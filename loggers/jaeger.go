@@ -11,12 +11,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package beaconnode
+package loggers
 
-// ConfigFetcher fetches chain configuration information.
-type ConfigFetcher interface {
-	// FetchSecondsPerSlot fetches the number of seconds per slot for the attached beacon node.
-	FetchSecondsPerSlot() uint64
-	// FetchSlotsPerEpoch fetches the number of slots per epoch for the attached beacon node.
-	FetchSlotsPerEpoch() uint64
+import (
+	"github.com/rs/zerolog"
+)
+
+// JaegerLogger provides the Jaeger logging interface with a zerolog backend.
+type JaegerLogger struct {
+	log zerolog.Logger
+}
+
+// NewJaegerLogger creates a new Jaeger logger with a zerolog backend.
+func NewJaegerLogger(log zerolog.Logger) *JaegerLogger {
+	return &JaegerLogger{log: log}
+}
+
+// Error logs an error.
+func (l *JaegerLogger) Error(msg string) {
+	l.log.Error().Msg(msg)
+}
+
+// Infof logs information.
+func (l *JaegerLogger) Infof(msg string, args ...interface{}) {
+	l.log.Info().Msgf(msg, args...)
 }

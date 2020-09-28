@@ -13,14 +13,59 @@
 
 package beaconblockproposer
 
-// BeaconBlockProposerDuty contains information about a beacon block proposal.
-type BeaconBlockProposerDuty interface {
-	Slot() uint64
-	PublicKey() []byte
+import (
+	"context"
+	"fmt"
+)
+
+// Duty contains information about a beacon block proposal duty.
+type Duty struct {
+	// Details for the duty.
+	slot           uint64
+	validatorIndex uint64
+
+	// randaoReveal is required to be passed to the beacon node when proposing the block; can be pre-calculated.
+	randaoReveal []byte
 }
 
-// BeaconBlockProposer defines an interface that proposes blocks.
-type Proposer interface {
-	// Schedule passes a proposer schedule.
-	Schedule([]*BeaconBlockProposerDuty)
+// NewDuty creates a new beacon block proposer duty.
+func NewDuty(ctx context.Context, slot uint64, validatorIndex uint64) (*Duty, error) {
+	return &Duty{
+		slot:           slot,
+		validatorIndex: validatorIndex,
+	}, nil
+}
+
+// Slot provides the slot for the beacon block proposer.
+func (d *Duty) Slot() uint64 {
+	return d.slot
+}
+
+// ValidatorIndex provides the validator index for the beacon block proposer.
+func (d *Duty) ValidatorIndex() uint64 {
+	return d.validatorIndex
+}
+
+// String provides a friendly string for the struct.
+func (d *Duty) String() string {
+	return fmt.Sprintf("beacon block proposal %d@%d", d.validatorIndex, d.slot)
+}
+
+// SetRandaoReveal sets the RANDAO reveal.
+func (d *Duty) SetRandaoReveal(randaoReveal []byte) {
+	d.randaoReveal = randaoReveal
+}
+
+// RANDAOReveal provides the RANDAO reveal.
+func (d *Duty) RANDAOReveal() []byte {
+	return d.randaoReveal
+}
+
+// Service is the beacon block proposer service.
+type Service interface {
+	// Prepare prepares the proposal for a slot.
+	Prepare(ctx context.Context, details interface{}) error
+
+	// Propose carries out the proposal for a slot.
+	Propose(ctx context.Context, details interface{})
 }
