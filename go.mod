@@ -5,7 +5,7 @@ go 1.14
 require (
 	cloud.google.com/go v0.66.0 // indirect
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
-	github.com/attestantio/go-eth2-client v0.6.4
+	github.com/attestantio/go-eth2-client v0.6.5
 	github.com/aws/aws-sdk-go v1.34.31
 	github.com/ferranbt/fastssz v0.0.0-20200826142241-3a913c5a1313
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
@@ -51,5 +51,3 @@ require (
 	google.golang.org/grpc v1.32.0
 	gopkg.in/ini.v1 v1.61.0 // indirect
 )
-
-replace github.com/attestantio/go-eth2-client => ../go-eth2-client
