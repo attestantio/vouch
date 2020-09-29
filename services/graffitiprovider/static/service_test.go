@@ -23,19 +23,49 @@ import (
 )
 
 func TestService(t *testing.T) {
-	s, err := static.New(context.Background(),
-		static.WithLogLevel(zerolog.Disabled),
-		static.WithGraffiti([]byte("Test")))
-	require.NoError(t, err)
-	res, err := s.Graffiti(context.Background(), 0, 0)
-	require.NoError(t, err)
-	require.Equal(t, []byte("Test"), res)
-}
+	tests := []struct {
+		name   string
+		params []static.Parameter
+		err    string
+	}{
+		{
+			name: "GraffitiMissing",
+			params: []static.Parameter{
+				static.WithLogLevel(zerolog.Disabled),
+			},
+		},
+		{
+			name: "GraffitiLong",
+			params: []static.Parameter{
+				static.WithLogLevel(zerolog.Disabled),
+				static.WithGraffiti([]byte("123456789012345678901234567890123")),
+			},
+			err: "problem with parameters: graffiti has a maximum size of 32 bytes",
+		},
+		{
+			name: "GraffitiShort",
+			params: []static.Parameter{
+				static.WithLogLevel(zerolog.Disabled),
+				static.WithGraffiti([]byte("1234567890123456789012345678901")),
+			},
+		},
+		{
+			name: "Graffiti32",
+			params: []static.Parameter{
+				static.WithLogLevel(zerolog.Disabled),
+				static.WithGraffiti([]byte("12345678901234567890123456789012")),
+			},
+		},
+	}
 
-func TestServiceNoGraffiti(t *testing.T) {
-	s, err := static.New(context.Background())
-	require.NoError(t, err)
-	res, err := s.Graffiti(context.Background(), 0, 0)
-	require.NoError(t, err)
-	require.Nil(t, res)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := static.New(context.Background(), test.params...)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

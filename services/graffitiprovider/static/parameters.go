@@ -61,7 +61,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 
 	if len(parameters.graffiti) > 32 {
-		return nil, errors.New("graffiti has a mximum size of 32 bytes")
+		return nil, errors.New("graffiti has a maximum size of 32 bytes")
 	}
 
 	return &parameters, nil
