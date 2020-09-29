@@ -41,6 +41,7 @@ func (s *Service) SubmitAggregateAttestation(ctx context.Context, aggregate *spe
 			submitter eth2client.AggregateAttestationsSubmitter,
 		) {
 			defer wg.Done()
+			log := log.With().Str("submitter", name).Uint64("slot", aggregate.Message.Aggregate.Data.Slot).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
@@ -48,9 +49,10 @@ func (s *Service) SubmitAggregateAttestation(ctx context.Context, aggregate *spe
 			defer sem.Release(1)
 
 			if err := submitter.SubmitAggregateAttestations(ctx, []*spec.SignedAggregateAndProof{aggregate}); err != nil {
-				log.Warn().Str("submitter", name).Uint64("slot", aggregate.Message.Aggregate.Data.Slot).Err(err).Msg("Failed to submit aggregate attestation")
+				log.Warn().Err(err).Msg("Failed to submit aggregate attestation")
 				return
 			}
+			log.Trace().Msg("Submitted aggregate attestation")
 		}(ctx, sem, &wg, name, submitter)
 	}
 	wg.Wait()

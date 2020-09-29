@@ -54,6 +54,7 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 			submitter eth2client.BeaconCommitteeSubscriptionsSubmitter,
 		) {
 			defer wg.Done()
+			log := log.With().Str("submitter", name).Int("subscriptions", len(subs)).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
@@ -61,9 +62,10 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 			defer sem.Release(1)
 
 			if err := submitter.SubmitBeaconCommitteeSubscriptions(ctx, subs); err != nil {
-				log.Warn().Str("submitter", name).Err(err).Msg("Failed to submit beacon committee subscription")
+				log.Warn().Err(err).Msg("Failed to submit beacon committee subscription")
 				return
 			}
+			log.Trace().Msg("Submitted beacon committee subscriptions")
 		}(ctx, sem, &wg, name, submitter)
 	}
 	wg.Wait()

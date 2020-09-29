@@ -41,6 +41,7 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 			submitter eth2client.AttestationSubmitter,
 		) {
 			defer wg.Done()
+			log := log.With().Str("submitter", name).Uint64("slot", attestation.Data.Slot).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
@@ -48,9 +49,10 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 			defer sem.Release(1)
 
 			if err := submitter.SubmitAttestation(ctx, attestation); err != nil {
-				log.Warn().Str("submitter", name).Uint64("slot", attestation.Data.Slot).Err(err).Msg("Failed to submit attestation")
+				log.Warn().Msg("Failed to submit attestation")
 				return
 			}
+			log.Trace().Msg("Submitted attestation")
 		}(ctx, sem, &wg, name, submitter)
 	}
 	wg.Wait()

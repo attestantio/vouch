@@ -41,6 +41,7 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaco
 			submitter eth2client.BeaconBlockSubmitter,
 		) {
 			defer wg.Done()
+			log := log.With().Str("submitter", name).Uint64("slot", block.Message.Slot).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
@@ -48,9 +49,10 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaco
 			defer sem.Release(1)
 
 			if err := submitter.SubmitBeaconBlock(ctx, block); err != nil {
-				log.Warn().Str("submitter", name).Uint64("slot", block.Message.Slot).Err(err).Msg("Failed to submit beacon block")
+				log.Warn().Err(err).Msg("Failed to submit beacon block")
 				return
 			}
+			log.Trace().Msg("Submitted beacon block")
 		}(ctx, sem, &wg, name, submitter)
 	}
 	wg.Wait()
