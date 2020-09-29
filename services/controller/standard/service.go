@@ -220,7 +220,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	err := s.validatingAccountsProvider.(accountmanager.AccountsUpdater).UpdateAccountsState(ctx)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to update account state")
-		return
+		// Don't return even though we have an error here, as we can continue with the accounts we have from the previous run.
 	}
 	accounts, err := s.validatingAccountsProvider.Accounts(ctx)
 	if err != nil {
@@ -244,7 +244,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 		// Update beacon committee subscriptions for the next epoch.
 		subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, currentEpoch+1, accounts)
 		if err != nil {
-			log.Warn().Err(err).Msg("Failed to subscribe to beacom committees")
+			log.Warn().Err(err).Msg("Failed to subscribe to beacon committees")
 			return
 		}
 		s.subscriptionInfosMutex.Lock()
