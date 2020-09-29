@@ -50,4 +50,5 @@ require (
 	google.golang.org/genproto v0.0.0-20200925023002-c2d885f95484 // indirect
 	google.golang.org/grpc v1.32.0
 	gopkg.in/ini.v1 v1.61.0 // indirect
+	gotest.tools v2.2.0+incompatible
 )
