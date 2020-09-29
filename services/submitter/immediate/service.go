@@ -101,8 +101,8 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 
 // SubmitBeaconCommitteeSubscriptions submits a batch of beacon committee subscriptions.
 func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*submitter.BeaconCommitteeSubscription) error {
-	if subscriptions == nil {
-		return errors.New("no subscriptions supplied")
+	if len(subscriptions) == 0 {
+		return errors.New("no beacon committee subscriptions supplied")
 	}
 
 	subs := make([]*eth2client.BeaconCommitteeSubscription, len(subscriptions))
@@ -139,20 +139,20 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 	return nil
 }
 
-// SubmitAggregateAttestation submits an aggregate attestation.
-func (s *Service) SubmitAggregateAttestation(ctx context.Context, aggregate *spec.SignedAggregateAndProof) error {
-	if aggregate == nil {
-		return errors.New("no aggregate attestation supplied")
+// SubmitAggregateAttestations submits aggregate attestations.
+func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []*spec.SignedAggregateAndProof) error {
+	if len(aggregates) == 0 {
+		return errors.New("no aggregate attestations supplied")
 	}
 
-	if err := s.aggregateAttestationsSubmitter.SubmitAggregateAttestations(ctx, []*spec.SignedAggregateAndProof{aggregate}); err != nil {
+	if err := s.aggregateAttestationsSubmitter.SubmitAggregateAttestations(ctx, aggregates); err != nil {
 		return errors.Wrap(err, "failed to submit aggregate attestation")
 	}
 
 	if e := log.Trace(); e.Enabled() {
-		data, err := json.Marshal(aggregate)
+		data, err := json.Marshal(aggregates)
 		if err == nil {
-			e.Str("attestation", string(data)).Msg("Submitted aggregate attestation")
+			e.Str("attestation", string(data)).Msg("Submitted aggregate attestations")
 		}
 	}
 

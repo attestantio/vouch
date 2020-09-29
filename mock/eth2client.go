@@ -15,6 +15,7 @@ package mock
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -85,6 +86,19 @@ func (m *AttestationSubmitter) SubmitAttestation(ctx context.Context, attestatio
 	return nil
 }
 
+// ErroringAttestationSubmitter is a mock for eth2client.AttestationSubmitter that returns errors.
+type ErroringAttestationSubmitter struct{}
+
+// NewErroringAttestationSubmitter returns a mock attestation submitter.
+func NewErroringAttestationSubmitter() eth2client.AttestationSubmitter {
+	return &ErroringAttestationSubmitter{}
+}
+
+// SubmitErroringAttestation is a mock.
+func (m *ErroringAttestationSubmitter) SubmitAttestation(ctx context.Context, attestation *spec.Attestation) error {
+	return errors.New("error")
+}
+
 // BeaconBlockSubmitter is a mock for eth2client.BeaconBlockSubmitter.
 type BeaconBlockSubmitter struct{}
 
@@ -96,6 +110,19 @@ func NewBeaconBlockSubmitter() eth2client.BeaconBlockSubmitter {
 // SubmitBeaconBlock is a mock.
 func (m *BeaconBlockSubmitter) SubmitBeaconBlock(ctx context.Context, bloc *spec.SignedBeaconBlock) error {
 	return nil
+}
+
+// ErroringBeaconBlockSubmitter is a mock for eth2client.BeaconBlockSubmitter that returns errors.
+type ErroringBeaconBlockSubmitter struct{}
+
+// NewErroringBeaconBlockSubmitter returns a mock beacon block submitter.
+func NewErroringBeaconBlockSubmitter() eth2client.BeaconBlockSubmitter {
+	return &ErroringBeaconBlockSubmitter{}
+}
+
+// SubmitBeaconBlock is a mock.
+func (m *ErroringBeaconBlockSubmitter) SubmitBeaconBlock(ctx context.Context, bloc *spec.SignedBeaconBlock) error {
+	return errors.New("error")
 }
 
 // AggregateAttestationsSubmitter is a mock for eth2client.AggregateAttestationsSubmitter.
@@ -111,6 +138,19 @@ func (m *AggregateAttestationsSubmitter) SubmitAggregateAttestations(ctx context
 	return nil
 }
 
+// ErroringAggregateAttestationsSubmitter is a mock for eth2client.AggregateAttestationsSubmitter that returns errors.
+type ErroringAggregateAttestationsSubmitter struct{}
+
+// NewErroringAggregateAttestationsSubmitter returns a mock aggregate attestation submitter.
+func NewErroringAggregateAttestationsSubmitter() eth2client.AggregateAttestationsSubmitter {
+	return &ErroringAggregateAttestationsSubmitter{}
+}
+
+// SubmitAggregateAttestations is a mock.
+func (m *ErroringAggregateAttestationsSubmitter) SubmitAggregateAttestations(ctx context.Context, aggregateAndProofs []*spec.SignedAggregateAndProof) error {
+	return errors.New("error")
+}
+
 // BeaconCommitteeSubscriptionsSubmitter is a mock for eth2client.BeaconCommitteeSubscriptionsSubmitter.
 type BeaconCommitteeSubscriptionsSubmitter struct{}
 
@@ -122,4 +162,30 @@ func NewBeaconCommitteeSubscriptionsSubmitter() eth2client.BeaconCommitteeSubscr
 // SubmitBeaconCommitteeSubscriptions is a mock.
 func (m *BeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*eth2client.BeaconCommitteeSubscription) error {
 	return nil
+}
+
+// ErroringBeaconCommitteeSubscriptionsSubmitter is a mock for eth2client.BeaconCommitteeSubscriptionsSubmitter that returns errors.
+type ErroringBeaconCommitteeSubscriptionsSubmitter struct{}
+
+// NewErroringBeaconCommitteeSubscriptionsSubmitter returns a mock beacon committee subscriptions submitter.
+func NewErroringBeaconCommitteeSubscriptionsSubmitter() eth2client.BeaconCommitteeSubscriptionsSubmitter {
+	return &ErroringBeaconCommitteeSubscriptionsSubmitter{}
+}
+
+// SubmitBeaconCommitteeSubscriptions is a mock.
+func (m *ErroringBeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*eth2client.BeaconCommitteeSubscription) error {
+	return errors.New("error")
+}
+
+// BeaconBlockProposalProvider is a mock for eth2client.BeaconBlockProposalProvider.
+type BeaconBlockProposalProvider struct{}
+
+// NewBeaconBlockProposalProvider returns a mock beacon block proposal provider.
+func NewBeaconBlockProposalProvider() eth2client.BeaconBlockProposalProvider {
+	return &BeaconBlockProposalProvider{}
+}
+
+// SubmitBeaconBlock is a mock.
+func (m *BeaconBlockProposalProvider) BeaconBlockProposal(ctx context.Context, slot uint64, randaoReveal []byte, graffiti []byte) (*spec.BeaconBlock, error) {
+	return nil, nil
 }

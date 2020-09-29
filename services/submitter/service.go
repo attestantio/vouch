@@ -51,8 +51,8 @@ type BeaconCommitteeSubscriptionsSubmitter interface {
 	SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*BeaconCommitteeSubscription) error
 }
 
-// AggregateAttestationSubmitter is the interface for a submitter of aggregate attestations.
-type AggregateAttestationSubmitter interface {
-	// SubmitAggregateAttestation submits an aggregate attestation.
-	SubmitAggregateAttestation(ctx context.Context, aggregateAttestation *spec.SignedAggregateAndProof) error
+// AggregateAttestationsSubmitter is the interface for a submitter of aggregate attestations.
+type AggregateAttestationsSubmitter interface {
+	// SubmitAggregateAttestations submits aggregate attestations.
+	SubmitAggregateAttestations(ctx context.Context, aggregateAttestations []*spec.SignedAggregateAndProof) error
 }

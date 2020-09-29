@@ -53,7 +53,7 @@ func TestSubmit(t *testing.T) {
 	require.EqualError(t, s.SubmitBeaconBlock(context.Background(), nil), "no beacon block supplied")
 	require.EqualError(t, s.SubmitAttestation(context.Background(), nil), "no attestation supplied")
 	require.EqualError(t, s.SubmitBeaconCommitteeSubscriptions(context.Background(), nil), "no subscriptions supplied")
-	require.EqualError(t, s.SubmitAggregateAttestation(context.Background(), nil), "no aggregate attestation supplied")
+	require.EqualError(t, s.SubmitAggregateAttestations(context.Background(), nil), "no aggregate attestations supplied")
 }
 
 func TestInterfaces(t *testing.T) {
@@ -64,5 +64,5 @@ func TestInterfaces(t *testing.T) {
 	require.Implements(t, (*submitter.BeaconBlockSubmitter)(nil), s)
 	require.Implements(t, (*submitter.AttestationSubmitter)(nil), s)
 	require.Implements(t, (*submitter.BeaconCommitteeSubscriptionsSubmitter)(nil), s)
-	require.Implements(t, (*submitter.AggregateAttestationSubmitter)(nil), s)
+	require.Implements(t, (*submitter.AggregateAttestationsSubmitter)(nil), s)
 }

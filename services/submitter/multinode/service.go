@@ -42,7 +42,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("strategy", "submitter").Str("impl", "multinode").Logger()
+	log = zerologger.With().Str("strategy", "submitter").Str("impl", "all").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}

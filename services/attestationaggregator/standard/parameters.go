@@ -28,7 +28,7 @@ type parameters struct {
 	targetAggregatorsPerCommitteeProvider eth2client.TargetAggregatorsPerCommitteeProvider
 	validatingAccountsProvider            accountmanager.ValidatingAccountsProvider
 	aggregateAttestationProvider          eth2client.NonSpecAggregateAttestationProvider
-	aggregateAttestationSubmitter         submitter.AggregateAttestationSubmitter
+	aggregateAttestationsSubmitter        submitter.AggregateAttestationsSubmitter
 }
 
 // Parameter is the interface for service parameters.
@@ -77,10 +77,10 @@ func WithAggregateAttestationDataProvider(provider eth2client.NonSpecAggregateAt
 	})
 }
 
-// WithAggregateAttestationSubmitter sets the aggregate attestation submitter.
-func WithAggregateAttestationSubmitter(submitter submitter.AggregateAttestationSubmitter) Parameter {
+// WithAggregateAttestationsSubmitter sets the aggregate attestation submitter.
+func WithAggregateAttestationsSubmitter(submitter submitter.AggregateAttestationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.aggregateAttestationSubmitter = submitter
+		p.aggregateAttestationsSubmitter = submitter
 	})
 }
 
@@ -107,8 +107,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.aggregateAttestationProvider == nil {
 		return nil, errors.New("no aggregate attestation provider specified")
 	}
-	if parameters.aggregateAttestationSubmitter == nil {
-		return nil, errors.New("no aggregate attestation submitter specified")
+	if parameters.aggregateAttestationsSubmitter == nil {
+		return nil, errors.New("no aggregate attestations submitter specified")
 	}
 
 	return &parameters, nil

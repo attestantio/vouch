@@ -32,11 +32,11 @@ import (
 
 // Service is an attestation aggregator.
 type Service struct {
-	monitor                       metrics.AttestationAggregationMonitor
-	targetAggregatorsPerCommittee uint64
-	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
-	aggregateAttestationProvider  eth2client.NonSpecAggregateAttestationProvider
-	aggregateAttestationSubmitter submitter.AggregateAttestationSubmitter
+	monitor                        metrics.AttestationAggregationMonitor
+	targetAggregatorsPerCommittee  uint64
+	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
+	aggregateAttestationProvider   eth2client.NonSpecAggregateAttestationProvider
+	aggregateAttestationsSubmitter submitter.AggregateAttestationsSubmitter
 }
 
 // module-wide log.
@@ -61,11 +61,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		monitor:                       parameters.monitor,
-		targetAggregatorsPerCommittee: targetAggregatorsPerCommittee,
-		validatingAccountsProvider:    parameters.validatingAccountsProvider,
-		aggregateAttestationProvider:  parameters.aggregateAttestationProvider,
-		aggregateAttestationSubmitter: parameters.aggregateAttestationSubmitter,
+		monitor:                        parameters.monitor,
+		targetAggregatorsPerCommittee:  targetAggregatorsPerCommittee,
+		validatingAccountsProvider:     parameters.validatingAccountsProvider,
+		aggregateAttestationProvider:   parameters.aggregateAttestationProvider,
+		aggregateAttestationsSubmitter: parameters.aggregateAttestationsSubmitter,
 	}
 
 	return s, nil
@@ -137,11 +137,13 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed aggregate attestation")
 
 	// Submit the signed aggregate and proof.
-	signedAggregateAndProof := &spec.SignedAggregateAndProof{
-		Message:   aggregateAndProof,
-		Signature: sig,
+	signedAggregateAndProofs := []*spec.SignedAggregateAndProof{
+		{
+			Message:   aggregateAndProof,
+			Signature: sig,
+		},
 	}
-	if err := s.aggregateAttestationSubmitter.SubmitAggregateAttestation(ctx, signedAggregateAndProof); err != nil {
+	if err := s.aggregateAttestationsSubmitter.SubmitAggregateAttestations(ctx, signedAggregateAndProofs); err != nil {
 		log.Error().Err(err).Msg("Failed to submit aggregate and proof")
 		s.monitor.AttestationAggregationCompleted(started, "failed")
 		return

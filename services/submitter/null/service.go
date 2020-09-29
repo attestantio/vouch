@@ -104,16 +104,16 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 	return nil
 }
 
-// SubmitAggregateAttestation submits an aggregate attestation.
-func (s *Service) SubmitAggregateAttestation(ctx context.Context, aggregate *spec.SignedAggregateAndProof) error {
-	if aggregate == nil {
-		return errors.New("no aggregate attestation supplied")
+// SubmitAggregateAttestations submits aggregate attestations.
+func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []*spec.SignedAggregateAndProof) error {
+	if len(aggregates) == 0 {
+		return errors.New("no aggregate attestations supplied")
 	}
 
 	if e := log.Trace(); e.Enabled() {
-		data, err := json.Marshal(aggregate)
+		data, err := json.Marshal(aggregates)
 		if err == nil {
-			e.Str("attestation", string(data)).Msg("Not submitting aggregate attestation")
+			e.Str("attestation", string(data)).Msg("Not submitting aggregate attestations")
 		}
 	}
 

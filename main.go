@@ -300,7 +300,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardattestationaggregator.WithLogLevel(logLevel(viper.GetString("attestationaggregator.log-level"))),
 		standardattestationaggregator.WithTargetAggregatorsPerCommitteeProvider(eth2Client.(eth2client.TargetAggregatorsPerCommitteeProvider)),
 		standardattestationaggregator.WithAggregateAttestationDataProvider(eth2Client.(eth2client.NonSpecAggregateAttestationProvider)),
-		standardattestationaggregator.WithAggregateAttestationSubmitter(submitterStrategy.(submitter.AggregateAttestationSubmitter)),
+		standardattestationaggregator.WithAggregateAttestationsSubmitter(submitterStrategy.(submitter.AggregateAttestationsSubmitter)),
 		standardattestationaggregator.WithMonitor(monitor.(metrics.AttestationAggregationMonitor)),
 		standardattestationaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 	)
@@ -623,6 +623,7 @@ func selectSubmitterStrategy(ctx context.Context, eth2Client eth2client.Service)
 			beaconBlockSubmitters[address] = client.(eth2client.BeaconBlockSubmitter)
 			attestationSubmitters[address] = client.(eth2client.AttestationSubmitter)
 			aggregateAttestationSubmitters[address] = client.(eth2client.AggregateAttestationsSubmitter)
+			beaconCommitteeSubscriptionsSubmitters[address] = client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)
 		}
 		submitter, err = multinodesubmitter.New(ctx,
 			multinodesubmitter.WithProcessConcurrency(viper.GetInt64("process-concurrency")),

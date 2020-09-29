@@ -97,16 +97,16 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.processConcurrency == 0 {
 		return nil, errors.New("no process concurrency specified")
 	}
-	if parameters.beaconBlockSubmitters == nil {
+	if len(parameters.beaconBlockSubmitters) == 0 {
 		return nil, errors.New("no beacon block submitters specified")
 	}
-	if parameters.attestationSubmitters == nil {
+	if len(parameters.attestationSubmitters) == 0 {
 		return nil, errors.New("no attestation submitters specified")
 	}
-	if parameters.aggregateAttestationsSubmitters == nil {
+	if len(parameters.aggregateAttestationsSubmitters) == 0 {
 		return nil, errors.New("no aggregate attestations submitters specified")
 	}
-	if parameters.beaconCommitteeSubscriptionsSubmitters == nil {
+	if len(parameters.beaconCommitteeSubscriptionsSubmitters) == 0 {
 		return nil, errors.New("no beacon committee subscription submitters specified")
 	}
 
