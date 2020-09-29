@@ -93,7 +93,7 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot uint64, randaoRe
 			cancel()
 
 			mu.Lock()
-			score := scoreBeaconBlockProposal(ctx, name, slot, proposal)
+			score := scoreBeaconBlockProposal(ctx, name, proposal)
 			if score > bestScore || bestProposal == nil {
 				bestScore = score
 				bestProposal = proposal
@@ -104,45 +104,4 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot uint64, randaoRe
 	wg.Wait()
 
 	return bestProposal, nil
-}
-
-// scoreBeaconBlockPropsal generates a score for a beacon block.
-// The score is relative to the reward expected by proposing the block.
-func scoreBeaconBlockProposal(ctx context.Context, name string, slot uint64, blockProposal *spec.BeaconBlock) float64 {
-	immediateAttestationScore := float64(0)
-	attestationScore := float64(0)
-
-	// Add attestation scores.
-	for _, attestation := range blockProposal.Body.Attestations {
-		inclusionDistance := float64(slot - attestation.Data.Slot)
-		attestationScore += float64(attestation.AggregationBits.Count()) / inclusionDistance
-		if inclusionDistance == 1 {
-			immediateAttestationScore += float64(attestation.AggregationBits.Count()) / inclusionDistance
-		}
-	}
-
-	// Add slashing scores.
-	// Slashing reward will be at most MAX_EFFECTIVE_BALANCE/WHISTLEBLOWER_REWARD_QUOTIENT,
-	// which is 0.0625 Ether.
-	// Individual attestation reward at 16K validators will be around 90,000 GWei, or .00009 Ether.
-	// So we state that a single slashing event has the same weight as about 700 attestations.
-	slashingWeight := float64(700)
-
-	// Add proposer slashing scores.
-	proposerSlashingScore := float64(len(blockProposal.Body.ProposerSlashings)) * slashingWeight
-
-	// Add attester slashing scores.
-	attesterSlashingScore := float64(len(blockProposal.Body.AttesterSlashings)) * slashingWeight
-
-	log.Trace().
-		Uint64("slot", slot).
-		Str("provider", name).
-		Float64("immediate_attestations", immediateAttestationScore).
-		Float64("attestations", attestationScore).
-		Float64("proposer_slashings", proposerSlashingScore).
-		Float64("attester_slashings", attesterSlashingScore).
-		Float64("total", attestationScore+proposerSlashingScore+attesterSlashingScore).
-		Msg("Scored block")
-
-	return attestationScore + proposerSlashingScore + attestationScore
 }

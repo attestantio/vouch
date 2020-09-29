@@ -93,10 +93,16 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
+	if parameters.timeout == 0 {
+		return nil, errors.New("no timeout specified")
+	}
+	if parameters.clientMonitor == nil {
+		return nil, errors.New("no client monitor specified")
+	}
 	if parameters.processConcurrency == 0 {
 		return nil, errors.New("no process concurrency specified")
 	}
-	if parameters.beaconBlockProposalProviders == nil {
+	if len(parameters.beaconBlockProposalProviders) == 0 {
 		return nil, errors.New("no beacon block proposal providers specified")
 	}
 
