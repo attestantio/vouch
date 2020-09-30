@@ -95,7 +95,7 @@ func NewErroringAttestationSubmitter() eth2client.AttestationSubmitter {
 	return &ErroringAttestationSubmitter{}
 }
 
-// SubmitErroringAttestation is a mock.
+// SubmitAttestation is a mock.
 func (m *ErroringAttestationSubmitter) SubmitAttestation(ctx context.Context, attestation *spec.Attestation) error {
 	return errors.New("error")
 }
@@ -186,7 +186,7 @@ func NewBeaconBlockProposalProvider() eth2client.BeaconBlockProposalProvider {
 	return &BeaconBlockProposalProvider{}
 }
 
-// SubmitBeaconBlock is a mock.
+// BeaconBlockProposal is a mock.
 func (m *BeaconBlockProposalProvider) BeaconBlockProposal(ctx context.Context, slot uint64, randaoReveal []byte, graffiti []byte) (*spec.BeaconBlock, error) {
 	// Graffiti should be 32 bytes.
 	fixedGraffiti := make([]byte, 32)

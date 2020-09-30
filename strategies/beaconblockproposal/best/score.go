@@ -36,9 +36,9 @@ func scoreBeaconBlockProposal(ctx context.Context, name string, blockProposal *s
 	// Add attestation scores.
 	for _, attestation := range blockProposal.Body.Attestations {
 		inclusionDistance := float64(blockProposal.Slot - attestation.Data.Slot)
-		attestationScore += float64(attestation.AggregationBits.Count()) * (float64(0.75) + float64(0.25)/float64(inclusionDistance))
+		attestationScore += float64(attestation.AggregationBits.Count()) * (float64(0.75) + float64(0.25)/inclusionDistance)
 		if inclusionDistance == 1 {
-			immediateAttestationScore += float64(attestation.AggregationBits.Count()) * (float64(0.75) + float64(0.25)/float64(inclusionDistance))
+			immediateAttestationScore += float64(attestation.AggregationBits.Count()) * (float64(0.75) + float64(0.25)/inclusionDistance)
 		}
 	}
 

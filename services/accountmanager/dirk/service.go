@@ -156,7 +156,7 @@ func (s *Service) UpdateAccountsState(ctx context.Context) error {
 		return nil
 	}
 	log.Trace().Int("total", len(s.accounts)).Int("unactivated", len(validatorIDs)).Msg("Updating state of unactivated keys")
-	validators := make(map[uint64]*api.Validator)
+	var validators map[uint64]*api.Validator
 	var err error
 	if validatorsWithoutBalanceProvider, isProvider := s.validatorsProvider.(eth2client.ValidatorsWithoutBalanceProvider); isProvider {
 		validators, err = validatorsWithoutBalanceProvider.ValidatorsWithoutBalance(ctx, "head", validatorIDs)
@@ -224,7 +224,7 @@ func (s *Service) RefreshAccounts(ctx context.Context) error {
 	}
 
 	log.Trace().Int("accounts", len(validatorIDs)).Msg("Obtaining validator state of accounts")
-	validators := make(map[uint64]*api.Validator)
+	var validators map[uint64]*api.Validator
 	var err error
 	if validatorsWithoutBalanceProvider, isProvider := s.validatorsProvider.(eth2client.ValidatorsWithoutBalanceProvider); isProvider {
 		validators, err = validatorsWithoutBalanceProvider.ValidatorsWithoutBalance(ctx, "head", validatorIDs)
