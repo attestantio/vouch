@@ -16,6 +16,7 @@ package multinode
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -41,7 +42,7 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 			submitter eth2client.AttestationSubmitter,
 		) {
 			defer wg.Done()
-			log := log.With().Str("submitter", name).Uint64("slot", attestation.Data.Slot).Logger()
+			log := log.With().Str("beacon_node_address", name).Uint64("slot", attestation.Data.Slot).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
@@ -49,7 +50,13 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 			defer sem.Release(1)
 
 			if err := submitter.SubmitAttestation(ctx, attestation); err != nil {
-				log.Warn().Msg("Failed to submit attestation")
+				if strings.Contains(err.Error(), "PriorAttestationKnown") {
+					// Lighthouse rejects duplicate attestations.  It is possible that an attestation we sent
+					// to another node already propagated to this node, so ignore the error.
+					log.Trace().Msg("Node already knows about attestation; ignored")
+				} else {
+					log.Warn().Err(err).Msg("Failed to submit attestation")
+				}
 				return
 			}
 			log.Trace().Msg("Submitted attestation")

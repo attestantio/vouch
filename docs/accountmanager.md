@@ -1,7 +1,9 @@
 # Account managers
 Account managers are the interface between Vouch and the accounts for which it validates.  Account managers provide the list of validating accounts and carry out signing operations.
 
-Vouch currently supports two account managers: Dirk and wallet.
+Vouch currently supports two account managers: Dirk and wallet.  Dirk is a remote keymanager that provides additional features such as distributed key generation, threshold signing, and slashing protection.  Wallet is a local keymanager that is quick and easy to set up.
+
+**It is recommended that Dirk be used for all production installations, due to the additional protections it provides.  Although Vouch attempts to avoid requesting signatures that could cause a slashing event, it does not have in-built slashing protection and relies on Dirk for this functionality.**
 
 ## `dirk`
 The `dirk` account manager obtains account information from [Dirk](https://github.com/attestantio/dirk), and uses Dirk for remote signing.  It is important to understand that this account manager never holds the private keys, instead it sends the data to sign to the Dirk server, which carries out signing as well as slashing prevention.
@@ -70,13 +72,13 @@ Each item is explained in more detail below.
 If no locations are supplied, the [default location for wallets](https://github.com/wealdtech/go-eth2-wallet-store-filesystem#usage) will be used.
 
 ### accounts
-`accounts` is the list of accounts that Vouch will request from Dirk.  This is an account specifier, and can be supplied in various forms for example:
+`accounts` is the list of accounts that Vouch will request locally.  This is an account specifier, and can be supplied in various forms for example:
 
   - **`wallet`** will return all accounts in _wallet_
   - **`wallet/Validator.*`** will return all accounts in _wallet_ starting with _Validator_
   - **`wallet/Validator.*[02468]`** will return all accounts in _wallet_ starting with _Validator_ and ending in an even number
 
-At least one account specifier is required for the Dirk account manager.
+At least one account specifier is required for the wallet account manager.
 
 ### passphrases
 `passphrases` is a list of passphrases that will be used to unlock the accounts.  Each item in the list is a [Majordomo](https://github.com/wealdtech/go-majordomo) URL.

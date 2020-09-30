@@ -24,10 +24,10 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-// SubmitAggregateAttestation submits an aggregate attestation.
-func (s *Service) SubmitAggregateAttestation(ctx context.Context, aggregate *spec.SignedAggregateAndProof) error {
-	if aggregate == nil {
-		return errors.New("no aggregate attestation supplied")
+// SubmitAggregateAttestations submits aggregate attestations.
+func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []*spec.SignedAggregateAndProof) error {
+	if len(aggregates) == 0 {
+		return errors.New("no aggregate attestations supplied")
 	}
 
 	sem := semaphore.NewWeighted(s.processConcurrency)
@@ -41,26 +41,26 @@ func (s *Service) SubmitAggregateAttestation(ctx context.Context, aggregate *spe
 			submitter eth2client.AggregateAttestationsSubmitter,
 		) {
 			defer wg.Done()
-			log := log.With().Str("submitter", name).Uint64("slot", aggregate.Message.Aggregate.Data.Slot).Logger()
+			log := log.With().Str("beacon_node_address", name).Uint64("slot", aggregates[0].Message.Aggregate.Data.Slot).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
 			}
 			defer sem.Release(1)
 
-			if err := submitter.SubmitAggregateAttestations(ctx, []*spec.SignedAggregateAndProof{aggregate}); err != nil {
-				log.Warn().Err(err).Msg("Failed to submit aggregate attestation")
+			if err := submitter.SubmitAggregateAttestations(ctx, aggregates); err != nil {
+				log.Warn().Err(err).Msg("Failed to submit aggregate attestations")
 				return
 			}
-			log.Trace().Msg("Submitted aggregate attestation")
+			log.Trace().Msg("Submitted aggregate attestations")
 		}(ctx, sem, &wg, name, submitter)
 	}
 	wg.Wait()
 
 	if e := log.Trace(); e.Enabled() {
-		data, err := json.Marshal(aggregate)
+		data, err := json.Marshal(aggregates)
 		if err == nil {
-			e.Str("attestation", string(data)).Msg("Submitted aggregate attestation")
+			e.Str("aggregate_attestations", string(data)).Msg("Submitted aggregate attestations")
 		}
 	}
 

@@ -608,14 +608,14 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 func selectSubmitterStrategy(ctx context.Context, eth2Client eth2client.Service) (submitter.Service, error) {
 	var submitter submitter.Service
 	var err error
-	switch viper.GetString("strategies.submitter.style") {
+	switch viper.GetString("submitter.style") {
 	case "all":
 		log.Info().Msg("Starting multinode submitter strategy")
 		beaconBlockSubmitters := make(map[string]eth2client.BeaconBlockSubmitter)
 		attestationSubmitters := make(map[string]eth2client.AttestationSubmitter)
 		aggregateAttestationSubmitters := make(map[string]eth2client.AggregateAttestationsSubmitter)
 		beaconCommitteeSubscriptionsSubmitters := make(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter)
-		for _, address := range viper.GetStringSlice("strategies.submitter.all.beacon-node-addresses") {
+		for _, address := range viper.GetStringSlice("submitter.beacon-node-addresses") {
 			client, err := fetchClient(ctx, address)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %q for submitter strategy", address))
@@ -627,7 +627,7 @@ func selectSubmitterStrategy(ctx context.Context, eth2Client eth2client.Service)
 		}
 		submitter, err = multinodesubmitter.New(ctx,
 			multinodesubmitter.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
-			multinodesubmitter.WithLogLevel(logLevel(viper.GetString("strategies.submitter.log-level"))),
+			multinodesubmitter.WithLogLevel(logLevel(viper.GetString("submitter.log-level"))),
 			multinodesubmitter.WithBeaconBlockSubmitters(beaconBlockSubmitters),
 			multinodesubmitter.WithAttestationSubmitters(attestationSubmitters),
 			multinodesubmitter.WithAggregateAttestationsSubmitters(aggregateAttestationSubmitters),
@@ -636,7 +636,7 @@ func selectSubmitterStrategy(ctx context.Context, eth2Client eth2client.Service)
 	default:
 		log.Info().Msg("Starting standard submitter strategy")
 		submitter, err = immediatesubmitter.New(ctx,
-			immediatesubmitter.WithLogLevel(logLevel(viper.GetString("strategies.submitter.log-level"))),
+			immediatesubmitter.WithLogLevel(logLevel(viper.GetString("submitter.log-level"))),
 			immediatesubmitter.WithBeaconBlockSubmitter(eth2Client.(eth2client.BeaconBlockSubmitter)),
 			immediatesubmitter.WithAttestationSubmitter(eth2Client.(eth2client.AttestationSubmitter)),
 			immediatesubmitter.WithBeaconCommitteeSubscriptionsSubmitter(eth2Client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)),

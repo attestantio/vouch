@@ -64,6 +64,8 @@ github.com/attestantio/go-eth2-client v0.6.4 h1:EfnOCWlPrmLXBxMyctXUOEIcn61/QnYv
 github.com/attestantio/go-eth2-client v0.6.4/go.mod h1:lYEayGHzZma9HMUJgyxFIzDWRck8n2IedP7KTkIwe0g=
 github.com/attestantio/go-eth2-client v0.6.5 h1:IaPJfxOTqHdkfmeuy6MntsuLEoJipf7V6m4njBE4F6w=
 github.com/attestantio/go-eth2-client v0.6.5/go.mod h1:lYEayGHzZma9HMUJgyxFIzDWRck8n2IedP7KTkIwe0g=
+github.com/attestantio/go-eth2-client v0.6.6 h1:rgqG4KDyLDw75vOqnFnJ/nAXzkp6EDFaOctMzPJYNWI=
+github.com/attestantio/go-eth2-client v0.6.6/go.mod h1:lYEayGHzZma9HMUJgyxFIzDWRck8n2IedP7KTkIwe0g=
 github.com/aws/aws-lambda-go v1.13.3/go.mod h1:4UKl9IzQMoD+QF79YdCuzCwp8VbmG4VAQwij/eHl5CU=
 github.com/aws/aws-sdk-go v1.27.0/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/aws/aws-sdk-go v1.33.5/go.mod h1:5zCpMtNQVjRREroY7sYe8lOMRSxkhG6MZveU8YkpAk0=
