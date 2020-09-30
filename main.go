@@ -84,7 +84,7 @@ func main() {
 	}
 
 	logModules()
-	log.Info().Str("version", "v0.6.0").Msg("Starting vouch")
+	log.Info().Str("version", "v0.6.1").Msg("Starting vouch")
 
 	if err := initProfiling(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialise profiling")
