@@ -216,11 +216,15 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	// Wait for half a second for the beacon node to update.
 	time.Sleep(500 * time.Millisecond)
 
-	log.Trace().Msg("Updating validating accounts")
-	err := s.validatingAccountsProvider.(accountmanager.AccountsUpdater).UpdateAccountsState(ctx)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to update account state")
-		// Don't return even though we have an error here, as we can continue with the accounts we have from the previous run.
+	// Do not update on first run because the service fetches accounts on startup.
+	if !firstRun {
+		log.Trace().Msg("Updating validating accounts")
+		err := s.validatingAccountsProvider.(accountmanager.AccountsUpdater).UpdateAccountsState(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to update account state")
+			// Don't return even though we have an error here, as we can continue with the accounts we have from the previous run.
+		}
+		log.Trace().Msg("Updated validating accounts")
 	}
 	accounts, err := s.validatingAccountsProvider.Accounts(ctx)
 	if err != nil {
