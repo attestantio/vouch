@@ -181,6 +181,7 @@ func (s *Service) calculateSubscriptionInfo(ctx context.Context,
 					defer wg.Done()
 					if err := sem.Acquire(ctx, 1); err != nil {
 						log.Error().Err(err).Msg("Failed to obtain semaphore")
+						return
 					}
 					defer sem.Release(1)
 					subscriptionInfoMutex.RLock()

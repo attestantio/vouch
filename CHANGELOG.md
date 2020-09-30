@@ -1,3 +1,6 @@
+Development
+  - do not continue if attempt to acquire a semaphore fails
+
 0.6.1
   - update documentation for account managers, explaining the difference between Dirk and wallet
   - add submitter configuration to documentation
