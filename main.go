@@ -107,7 +107,6 @@ func main() {
 	if err := startServices(ctx, majordomo); err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialise services")
 	}
-
 	log.Info().Msg("All services operational")
 
 	// Wait for signal.
@@ -221,7 +220,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	log.Trace().Msg("Starting Ethereum 2 client service")
 	eth2Client, err := fetchClient(ctx, viper.GetString("beacon-node-address"))
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("failed to fetch client %q", viper.GetString("beacon-node-address")))
+		return errors.Wrap(err, fmt.Sprintf("failed to fetch client %s", viper.GetString("beacon-node-address")))
 	}
 
 	log.Trace().Msg("Starting chain time service")
@@ -463,12 +462,14 @@ func startMonitor(ctx context.Context) (metrics.Service, error) {
 func startGraffitiProvider(ctx context.Context, monitor metrics.Service, majordomo majordomo.Service) (graffitiprovider.Service, error) {
 	switch {
 	case viper.Get("graffiti.dynamic") != nil:
+		log.Info().Msg("Starting dynamic graffiti provider")
 		return dynamicgraffitiprovider.New(ctx,
 			dynamicgraffitiprovider.WithMajordomo(majordomo),
 			dynamicgraffitiprovider.WithLogLevel(logLevel(viper.GetString("graffiti.dynamic.log-level"))),
 			dynamicgraffitiprovider.WithLocation(viper.GetString("graffiti.dynamic.location")),
 		)
 	default:
+		log.Info().Msg("Starting static graffiti provider")
 		return staticgraffitiprovider.New(ctx,
 			staticgraffitiprovider.WithLogLevel(logLevel(viper.GetString("graffiti.static.log-level"))),
 			staticgraffitiprovider.WithGraffiti([]byte(viper.GetString("graffiti.static.value"))),
@@ -479,6 +480,7 @@ func startGraffitiProvider(ctx context.Context, monitor metrics.Service, majordo
 func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service, majordomo majordomo.Service) (accountmanager.Service, error) {
 	var accountManager accountmanager.Service
 	if viper.Get("accountmanager.dirk") != nil {
+		log.Info().Msg("Starting dirk account manager")
 		certPEMBlock, err := majordomo.Fetch(ctx, viper.GetString("accountmanager.dirk.client-cert"))
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to obtain server certificate")
@@ -514,9 +516,11 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start dirk account manager service")
 		}
+		return accountManager, nil
 	}
 
 	if viper.Get("accountmanager.wallet") != nil {
+		log.Info().Msg("Starting wallet account manager")
 		var err error
 		passphrases := make([][]byte, 0)
 		for _, passphraseURL := range viper.GetStringSlice("accountmanager.wallet.passphrases") {
@@ -566,7 +570,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 		for _, address := range viper.GetStringSlice("strategies.beaconblockproposal.beacon-node-addresses") {
 			client, err := fetchClient(ctx, address)
 			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %q for beacon block proposal strategy", address))
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block proposal strategy", address))
 			}
 			beaconBlockProposalProviders[address] = client.(eth2client.BeaconBlockProposalProvider)
 		}
@@ -585,7 +589,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 		for _, address := range viper.GetStringSlice("strategies.beaconblockproposal.beacon-node-addresses") {
 			client, err := fetchClient(ctx, address)
 			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %q for beacon block proposal strategy", address))
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block proposal strategy", address))
 			}
 			beaconBlockProposalProviders[address] = client.(eth2client.BeaconBlockProposalProvider)
 		}
@@ -618,7 +622,7 @@ func selectSubmitterStrategy(ctx context.Context, eth2Client eth2client.Service)
 		for _, address := range viper.GetStringSlice("submitter.beacon-node-addresses") {
 			client, err := fetchClient(ctx, address)
 			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %q for submitter strategy", address))
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for submitter strategy", address))
 			}
 			beaconBlockSubmitters[address] = client.(eth2client.BeaconBlockSubmitter)
 			attestationSubmitters[address] = client.(eth2client.AttestationSubmitter)

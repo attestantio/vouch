@@ -2,6 +2,7 @@ Development
   - do not continue if attempt to acquire a semaphore fails
   - fetch validators without balances, for (much) faster response from Prysm
   - do not fetch validator status twice on startup
+  - log module selections when a choice is made
 
 0.6.1
   - update documentation for account managers, explaining the difference between Dirk and wallet
