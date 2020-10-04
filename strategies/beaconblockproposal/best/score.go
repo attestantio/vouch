@@ -33,12 +33,35 @@ func scoreBeaconBlockProposal(ctx context.Context, name string, blockProposal *s
 	immediateAttestationScore := float64(0)
 	attestationScore := float64(0)
 
-	// Add attestation scores.
+	// We need to avoid duplicates in attestations.
+	// Map is slot -> committee index -> validator committee index -> attested.
+	attested := make(map[uint64]map[uint64]map[uint64]bool)
 	for _, attestation := range blockProposal.Body.Attestations {
-		inclusionDistance := float64(blockProposal.Slot - attestation.Data.Slot)
-		attestationScore += float64(attestation.AggregationBits.Count()) * (float64(0.75) + float64(0.25)/inclusionDistance)
-		if inclusionDistance == 1 {
-			immediateAttestationScore += float64(attestation.AggregationBits.Count()) * (float64(0.75) + float64(0.25)/inclusionDistance)
+		slotAttested, exists := attested[attestation.Data.Slot]
+		if !exists {
+			slotAttested = make(map[uint64]map[uint64]bool)
+			attested[attestation.Data.Slot] = slotAttested
+		}
+		committeeAttested, exists := slotAttested[attestation.Data.Index]
+		if !exists {
+			committeeAttested = make(map[uint64]bool)
+			slotAttested[attestation.Data.Index] = committeeAttested
+		}
+		for i := uint64(0); i < attestation.AggregationBits.Len(); i++ {
+			if attestation.AggregationBits.BitAt(i) {
+				committeeAttested[i] = true
+			}
+		}
+	}
+
+	// Calculate inclusion score.
+	for slot, slotAttested := range attested {
+		inclusionDistance := float64(blockProposal.Slot - slot)
+		for _, committeeAttested := range slotAttested {
+			attestationScore += float64(len(committeeAttested)) * (float64(0.75) + float64(0.25)/inclusionDistance)
+			if inclusionDistance == 1 {
+				immediateAttestationScore += float64(len(committeeAttested)) * (float64(0.75) + float64(0.25)/inclusionDistance)
+			}
 		}
 	}
 

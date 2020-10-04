@@ -30,6 +30,14 @@ func aggregationBits(set uint64, total uint64) bitfield.Bitlist {
 	return bits
 }
 
+func specificAggregationBits(set []uint64, total uint64) bitfield.Bitlist {
+	bits := bitfield.NewBitlist(total)
+	for _, pos := range set {
+		bits.SetBitAt(pos, true)
+	}
+	return bits
+}
+
 func TestScore(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -129,6 +137,29 @@ func TestScore(t *testing.T) {
 				},
 			},
 			score: 1450,
+		},
+		{
+			name: "DuplicateAttestations",
+			block: &spec.BeaconBlock{
+				Slot: 12345,
+				Body: &spec.BeaconBlockBody{
+					Attestations: []*spec.Attestation{
+						{
+							AggregationBits: specificAggregationBits([]uint64{1, 2, 3}, 128),
+							Data: &spec.AttestationData{
+								Slot: 12344,
+							},
+						},
+						{
+							AggregationBits: specificAggregationBits([]uint64{2, 3, 4}, 128),
+							Data: &spec.AttestationData{
+								Slot: 12344,
+							},
+						},
+					},
+				},
+			},
+			score: 4,
 		},
 	}
 
