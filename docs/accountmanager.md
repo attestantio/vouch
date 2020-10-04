@@ -19,7 +19,7 @@ accountmanager:
     client-key: file:///home/me/certs/validator.example.com.key
     ca-cert: file:///home/me/certs/ca.crt
     accounts:
-      - my valdiators
+      - my validators
 ```
 
 Each item is explained in more detail below.
@@ -59,7 +59,7 @@ accountmanager:
     locations:
       - /home/me/wallets
     accounts:
-      - my valdiators
+      - my validators
     passphrases:
       - file:///home/me/secrets/passphrase
 ```

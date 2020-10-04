@@ -156,7 +156,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	s.monitor.AttestationAggregationCompleted(started, "succeeded")
 }
 
-// IsAggregator reports if we are an attestation aggregator for a given valdiator/committee/slot combination.
+// IsAggregator reports if we are an attestation aggregator for a given validator/committee/slot combination.
 func (s *Service) IsAggregator(ctx context.Context, validatorIndex uint64, committeeIndex uint64, slot uint64, committeeSize uint64) (bool, []byte, error) {
 	modulo := committeeSize / s.targetAggregatorsPerCommittee
 	if modulo == 0 {

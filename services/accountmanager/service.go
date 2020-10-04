@@ -23,7 +23,7 @@ import (
 // Service is the generic accountmanager service.
 type Service interface{}
 
-// ValidatingAccountsProvider provides methods for valdiating accounts.
+// ValidatingAccountsProvider provides methods for validating accounts.
 type ValidatingAccountsProvider interface {
 	// Accounts provides information about all accounts that are configured to validate through this instance.
 	Accounts(ctx context.Context) ([]ValidatingAccount, error)
