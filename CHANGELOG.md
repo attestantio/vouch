@@ -1,4 +1,5 @@
 Development
+  - ensure genesis attesters are scheduled appropriately
   - do not continue if attempt to acquire a semaphore fails
   - fetch validators without balances, for (much) faster response from Prysm
   - do not fetch validator status twice on startup
