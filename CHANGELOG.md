@@ -1,4 +1,5 @@
 Development
+  - add internal ability to list names of all active scheduler jobs
   - ensure duplicated attestations are only counted as 1 in block proposal score
   - ensure genesis attesters are scheduled appropriately
   - do not continue if attempt to acquire a semaphore fails

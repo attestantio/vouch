@@ -102,7 +102,7 @@ func (s *Service) ScheduleJob(ctx context.Context, name string, runtime time.Tim
 		case <-cancelCh:
 			log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Cancel triggered; job not running")
 			s.mutex.Lock()
-			s.removeJob(ctx, name)
+			// The job will have already been removed.
 			s.mutex.Unlock()
 			s.monitor.JobCancelled()
 		case <-runCh:
@@ -195,7 +195,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeF
 			case <-cancelCh:
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Cancel triggered; job not running")
 				s.mutex.Lock()
-				s.removeJob(ctx, name)
+				// The job will have already been removed.
 				s.mutex.Unlock()
 				s.monitor.JobCancelled()
 				return
@@ -245,6 +245,18 @@ func (s *Service) JobExists(ctx context.Context, name string) bool {
 	return exists
 }
 
+// ListJobs returns the names of all jobs.
+func (s *Service) ListJobs(ctx context.Context) []string {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	names := make([]string, 0, len(s.jobs))
+	for name := range s.jobs {
+		names = append(names, name)
+	}
+
+	return names
+}
+
 // RunJobIfExists runs a job if it exists.
 // This does not return an error if the job does not exist.
 // If the job does not exist it will return an appropriate error.
@@ -270,6 +282,8 @@ func (s *Service) CancelJob(ctx context.Context, name string) error {
 	}
 
 	job.cancelCh <- struct{}{}
+	s.removeJob(ctx, name)
+
 	return nil
 }
 
@@ -281,6 +295,7 @@ func (s *Service) CancelJobs(ctx context.Context, prefix string) error {
 	for name, job := range s.jobs {
 		if strings.HasPrefix(name, prefix) {
 			job.cancelCh <- struct{}{}
+			s.removeJob(ctx, name)
 		}
 	}
 

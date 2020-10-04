@@ -73,4 +73,7 @@ type Service interface {
 	// This does not return an error if the job does not exist.
 	// If this is a period job then the next instance will be scheduled.
 	RunJobIfExists(ctx context.Context, name string) error
+
+	// ListJobs returns the names of all jobs.
+	ListJobs(ctx context.Context) []string
 }

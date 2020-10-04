@@ -15,7 +15,7 @@ package basic
 
 import (
 	"github.com/attestantio/vouch/services/metrics"
-	"github.com/pkg/errors"
+	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/rs/zerolog"
 )
 
@@ -61,7 +61,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 
 	if parameters.monitor == nil {
-		return nil, errors.New("no monitor specified")
+		parameters.monitor = &nullmetrics.Service{}
 	}
 
 	return &parameters, nil

@@ -33,9 +33,33 @@ import (
 func TestNew(t *testing.T) {
 	ctx := context.Background()
 
-	s, err := basic.New(ctx, basic.WithLogLevel(zerolog.Disabled), basic.WithMonitor(&nullmetrics.Service{}))
-	require.NoError(t, err)
-	assert.NotNil(t, s)
+	tests := []struct {
+		name    string
+		options []basic.Parameter
+		err     string
+	}{
+		{
+			name: "Good",
+		},
+		{
+			name: "GoodLogLevel",
+			options: []basic.Parameter{
+				basic.WithLogLevel(zerolog.Disabled),
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			s, err := basic.New(ctx, test.options...)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+				assert.NotNil(t, s)
+			}
+		})
+	}
 }
 
 func TestJob(t *testing.T) {
@@ -380,4 +404,38 @@ func TestManyJobs(t *testing.T) {
 	time.Sleep(400 * time.Millisecond)
 
 	require.Equal(t, uint32(jobs), run)
+}
+
+func TestListJobs(t *testing.T) {
+	ctx := context.Background()
+	s, err := basic.New(ctx, basic.WithLogLevel(zerolog.Disabled), basic.WithMonitor(&nullmetrics.Service{}))
+	require.NoError(t, err)
+	require.NotNil(t, s)
+
+	run := 0
+	runFunc := func(ctx context.Context, data interface{}) {
+		run++
+	}
+
+	jobs := s.ListJobs(ctx)
+	require.Len(t, jobs, 0)
+
+	require.NoError(t, s.ScheduleJob(ctx, "Test job 1", time.Now().Add(time.Second), runFunc, nil))
+
+	jobs = s.ListJobs(ctx)
+	require.Len(t, jobs, 1)
+	require.Contains(t, jobs, "Test job 1")
+
+	require.NoError(t, s.ScheduleJob(ctx, "Test job 2", time.Now().Add(time.Second), runFunc, nil))
+
+	jobs = s.ListJobs(ctx)
+	require.Len(t, jobs, 2)
+	require.Contains(t, jobs, "Test job 1")
+	require.Contains(t, jobs, "Test job 2")
+
+	require.NoError(t, s.CancelJob(ctx, "Test job 1"))
+
+	jobs = s.ListJobs(ctx)
+	require.Len(t, jobs, 1)
+	require.Contains(t, jobs, "Test job 2")
 }
