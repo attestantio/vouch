@@ -499,6 +499,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 		accountManager, err = dirkaccountmanager.New(ctx,
 			dirkaccountmanager.WithLogLevel(logLevel(viper.GetString("accountmanager.dirk.log-level"))),
 			dirkaccountmanager.WithMonitor(monitor.(metrics.AccountManagerMonitor)),
+			dirkaccountmanager.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			dirkaccountmanager.WithValidatorsProvider(eth2Client.(eth2client.ValidatorsProvider)),
 			dirkaccountmanager.WithEndpoints(viper.GetStringSlice("accountmanager.dirk.endpoints")),
 			dirkaccountmanager.WithAccountPaths(viper.GetStringSlice("accountmanager.dirk.accounts")),

@@ -14,8 +14,11 @@
 package dirk
 
 import (
+	"context"
+
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
+	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -23,6 +26,7 @@ import (
 type parameters struct {
 	logLevel                        zerolog.Level
 	monitor                         metrics.AccountManagerMonitor
+	clientMonitor                   metrics.ClientMonitor
 	endpoints                       []string
 	accountPaths                    []string
 	clientCert                      []byte
@@ -60,6 +64,13 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 func WithMonitor(monitor metrics.AccountManagerMonitor) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
+	})
+}
+
+// WithClientMonitor sets the client monitor for the module.
+func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.clientMonitor = clientMonitor
 	})
 }
 
@@ -157,7 +168,9 @@ func WithSignatureDomainProvider(provider eth2client.SignatureDomainProvider) Pa
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel: zerolog.GlobalLevel(),
+		logLevel:      zerolog.GlobalLevel(),
+		monitor:       nullmetrics.New(context.Background()),
+		clientMonitor: nullmetrics.New(context.Background()),
 	}
 	for _, p := range params {
 		if params != nil {
@@ -168,10 +181,13 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")
 	}
-	if parameters.endpoints == nil {
+	if parameters.clientMonitor == nil {
+		return nil, errors.New("no client monitor specified")
+	}
+	if len(parameters.endpoints) == 0 {
 		return nil, errors.New("no endpoints specified")
 	}
-	if parameters.accountPaths == nil {
+	if len(parameters.accountPaths) == 0 {
 		return nil, errors.New("no account paths specified")
 	}
 	if parameters.clientCert == nil {

@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
@@ -40,6 +41,7 @@ import (
 type Service struct {
 	mutex                   sync.RWMutex
 	monitor                 metrics.AccountManagerMonitor
+	clientMonitor           metrics.ClientMonitor
 	endpoints               []*dirk.Endpoint
 	accountPaths            []string
 	credentials             credentials.TransportCredentials
@@ -93,6 +95,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		}
 		endpoints = append(endpoints, dirk.NewEndpoint(endpointParts[0], uint32(port)))
 	}
+	if len(endpoints) == 0 {
+		return nil, errors.New("no valid endpoints specified")
+	}
 
 	slotsPerEpoch, err := parameters.slotsPerEpochProvider.SlotsPerEpoch(ctx)
 	if err != nil {
@@ -121,6 +126,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	s := &Service{
 		monitor:                 parameters.monitor,
+		clientMonitor:           parameters.clientMonitor,
 		endpoints:               endpoints,
 		accountPaths:            parameters.accountPaths,
 		credentials:             credentials,
@@ -159,12 +165,24 @@ func (s *Service) UpdateAccountsState(ctx context.Context) error {
 	var validators map[uint64]*api.Validator
 	var err error
 	if validatorsWithoutBalanceProvider, isProvider := s.validatorsProvider.(eth2client.ValidatorsWithoutBalanceProvider); isProvider {
+		started := time.Now()
 		validators, err = validatorsWithoutBalanceProvider.ValidatorsWithoutBalance(ctx, "head", validatorIDs)
+		if service, isService := s.validatorsProvider.(eth2client.Service); isService {
+			s.clientMonitor.ClientOperation(service.Address(), "validators without balance", err == nil, time.Since(started))
+		} else {
+			s.clientMonitor.ClientOperation("<unknown>", "validators without balance", err == nil, time.Since(started))
+		}
 		if err != nil {
 			return errors.Wrap(err, "failed to obtain validators without balances")
 		}
 	} else {
+		started := time.Now()
 		validators, err = s.validatorsProvider.Validators(ctx, "head", validatorIDs)
+		if service, isService := s.validatorsProvider.(eth2client.Service); isService {
+			s.clientMonitor.ClientOperation(service.Address(), "validators", err == nil, time.Since(started))
+		} else {
+			s.clientMonitor.ClientOperation("<unknown>", "validators", err == nil, time.Since(started))
+		}
 		if err != nil {
 			return errors.Wrap(err, "failed to obtain validators")
 		}
@@ -352,13 +370,14 @@ func accountPathsToVerificationRegexes(paths []string) []*regexp.Regexp {
 		if len(parts) == 1 {
 			parts = append(parts, ".*")
 		}
-		parts[1] = strings.TrimPrefix(parts[1], "^")
-		var specifier string
-		if strings.HasSuffix(parts[1], "$") {
-			specifier = fmt.Sprintf("^%s/%s", parts[0], parts[1])
-		} else {
-			specifier = fmt.Sprintf("^%s/%s$", parts[0], parts[1])
+		if len(parts[1]) == 0 {
+			parts[1] = ".*"
 		}
+		parts[0] = strings.TrimPrefix(parts[0], "^")
+		parts[0] = strings.TrimSuffix(parts[0], "$")
+		parts[1] = strings.TrimPrefix(parts[1], "^")
+		parts[1] = strings.TrimSuffix(parts[1], "$")
+		specifier := fmt.Sprintf("^%s/%s$", parts[0], parts[1])
 		regex, err := regexp.Compile(specifier)
 		if err != nil {
 			log.Warn().Str("specifier", specifier).Err(err).Msg("Invalid path regex")

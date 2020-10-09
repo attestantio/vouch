@@ -1,4 +1,6 @@
 Development
+  - add measurement of validator status fetching operations
+  - increase maximum block receipt delay metric from 4s to 12s
   - add internal ability to list names of all active scheduler jobs
   - ensure duplicated attestations are only counted as 1 in block proposal score
   - ensure genesis attesters are scheduled appropriately
