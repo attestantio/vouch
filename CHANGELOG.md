@@ -1,4 +1,5 @@
 Development
+  - avoid crash if beacon committee subscription information is not present
   - add measurement of validator status fetching operations
   - increase maximum block receipt delay metric from 4s to 12s
   - add internal ability to list names of all active scheduler jobs

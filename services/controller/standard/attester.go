@@ -132,6 +132,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 		info, exists := slotInfoMap[attestation.Data.Index]
 		if !exists {
 			log.Debug().Uint64("attestation_slot", attestation.Data.Slot).Uint64("committee_index", attestation.Data.Index).Msg("No committee info; cannot aggregate")
+			continue
 		}
 		if info.Aggregate {
 			aggregatorDuty, err := attestationaggregator.NewDuty(ctx, info.ValidatorIndex, info.ValidatorPubKey, attestation, info.Signature)
