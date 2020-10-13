@@ -553,9 +553,10 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start wallet account manager service")
 		}
+		return accountManager, nil
 	}
 
-	return accountManager, nil
+	return nil, errors.New("no account manager defined")
 }
 
 func selectBeaconBlockProposalProvider(ctx context.Context,
