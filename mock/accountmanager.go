@@ -54,14 +54,14 @@ func (a *validatingAccount) SignSlotSelection(ctx context.Context, slot uint64, 
 		return nil, errors.Wrap(err, "failed to write slot")
 	}
 	if n != 32 {
-		return nil, errors.Wrap(err, "failed to write all slot bytes")
+		return nil, errors.New("failed to write all slot bytes")
 	}
 	n, err = hash.Write(signatureDomain)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to write signature domain")
 	}
 	if n != 32 {
-		return nil, errors.Wrap(err, "failed to write all signature domain bytes")
+		return nil, errors.New("failed to write all signature domain bytes")
 	}
 
 	root := hash.Sum(nil)

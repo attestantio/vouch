@@ -68,31 +68,41 @@ import (
 )
 
 func main() {
+	os.Exit(main2())
+}
+
+func main2() int {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	if err := fetchConfig(); err != nil {
-		zerologger.Fatal().Err(err).Msg("Failed to fetch configuration")
+		zerologger.Error().Err(err).Msg("Failed to fetch configuration")
+		return 1
 	}
 
 	if err := initLogging(); err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialise logging")
+		log.Error().Err(err).Msg("Failed to initialise logging")
+		return 1
 	}
 
 	majordomo, err := initMajordomo(ctx)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialise majordomo")
+		log.Error().Err(err).Msg("Failed to initialise majordomo")
+		return 1
 	}
 
 	logModules()
 	log.Info().Str("version", "v0.6.1").Msg("Starting vouch")
 
 	if err := initProfiling(); err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialise profiling")
+		log.Error().Err(err).Msg("Failed to initialise profiling")
+		return 1
 	}
 
 	closer, err := initTracing()
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialise tracing")
+		log.Error().Err(err).Msg("Failed to initialise tracing")
+		return 1
 	}
 	if closer != nil {
 		defer closer.Close()
@@ -101,11 +111,13 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU() * 8)
 
 	if err := e2types.InitBLS(); err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialise BLS library")
+		log.Error().Err(err).Msg("Failed to initialise BLS library")
+		return 1
 	}
 
 	if err := startServices(ctx, majordomo); err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialise services")
+		log.Error().Err(err).Msg("Failed to initialise services")
+		return 1
 	}
 	log.Info().Msg("All services operational")
 
@@ -115,12 +127,12 @@ func main() {
 	for {
 		sig := <-sigCh
 		if sig == syscall.SIGINT || sig == syscall.SIGTERM || sig == os.Interrupt || sig == os.Kill {
-			cancel()
 			break
 		}
 	}
 
 	log.Info().Msg("Stopping vouch")
+	return 0
 }
 
 // fetchConfig fetches configuration from various sources.
@@ -161,7 +173,7 @@ func fetchConfig() error {
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return errors.Wrap(err, "failed to read configuration file")
+			return errors.New("failed to read configuration file")
 		}
 	}
 

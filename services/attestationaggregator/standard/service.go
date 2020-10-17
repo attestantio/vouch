@@ -170,7 +170,7 @@ func (s *Service) IsAggregator(ctx context.Context, validatorIndex uint64, commi
 		return false, nil, errors.Wrap(err, "failed to obtain validator")
 	}
 	if len(accounts) == 0 {
-		return false, nil, errors.Wrap(err, "validator unknown")
+		return false, nil, errors.New("validator unknown")
 	}
 	account := accounts[0]
 

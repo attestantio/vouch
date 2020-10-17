@@ -280,7 +280,7 @@ func credentialsFromCerts(ctx context.Context, clientCert []byte, clientKey []by
 	if caCert != nil {
 		cp := x509.NewCertPool()
 		if !cp.AppendCertsFromPEM(caCert) {
-			return nil, errors.Wrap(err, "failed to add CA certificate")
+			return nil, errors.New("failed to add CA certificate")
 		}
 		tlsCfg.RootCAs = cp
 	}

@@ -661,8 +661,8 @@ func TestAccounts(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	// #nosec G404
-	port := 1024 + rand.Intn(15359)
-	_, _, err := daemon.New(ctx, "", 1, port)
+	port := uint32(1024 + rand.Intn(15359))
+	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
 	require.Nil(t, err)
 
 	tests := []struct {
@@ -722,8 +722,8 @@ func TestAccountsByIndex(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	// #nosec G404
-	port := 1024 + rand.Intn(15359)
-	_, _, err := daemon.New(ctx, "", 1, port)
+	port := uint32(1024 + rand.Intn(15359))
+	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
 	require.Nil(t, err)
 
 	tests := []struct {
@@ -787,8 +787,8 @@ func TestAccountsByPubKey(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	// #nosec G404
-	port := 1024 + rand.Intn(15359)
-	_, _, err := daemon.New(ctx, "", 1, port)
+	port := uint32(1024 + rand.Intn(15359))
+	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
 	require.Nil(t, err)
 
 	tests := []struct {

@@ -26,20 +26,13 @@ import (
 
 // LogCapture allows testing code to query log output.
 type LogCapture struct {
-	mu sync.Mutex
-	// entries []*LogEntry
+	mu      sync.Mutex
 	entries []string
 }
-
-//type LogEntry struct {
-//	Level zerolog.Level
-//	Msg   string
-//}
 
 // NewLogCapture captures logs for querying.
 func NewLogCapture() *LogCapture {
 	c := &LogCapture{
-		//entries: make([]*LogEntry, 0),
 		entries: make([]string, 0),
 	}
 	zerologger.Logger = zerologger.Logger.Hook(c)
@@ -51,10 +44,6 @@ func (c *LogCapture) Run(e *zerolog.Event, level zerolog.Level, msg string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries = append(c.entries, msg)
-	//	c.entries = append(c.entries, &LogEntry{
-	//		Level: level,
-	//		Msg:   msg,
-	//	})
 	e.Discard()
 }
 
@@ -66,9 +55,11 @@ func (c *LogCapture) AssertHasEntry(t *testing.T, msg string) {
 		if c.entries[i] == msg {
 			return
 		}
-		//		if c.entries[i].Msg == msg {
-		//			return true
-		//		}
 	}
 	assert.Fail(t, fmt.Sprintf("Missing log message %q", msg), strings.Join(c.entries, "\n"))
+}
+
+// Entries returns all captures log entries.
+func (c *LogCapture) Entries() []string {
+	return c.entries
 }

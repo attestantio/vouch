@@ -37,8 +37,8 @@ func TestPubKey(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	// #nosec G404
-	port := 1024 + rand.Intn(15359)
-	_, _, err := daemon.New(ctx, "", 1, port)
+	port := uint32(1024 + rand.Intn(15359))
+	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
 	require.Nil(t, err)
 
 	s, err := dirk.New(context.Background(),
@@ -100,8 +100,8 @@ func TestState(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	// #nosec G404
-	port := 1024 + rand.Intn(15359)
-	_, _, err := daemon.New(ctx, "", 1, port)
+	port := uint32(1024 + rand.Intn(15359))
+	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
 	require.Nil(t, err)
 
 	s, err := dirk.New(context.Background(),
@@ -162,8 +162,8 @@ func TestSignSlotSelection(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	// #nosec G404
-	port := 1024 + rand.Intn(15359)
-	_, _, err := daemon.New(ctx, "", 1, port)
+	port := uint32(1024 + rand.Intn(15359))
+	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
 	require.Nil(t, err)
 
 	s, err := dirk.New(context.Background(),
@@ -225,8 +225,8 @@ func TestSignRANDAOReveal(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	// #nosec G404
-	port := 1024 + rand.Intn(15359)
-	_, _, err := daemon.New(ctx, "", 1, port)
+	port := uint32(1024 + rand.Intn(15359))
+	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
 	require.Nil(t, err)
 
 	s, err := dirk.New(context.Background(),
@@ -288,8 +288,8 @@ func TestSignBeaconBlockProposal(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	// #nosec G404
-	port := 1024 + rand.Intn(15359)
-	_, _, err := daemon.New(ctx, "", 1, port)
+	port := uint32(1024 + rand.Intn(15359))
+	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
 	require.Nil(t, err)
 
 	s, err := dirk.New(context.Background(),
@@ -320,12 +320,12 @@ func TestSignBeaconBlockProposal(t *testing.T) {
 		{
 			name:     "0",
 			index:    0,
-			expected: _byte("0xb02d15b68bb30bd2a9233db1fc31b6cd2e67692567d9af536acb4d6359d7e0246a975674bb12cdf6911a8301f3abf8c506473ba278ee0a09381482100b02c97e1b4901cb34c9b0f26cef892d3416d3b31a29fe190f392b2239392448e333dbb1"),
+			expected: _byte("0x83d91f4fe6dd962493f212a94dc62c81358ffbdb6c3f8567d96fbe31c5ab505db1a3d37b8c3d653225621bb34918d30b069bbc02daeea9e1b2e62166014563f271fdfbe9aad37f0d155754f63eb368dd853c0bf723ad64af371a04b7778e891a"),
 		},
 		{
 			name:     "1",
 			index:    1,
-			expected: _byte("0x87d7292ddc920c83057ae9034a8c02f828a2f793ddada099f23269cecf0c27372797b49088dcf4275bb603b8ad2a6edb08ebea42b7b5cce90ef22307926b0dd03e5591154c4f712830e5819a0614ada3de3b21d820c3e33322407f3b9d096396"),
+			expected: _byte("0x9176ac06d426beb74bfb3969a619d364a5e214f0da511433b56f8dca47b93725c4ddd225c1cb81dd5a26fc321801a1d70b1c28c6cf705c010fadf9c4f139c044224680d8c60e425c9d6e6b8e8af21f12cffab38b393a9b7529527b92cf20e80a"),
 		},
 	}
 
@@ -341,9 +341,9 @@ func TestSignBeaconBlockProposal(t *testing.T) {
 			res, err := signer.SignBeaconBlockProposal(ctx,
 				1,
 				1,
-				[]byte("0x0000000000000000000000000000000000000000000000000000000000000000"),
-				[]byte("0x0000000000000000000000000000000000000000000000000000000000000000"),
-				[]byte("0x0000000000000000000000000000000000000000000000000000000000000000"),
+				_byte("0x0000000000000000000000000000000000000000000000000000000000000000"),
+				_byte("0x0000000000000000000000000000000000000000000000000000000000000000"),
+				_byte("0x0000000000000000000000000000000000000000000000000000000000000000"),
 			)
 			require.NoError(t, err)
 			require.Equal(t, test.expected, res)
@@ -357,8 +357,8 @@ func TestBeaconAttestationsSigner(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	// #nosec G404
-	port := 1024 + rand.Intn(15359)
-	_, _, err := daemon.New(ctx, "", 1, port)
+	port := uint32(1024 + rand.Intn(15359))
+	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
 	require.Nil(t, err)
 
 	s, err := dirk.New(context.Background(),
@@ -389,12 +389,12 @@ func TestBeaconAttestationsSigner(t *testing.T) {
 		{
 			name:     "0",
 			index:    0,
-			expected: _byte("0x960b865e07da42f20bef229c21d0e61f5e5028271695910736b6787cc501d0b46a5be62ef22a5d63a10168cf19c46b86004454c54f3fa432e92defd55d867ea84a918c4826f769302d3aee6b66c1bb9bb6fc92262c4abdd58560e14ce33d696c"),
+			expected: _byte("0x974fb6782c196c8e523b74ea3dbdfe7b122c6a18590992f2cb789358dcea6c28498ffa6cac68629bf83175cb55bb0d3910919eab48d2934c3a81655dcc27c91a996ca4a9880ffde7864f6aba3cd7c40111e3317c817032776d077d8d6a348bb2"),
 		},
 		{
 			name:     "1",
 			index:    1,
-			expected: _byte("0xb51bdd3cec570d7e23b9b0ac2c93626759d6802a98c181d40750df1d64292f986b62228b948875b152289498dae36a6f0898ed142903eda3321ba96356b470b381ecd5f497b8f81b75d302649989ed31d1d09aab6d8930e7fe2858e92705e9ea"),
+			expected: _byte("0x84a1c3c50d093901ea1b027b18598e4b9cf0f848f6bd49f2807a3f6ea37c0cbf3794556705863de0ae8ea7dd2da4d4d91436e2ca96fa1eb045a22fb7704cedf8a842fa881a416eaa02444454d9f7f8040b84fc3cd3d42817f6992c3c29e16007"),
 		},
 	}
 
@@ -410,11 +410,11 @@ func TestBeaconAttestationsSigner(t *testing.T) {
 			res, err := signer.SignBeaconAttestation(ctx,
 				1,
 				1,
-				[]byte("0x0000000000000000000000000000000000000000000000000000000000000000"),
+				_byte("0x0000000000000000000000000000000000000000000000000000000000000000"),
 				0,
-				[]byte("0x0000000000000000000000000000000000000000000000000000000000000000"),
+				_byte("0x0000000000000000000000000000000000000000000000000000000000000000"),
 				1,
-				[]byte("0x0000000000000000000000000000000000000000000000000000000000000000"),
+				_byte("0x0000000000000000000000000000000000000000000000000000000000000000"),
 			)
 			require.NoError(t, err)
 			require.Equal(t, test.expected, res)
@@ -428,8 +428,8 @@ func TestAggregateAndProofsigner(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	// #nosec G404
-	port := 1024 + rand.Intn(15359)
-	_, _, err := daemon.New(ctx, "", 1, port)
+	port := uint32(1024 + rand.Intn(15359))
+	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
 	require.Nil(t, err)
 
 	s, err := dirk.New(context.Background(),

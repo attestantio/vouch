@@ -207,8 +207,8 @@ func TestUpdateAccountsState(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	// #nosec G404
-	port := 1024 + rand.Intn(15359)
-	_, _, err := daemon.New(ctx, "", 1, port)
+	port := uint32(1024 + rand.Intn(15359))
+	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
 	require.NoError(t, err)
 
 	s, err := setupService(context.Background(), t, []string{fmt.Sprintf("signer-test01:%d", port)}, []string{"Wallet 1", "Wallet 2"})
@@ -240,8 +240,8 @@ func TestUpdateAccountsStateWithoutBalances(t *testing.T) {
 
 	rand.Seed(time.Now().UnixNano())
 	// #nosec G404
-	port := 1024 + rand.Intn(15359)
-	_, _, err := daemon.New(ctx, "", 1, port)
+	port := uint32(1024 + rand.Intn(15359))
+	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
 	require.NoError(t, err)
 
 	s, err := New(ctx,
