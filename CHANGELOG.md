@@ -1,4 +1,5 @@
 Development
+  - do not attempt to aggregate a failed attestation
   - error appropriately when misconfigured
   - avoid crash if accountmanager not configured
   - avoid crash if beacon committee subscription information is not present

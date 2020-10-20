@@ -102,9 +102,10 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 	attestations, err := s.attester.Attest(ctx, duty)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to attest")
+		return
 	}
 
-	if len(attestations) == 0 {
+	if len(attestations) == 0 || attestations[0].Data == nil {
 		log.Debug().Msg("No attestations; nothing to aggregate")
 		return
 	}
