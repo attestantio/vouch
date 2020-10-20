@@ -67,6 +67,9 @@ import (
 	standardmajordomo "github.com/wealdtech/go-majordomo/standard"
 )
 
+// ReleaseVersion is the release version for the code.
+var ReleaseVersion = "0.6.2"
+
 func main() {
 	os.Exit(main2())
 }
@@ -92,7 +95,7 @@ func main2() int {
 	}
 
 	logModules()
-	log.Info().Str("version", "v0.6.1").Msg("Starting vouch")
+	log.Info().Str("version", ReleaseVersion).Msg("Starting vouch")
 
 	if err := initProfiling(); err != nil {
 		log.Error().Err(err).Msg("Failed to initialise profiling")

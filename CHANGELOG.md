@@ -1,4 +1,4 @@
-Development
+0.6.2
   - do not attempt to aggregate a failed attestation
   - error appropriately when misconfigured
   - avoid crash if accountmanager not configured
