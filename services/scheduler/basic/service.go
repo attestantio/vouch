@@ -125,8 +125,8 @@ func (s *Service) ScheduleJob(ctx context.Context, name string, runtime time.Tim
 				s.mutex.Unlock()
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Timer triggered; job running")
 				s.monitor.JobStartedOnTimer()
-				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Job complete")
 				jobFunc(ctx, data)
+				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Job complete")
 			} else {
 				// Job has been taken by another thread; do nothing.
 				s.mutex.Unlock()
@@ -137,7 +137,10 @@ func (s *Service) ScheduleJob(ctx context.Context, name string, runtime time.Tim
 	return nil
 }
 
-// SchedulePeriodicJob scheduls a periodic job for a given time.
+// SchedulePeriodicJob schedules a job to run in a loop.
+// The loop starts by calling runtimeFunc, which sets the time for the first run.
+// Once the time as specified by runtimeFunc is met, jobFunc is called.
+// Once jobFunc returns, go back to the beginning of the loop.
 func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeFunc scheduler.RuntimeFunc, runtimeData interface{}, jobFunc scheduler.JobFunc, jobData interface{}) error {
 	if name == "" {
 		return scheduler.ErrNoJobName
@@ -206,6 +209,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeF
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Run triggered; job running")
 				s.monitor.JobStartedOnSignal()
 				jobFunc(ctx, jobData)
+				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Job complete")
 				s.unlockJob(ctx, name)
 			case <-time.After(time.Until(runtime)):
 				s.mutex.Lock()
@@ -214,6 +218,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeF
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Timer triggered; job running")
 				s.monitor.JobStartedOnTimer()
 				jobFunc(ctx, jobData)
+				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Job complete")
 				s.unlockJob(ctx, name)
 			}
 		}
@@ -259,7 +264,6 @@ func (s *Service) ListJobs(ctx context.Context) []string {
 
 // RunJobIfExists runs a job if it exists.
 // This does not return an error if the job does not exist.
-// If the job does not exist it will return an appropriate error.
 func (s *Service) RunJobIfExists(ctx context.Context, name string) error {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
@@ -326,7 +330,7 @@ func (s *Service) lockJob(ctx context.Context, name string) {
 }
 
 // unlockJob unlocks a specific job.
-// This assumes that the service mutex is held.
+// This should be called without the service mutex held, to avoid lock<>lock<>unlock situations.
 func (s *Service) unlockJob(ctx context.Context, name string) {
 	job, exists := s.jobs[name]
 	if !exists {

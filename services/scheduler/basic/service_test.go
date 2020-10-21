@@ -439,3 +439,29 @@ func TestListJobs(t *testing.T) {
 	require.Len(t, jobs, 1)
 	require.Contains(t, jobs, "Test job 2")
 }
+
+func TestLongRunningPeriodicJob(t *testing.T) {
+	ctx := context.Background()
+	s, err := basic.New(ctx, basic.WithLogLevel(zerolog.Disabled), basic.WithMonitor(&nullmetrics.Service{}))
+	require.NoError(t, err)
+	require.NotNil(t, s)
+
+	// Job takes 200 ms.
+	run := uint32(0)
+	jobFunc := func(ctx context.Context, data interface{}) {
+		time.Sleep(200 * time.Millisecond)
+		atomic.AddUint32(&run, 1)
+	}
+
+	// Job runs every 150 ms.
+	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+		return time.Now().Add(150 * time.Millisecond), nil
+	}
+
+	// Schedule the job.
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test long running periodic job", runtimeFunc, nil, jobFunc, nil))
+
+	// Sleep for 800 ms.  Expect two runs (150+200+150+200+150).
+	time.Sleep(800 * time.Millisecond)
+	assert.Equal(t, uint32(2), run)
+}
