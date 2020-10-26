@@ -20,9 +20,10 @@ import (
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
-// Duty contains information about a beacon block attester duty.
+// Duty contains information about beacon block attester duties for a given slot.
 type Duty struct {
 	slot                      uint64
+	committeesAtSlot          uint64
 	validatorIndices          []uint64
 	committeeIndices          []uint64
 	validatorCommitteeIndices []uint64
@@ -30,7 +31,7 @@ type Duty struct {
 }
 
 // NewDuty creates a new beacon block attester duty.
-func NewDuty(ctx context.Context, slot uint64, validatorIndices []uint64, committeeIndices []uint64, validatorCommitteeIndices []uint64, committeeLengths map[uint64]uint64) (*Duty, error) {
+func NewDuty(ctx context.Context, slot uint64, committeesAtSlot uint64, validatorIndices []uint64, committeeIndices []uint64, validatorCommitteeIndices []uint64, committeeLengths map[uint64]uint64) (*Duty, error) {
 	// Ensure there is a matching committee size for each committee index.
 	for i := range committeeIndices {
 		if _, exists := committeeLengths[committeeIndices[i]]; !exists {
@@ -40,6 +41,7 @@ func NewDuty(ctx context.Context, slot uint64, validatorIndices []uint64, commit
 
 	return &Duty{
 		slot:                      slot,
+		committeesAtSlot:          committeesAtSlot,
 		validatorIndices:          validatorIndices,
 		committeeIndices:          committeeIndices,
 		validatorCommitteeIndices: validatorCommitteeIndices,
@@ -50,6 +52,11 @@ func NewDuty(ctx context.Context, slot uint64, validatorIndices []uint64, commit
 // Slot provides the slot for the beacon block attester.
 func (d *Duty) Slot() uint64 {
 	return d.slot
+}
+
+// CommitteesAtSlot provides the number of committees at the slot for the beacon block attester.
+func (d *Duty) CommitteesAtSlot() uint64 {
+	return d.committeesAtSlot
 }
 
 // ValidatorIndices provides the validator indices for the beacon block attester.
