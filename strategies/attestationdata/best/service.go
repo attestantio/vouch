@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package first
+package best
 
 import (
 	"context"
@@ -27,6 +27,7 @@ import (
 // Service is the provider for attestation data.
 type Service struct {
 	clientMonitor            metrics.ClientMonitor
+	processConcurrency       int64
 	attestationDataProviders map[string]eth2client.AttestationDataProvider
 	timeout                  time.Duration
 }
@@ -42,15 +43,16 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("strategy", "attestationdata").Str("impl", "first").Logger()
+	log = zerologger.With().Str("strategy", "attestationdata").Str("impl", "best").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
 
 	s := &Service{
-		attestationDataProviders: parameters.attestationDataProviders,
 		timeout:                  parameters.timeout,
 		clientMonitor:            parameters.clientMonitor,
+		processConcurrency:       parameters.processConcurrency,
+		attestationDataProviders: parameters.attestationDataProviders,
 	}
 
 	return s, nil

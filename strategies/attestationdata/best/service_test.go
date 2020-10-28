@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package first_test
+package best_test
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/mock"
-	"github.com/attestantio/vouch/strategies/attestationdata/first"
+	"github.com/attestantio/vouch/strategies/attestationdata/best"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
@@ -32,56 +32,56 @@ func TestService(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		params []first.Parameter
+		params []best.Parameter
 		err    string
 	}{
 		{
 			name: "TimeoutZero",
-			params: []first.Parameter{
-				first.WithLogLevel(zerolog.TraceLevel),
-				first.WithTimeout(0),
-				first.WithAttestationDataProviders(attestationDataProviders),
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(0),
+				best.WithAttestationDataProviders(attestationDataProviders),
 			},
 			err: "problem with parameters: no timeout specified",
 		},
 		{
 			name: "ClientMonitorMissing",
-			params: []first.Parameter{
-				first.WithLogLevel(zerolog.TraceLevel),
-				first.WithClientMonitor(nil),
-				first.WithAttestationDataProviders(attestationDataProviders),
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithClientMonitor(nil),
+				best.WithAttestationDataProviders(attestationDataProviders),
 			},
 			err: "problem with parameters: no client monitor specified",
 		},
 		{
 			name: "AttestationDataProvidersNil",
-			params: []first.Parameter{
-				first.WithLogLevel(zerolog.TraceLevel),
-				first.WithAttestationDataProviders(nil),
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithAttestationDataProviders(nil),
 			},
 			err: "problem with parameters: no attestation data providers specified",
 		},
 		{
 			name: "AttestationDataProvidersEmpty",
-			params: []first.Parameter{
-				first.WithLogLevel(zerolog.TraceLevel),
-				first.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{}),
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{}),
 			},
 			err: "problem with parameters: no attestation data providers specified",
 		},
 		{
 			name: "Good",
-			params: []first.Parameter{
-				first.WithLogLevel(zerolog.TraceLevel),
-				first.WithTimeout(10 * time.Second),
-				first.WithAttestationDataProviders(attestationDataProviders),
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(10 * time.Second),
+				best.WithAttestationDataProviders(attestationDataProviders),
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := first.New(context.Background(), test.params...)
+			_, err := best.New(context.Background(), test.params...)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
@@ -96,9 +96,9 @@ func TestInterfaces(t *testing.T) {
 		"localhost:1": mock.NewAttestationDataProvider(),
 	}
 
-	s, err := first.New(context.Background(),
-		first.WithLogLevel(zerolog.Disabled),
-		first.WithAttestationDataProviders(attestationDataProviders),
+	s, err := best.New(context.Background(),
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithAttestationDataProviders(attestationDataProviders),
 	)
 	require.NoError(t, err)
 	require.Implements(t, (*eth2client.AttestationDataProvider)(nil), s)
