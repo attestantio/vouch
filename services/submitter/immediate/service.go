@@ -16,10 +16,12 @@ package immediate
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	api "github.com/attestantio/go-eth2-client/api/v1"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/submitter"
+	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -27,6 +29,7 @@ import (
 
 // Service is the submitter for signed items.
 type Service struct {
+	clientMonitor                         metrics.ClientMonitor
 	attestationSubmitter                  eth2client.AttestationSubmitter
 	beaconBlockSubmitter                  eth2client.BeaconBlockSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
@@ -50,6 +53,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		clientMonitor:                         parameters.clientMonitor,
 		attestationSubmitter:                  parameters.attestationSubmitter,
 		beaconBlockSubmitter:                  parameters.beaconBlockSubmitter,
 		beaconCommitteeSubscriptionsSubmitter: parameters.beaconCommitteeSubscriptionsSubmitter,
@@ -65,7 +69,14 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaco
 		return errors.New("no beacon block supplied")
 	}
 
-	if err := s.beaconBlockSubmitter.SubmitBeaconBlock(ctx, block); err != nil {
+	started := time.Now()
+	err := s.beaconBlockSubmitter.SubmitBeaconBlock(ctx, block)
+	if service, isService := s.beaconBlockSubmitter.(eth2client.Service); isService {
+		s.clientMonitor.ClientOperation(service.Address(), "submit beacon block", err == nil, time.Since(started))
+	} else {
+		s.clientMonitor.ClientOperation("<unknown>", "submit beacon block", err == nil, time.Since(started))
+	}
+	if err != nil {
 		return errors.Wrap(err, "failed to submit beacon block")
 	}
 
@@ -85,7 +96,14 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 		return errors.New("no attestation supplied")
 	}
 
-	if err := s.attestationSubmitter.SubmitAttestation(ctx, attestation); err != nil {
+	started := time.Now()
+	err := s.attestationSubmitter.SubmitAttestation(ctx, attestation)
+	if service, isService := s.attestationSubmitter.(eth2client.Service); isService {
+		s.clientMonitor.ClientOperation(service.Address(), "submit attestation", err == nil, time.Since(started))
+	} else {
+		s.clientMonitor.ClientOperation("<unknown>", "submit attestation", err == nil, time.Since(started))
+	}
+	if err != nil {
 		return errors.Wrap(err, "failed to submit attestation")
 	}
 
@@ -100,24 +118,28 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 }
 
 // SubmitBeaconCommitteeSubscriptions submits a batch of beacon committee subscriptions.
-func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*submitter.BeaconCommitteeSubscription) error {
+func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*api.BeaconCommitteeSubscription) error {
 	if len(subscriptions) == 0 {
 		return errors.New("no beacon committee subscriptions supplied")
 	}
 
-	subs := make([]*eth2client.BeaconCommitteeSubscription, len(subscriptions))
+	subs := make([]*api.BeaconCommitteeSubscription, len(subscriptions))
 	for i, subscription := range subscriptions {
-		subs[i] = &eth2client.BeaconCommitteeSubscription{
-			Slot:                   subscription.Slot,
-			CommitteeIndex:         subscription.CommitteeIndex,
-			CommitteeSize:          subscription.CommitteeSize,
-			ValidatorIndex:         subscription.ValidatorIndex,
-			ValidatorPubKey:        subscription.ValidatorPubKey,
-			Aggregate:              subscription.Aggregate,
-			SlotSelectionSignature: subscription.Signature,
+		subs[i] = &api.BeaconCommitteeSubscription{
+			Slot:             subscription.Slot,
+			CommitteeIndex:   subscription.CommitteeIndex,
+			CommitteesAtSlot: subscription.CommitteesAtSlot,
+			IsAggregator:     subscription.IsAggregator,
 		}
 	}
-	if err := s.beaconCommitteeSubscriptionsSubmitter.SubmitBeaconCommitteeSubscriptions(ctx, subs); err != nil {
+	started := time.Now()
+	err := s.beaconCommitteeSubscriptionsSubmitter.SubmitBeaconCommitteeSubscriptions(ctx, subs)
+	if service, isService := s.beaconCommitteeSubscriptionsSubmitter.(eth2client.Service); isService {
+		s.clientMonitor.ClientOperation(service.Address(), "submit beacon committee subscription", err == nil, time.Since(started))
+	} else {
+		s.clientMonitor.ClientOperation("<unknown>", "submit beacon committee subscription", err == nil, time.Since(started))
+	}
+	if err != nil {
 		return errors.Wrap(err, "failed to submit beacon committee subscriptions")
 	}
 
@@ -125,7 +147,7 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 		// Summary counts.
 		aggregating := 0
 		for i := range subscriptions {
-			if subscriptions[i].Aggregate {
+			if subscriptions[i].IsAggregator {
 				aggregating++
 			}
 		}
@@ -145,7 +167,14 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []
 		return errors.New("no aggregate attestations supplied")
 	}
 
-	if err := s.aggregateAttestationsSubmitter.SubmitAggregateAttestations(ctx, aggregates); err != nil {
+	started := time.Now()
+	err := s.aggregateAttestationsSubmitter.SubmitAggregateAttestations(ctx, aggregates)
+	if service, isService := s.aggregateAttestationsSubmitter.(eth2client.Service); isService {
+		s.clientMonitor.ClientOperation(service.Address(), "submit aggregate attestation", err == nil, time.Since(started))
+	} else {
+		s.clientMonitor.ClientOperation("<unknown>", "submit aggregate attestation", err == nil, time.Since(started))
+	}
+	if err != nil {
 		return errors.Wrap(err, "failed to submit aggregate attestation")
 	}
 

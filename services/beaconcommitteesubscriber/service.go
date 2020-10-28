@@ -17,16 +17,16 @@ package beaconcommitteesubscriber
 import (
 	"context"
 
+	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/vouch/services/accountmanager"
 )
 
 // Subscription holds details of the committees to which we are subscribing.
 type Subscription struct {
-	ValidatorIndex  uint64
-	ValidatorPubKey []byte
-	CommitteeSize   uint64
-	Signature       []byte
-	Aggregate       bool
+	Duty         *api.AttesterDuty
+	IsAggregator bool
+	// TODO is this in the correct place?
+	Signature []byte
 }
 
 // Service is the beacon committee subscriber service.

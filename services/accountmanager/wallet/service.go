@@ -126,10 +126,14 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 // UpdateAccountsState updates account state with the latest information from the beacon chain.
 // This should be run at the beginning of each epoch to ensure that any newly-activated accounts are registered.
 func (s *Service) UpdateAccountsState(ctx context.Context) error {
-	validatorIDs := make([]eth2client.ValidatorIDProvider, 0, len(s.accounts))
+	validatorIDs := make([]uint64, 0, len(s.accounts))
 	for _, account := range s.accounts {
 		if !account.state.IsAttesting() {
-			validatorIDs = append(validatorIDs, account)
+			index, err := account.Index(ctx)
+			if err != nil {
+				return errors.Wrap(err, "failed to obtain account index")
+			}
+			validatorIDs = append(validatorIDs, index)
 		}
 	}
 	if len(validatorIDs) == 0 {
@@ -189,22 +193,26 @@ func (s *Service) RefreshAccounts(ctx context.Context) error {
 		//}
 	}
 
-	validatorIDs := make([]eth2client.ValidatorIDProvider, 0, len(accounts))
+	// Update indices for accounts.
+	pubKeys := make([][]byte, 0, len(accounts))
 	for _, account := range accounts {
-		if !account.state.IsAttesting() {
-			validatorIDs = append(validatorIDs, account)
+		pubKey, err := account.PubKey(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to obtain public key")
 		}
+		pubKeys = append(pubKeys, pubKey)
 	}
+	validators, err := s.validatorsProvider.ValidatorsByPubKey(ctx, "head", pubKeys)
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain validators")
+	}
+
 	log.Trace().Int("keys", len(accounts)).Msg("Keys obtained")
-	if len(validatorIDs) == 0 {
+	if len(pubKeys) == 0 {
 		log.Warn().Msg("No accounts obtained")
 		return nil
 	}
 
-	validators, err := s.validatorsProvider.Validators(ctx, "head", validatorIDs)
-	if err != nil {
-		return errors.Wrap(err, "failed to obtain validators")
-	}
 	s.updateAccountStates(ctx, accounts, validators)
 
 	s.mutex.Lock()
@@ -246,7 +254,7 @@ func (s *Service) AccountsByIndex(ctx context.Context, indices []uint64) ([]acco
 		}
 		index, err := account.Index(ctx)
 		if err != nil {
-			log.Error().Err(err).Msg("No index for account")
+			log.Error().Err(err).Msg("Failed to obtain account index")
 			continue
 		}
 		if _, exists := indexMap[index]; exists {
@@ -326,7 +334,7 @@ func (s *Service) updateAccountStates(ctx context.Context, accounts map[[48]byte
 		validator, exists := validatorsByPubKey[pubKey]
 		if exists {
 			account.index = validator.Index
-			account.state = validator.State
+			account.state = validator.Status
 		}
 		validatorStateCounts[strings.ToLower(account.state.String())]++
 	}

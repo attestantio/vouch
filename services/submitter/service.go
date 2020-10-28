@@ -16,6 +16,7 @@ package submitter
 import (
 	"context"
 
+	api "github.com/attestantio/go-eth2-client/api/v1"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
@@ -34,21 +35,10 @@ type BeaconBlockSubmitter interface {
 	SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaconBlock) error
 }
 
-// BeaconCommitteeSubscription is a subscription for a particular beacon committee at a given time.
-type BeaconCommitteeSubscription struct {
-	Slot            uint64
-	CommitteeIndex  uint64
-	CommitteeSize   uint64
-	ValidatorIndex  uint64
-	ValidatorPubKey []byte
-	Aggregate       bool
-	Signature       []byte
-}
-
 // BeaconCommitteeSubscriptionsSubmitter is the interface for a submitter of beacon committee subscriptions.
 type BeaconCommitteeSubscriptionsSubmitter interface {
 	// SubmitBeaconCommitteeSubscription submits a batch of beacon committee subscriptions.
-	SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*BeaconCommitteeSubscription) error
+	SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*api.BeaconCommitteeSubscription) error
 }
 
 // AggregateAttestationsSubmitter is the interface for a submitter of aggregate attestations.

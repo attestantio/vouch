@@ -265,13 +265,13 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	}
 
 	log.Trace().Msg("Selecting submitter strategy")
-	submitterStrategy, err := selectSubmitterStrategy(ctx, eth2Client)
+	submitterStrategy, err := selectSubmitterStrategy(ctx, monitor, eth2Client)
 	if err != nil {
 		return errors.Wrap(err, "failed to select submitter")
 	}
 
 	log.Trace().Msg("Starting graffiti provider")
-	graffitiProvider, err := startGraffitiProvider(ctx, monitor, majordomo)
+	graffitiProvider, err := startGraffitiProvider(ctx, majordomo)
 	if err != nil {
 		return errors.Wrap(err, "failed to start graffiti provider")
 	}
@@ -313,7 +313,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	attestationAggregator, err := standardattestationaggregator.New(ctx,
 		standardattestationaggregator.WithLogLevel(logLevel(viper.GetString("attestationaggregator.log-level"))),
 		standardattestationaggregator.WithTargetAggregatorsPerCommitteeProvider(eth2Client.(eth2client.TargetAggregatorsPerCommitteeProvider)),
-		standardattestationaggregator.WithAggregateAttestationDataProvider(eth2Client.(eth2client.NonSpecAggregateAttestationProvider)),
+		standardattestationaggregator.WithAggregateAttestationDataProvider(eth2Client.(eth2client.AggregateAttestationProvider)),
 		standardattestationaggregator.WithAggregateAttestationsSubmitter(submitterStrategy.(submitter.AggregateAttestationsSubmitter)),
 		standardattestationaggregator.WithMonitor(monitor.(metrics.AttestationAggregationMonitor)),
 		standardattestationaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
@@ -344,7 +344,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardcontroller.WithChainTimeService(chainTime),
 		standardcontroller.WithProposerDutiesProvider(eth2Client.(eth2client.ProposerDutiesProvider)),
 		standardcontroller.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),
-		standardcontroller.WithBeaconChainHeadUpdatedSource(eth2Client.(eth2client.BeaconChainHeadUpdatedSource)),
+		standardcontroller.WithEventsProvider(eth2Client.(eth2client.EventsProvider)),
 		standardcontroller.WithScheduler(scheduler),
 		standardcontroller.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardcontroller.WithAttester(attester),
@@ -474,7 +474,7 @@ func startMonitor(ctx context.Context) (metrics.Service, error) {
 	return monitor, nil
 }
 
-func startGraffitiProvider(ctx context.Context, monitor metrics.Service, majordomo majordomo.Service) (graffitiprovider.Service, error) {
+func startGraffitiProvider(ctx context.Context, majordomo majordomo.Service) (graffitiprovider.Service, error) {
 	switch {
 	case viper.Get("graffiti.dynamic") != nil:
 		log.Info().Msg("Starting dynamic graffiti provider")
@@ -626,7 +626,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 	return beaconBlockProposalProvider, nil
 }
 
-func selectSubmitterStrategy(ctx context.Context, eth2Client eth2client.Service) (submitter.Service, error) {
+func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (submitter.Service, error) {
 	var submitter submitter.Service
 	var err error
 	switch viper.GetString("submitter.style") {
@@ -647,6 +647,7 @@ func selectSubmitterStrategy(ctx context.Context, eth2Client eth2client.Service)
 			beaconCommitteeSubscriptionsSubmitters[address] = client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)
 		}
 		submitter, err = multinodesubmitter.New(ctx,
+			multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			multinodesubmitter.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
 			multinodesubmitter.WithLogLevel(logLevel(viper.GetString("submitter.log-level"))),
 			multinodesubmitter.WithBeaconBlockSubmitters(beaconBlockSubmitters),
@@ -658,6 +659,7 @@ func selectSubmitterStrategy(ctx context.Context, eth2Client eth2client.Service)
 		log.Info().Msg("Starting standard submitter strategy")
 		submitter, err = immediatesubmitter.New(ctx,
 			immediatesubmitter.WithLogLevel(logLevel(viper.GetString("submitter.log-level"))),
+			immediatesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			immediatesubmitter.WithBeaconBlockSubmitter(eth2Client.(eth2client.BeaconBlockSubmitter)),
 			immediatesubmitter.WithAttestationSubmitter(eth2Client.(eth2client.AttestationSubmitter)),
 			immediatesubmitter.WithBeaconCommitteeSubscriptionsSubmitter(eth2Client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)),

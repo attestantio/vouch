@@ -17,6 +17,7 @@ import (
 	"context"
 	"testing"
 
+	api "github.com/attestantio/go-eth2-client/api/v1"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/submitter"
@@ -330,7 +331,7 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 	tests := []struct {
 		name          string
 		params        []immediate.Parameter
-		subscriptions []*submitter.BeaconCommitteeSubscription
+		subscriptions []*api.BeaconCommitteeSubscription
 		err           string
 	}{
 		{
@@ -353,7 +354,7 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 			},
-			subscriptions: []*submitter.BeaconCommitteeSubscription{},
+			subscriptions: []*api.BeaconCommitteeSubscription{},
 			err:           "no beacon committee subscriptions supplied",
 		},
 		{
@@ -365,7 +366,7 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewErroringBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 			},
-			subscriptions: []*submitter.BeaconCommitteeSubscription{
+			subscriptions: []*api.BeaconCommitteeSubscription{
 				{},
 			},
 			err: "failed to submit beacon committee subscriptions: error",
@@ -379,7 +380,7 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 			},
-			subscriptions: []*submitter.BeaconCommitteeSubscription{
+			subscriptions: []*api.BeaconCommitteeSubscription{
 				{},
 			},
 		},

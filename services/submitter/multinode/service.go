@@ -17,6 +17,7 @@ import (
 	"context"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -24,6 +25,7 @@ import (
 
 // Service is the provider for beacon block proposals.
 type Service struct {
+	clientMonitor                         metrics.ClientMonitor
 	processConcurrency                    int64
 	beaconBlockSubmitters                 map[string]eth2client.BeaconBlockSubmitter
 	attestationSubmitters                 map[string]eth2client.AttestationSubmitter
@@ -48,6 +50,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		clientMonitor:                         parameters.clientMonitor,
 		processConcurrency:                    parameters.processConcurrency,
 		beaconBlockSubmitters:                 parameters.beaconBlockSubmitters,
 		attestationSubmitters:                 parameters.attestationSubmitters,

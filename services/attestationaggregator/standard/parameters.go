@@ -27,7 +27,7 @@ type parameters struct {
 	monitor                               metrics.AttestationAggregationMonitor
 	targetAggregatorsPerCommitteeProvider eth2client.TargetAggregatorsPerCommitteeProvider
 	validatingAccountsProvider            accountmanager.ValidatingAccountsProvider
-	aggregateAttestationProvider          eth2client.NonSpecAggregateAttestationProvider
+	aggregateAttestationProvider          eth2client.AggregateAttestationProvider
 	aggregateAttestationsSubmitter        submitter.AggregateAttestationsSubmitter
 }
 
@@ -71,7 +71,7 @@ func WithValidatingAccountsProvider(provider accountmanager.ValidatingAccountsPr
 }
 
 // WithAggregateAttestationDataProvider sets the aggregate attestation provider.
-func WithAggregateAttestationDataProvider(provider eth2client.NonSpecAggregateAttestationProvider) Parameter {
+func WithAggregateAttestationDataProvider(provider eth2client.AggregateAttestationProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.aggregateAttestationProvider = provider
 	})

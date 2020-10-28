@@ -15,13 +15,18 @@
 package immediate
 
 import (
+	"context"
+
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/vouch/services/metrics"
+	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 type parameters struct {
 	logLevel                              zerolog.Level
+	clientMonitor                         metrics.ClientMonitor
 	beaconBlockSubmitter                  eth2client.BeaconBlockSubmitter
 	attestationSubmitter                  eth2client.AttestationSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
@@ -46,14 +51,21 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 	})
 }
 
-// WithBeaconBlockSubmitter sets the beacon block submitter
+// WithClientMonitor sets the client monitor.
+func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.clientMonitor = clientMonitor
+	})
+}
+
+// WithBeaconBlockSubmitter sets the beacon block submitter.
 func WithBeaconBlockSubmitter(submitter eth2client.BeaconBlockSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.beaconBlockSubmitter = submitter
 	})
 }
 
-// WithAttestationSubmitter sets the attestation submitter
+// WithAttestationSubmitter sets the attestation submitter.
 func WithAttestationSubmitter(submitter eth2client.AttestationSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.attestationSubmitter = submitter
@@ -77,7 +89,8 @@ func WithAggregateAttestationsSubmitter(submitter eth2client.AggregateAttestatio
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel: zerolog.GlobalLevel(),
+		logLevel:      zerolog.GlobalLevel(),
+		clientMonitor: nullmetrics.New(context.Background()),
 	}
 	for _, p := range params {
 		if params != nil {
@@ -85,6 +98,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
+	if parameters.clientMonitor == nil {
+		return nil, errors.New("no client monitor specified")
+	}
 	if parameters.beaconBlockSubmitter == nil {
 		return nil, errors.New("no beacon block submitter specified")
 	}

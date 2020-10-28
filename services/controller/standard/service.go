@@ -97,10 +97,12 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		subscriptionInfos:          make(map[uint64]map[uint64]map[uint64]*beaconcommitteesubscriber.Subscription),
 	}
 
-	log.Trace().Msg("Adding beacon chain head updated handler")
-	if err := parameters.beaconChainHeadUpdatedSource.AddOnBeaconChainHeadUpdatedHandler(ctx, s); err != nil {
-		return nil, errors.Wrap(err, "failed to add beacon chain head updated handler")
+	// Subscribe to head events.
+	if err := parameters.eventsProvider.Events(ctx, []string{"head"}, s.HandleHeadEvent); err != nil {
+		return nil, errors.Wrap(err, "failed to add head event handler")
 	}
+
+	// TODO subscribe to reorg events.
 
 	// Subscriptions are usually updated one epoch in advance, but as we're
 	// just starting we don't have subscriptions (or subscription information)
@@ -263,21 +265,22 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	epochTickerData.atGenesis = false
 }
 
-// OnBeaconChainHeadUpdated runs attestations for a slot immediately, if the update is for the current slot.
-func (s *Service) OnBeaconChainHeadUpdated(ctx context.Context, slot uint64, stateRoot []byte, bodyRoot []byte, epochTransitioni bool) {
-	if slot != s.chainTimeService.CurrentSlot() {
-		return
-	}
-	s.monitor.BlockDelay(time.Since(s.chainTimeService.StartOfSlot(slot)))
-
-	jobName := fmt.Sprintf("Beacon block attestations for slot %d", slot)
-	if s.scheduler.JobExists(ctx, jobName) {
-		log.Trace().Uint64("slot", slot).Msg("Kicking off attestations for slot early due to receiving relevant block")
-		if err := s.scheduler.RunJobIfExists(ctx, jobName); err != nil {
-			log.Error().Str("job", jobName).Err(err).Msg("Failed to run attester job")
-		}
-	}
-
-	// Remove old subscriptions if present.
-	delete(s.subscriptionInfos, s.chainTimeService.SlotToEpoch(slot)-2)
-}
+// TODO REMOVE
+// // OnBeaconChainHeadUpdated runs attestations for a slot immediately, if the update is for the current slot.
+// func (s *Service) OnBeaconChainHeadUpdated(ctx context.Context, slot uint64, stateRoot []byte, bodyRoot []byte, epochTransitioni bool) {
+// 	if slot != s.chainTimeService.CurrentSlot() {
+// 		return
+// 	}
+// 	s.monitor.BlockDelay(time.Since(s.chainTimeService.StartOfSlot(slot)))
+//
+// 	jobName := fmt.Sprintf("Beacon block attestations for slot %d", slot)
+// 	if s.scheduler.JobExists(ctx, jobName) {
+// 		log.Trace().Uint64("slot", slot).Msg("Kicking off attestations for slot early due to receiving relevant block")
+// 		if err := s.scheduler.RunJobIfExists(ctx, jobName); err != nil {
+// 			log.Error().Str("job", jobName).Err(err).Msg("Failed to run attester job")
+// 		}
+// 	}
+//
+// 	// Remove old subscriptions if present.
+// 	delete(s.subscriptionInfos, s.chainTimeService.SlotToEpoch(slot)-2)
+// }

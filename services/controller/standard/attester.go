@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 
-	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
@@ -31,11 +30,16 @@ func (s *Service) createAttesterJobs(ctx context.Context,
 	firstRun bool) {
 	log.Trace().Msg("Creating attester jobs")
 
-	idProviders := make([]eth2client.ValidatorIDProvider, len(accounts))
+	validatorIDs := make([]uint64, len(accounts))
+	var err error
 	for i, account := range accounts {
-		idProviders[i] = account.(eth2client.ValidatorIDProvider)
+		validatorIDs[i], err = account.Index(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to obtain account index")
+			return
+		}
 	}
-	resp, err := s.attesterDutiesProvider.AttesterDuties(ctx, epoch, idProviders)
+	resp, err := s.attesterDutiesProvider.AttesterDuties(ctx, epoch, validatorIDs)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain attester duties")
 		return
@@ -135,12 +139,18 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 			log.Debug().Uint64("attestation_slot", attestation.Data.Slot).Uint64("committee_index", attestation.Data.Index).Msg("No committee info; cannot aggregate")
 			continue
 		}
-		if info.Aggregate {
-			aggregatorDuty, err := attestationaggregator.NewDuty(ctx, info.ValidatorIndex, info.ValidatorPubKey, attestation, info.Signature)
+		if info.IsAggregator {
+			attestationDataRoot, err := attestation.Data.HashTreeRoot()
 			if err != nil {
 				// Don't return here; we want to try to set up as many aggregator jobs as possible.
-				log.Error().Err(err).Msg("Failed to create beacon block attestation aggregation duty")
+				log.Error().Err(err).Msg("Failed to obtain hash tree root of attestation")
 				continue
+			}
+			aggregatorDuty := &attestationaggregator.Duty{
+				Slot:                info.Duty.Slot,
+				AttestationDataRoot: attestationDataRoot[:],
+				ValidatorIndex:      info.Duty.ValidatorIndex,
+				SlotSignature:       info.Signature,
 			}
 			if err := s.scheduler.ScheduleJob(ctx,
 				fmt.Sprintf("Beacon block attestation aggregation for slot %d committee %d", attestation.Data.Slot, attestation.Data.Index),

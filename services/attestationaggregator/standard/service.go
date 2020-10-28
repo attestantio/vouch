@@ -17,6 +17,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -35,7 +36,7 @@ type Service struct {
 	monitor                        metrics.AttestationAggregationMonitor
 	targetAggregatorsPerCommittee  uint64
 	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
-	aggregateAttestationProvider   eth2client.NonSpecAggregateAttestationProvider
+	aggregateAttestationProvider   eth2client.AggregateAttestationProvider
 	aggregateAttestationsSubmitter submitter.AggregateAttestationsSubmitter
 }
 
@@ -81,14 +82,11 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 		s.monitor.AttestationAggregationCompleted(started, "failed")
 		return
 	}
-	log := log.With().Uint64("slot", duty.Slot()).Uint64("committee_index", duty.CommitteeIndex()).Logger()
+	log := log.With().Uint64("slot", duty.Slot).Str("attestation_data_root", fmt.Sprintf("%#x", duty.AttestationDataRoot)).Logger()
 	log.Trace().Msg("Aggregating")
 
 	// Obtain the aggregate attestation.
-	aggregateAttestation, err := s.aggregateAttestationProvider.NonSpecAggregateAttestation(ctx,
-		duty.Attestation(),
-		duty.ValidatorPubKey(),
-		duty.SlotSignature())
+	aggregateAttestation, err := s.aggregateAttestationProvider.AggregateAttestation(ctx, duty.Slot, duty.AttestationDataRoot)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain aggregate attestation")
 		s.monitor.AttestationAggregationCompleted(started, "failed")
@@ -97,7 +95,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained aggregate attestation")
 
 	// Fetch the validating account.
-	accounts, err := s.validatingAccountsProvider.AccountsByPubKey(ctx, [][]byte{duty.ValidatorPubKey()})
+	accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, []uint64{duty.ValidatorIndex})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain proposing validator account")
 		s.monitor.AttestationAggregationCompleted(started, "failed")
@@ -119,16 +117,16 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 		return
 	}
 	aggregateAndProof := &spec.AggregateAndProof{
-		AggregatorIndex: duty.ValidatorIndex(),
+		AggregatorIndex: duty.ValidatorIndex,
 		Aggregate:       aggregateAttestation,
-		SelectionProof:  duty.SlotSignature(),
+		SelectionProof:  duty.SlotSignature,
 	}
 
 	aggregateAndProofRoot, err := aggregateAndProof.HashTreeRoot()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate hash tree root of aggregate and proof")
 	}
-	sig, err := signer.SignAggregateAndProof(ctx, duty.Slot(), aggregateAndProofRoot[:])
+	sig, err := signer.SignAggregateAndProof(ctx, duty.Slot, aggregateAndProofRoot[:])
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign aggregate and proof")
 		s.monitor.AttestationAggregationCompleted(started, "failed")

@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"strings"
 	"sync"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
@@ -49,7 +50,14 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 			}
 			defer sem.Release(1)
 
-			if err := submitter.SubmitAttestation(ctx, attestation); err != nil {
+			started := time.Now()
+			err := submitter.SubmitAttestation(ctx, attestation)
+			if service, isService := submitter.(eth2client.Service); isService {
+				s.clientMonitor.ClientOperation(service.Address(), "submit attestation", err == nil, time.Since(started))
+			} else {
+				s.clientMonitor.ClientOperation("<unknown>", "submit attestation", err == nil, time.Since(started))
+			}
+			if err != nil {
 				if strings.Contains(err.Error(), "PriorAttestationKnown") {
 					// Lighthouse rejects duplicate attestations.  It is possible that an attestation we sent
 					// to another node already propagated to this node, so ignore the error.

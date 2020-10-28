@@ -17,7 +17,6 @@ import (
 	"context"
 	"fmt"
 
-	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 )
@@ -27,12 +26,19 @@ func (s *Service) createProposerJobs(ctx context.Context,
 	epoch uint64,
 	accounts []accountmanager.ValidatingAccount,
 	firstRun bool) {
-	validatorIDProviders := make([]eth2client.ValidatorIDProvider, len(accounts))
+	log.Trace().Msg("Creating proposer jobs")
+
+	validatorIDs := make([]uint64, len(accounts))
+	var err error
 	for i, account := range accounts {
-		validatorIDProviders[i] = account
+		validatorIDs[i], err = account.Index(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to obtain account index")
+			return
+		}
 	}
 
-	resp, err := s.proposerDutiesProvider.ProposerDuties(ctx, epoch, validatorIDProviders)
+	resp, err := s.proposerDutiesProvider.ProposerDuties(ctx, epoch, validatorIDs)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain proposer duties")
 		return

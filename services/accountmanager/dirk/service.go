@@ -150,23 +150,23 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 // UpdateAccountsState updates account state with the latest information from the beacon chain.
 // This should be run at the beginning of each epoch to ensure that any newly-activated accounts are registered.
 func (s *Service) UpdateAccountsState(ctx context.Context) error {
-	validatorIDs := make([]eth2client.ValidatorIDProvider, 0, len(s.accounts))
+	validatorIDProviders := make([]eth2client.ValidatorIDProvider, 0, len(s.accounts))
 	for _, account := range s.accounts {
 		if !account.state.HasActivated() {
-			validatorIDs = append(validatorIDs, account)
+			validatorIDProviders = append(validatorIDProviders, account)
 		}
 	}
-	if len(validatorIDs) == 0 {
+	if len(validatorIDProviders) == 0 {
 		// Nothing to do.
 		log.Trace().Msg("No unactivated keys")
 		return nil
 	}
-	log.Trace().Int("total", len(s.accounts)).Int("unactivated", len(validatorIDs)).Msg("Updating state of unactivated keys")
+	log.Trace().Int("total", len(s.accounts)).Int("unactivated", len(validatorIDProviders)).Msg("Updating state of unactivated keys")
 	var validators map[uint64]*api.Validator
 	var err error
 	if validatorsWithoutBalanceProvider, isProvider := s.validatorsProvider.(eth2client.ValidatorsWithoutBalanceProvider); isProvider {
 		started := time.Now()
-		validators, err = validatorsWithoutBalanceProvider.ValidatorsWithoutBalance(ctx, "head", validatorIDs)
+		validators, err = validatorsWithoutBalanceProvider.ValidatorsWithoutBalance(ctx, "head", validatorIDProviders)
 		if service, isService := s.validatorsProvider.(eth2client.Service); isService {
 			s.clientMonitor.ClientOperation(service.Address(), "validators without balance", err == nil, time.Since(started))
 		} else {
@@ -177,6 +177,16 @@ func (s *Service) UpdateAccountsState(ctx context.Context) error {
 		}
 	} else {
 		started := time.Now()
+		validatorIDs := make([]uint64, 0, len(s.accounts))
+		for _, account := range s.accounts {
+			if !account.state.HasActivated() {
+				index, err := account.Index(ctx)
+				if err != nil {
+					return errors.Wrap(err, "failed to obtain account index")
+				}
+				validatorIDs = append(validatorIDs, index)
+			}
+		}
 		validators, err = s.validatorsProvider.Validators(ctx, "head", validatorIDs)
 		if service, isService := s.validatorsProvider.(eth2client.Service); isService {
 			s.clientMonitor.ClientOperation(service.Address(), "validators", err == nil, time.Since(started))
@@ -229,32 +239,44 @@ func (s *Service) RefreshAccounts(ctx context.Context) error {
 		//}
 	}
 
-	validatorIDs := make([]eth2client.ValidatorIDProvider, 0, len(accounts))
+	// Update indices for accounts.
+	pubKeys := make([][]byte, 0, len(accounts))
 	for _, account := range accounts {
-		if !account.state.IsAttesting() {
-			validatorIDs = append(validatorIDs, account)
+		pubKey, err := account.PubKey(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to obtain public key")
 		}
+		pubKeys = append(pubKeys, pubKey)
 	}
-	log.Trace().Int("keys", len(accounts)).Msg("Keys obtained")
-	if len(validatorIDs) == 0 {
-		log.Warn().Msg("No accounts obtained")
-		return nil
+	validators, err := s.validatorsProvider.ValidatorsByPubKey(ctx, "head", pubKeys)
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain validators")
 	}
 
-	log.Trace().Int("accounts", len(validatorIDs)).Msg("Obtaining validator state of accounts")
-	var validators map[uint64]*api.Validator
-	var err error
-	if validatorsWithoutBalanceProvider, isProvider := s.validatorsProvider.(eth2client.ValidatorsWithoutBalanceProvider); isProvider {
-		validators, err = validatorsWithoutBalanceProvider.ValidatorsWithoutBalance(ctx, "head", validatorIDs)
-		if err != nil {
-			return errors.Wrap(err, "failed to obtain validators without balances")
-		}
-	} else {
-		validators, err = s.validatorsProvider.Validators(ctx, "head", validatorIDs)
-		if err != nil {
-			return errors.Wrap(err, "failed to obtain validators")
-		}
-	}
+	//	log.Trace().Int("accounts", len(validatorIDProviders)).Msg("Obtaining validator state of accounts")
+	//	var validators map[uint64]*api.Validator
+	//	var err error
+	//	if validatorsWithoutBalanceProvider, isProvider := s.validatorsProvider.(eth2client.ValidatorsWithoutBalanceProvider); isProvider {
+	//		validators, err = validatorsWithoutBalanceProvider.ValidatorsWithoutBalance(ctx, "head", validatorIDProviders)
+	//		if err != nil {
+	//			return errors.Wrap(err, "failed to obtain validators without balances")
+	//		}
+	//	} else {
+	//		validatorIDs := make([]uint64, 0, len(s.accounts))
+	//		for _, account := range s.accounts {
+	//			if !account.state.IsAttesting() {
+	//				index, err := account.Index(ctx)
+	//				if err != nil {
+	//					return errors.Wrap(err, "failed to obtain account index")
+	//				}
+	//				validatorIDs = append(validatorIDs, index)
+	//			}
+	//		}
+	//		validators, err = s.validatorsProvider.Validators(ctx, "head", validatorIDs)
+	//		if err != nil {
+	//			return errors.Wrap(err, "failed to obtain validators")
+	//		}
+	//	}
 	log.Trace().Int("received", len(validators)).Msg("Received state of accounts")
 
 	s.updateAccountStates(ctx, accounts, validators)
@@ -400,7 +422,7 @@ func (s *Service) updateAccountStates(ctx context.Context, accounts map[[48]byte
 	for pubKey, account := range accounts {
 		if validator, exists := validatorsByPubKey[pubKey]; exists {
 			account.index = validator.Index
-			account.state = validator.State
+			account.state = validator.Status
 		}
 		validatorStateCounts[strings.ToLower(account.state.String())]++
 	}

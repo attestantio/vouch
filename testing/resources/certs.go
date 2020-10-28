@@ -506,6 +506,24 @@ XDCQeaEUOuLjokRojHrN27ghz3wJoUJzTdjtHZ+yE9s2cW9VXRUxkun0aLcQd/iY
 xvXEII1qCvhI4mmWvbcepvtswQmTEeOroM/27/IIEAOvTyqd6rDi2A==
 -----END RSA PRIVATE KEY-----`
 
+// SignerCerts gives access to signer certificates by ID.
+var SignerCerts = map[uint64][]byte{
+	1: []byte(SignerTest01Crt),
+	2: []byte(SignerTest02Crt),
+	3: []byte(SignerTest03Crt),
+	4: []byte(SignerTest04Crt),
+	5: []byte(SignerTest05Crt),
+}
+
+// SignerKeys gives access to signer keys by ID.
+var SignerKeys = map[uint64][]byte{
+	1: []byte(SignerTest01Key),
+	2: []byte(SignerTest02Key),
+	3: []byte(SignerTest03Key),
+	4: []byte(SignerTest04Key),
+	5: []byte(SignerTest05Key),
+}
+
 // SetupCerts sets up a number of certificates on-disk in the provided location.
 func SetupCerts(base string) error {
 	if err := ioutil.WriteFile(filepath.Join(base, "ca.crt"), []byte(CACrt), 0600); err != nil {
