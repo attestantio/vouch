@@ -11,9 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package best is a strategy that obtains beacon block proposals from multiple
-// nodes and selects the best one based on its attestation load.
-package best
+// Package first is a strategy that obtains beacon block proposals from multiple
+// nodes and selects the first one returned.
+package first
 
 import (
 	"context"

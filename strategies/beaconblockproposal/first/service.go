@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package best
+package first
 
 import (
 	"context"
@@ -43,7 +43,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("strategy", "beaconblockproposal").Str("impl", "best").Logger()
+	log = zerologger.With().Str("strategy", "beaconblockproposal").Str("impl", "first").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -57,7 +57,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	return s, nil
 }
 
-// BeaconBlockProposal provies the best beacon block proposal from a number of beacon nodes.
+// BeaconBlockProposal provies the first beacon block proposal from a number of beacon nodes.
 func (s *Service) BeaconBlockProposal(ctx context.Context, slot uint64, randaoReveal []byte, graffiti []byte) (*spec.BeaconBlock, error) {
 	// We create a cancelable context with a timeout.  As soon as the first provider has responded we
 	// cancel the context to cancel the other requests.
@@ -71,7 +71,6 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot uint64, randaoRe
 			started := time.Now()
 			proposal, err := provider.BeaconBlockProposal(ctx, slot, randaoReveal, graffiti)
 			s.clientMonitor.ClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
-			cancel()
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain beacon block proposal")
 				return

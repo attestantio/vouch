@@ -1,4 +1,5 @@
 Development
+  - fix race condition in "first" beacon block proposal strategy
   - tidy up trace logging for scheduler
 
 0.6.2
