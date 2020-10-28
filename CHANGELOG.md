@@ -1,4 +1,5 @@
 Development
+  - add a default process concurrency for strategies
   - fix race condition in "first" beacon block proposal strategy
   - tidy up trace logging for scheduler
 
