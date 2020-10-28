@@ -55,8 +55,13 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot uint64, randaoRe
 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
 			cancel()
 
+			// Obtain the slot of the block to which the proposal refers.
+			// We use this to allow the scorer to score blocks with earlier parents lower.
+			// TODO need a go-eth2-client provider to obtain this information.
+			parentSlot := uint64(slot - 1)
+
 			mu.Lock()
-			score := scoreBeaconBlockProposal(ctx, name, proposal)
+			score := scoreBeaconBlockProposal(ctx, name, parentSlot, proposal)
 			if score > bestScore || bestProposal == nil {
 				bestScore = score
 				bestProposal = proposal

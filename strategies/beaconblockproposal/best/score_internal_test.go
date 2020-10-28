@@ -15,12 +15,22 @@ package best
 
 import (
 	"context"
+	"encoding/hex"
+	"strings"
 	"testing"
 
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/stretchr/testify/assert"
 )
+
+func _bytes(input string) []byte {
+	res, err := hex.DecodeString(strings.TrimPrefix(input, "0x"))
+	if err != nil {
+		panic(err)
+	}
+	return res
+}
 
 func aggregationBits(set uint64, total uint64) bitfield.Bitlist {
 	bits := bitfield.NewBitlist(total)
@@ -40,19 +50,22 @@ func specificAggregationBits(set []uint64, total uint64) bitfield.Bitlist {
 
 func TestScore(t *testing.T) {
 	tests := []struct {
-		name  string
-		block *spec.BeaconBlock
-		score float64
-		err   string
+		name       string
+		block      *spec.BeaconBlock
+		parentSlot uint64
+		score      float64
+		err        string
 	}{
 		{
-			name:  "Nil",
-			score: 0,
+			name:       "Nil",
+			parentSlot: 1,
+			score:      0,
 		},
 		{
-			name:  "Empty",
-			block: &spec.BeaconBlock{},
-			score: 0,
+			name:       "Empty",
+			block:      &spec.BeaconBlock{},
+			parentSlot: 1,
+			score:      0,
 		},
 		{
 			name: "SingleAttestation",
@@ -69,7 +82,26 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			score: 1,
+			parentSlot: 12344,
+			score:      1,
+		},
+		{
+			name: "SingleAttestationParentRootDistance2",
+			block: &spec.BeaconBlock{
+				Slot: 12345,
+				Body: &spec.BeaconBlockBody{
+					Attestations: []*spec.Attestation{
+						{
+							AggregationBits: aggregationBits(1, 128),
+							Data: &spec.AttestationData{
+								Slot: 12344,
+							},
+						},
+					},
+				},
+			},
+			parentSlot: 12343,
+			score:      0.5,
 		},
 		{
 			name: "SingleAttestationDistance2",
@@ -86,7 +118,8 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			score: 0.875,
+			parentSlot: 12344,
+			score:      0.875,
 		},
 		{
 			name: "TwoAttestations",
@@ -109,7 +142,8 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			score: 2.8125,
+			parentSlot: 12344,
+			score:      2.8125,
 		},
 		{
 			name: "AttesterSlashing",
@@ -136,7 +170,8 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			score: 1450,
+			parentSlot: 12344,
+			score:      1450,
 		},
 		{
 			name: "DuplicateAttestations",
@@ -159,13 +194,170 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			score: 4,
+			parentSlot: 12344,
+			score:      4,
+		},
+		{
+			name: "Full",
+			block: &spec.BeaconBlock{
+				Slot: 12345,
+				Body: &spec.BeaconBlockBody{
+					Attestations: []*spec.Attestation{
+						{
+							AggregationBits: aggregationBits(50, 128),
+							Data: &spec.AttestationData{
+								Slot: 12344,
+							},
+						},
+					},
+					AttesterSlashings: []*spec.AttesterSlashing{
+						{
+							Attestation1: &spec.IndexedAttestation{
+								AttestingIndices: []uint64{1, 2, 3},
+							},
+							Attestation2: &spec.IndexedAttestation{
+								AttestingIndices: []uint64{2, 3, 4},
+							},
+						},
+					},
+					ProposerSlashings: []*spec.ProposerSlashing{
+						{
+							Header1: &spec.SignedBeaconBlockHeader{
+								Message: &spec.BeaconBlockHeader{
+									Slot:          10,
+									ProposerIndex: 1,
+									ParentRoot:    _bytes("0x0101010101010101010101010101010101010101010101010101010101010101"),
+									StateRoot:     _bytes("0x0202020202020202020202020202020202020202020202020202020202020202"),
+									BodyRoot:      _bytes("0x0303030303030303030303030303030303030303030303030303030303030303"),
+								},
+								Signature: _bytes("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
+							},
+							Header2: &spec.SignedBeaconBlockHeader{
+								Message: &spec.BeaconBlockHeader{
+									Slot:          10,
+									ProposerIndex: 1,
+									ParentRoot:    _bytes("0x0404040404040404040404040404040404040404040404040404040404040404"),
+									StateRoot:     _bytes("0x0202020202020202020202020202020202020202020202020202020202020202"),
+									BodyRoot:      _bytes("0x0303030303030303030303030303030303030303030303030303030303030303"),
+								},
+								Signature: _bytes("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
+							},
+						},
+					},
+				},
+			},
+			parentSlot: 12344,
+			score:      2150,
+		},
+		{
+			name: "FullParentRootDistance2",
+			block: &spec.BeaconBlock{
+				Slot: 12345,
+				Body: &spec.BeaconBlockBody{
+					Attestations: []*spec.Attestation{
+						{
+							AggregationBits: aggregationBits(50, 128),
+							Data: &spec.AttestationData{
+								Slot: 12344,
+							},
+						},
+					},
+					AttesterSlashings: []*spec.AttesterSlashing{
+						{
+							Attestation1: &spec.IndexedAttestation{
+								AttestingIndices: []uint64{1, 2, 3},
+							},
+							Attestation2: &spec.IndexedAttestation{
+								AttestingIndices: []uint64{2, 3, 4},
+							},
+						},
+					},
+					ProposerSlashings: []*spec.ProposerSlashing{
+						{
+							Header1: &spec.SignedBeaconBlockHeader{
+								Message: &spec.BeaconBlockHeader{
+									Slot:          10,
+									ProposerIndex: 1,
+									ParentRoot:    _bytes("0x0101010101010101010101010101010101010101010101010101010101010101"),
+									StateRoot:     _bytes("0x0202020202020202020202020202020202020202020202020202020202020202"),
+									BodyRoot:      _bytes("0x0303030303030303030303030303030303030303030303030303030303030303"),
+								},
+								Signature: _bytes("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
+							},
+							Header2: &spec.SignedBeaconBlockHeader{
+								Message: &spec.BeaconBlockHeader{
+									Slot:          10,
+									ProposerIndex: 1,
+									ParentRoot:    _bytes("0x0404040404040404040404040404040404040404040404040404040404040404"),
+									StateRoot:     _bytes("0x0202020202020202020202020202020202020202020202020202020202020202"),
+									BodyRoot:      _bytes("0x0303030303030303030303030303030303030303030303030303030303030303"),
+								},
+								Signature: _bytes("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
+							},
+						},
+					},
+				},
+			},
+			parentSlot: 12343,
+			score:      1075,
+		},
+		{
+			name: "FullParentRootDistance4",
+			block: &spec.BeaconBlock{
+				Slot: 12345,
+				Body: &spec.BeaconBlockBody{
+					Attestations: []*spec.Attestation{
+						{
+							AggregationBits: aggregationBits(50, 128),
+							Data: &spec.AttestationData{
+								Slot: 12344,
+							},
+						},
+					},
+					AttesterSlashings: []*spec.AttesterSlashing{
+						{
+							Attestation1: &spec.IndexedAttestation{
+								AttestingIndices: []uint64{1, 2, 3},
+							},
+							Attestation2: &spec.IndexedAttestation{
+								AttestingIndices: []uint64{2, 3, 4},
+							},
+						},
+					},
+					ProposerSlashings: []*spec.ProposerSlashing{
+						{
+							Header1: &spec.SignedBeaconBlockHeader{
+								Message: &spec.BeaconBlockHeader{
+									Slot:          10,
+									ProposerIndex: 1,
+									ParentRoot:    _bytes("0x0101010101010101010101010101010101010101010101010101010101010101"),
+									StateRoot:     _bytes("0x0202020202020202020202020202020202020202020202020202020202020202"),
+									BodyRoot:      _bytes("0x0303030303030303030303030303030303030303030303030303030303030303"),
+								},
+								Signature: _bytes("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
+							},
+							Header2: &spec.SignedBeaconBlockHeader{
+								Message: &spec.BeaconBlockHeader{
+									Slot:          10,
+									ProposerIndex: 1,
+									ParentRoot:    _bytes("0x0404040404040404040404040404040404040404040404040404040404040404"),
+									StateRoot:     _bytes("0x0202020202020202020202020202020202020202020202020202020202020202"),
+									BodyRoot:      _bytes("0x0303030303030303030303030303030303030303030303030303030303030303"),
+								},
+								Signature: _bytes("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
+							},
+						},
+					},
+				},
+			},
+			parentSlot: 12341,
+			score:      537.5,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			score := scoreBeaconBlockProposal(context.Background(), test.name, test.block)
+			score := scoreBeaconBlockProposal(context.Background(), test.name, test.parentSlot, test.block)
 			assert.Equal(t, test.score, score)
 		})
 	}

@@ -32,6 +32,7 @@ type parameters struct {
 	clientMonitor                metrics.ClientMonitor
 	processConcurrency           int64
 	beaconBlockProposalProviders map[string]eth2client.BeaconBlockProposalProvider
+	signedBeaconBlockProvider    eth2client.SignedBeaconBlockProvider
 	timeout                      time.Duration
 }
 
