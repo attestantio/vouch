@@ -286,6 +286,23 @@ func (m *BeaconBlockProposalProvider) BeaconBlockProposal(ctx context.Context, s
 	return block, nil
 }
 
+// SignedBeaconBlockProvider is a mock for eth2client.SignedBeaconBlockProvider.
+type SignedBeaconBlockProvider struct{}
+
+// NewSignedBeaconBlockProvider returns a mock beacon block proposal provider.
+func NewSignedBeaconBlockProvider() eth2client.SignedBeaconBlockProvider {
+	return &SignedBeaconBlockProvider{}
+}
+
+// SignedBeaconBlock is a mock.
+func (m *SignedBeaconBlockProvider) SignedBeaconBlock(ctx context.Context, stateID string) (*spec.SignedBeaconBlock, error) {
+	return &spec.SignedBeaconBlock{
+		Message: &spec.BeaconBlock{
+			Slot: 123,
+		},
+	}, nil
+}
+
 // BeaconProposerDomainProvider is a mock for eth2client.BeaconProposerDomainProvider.
 type BeaconProposerDomainProvider struct{}
 

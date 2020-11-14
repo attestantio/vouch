@@ -38,6 +38,7 @@ func TestBeaconBlockProposal(t *testing.T) {
 			"two":   mock.NewBeaconBlockProposalProvider(),
 			"three": mock.NewBeaconBlockProposalProvider(),
 		}),
+		best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 	)
 	require.NoError(t, err)
 
