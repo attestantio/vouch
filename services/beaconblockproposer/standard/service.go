@@ -26,7 +26,6 @@ import (
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
-	ethpb "github.com/prysmaticlabs/ethereumapis/eth/v1alpha1"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
 )
@@ -76,11 +75,11 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 	if !ok {
 		return errors.New("passed invalid data structure")
 	}
-	log := log.With().Uint64("slot", duty.Slot()).Uint64("validator_index", duty.ValidatorIndex()).Logger()
+	log := log.With().Uint64("slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Preparing")
 
 	// Fetch the validating account.
-	accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, []uint64{duty.ValidatorIndex()})
+	accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, []spec.ValidatorIndex{duty.ValidatorIndex()})
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain proposing validator account")
 	}
@@ -89,6 +88,7 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 	}
 	account := accounts[0]
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained proposing account")
+	duty.SetAccount(account)
 
 	revealSigner, isRevealSigner := account.(accountmanager.RANDAORevealSigner)
 	if !isRevealSigner {
@@ -114,25 +114,11 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 		s.monitor.BeaconBlockProposalCompleted(started, "failed")
 		return
 	}
-	log := log.With().Uint64("slot", duty.Slot()).Uint64("validator_index", duty.ValidatorIndex()).Logger()
+	log := log.With().Uint64("slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Proposing")
 
-	// Fetch the validating account.
-	accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, []uint64{duty.ValidatorIndex()})
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to obtain proposing validator account")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
-		return
-	}
-	if len(accounts) != 1 {
-		log.Error().Err(err).Msg("Unknown proposing validator account")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
-		return
-	}
-	account := accounts[0]
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained account")
-
 	var graffiti []byte
+	var err error
 	if s.graffitiProvider != nil {
 		graffiti, err = s.graffitiProvider.Graffiti(ctx, duty.Slot(), duty.ValidatorIndex())
 		if err != nil {
@@ -156,7 +142,7 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained proposal")
 
 	if proposal.Slot != duty.Slot() {
-		log.Error().Uint64("proposal_slot", proposal.Slot).Msg("Proposal data for incorrect slot; not proceeding")
+		log.Error().Uint64("proposal_slot", uint64(proposal.Slot)).Msg("Proposal data for incorrect slot; not proceeding")
 		s.monitor.BeaconBlockProposalCompleted(started, "failed")
 		return
 	}
@@ -167,27 +153,20 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 		s.monitor.BeaconBlockProposalCompleted(started, "failed")
 		return
 	}
-	proposalData := &ethpb.BeaconBlockHeader{
-		Slot:          proposal.Slot,
-		ProposerIndex: duty.ValidatorIndex(),
-		ParentRoot:    proposal.ParentRoot,
-		StateRoot:     proposal.StateRoot,
-		BodyRoot:      bodyRoot[:],
-	}
 
 	// Sign the block.
-	signer, isSigner := account.(accountmanager.BeaconBlockSigner)
+	signer, isSigner := duty.Account().(accountmanager.BeaconBlockSigner)
 	if !isSigner {
 		log.Error().Msg("Account is not a beacon block signer")
 		s.monitor.BeaconBlockProposalCompleted(started, "failed")
 		return
 	}
 	sig, err := signer.SignBeaconBlockProposal(ctx,
-		proposalData.Slot,
-		proposalData.ProposerIndex,
-		proposalData.ParentRoot,
-		proposalData.StateRoot,
-		proposalData.BodyRoot)
+		proposal.Slot,
+		duty.ValidatorIndex(),
+		proposal.ParentRoot,
+		proposal.StateRoot,
+		bodyRoot)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign beacon block proposal")
 		s.monitor.BeaconBlockProposalCompleted(started, "failed")

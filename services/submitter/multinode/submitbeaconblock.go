@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
@@ -41,14 +42,21 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaco
 			submitter eth2client.BeaconBlockSubmitter,
 		) {
 			defer wg.Done()
-			log := log.With().Str("beacon_node_address", name).Uint64("slot", block.Message.Slot).Logger()
+			log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(block.Message.Slot)).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
 			}
 			defer sem.Release(1)
 
-			if err := submitter.SubmitBeaconBlock(ctx, block); err != nil {
+			started := time.Now()
+			err := submitter.SubmitBeaconBlock(ctx, block)
+			if service, isService := submitter.(eth2client.Service); isService {
+				s.clientMonitor.ClientOperation(service.Address(), "submit beacon block", err == nil, time.Since(started))
+			} else {
+				s.clientMonitor.ClientOperation("<unknown>", "submit beacon block", err == nil, time.Since(started))
+			}
+			if err != nil {
 				log.Warn().Err(err).Msg("Failed to submit beacon block")
 				return
 			}

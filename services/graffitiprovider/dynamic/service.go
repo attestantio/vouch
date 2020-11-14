@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -60,7 +61,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // Graffiti provides graffiti.
-func (s *Service) Graffiti(ctx context.Context, slot uint64, validatorIndex uint64) ([]byte, error) {
+func (s *Service) Graffiti(ctx context.Context, slot spec.Slot, validatorIndex spec.ValidatorIndex) ([]byte, error) {
 	// Replace location parameters with values.
 	location := strings.ReplaceAll(s.location, "{{SLOT}}", fmt.Sprintf("%d", slot))
 	location = strings.ReplaceAll(location, "{{VALIDATORINDEX}}", fmt.Sprintf("%d", validatorIndex))

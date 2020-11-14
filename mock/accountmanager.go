@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/herumi/bls-eth-go-binary/bls"
 	"github.com/pkg/errors"
@@ -32,12 +33,14 @@ type validatingAccount struct {
 	key   *bls.SecretKey
 }
 
-func (a *validatingAccount) PubKey(ctx context.Context) ([]byte, error) {
-	return a.key.GetPublicKey().Serialize(), nil
+func (a *validatingAccount) PubKey(ctx context.Context) (spec.BLSPubKey, error) {
+	var res spec.BLSPubKey
+	copy(res[:], a.key.GetPublicKey().Serialize())
+	return res, nil
 }
 
-func (a *validatingAccount) Index(ctx context.Context) (uint64, error) {
-	return a.index, nil
+func (a *validatingAccount) Index(ctx context.Context) (spec.ValidatorIndex, error) {
+	return spec.ValidatorIndex(a.index), nil
 }
 
 func (a *validatingAccount) State() api.ValidatorState {
@@ -175,8 +178,8 @@ func (m *ValidatingAccountsProvider) Accounts(ctx context.Context) ([]accountman
 }
 
 // AccountsByIndex returns accounts.
-func (m *ValidatingAccountsProvider) AccountsByIndex(ctx context.Context, indices []uint64) ([]accountmanager.ValidatingAccount, error) {
-	indexMap := make(map[uint64]bool)
+func (m *ValidatingAccountsProvider) AccountsByIndex(ctx context.Context, indices []spec.ValidatorIndex) ([]accountmanager.ValidatingAccount, error) {
+	indexMap := make(map[spec.ValidatorIndex]bool)
 	for _, index := range indices {
 		indexMap[index] = true
 	}
@@ -195,7 +198,7 @@ func (m *ValidatingAccountsProvider) AccountsByIndex(ctx context.Context, indice
 }
 
 // AccountsByPubKey returns accounts.
-func (m *ValidatingAccountsProvider) AccountsByPubKey(ctx context.Context, pubKeys [][]byte) ([]accountmanager.ValidatingAccount, error) {
+func (m *ValidatingAccountsProvider) AccountsByPubKey(ctx context.Context, pubKeys []spec.BLSPubKey) ([]accountmanager.ValidatingAccount, error) {
 	keyMap := make(map[string]bool)
 	for _, pubKey := range pubKeys {
 		keyMap[fmt.Sprintf("%x", pubKey)] = true

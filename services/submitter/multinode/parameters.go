@@ -16,13 +16,18 @@
 package multinode
 
 import (
+	"context"
+
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/vouch/services/metrics"
+	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 type parameters struct {
 	logLevel                               zerolog.Level
+	clientMonitor                          metrics.ClientMonitor
 	processConcurrency                     int64
 	beaconBlockSubmitters                  map[string]eth2client.BeaconBlockSubmitter
 	attestationSubmitters                  map[string]eth2client.AttestationSubmitter
@@ -45,6 +50,13 @@ func (f parameterFunc) apply(p *parameters) {
 func WithLogLevel(logLevel zerolog.Level) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.logLevel = logLevel
+	})
+}
+
+// WithClientMonitor sets the client monitor.
+func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.clientMonitor = clientMonitor
 	})
 }
 
@@ -86,7 +98,8 @@ func WithBeaconCommitteeSubscriptionsSubmitters(submitters map[string]eth2client
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel: zerolog.GlobalLevel(),
+		logLevel:      zerolog.GlobalLevel(),
+		clientMonitor: nullmetrics.New(context.Background()),
 	}
 	for _, p := range params {
 		if params != nil {
@@ -94,6 +107,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
+	if parameters.clientMonitor == nil {
+		return nil, errors.New("no client monitor specified")
+	}
 	if parameters.processConcurrency == 0 {
 		return nil, errors.New("no process concurrency specified")
 	}

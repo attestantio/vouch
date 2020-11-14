@@ -23,12 +23,13 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-// BeaconBlockProposal provies the best beacon block proposal from a number of beacon nodes.
-func (s *Service) BeaconBlockProposal(ctx context.Context, slot uint64, randaoReveal []byte, graffiti []byte) (*spec.BeaconBlock, error) {
+// BeaconBlockProposal provides the best beacon block proposal from a number of beacon nodes.
+func (s *Service) BeaconBlockProposal(ctx context.Context, slot spec.Slot, randaoReveal spec.BLSSignature, graffiti []byte) (*spec.BeaconBlock, error) {
 	var mu sync.Mutex
 	bestScore := float64(0)
 	var bestProposal *spec.BeaconBlock
 
+	started := time.Now()
 	sem := semaphore.NewWeighted(s.processConcurrency)
 	var wg sync.WaitGroup
 	for name, provider := range s.beaconBlockProposalProviders {
@@ -41,10 +42,10 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot uint64, randaoRe
 				return
 			}
 			defer sem.Release(1)
-			log := log.With().Str("provider", name).Uint64("slot", slot).Logger()
+			log := log.With().Str("provider", name).Uint64("slot", uint64(slot)).Logger()
+			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained semaphore")
 
 			opCtx, cancel := context.WithTimeout(ctx, s.timeout)
-			started := time.Now()
 			proposal, err := provider.BeaconBlockProposal(opCtx, slot, randaoReveal, graffiti)
 			s.clientMonitor.ClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
 			if err != nil {

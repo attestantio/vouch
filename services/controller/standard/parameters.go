@@ -28,20 +28,20 @@ import (
 )
 
 type parameters struct {
-	logLevel                     zerolog.Level
-	monitor                      metrics.ControllerMonitor
-	slotDurationProvider         eth2client.SlotDurationProvider
-	slotsPerEpochProvider        eth2client.SlotsPerEpochProvider
-	chainTimeService             chaintime.Service
-	proposerDutiesProvider       eth2client.ProposerDutiesProvider
-	attesterDutiesProvider       eth2client.AttesterDutiesProvider
-	validatingAccountsProvider   accountmanager.ValidatingAccountsProvider
-	scheduler                    scheduler.Service
-	beaconChainHeadUpdatedSource eth2client.BeaconChainHeadUpdatedSource
-	attester                     attester.Service
-	beaconBlockProposer          beaconblockproposer.Service
-	attestationAggregator        attestationaggregator.Service
-	beaconCommitteeSubscriber    beaconcommitteesubscriber.Service
+	logLevel                   zerolog.Level
+	monitor                    metrics.ControllerMonitor
+	slotDurationProvider       eth2client.SlotDurationProvider
+	slotsPerEpochProvider      eth2client.SlotsPerEpochProvider
+	chainTimeService           chaintime.Service
+	proposerDutiesProvider     eth2client.ProposerDutiesProvider
+	attesterDutiesProvider     eth2client.AttesterDutiesProvider
+	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
+	scheduler                  scheduler.Service
+	eventsProvider             eth2client.EventsProvider
+	attester                   attester.Service
+	beaconBlockProposer        beaconblockproposer.Service
+	attestationAggregator      attestationaggregator.Service
+	beaconCommitteeSubscriber  beaconcommitteesubscriber.Service
 }
 
 // Parameter is the interface for service parameters.
@@ -104,10 +104,10 @@ func WithAttesterDutiesProvider(provider eth2client.AttesterDutiesProvider) Para
 	})
 }
 
-// WithBeaconChainHeadUpdatedSource sets the source for an OnBeaconChainHeadUpdated request
-func WithBeaconChainHeadUpdatedSource(source eth2client.BeaconChainHeadUpdatedSource) Parameter {
+// WithEventsProvider sets the events provider.
+func WithEventsProvider(provider eth2client.EventsProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.beaconChainHeadUpdatedSource = source
+		p.eventsProvider = provider
 	})
 }
 
@@ -182,8 +182,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.attesterDutiesProvider == nil {
 		return nil, errors.New("no attester duties provider specified")
 	}
-	if parameters.beaconChainHeadUpdatedSource == nil {
-		return nil, errors.New("no beacon chain head updated source specified")
+	if parameters.eventsProvider == nil {
+		return nil, errors.New("no events provider specified")
 	}
 	if parameters.scheduler == nil {
 		return nil, errors.New("no scheduler service specified")

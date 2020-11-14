@@ -21,56 +21,20 @@ import (
 
 // Duty contains information about an attestation aggregation duty.
 type Duty struct {
-	validatorIndex  uint64
-	validatorPubKey []byte
-	slotSignature   []byte
-	attestation     *spec.Attestation
-}
-
-// NewDuty creates a new attestation aggregation duty.
-func NewDuty(ctx context.Context, validatorIndex uint64, validatorPubKey []byte, attestation *spec.Attestation, slotSignature []byte) (*Duty, error) {
-	return &Duty{
-		validatorIndex:  validatorIndex,
-		validatorPubKey: validatorPubKey,
-		slotSignature:   slotSignature,
-		attestation:     attestation,
-	}, nil
-}
-
-// Slot provides the slot for the attestaton aggregation.
-func (d *Duty) Slot() uint64 {
-	return d.attestation.Data.Slot
-}
-
-// CommitteeIndex provides the committee index for the attestaton aggregation.
-func (d *Duty) CommitteeIndex() uint64 {
-	return d.attestation.Data.Index
-}
-
-// ValidatorIndex provides the index of the validator carrying out the attestation aggregation.
-func (d *Duty) ValidatorIndex() uint64 {
-	return d.validatorIndex
-}
-
-// ValidatorPubKey provides the public key of the validator carrying out the attestation aggregation.
-func (d *Duty) ValidatorPubKey() []byte {
-	return d.validatorPubKey
-}
-
-// Attestation provides the attestation of the validator carrying out the attestation aggregation.
-func (d *Duty) Attestation() *spec.Attestation {
-	return d.attestation
-}
-
-// SlotSignature provides the slot signature of the validator carrying out the attestation aggregation.
-func (d *Duty) SlotSignature() []byte {
-	return d.slotSignature
+	// Slot is the slot of the attestation aggregation; required for obtaining the aggregate.
+	Slot spec.Slot
+	// Attestation data root is the root of the attestation to be aggregated; required for obtaining the aggregate.
+	AttestationDataRoot spec.Root
+	// ValidatorIndex is the index of the validator carrying out the aggregation; reuqired for submitting the aggregate.
+	ValidatorIndex spec.ValidatorIndex
+	// SlotSignature is the signature of the slot by the validator carrying out the aggregation; reuqired for submitting the aggregate.
+	SlotSignature spec.BLSSignature
 }
 
 // IsAggregatorProvider provides information about if a validator is an aggregator.
 type IsAggregatorProvider interface {
 	// IsAggregator returns true if the given validator is an aggregator for the given committee at the given slot.
-	IsAggregator(ctx context.Context, validatorIndex uint64, committeeIndex uint64, slot uint64, committeeSize uint64) (bool, []byte, error)
+	IsAggregator(ctx context.Context, validatorIndex spec.ValidatorIndex, committeeIndex spec.CommitteeIndex, slot spec.Slot, committeeSize uint64) (bool, spec.BLSSignature, error)
 }
 
 // Service is the attestation aggregation service.

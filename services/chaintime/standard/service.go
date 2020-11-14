@@ -17,6 +17,7 @@ import (
 	"context"
 	"time"
 
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -78,37 +79,37 @@ func (s *Service) GenesisTime() time.Time {
 }
 
 // StartOfSlot provides the time at which a given slot starts.
-func (s *Service) StartOfSlot(slot uint64) time.Time {
+func (s *Service) StartOfSlot(slot spec.Slot) time.Time {
 	return s.genesisTime.Add(time.Duration(slot) * s.slotDuration)
 }
 
 // StartOfEpoch provides the time at which a given epoch starts.
-func (s *Service) StartOfEpoch(epoch uint64) time.Time {
-	return s.genesisTime.Add(time.Duration(epoch*s.slotsPerEpoch) * s.slotDuration)
+func (s *Service) StartOfEpoch(epoch spec.Epoch) time.Time {
+	return s.genesisTime.Add(time.Duration(uint64(epoch)*s.slotsPerEpoch) * s.slotDuration)
 }
 
 // CurrentSlot provides the current slot.
-func (s *Service) CurrentSlot() uint64 {
+func (s *Service) CurrentSlot() spec.Slot {
 	if s.genesisTime.After(time.Now()) {
-		return 0
+		return spec.Slot(0)
 	}
-	return uint64(time.Since(s.genesisTime).Seconds()) / uint64(s.slotDuration.Seconds())
+	return spec.Slot(uint64(time.Since(s.genesisTime).Seconds()) / uint64(s.slotDuration.Seconds()))
 }
 
 // CurrentEpoch provides the current epoch.
-func (s *Service) CurrentEpoch() uint64 {
+func (s *Service) CurrentEpoch() spec.Epoch {
 	if s.genesisTime.After(time.Now()) {
-		return 0
+		return spec.Epoch(0)
 	}
-	return uint64(time.Since(s.genesisTime).Seconds()) / (uint64(s.slotDuration.Seconds()) * s.slotsPerEpoch)
+	return spec.Epoch(uint64(time.Since(s.genesisTime).Seconds()) / (uint64(s.slotDuration.Seconds()) * s.slotsPerEpoch))
 }
 
 // SlotToEpoch provides the epoch of a given slot.
-func (s *Service) SlotToEpoch(slot uint64) uint64 {
-	return slot / s.slotsPerEpoch
+func (s *Service) SlotToEpoch(slot spec.Slot) spec.Epoch {
+	return spec.Epoch(uint64(slot) / s.slotsPerEpoch)
 }
 
 // FirstSlotOfEpoch provides the first slot of the given epoch.
-func (s *Service) FirstSlotOfEpoch(epoch uint64) uint64 {
-	return epoch * s.slotsPerEpoch
+func (s *Service) FirstSlotOfEpoch(epoch spec.Epoch) spec.Slot {
+	return spec.Slot(uint64(epoch) * s.slotsPerEpoch)
 }

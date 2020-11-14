@@ -27,7 +27,8 @@ type parameters struct {
 	monitor                               metrics.AttestationAggregationMonitor
 	targetAggregatorsPerCommitteeProvider eth2client.TargetAggregatorsPerCommitteeProvider
 	validatingAccountsProvider            accountmanager.ValidatingAccountsProvider
-	aggregateAttestationProvider          eth2client.NonSpecAggregateAttestationProvider
+	aggregateAttestationProvider          eth2client.AggregateAttestationProvider
+	prysmAggregateAttestationProvider     eth2client.PrysmAggregateAttestationProvider
 	aggregateAttestationsSubmitter        submitter.AggregateAttestationsSubmitter
 }
 
@@ -71,9 +72,16 @@ func WithValidatingAccountsProvider(provider accountmanager.ValidatingAccountsPr
 }
 
 // WithAggregateAttestationDataProvider sets the aggregate attestation provider.
-func WithAggregateAttestationDataProvider(provider eth2client.NonSpecAggregateAttestationProvider) Parameter {
+func WithAggregateAttestationDataProvider(provider eth2client.AggregateAttestationProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.aggregateAttestationProvider = provider
+	})
+}
+
+// WithPrysmAggregateAttestationDataProvider sets the non-spec aggregate attestation provider.
+func WithPrysmAggregateAttestationDataProvider(provider eth2client.PrysmAggregateAttestationProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.prysmAggregateAttestationProvider = provider
 	})
 }
 
@@ -104,7 +112,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.validatingAccountsProvider == nil {
 		return nil, errors.New("no validating accounts provider specified")
 	}
-	if parameters.aggregateAttestationProvider == nil {
+	if parameters.aggregateAttestationProvider == nil && parameters.prysmAggregateAttestationProvider == nil {
 		return nil, errors.New("no aggregate attestation provider specified")
 	}
 	if parameters.aggregateAttestationsSubmitter == nil {

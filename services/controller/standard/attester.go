@@ -17,8 +17,8 @@ import (
 	"context"
 	"fmt"
 
-	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
@@ -26,16 +26,21 @@ import (
 
 // createAttesterJobs creates attestation jobs for the given epoch provided accounts.
 func (s *Service) createAttesterJobs(ctx context.Context,
-	epoch uint64,
+	epoch spec.Epoch,
 	accounts []accountmanager.ValidatingAccount,
 	firstRun bool) {
 	log.Trace().Msg("Creating attester jobs")
 
-	idProviders := make([]eth2client.ValidatorIDProvider, len(accounts))
+	validatorIDs := make([]spec.ValidatorIndex, len(accounts))
+	var err error
 	for i, account := range accounts {
-		idProviders[i] = account.(eth2client.ValidatorIDProvider)
+		validatorIDs[i], err = account.Index(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to obtain account index")
+			return
+		}
 	}
-	resp, err := s.attesterDutiesProvider.AttesterDuties(ctx, epoch, idProviders)
+	resp, err := s.attesterDutiesProvider.AttesterDuties(ctx, epoch, validatorIDs)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain attester duties")
 		return
@@ -43,11 +48,11 @@ func (s *Service) createAttesterJobs(ctx context.Context,
 
 	// Filter bad responses.
 	filteredDuties := make([]*api.AttesterDuty, 0, len(resp))
-	firstSlot := epoch * s.slotsPerEpoch
-	lastSlot := (epoch+1)*s.slotsPerEpoch - 1
+	firstSlot := spec.Slot(uint64(epoch) * s.slotsPerEpoch)
+	lastSlot := spec.Slot((uint64(epoch)+1)*s.slotsPerEpoch - 1)
 	for _, duty := range resp {
 		if duty.Slot < firstSlot || duty.Slot > lastSlot {
-			log.Warn().Uint64("epoch", epoch).Uint64("duty_slot", duty.Slot).Msg("Attester duty has invalid slot for requested epoch; ignoring")
+			log.Warn().Uint64("epoch", uint64(epoch)).Uint64("duty_slot", uint64(duty.Slot)).Msg("Attester duty has invalid slot for requested epoch; ignoring")
 			continue
 		}
 		filteredDuties = append(filteredDuties, duty)
@@ -59,24 +64,24 @@ func (s *Service) createAttesterJobs(ctx context.Context,
 		return
 	}
 
-	for _, duty := range duties {
-		log.
-			Trace().
-			Uint64("slot", duty.Slot()).
-			Uints64("committee_indices", duty.CommitteeIndices()).
-			Uints64("validator_indices", duty.ValidatorCommitteeIndices()).
-			Msg("Received attester duty")
+	if e := log.Trace(); e.Enabled() {
+		for _, duty := range duties {
+			log.Trace().
+				Uint64("slot", uint64(duty.Slot())).
+				Strs("duties", duty.Tuples()).
+				Msg("Received attester duties")
+		}
 	}
 
 	currentSlot := s.chainTimeService.CurrentSlot()
 	for _, duty := range duties {
 		// Do not schedule attestations for past slots (or the current slot if we've just started).
 		if duty.Slot() < currentSlot {
-			log.Debug().Uint64("attestation_slot", duty.Slot()).Uint64("current_slot", currentSlot).Msg("Attestation in the past; not scheduling")
+			log.Debug().Uint64("attestation_slot", uint64(duty.Slot())).Uint64("current_slot", uint64(currentSlot)).Msg("Attestation for a past slot; not scheduling")
 			continue
 		}
 		if firstRun && duty.Slot() == currentSlot {
-			log.Debug().Uint64("attestation_slot", duty.Slot()).Uint64("current_slot", currentSlot).Msg("Attestation in the current slot and this is our first run; not scheduling")
+			log.Debug().Uint64("attestation_slot", uint64(duty.Slot())).Uint64("current_slot", uint64(currentSlot)).Msg("Attestation for the current slot and this is our first run; not scheduling")
 			continue
 		}
 		if err := s.scheduler.ScheduleJob(ctx,
@@ -110,37 +115,44 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 		return
 	}
 
-	epoch := attestations[0].Data.Slot / s.slotsPerEpoch
+	epoch := s.chainTimeService.SlotToEpoch(attestations[0].Data.Slot)
 	s.subscriptionInfosMutex.Lock()
 	subscriptionInfoMap, exists := s.subscriptionInfos[epoch]
 	s.subscriptionInfosMutex.Unlock()
 	if !exists {
-		log.Warn().Msg("No subscription info for this epoch; cannot aggregate")
+		log.Debug().Uint64("epoch", uint64(epoch)).Msg("No subscription info for this epoch; not aggregating")
 		return
 	}
 
 	for _, attestation := range attestations {
+		log := log.With().Uint64("attestation_slot", uint64(attestation.Data.Slot)).Logger()
 		slotInfoMap, exists := subscriptionInfoMap[attestation.Data.Slot]
 		if !exists {
-			log.Debug().Uint64("attestation_slot", attestation.Data.Slot).Msg("No slot info; cannot aggregate")
+			log.Debug().Msg("No slot info; not aggregating")
 			continue
 		}
 		// Do not schedule aggregations for past slots.
 		if attestation.Data.Slot < s.chainTimeService.CurrentSlot() {
-			log.Debug().Uint64("aggregation_slot", attestation.Data.Slot).Uint64("current_slot", s.chainTimeService.CurrentSlot()).Msg("Aggregation in the past; not scheduling")
+			log.Debug().Uint64("current_slot", uint64(s.chainTimeService.CurrentSlot())).Msg("Aggregation in the past; not scheduling")
 			continue
 		}
 		info, exists := slotInfoMap[attestation.Data.Index]
 		if !exists {
-			log.Debug().Uint64("attestation_slot", attestation.Data.Slot).Uint64("committee_index", attestation.Data.Index).Msg("No committee info; cannot aggregate")
+			log.Debug().Uint64("committee_index", uint64(attestation.Data.Index)).Msg("No committee info; not aggregating")
 			continue
 		}
-		if info.Aggregate {
-			aggregatorDuty, err := attestationaggregator.NewDuty(ctx, info.ValidatorIndex, info.ValidatorPubKey, attestation, info.Signature)
+		if info.IsAggregator {
+			attestationDataRoot, err := attestation.Data.HashTreeRoot()
 			if err != nil {
 				// Don't return here; we want to try to set up as many aggregator jobs as possible.
-				log.Error().Err(err).Msg("Failed to create beacon block attestation aggregation duty")
+				log.Error().Err(err).Msg("Failed to obtain hash tree root of attestation")
 				continue
+			}
+			aggregatorDuty := &attestationaggregator.Duty{
+				Slot:                info.Duty.Slot,
+				AttestationDataRoot: attestationDataRoot,
+				ValidatorIndex:      info.Duty.ValidatorIndex,
+				SlotSignature:       info.Signature,
 			}
 			if err := s.scheduler.ScheduleJob(ctx,
 				fmt.Sprintf("Beacon block attestation aggregation for slot %d committee %d", attestation.Data.Slot, attestation.Data.Index),

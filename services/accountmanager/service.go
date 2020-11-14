@@ -18,6 +18,7 @@ import (
 	"context"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // Service is the generic accountmanager service.
@@ -29,23 +30,23 @@ type ValidatingAccountsProvider interface {
 	Accounts(ctx context.Context) ([]ValidatingAccount, error)
 
 	// AccountsByIndex provides information about the specific accounts that are configured to validate through this instance.
-	AccountsByIndex(ctx context.Context, indices []uint64) ([]ValidatingAccount, error)
+	AccountsByIndex(ctx context.Context, indices []spec.ValidatorIndex) ([]ValidatingAccount, error)
 
 	// AccountsByPubKey provides information about the specific accounts that are configured to validate through this instance.
-	AccountsByPubKey(ctx context.Context, pubKeys [][]byte) ([]ValidatingAccount, error)
+	AccountsByPubKey(ctx context.Context, pubKeys []spec.BLSPubKey) ([]ValidatingAccount, error)
 }
 
 // ValidatingAccountPubKeyProvider provides methods for obtaining public keys from accounts.
 type ValidatingAccountPubKeyProvider interface {
 	// PubKey() provides the public key for this account.
-	PubKey(ctx context.Context) ([]byte, error)
+	PubKey(ctx context.Context) (spec.BLSPubKey, error)
 }
 
 // ValidatingAccountIndexProvider provides methods for obtaining indices from accounts.
 type ValidatingAccountIndexProvider interface {
 	// Index() provides the validator index for this account.
 	// Returns an error if there is no index for this validator.
-	Index(ctx context.Context) (uint64, error)
+	Index(ctx context.Context) (spec.ValidatorIndex, error)
 }
 
 // ValidatingAccountStateProvider provides methods for obtaining state from accounts.
@@ -81,45 +82,44 @@ type IsAggregatorProvider interface {
 type RANDAORevealSigner interface {
 	// SignRANDAOReveal returns a RANDAO signature.
 	// This signs an epoch with the "RANDAO" domain.
-	// N.B. This passes in a slot, not an epoch.
-	SignRANDAOReveal(ctx context.Context, slot uint64) ([]byte, error)
+	SignRANDAOReveal(ctx context.Context, slot spec.Slot) (spec.BLSSignature, error)
 }
 
 // SlotSelectionSigner provides methods to sign slot selections.
 type SlotSelectionSigner interface {
 	// SignSlotSelection returns a slot selection signature.
 	// This signs a slot with the "selection proof" domain.
-	SignSlotSelection(ctx context.Context, slot uint64) ([]byte, error)
+	SignSlotSelection(ctx context.Context, slot spec.Slot) (spec.BLSSignature, error)
 }
 
 // BeaconBlockSigner provides methods to sign beacon blocks.
 type BeaconBlockSigner interface {
 	// SignBeaconBlockProposal signs a beacon block proposal.
 	SignBeaconBlockProposal(ctx context.Context,
-		slot uint64,
-		proposerIndex uint64,
-		parentRoot []byte,
-		stateRoot []byte,
-		bodyRoot []byte) ([]byte, error)
+		slot spec.Slot,
+		proposerIndex spec.ValidatorIndex,
+		parentRoot spec.Root,
+		stateRoot spec.Root,
+		bodyRoot spec.Root) (spec.BLSSignature, error)
 }
 
 // BeaconAttestationSigner provides methods to sign beacon attestations.
 type BeaconAttestationSigner interface {
 	// SignBeaconAttestation signs a beacon attestation.
 	SignBeaconAttestation(ctx context.Context,
-		slot uint64,
-		committeeIndex uint64,
-		blockRoot []byte,
-		sourceEpoch uint64,
-		sourceRoot []byte,
-		targetEpoch uint64,
-		targetRoot []byte) ([]byte, error)
+		slot spec.Slot,
+		committeeIndex spec.CommitteeIndex,
+		blockRoot spec.Root,
+		sourceEpoch spec.Epoch,
+		sourceRoot spec.Root,
+		targetEpoch spec.Epoch,
+		targetRoot spec.Root) (spec.BLSSignature, error)
 }
 
 // AggregateAndProofSigner provides methods to sign aggregate and proofs.
 type AggregateAndProofSigner interface {
 	// SignAggregateAndProof signs an aggregate attestation for given slot and root.
-	SignAggregateAndProof(ctx context.Context, slot uint64, root []byte) ([]byte, error)
+	SignAggregateAndProof(ctx context.Context, slot spec.Slot, root spec.Root) (spec.BLSSignature, error)
 }
 
 // Signer is a composite interface for all signer operations.

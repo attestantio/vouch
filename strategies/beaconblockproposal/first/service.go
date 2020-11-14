@@ -1,5 +1,5 @@
 // Copyright © 2020 Attestant Limited.
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed )junder the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -57,8 +57,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	return s, nil
 }
 
-// BeaconBlockProposal provies the first beacon block proposal from a number of beacon nodes.
-func (s *Service) BeaconBlockProposal(ctx context.Context, slot uint64, randaoReveal []byte, graffiti []byte) (*spec.BeaconBlock, error) {
+// BeaconBlockProposal provides the first beacon block proposal from a number of beacon nodes.
+func (s *Service) BeaconBlockProposal(ctx context.Context, slot spec.Slot, randaoReveal spec.BLSSignature, graffiti []byte) (*spec.BeaconBlock, error) {
 	// We create a cancelable context with a timeout.  As soon as the first provider has responded we
 	// cancel the context to cancel the other requests.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
@@ -66,7 +66,7 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot uint64, randaoRe
 	proposalCh := make(chan *spec.BeaconBlock, 1)
 	for name, provider := range s.beaconBlockProposalProviders {
 		go func(ctx context.Context, name string, provider eth2client.BeaconBlockProposalProvider, ch chan *spec.BeaconBlock) {
-			log := log.With().Str("provider", name).Uint64("slot", slot).Logger()
+			log := log.With().Str("provider", name).Uint64("slot", uint64(slot)).Logger()
 
 			started := time.Now()
 			proposal, err := provider.BeaconBlockProposal(ctx, slot, randaoReveal, graffiti)

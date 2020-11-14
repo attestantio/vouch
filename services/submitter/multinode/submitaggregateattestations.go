@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
@@ -41,14 +42,21 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []
 			submitter eth2client.AggregateAttestationsSubmitter,
 		) {
 			defer wg.Done()
-			log := log.With().Str("beacon_node_address", name).Uint64("slot", aggregates[0].Message.Aggregate.Data.Slot).Logger()
+			log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(aggregates[0].Message.Aggregate.Data.Slot)).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
 			}
 			defer sem.Release(1)
 
-			if err := submitter.SubmitAggregateAttestations(ctx, aggregates); err != nil {
+			started := time.Now()
+			err := submitter.SubmitAggregateAttestations(ctx, aggregates)
+			if service, isService := submitter.(eth2client.Service); isService {
+				s.clientMonitor.ClientOperation(service.Address(), "submit aggregate attestation", err == nil, time.Since(started))
+			} else {
+				s.clientMonitor.ClientOperation("<unknown>", "submit aggregate attestation", err == nil, time.Since(started))
+			}
+			if err != nil {
 				log.Warn().Err(err).Msg("Failed to submit aggregate attestations")
 				return
 			}

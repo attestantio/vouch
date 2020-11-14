@@ -23,6 +23,7 @@ import (
 
 	"github.com/attestantio/dirk/testing/daemon"
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/testing/logger"
@@ -57,9 +58,9 @@ func TestFetchAccountsForWallet(t *testing.T) {
 	// Test with wallet regex.
 	s, err := setupService(ctx, t, []string{"localhost:12345"}, []string{"wallet1", "wallet2"})
 	require.NoError(t, err)
-	validatingAccounts := make(map[[48]byte]*ValidatingAccount)
+	validatingAccounts := make(map[spec.BLSPubKey]*ValidatingAccount)
 	for account := range wallets[0].Accounts(ctx) {
-		var key [48]byte
+		var key spec.BLSPubKey
 		copy(key[:], account.PublicKey().Marshal())
 		validatingAccounts[key] = &ValidatingAccount{
 			account: account,
@@ -76,9 +77,9 @@ func TestFetchAccountsForWallet(t *testing.T) {
 	capture := logger.NewLogCapture()
 	s, err = setupService(ctx, t, []string{"localhost:12345"}, []string{"wallet1", "wallet2"})
 	require.NoError(t, err)
-	validatingAccounts = make(map[[48]byte]*ValidatingAccount)
+	validatingAccounts = make(map[spec.BLSPubKey]*ValidatingAccount)
 	for account := range wallets[0].Accounts(ctx) {
-		var key [48]byte
+		var key spec.BLSPubKey
 		copy(key[:], account.PublicKey().Marshal())
 		validatingAccounts[key] = &ValidatingAccount{
 			account: account,
@@ -180,7 +181,7 @@ func TestAccountPathsToVerificationRegexes(t *testing.T) {
 func TestAccounts(t *testing.T) {
 	tests := []struct {
 		name     string
-		accounts map[[48]byte]*ValidatingAccount
+		accounts map[spec.BLSPubKey]*ValidatingAccount
 		expected int
 	}{
 		{
@@ -260,7 +261,7 @@ func TestUpdateAccountsStateWithoutBalances(t *testing.T) {
 		WithRANDAODomainProvider(mock.NewRANDAODomainProvider()),
 		WithSelectionProofDomainProvider(mock.NewSelectionProofDomainProvider()),
 		WithAggregateAndProofDomainProvider(mock.NewAggregateAndProofDomainProvider()),
-		WithSignatureDomainProvider(mock.NewSignatureDomainProvider()),
+		WithDomainProvider(mock.NewDomainProvider()),
 	)
 	require.NoError(t, err)
 	accounts, err := s.Accounts(ctx)
@@ -301,7 +302,7 @@ func setupService(ctx context.Context, t *testing.T, endpoints []string, account
 		WithRANDAODomainProvider(mock.NewRANDAODomainProvider()),
 		WithSelectionProofDomainProvider(mock.NewSelectionProofDomainProvider()),
 		WithAggregateAndProofDomainProvider(mock.NewAggregateAndProofDomainProvider()),
-		WithSignatureDomainProvider(mock.NewSignatureDomainProvider()),
+		WithDomainProvider(mock.NewDomainProvider()),
 	)
 }
 

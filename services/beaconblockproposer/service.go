@@ -16,20 +16,26 @@ package beaconblockproposer
 import (
 	"context"
 	"fmt"
+
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/accountmanager"
 )
 
 // Duty contains information about a beacon block proposal duty.
 type Duty struct {
 	// Details for the duty.
-	slot           uint64
-	validatorIndex uint64
+	slot           spec.Slot
+	validatorIndex spec.ValidatorIndex
 
 	// randaoReveal is required to be passed to the beacon node when proposing the block; can be pre-calculated.
-	randaoReveal []byte
+	randaoReveal spec.BLSSignature
+
+	// account is used to sign the proposal; can be pre-fetched.
+	account accountmanager.ValidatingAccount
 }
 
 // NewDuty creates a new beacon block proposer duty.
-func NewDuty(ctx context.Context, slot uint64, validatorIndex uint64) (*Duty, error) {
+func NewDuty(ctx context.Context, slot spec.Slot, validatorIndex spec.ValidatorIndex) (*Duty, error) {
 	return &Duty{
 		slot:           slot,
 		validatorIndex: validatorIndex,
@@ -37,12 +43,12 @@ func NewDuty(ctx context.Context, slot uint64, validatorIndex uint64) (*Duty, er
 }
 
 // Slot provides the slot for the beacon block proposer.
-func (d *Duty) Slot() uint64 {
+func (d *Duty) Slot() spec.Slot {
 	return d.slot
 }
 
 // ValidatorIndex provides the validator index for the beacon block proposer.
-func (d *Duty) ValidatorIndex() uint64 {
+func (d *Duty) ValidatorIndex() spec.ValidatorIndex {
 	return d.validatorIndex
 }
 
@@ -52,13 +58,23 @@ func (d *Duty) String() string {
 }
 
 // SetRandaoReveal sets the RANDAO reveal.
-func (d *Duty) SetRandaoReveal(randaoReveal []byte) {
+func (d *Duty) SetRandaoReveal(randaoReveal spec.BLSSignature) {
 	d.randaoReveal = randaoReveal
 }
 
 // RANDAOReveal provides the RANDAO reveal.
-func (d *Duty) RANDAOReveal() []byte {
+func (d *Duty) RANDAOReveal() spec.BLSSignature {
 	return d.randaoReveal
+}
+
+// SetAccount sets the account.
+func (d *Duty) SetAccount(account accountmanager.ValidatingAccount) {
+	d.account = account
+}
+
+// Account provides the account.
+func (d *Duty) Account() accountmanager.ValidatingAccount {
+	return d.account
 }
 
 // Service is the beacon block proposer service.

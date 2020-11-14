@@ -17,30 +17,18 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/attestantio/vouch/services/submitter"
+	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/semaphore"
 )
 
 // SubmitBeaconCommitteeSubscriptions submits a batch of beacon committee subscriptions.
-func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*submitter.BeaconCommitteeSubscription) error {
+func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*api.BeaconCommitteeSubscription) error {
 	if subscriptions == nil {
 		return errors.New("no subscriptions supplied")
-	}
-
-	subs := make([]*eth2client.BeaconCommitteeSubscription, len(subscriptions))
-	for i, subscription := range subscriptions {
-		subs[i] = &eth2client.BeaconCommitteeSubscription{
-			Slot:                   subscription.Slot,
-			CommitteeIndex:         subscription.CommitteeIndex,
-			CommitteeSize:          subscription.CommitteeSize,
-			ValidatorIndex:         subscription.ValidatorIndex,
-			ValidatorPubKey:        subscription.ValidatorPubKey,
-			Aggregate:              subscription.Aggregate,
-			SlotSelectionSignature: subscription.Signature,
-		}
 	}
 
 	sem := semaphore.NewWeighted(s.processConcurrency)
@@ -54,14 +42,21 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 			submitter eth2client.BeaconCommitteeSubscriptionsSubmitter,
 		) {
 			defer wg.Done()
-			log := log.With().Str("beacon_node_address", name).Int("subscriptions", len(subs)).Logger()
+			log := log.With().Str("beacon_node_address", name).Int("subscriptions", len(subscriptions)).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
 			}
 			defer sem.Release(1)
 
-			if err := submitter.SubmitBeaconCommitteeSubscriptions(ctx, subs); err != nil {
+			started := time.Now()
+			err := submitter.SubmitBeaconCommitteeSubscriptions(ctx, subscriptions)
+			if service, isService := submitter.(eth2client.Service); isService {
+				s.clientMonitor.ClientOperation(service.Address(), "submit beacon committee subscription", err == nil, time.Since(started))
+			} else {
+				s.clientMonitor.ClientOperation("<unknown>", "submit beacon committee subscription", err == nil, time.Since(started))
+			}
+			if err != nil {
 				log.Warn().Err(err).Msg("Failed to submit beacon committee subscription")
 				return
 			}
@@ -74,7 +69,7 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 		// Summary counts.
 		aggregating := 0
 		for i := range subscriptions {
-			if subscriptions[i].Aggregate {
+			if subscriptions[i].IsAggregator {
 				aggregating++
 			}
 		}

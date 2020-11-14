@@ -19,6 +19,8 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	api "github.com/attestantio/go-eth2-client/api/v1"
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
@@ -70,22 +72,29 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 // Subscribe subscribes to beacon committees for a given epoch.
 // This returns data about the subnets to which we are subscribing.
-func (s *Service) Subscribe(ctx context.Context, epoch uint64, accounts []accountmanager.ValidatingAccount) (map[uint64]map[uint64]*beaconcommitteesubscriber.Subscription, error) {
+func (s *Service) Subscribe(ctx context.Context,
+	epoch spec.Epoch,
+	accounts []accountmanager.ValidatingAccount,
+) (map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
 	started := time.Now()
 
-	log := log.With().Uint64("epoch", epoch).Logger()
+	log := log.With().Uint64("epoch", uint64(epoch)).Logger()
 	log.Trace().Msg("Subscribing")
 
-	idProviders := make([]eth2client.ValidatorIDProvider, len(accounts))
+	validatorIDs := make([]spec.ValidatorIndex, len(accounts))
+	var err error
 	for i, account := range accounts {
-		idProviders[i] = account.(eth2client.ValidatorIDProvider)
+		validatorIDs[i], err = account.Index(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to obtain account index")
+		}
 	}
-	attesterDuties, err := s.attesterDutiesProvider.AttesterDuties(ctx, epoch, idProviders)
+	attesterDuties, err := s.attesterDutiesProvider.AttesterDuties(ctx, epoch, validatorIDs)
 	if err != nil {
 		s.monitor.BeaconCommitteeSubscriptionCompleted(started, "failed")
 		return nil, errors.Wrap(err, "failed to obtain attester duties")
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(idProviders)).Msg("Fetched attester duties")
+	log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(validatorIDs)).Msg("Fetched attester duties")
 	duties, err := attester.MergeDuties(ctx, attesterDuties)
 	if err != nil {
 		s.monitor.BeaconCommitteeSubscriptionCompleted(started, "failed")
@@ -105,7 +114,7 @@ func (s *Service) Subscribe(ctx context.Context, epoch uint64, accounts []accoun
 	for _, v := range subscriptionInfo {
 		for _, v2 := range v {
 			subscriptions++
-			if v2.Aggregate {
+			if v2.IsAggregator {
 				aggregators++
 			}
 		}
@@ -116,17 +125,15 @@ func (s *Service) Subscribe(ctx context.Context, epoch uint64, accounts []accoun
 	// Submit the subscription information.
 	go func() {
 		log.Trace().Msg("Submitting subscription")
-		subscriptions := make([]*submitter.BeaconCommitteeSubscription, 0, len(duties))
+		subscriptions := make([]*api.BeaconCommitteeSubscription, 0, len(duties))
 		for slot, slotInfo := range subscriptionInfo {
 			for committeeIndex, info := range slotInfo {
-				subscriptions = append(subscriptions, &submitter.BeaconCommitteeSubscription{
-					Slot:            slot,
-					CommitteeIndex:  committeeIndex,
-					CommitteeSize:   info.CommitteeSize,
-					ValidatorIndex:  info.ValidatorIndex,
-					ValidatorPubKey: info.ValidatorPubKey,
-					Aggregate:       info.Aggregate,
-					Signature:       info.Signature,
+				subscriptions = append(subscriptions, &api.BeaconCommitteeSubscription{
+					ValidatorIndex:   info.Duty.ValidatorIndex,
+					Slot:             slot,
+					CommitteeIndex:   committeeIndex,
+					CommitteesAtSlot: info.Duty.CommitteesAtSlot,
+					IsAggregator:     info.IsAggregator,
 				})
 			}
 		}
@@ -146,17 +153,17 @@ func (s *Service) Subscribe(ctx context.Context, epoch uint64, accounts []accoun
 // calculateSubscriptionInfo calculates our beacon block attesation subnet requirements given a set of duties.
 // It returns a map of slot => committee => subscription information.
 func (s *Service) calculateSubscriptionInfo(ctx context.Context,
-	epoch uint64,
+	epoch spec.Epoch,
 	accounts []accountmanager.ValidatingAccount,
 	duties []*attester.Duty,
-) (map[uint64]map[uint64]*beaconcommitteesubscriber.Subscription, error) {
+) (map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
 
 	// Map is slot => committee => info.
-	subscriptionInfo := make(map[uint64]map[uint64]*beaconcommitteesubscriber.Subscription)
+	subscriptionInfo := make(map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription)
 	subscriptionInfoMutex := deadlock.RWMutex{}
 
 	// Map is validator ID => account.
-	accountMap := make(map[uint64]accountmanager.ValidatingAccount, len(accounts))
+	accountMap := make(map[spec.ValidatorIndex]accountmanager.ValidatingAccount, len(accounts))
 	for _, account := range accounts {
 		index, err := account.Index(ctx)
 		if err != nil {
@@ -187,7 +194,7 @@ func (s *Service) calculateSubscriptionInfo(ctx context.Context,
 					subscriptionInfoMutex.RLock()
 					info, exists := subscriptionInfo[duty.Slot()][duty.CommitteeIndices()[i]]
 					subscriptionInfoMutex.RUnlock()
-					if exists && info.Aggregate {
+					if exists && info.IsAggregator {
 						// Already an aggregator for this slot/committee; don't need to go further.
 						return
 					}
@@ -201,26 +208,27 @@ func (s *Service) calculateSubscriptionInfo(ctx context.Context,
 						log.Error().Err(err).Msg("Failed to calculate if validator is an aggregator")
 						return
 					}
-					account, exists := accountMap[duty.ValidatorIndices()[i]]
-					if !exists {
-						log.Error().Uint64("validator_index", duty.ValidatorIndices()[i]).Msg("Failed to obtain validator account")
+					pubKey, err := accountMap[duty.ValidatorIndices()[i]].PubKey(ctx)
+					if err != nil {
+						log.Error().Err(err).Msg("Failed to obtain validator's public key")
 						return
 					}
 					subscriptionInfoMutex.Lock()
 					if _, exists := subscriptionInfo[duty.Slot()]; !exists {
-						subscriptionInfo[duty.Slot()] = make(map[uint64]*beaconcommitteesubscriber.Subscription)
-					}
-					pubKey, err := account.PubKey(ctx)
-					if err != nil {
-						log.Error().Uint64("validator_index", duty.ValidatorIndices()[i]).Err(err).Msg("Failed to obtain validator public key")
-						return
+						subscriptionInfo[duty.Slot()] = make(map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription)
 					}
 					subscriptionInfo[duty.Slot()][duty.CommitteeIndices()[i]] = &beaconcommitteesubscriber.Subscription{
-						ValidatorIndex:  duty.ValidatorIndices()[i],
-						ValidatorPubKey: pubKey,
-						CommitteeSize:   duty.CommitteeSize(duty.CommitteeIndices()[i]),
-						Signature:       signature,
-						Aggregate:       isAggregator,
+						Duty: &api.AttesterDuty{
+							PubKey:                  pubKey,
+							Slot:                    duty.Slot(),
+							ValidatorIndex:          duty.ValidatorIndices()[i],
+							CommitteeIndex:          duty.CommitteeIndices()[i],
+							CommitteeLength:         duty.CommitteeSize(duty.CommitteeIndices()[i]),
+							CommitteesAtSlot:        duty.CommitteesAtSlot(),
+							ValidatorCommitteeIndex: duty.ValidatorCommitteeIndices()[i],
+						},
+						IsAggregator: isAggregator,
+						Signature:    signature,
 					}
 					subscriptionInfoMutex.Unlock()
 				}(ctx, sem, wg, duty, i)

@@ -19,30 +19,33 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	"github.com/opentracing/opentracing-go"
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // ValidatingAccount is a wrapper around the dirk account that implements ValidatingAccount.
 type ValidatingAccount struct {
-	account                 e2wtypes.Account
-	index                   uint64
-	state                   api.ValidatorState
-	accountManager          *Service
-	signatureDomainProvider eth2client.SignatureDomainProvider
+	account        e2wtypes.Account
+	index          spec.ValidatorIndex
+	state          api.ValidatorState
+	accountManager *Service
+	domainProvider eth2client.DomainProvider
 }
 
 // PubKey returns the public key of the validating account.
-func (d *ValidatingAccount) PubKey(ctx context.Context) ([]byte, error) {
+func (d *ValidatingAccount) PubKey(ctx context.Context) (spec.BLSPubKey, error) {
+	var pubKey spec.BLSPubKey
 	if provider, isProvider := d.account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
-		return provider.CompositePublicKey().Marshal(), nil
+		copy(pubKey[:], provider.CompositePublicKey().Marshal())
+	} else {
+		copy(pubKey[:], d.account.PublicKey().Marshal())
 	}
-	return d.account.PublicKey().Marshal(), nil
+	return pubKey, nil
 }
 
 // Index returns the index of the validating account.
-func (d *ValidatingAccount) Index(ctx context.Context) (uint64, error) {
+func (d *ValidatingAccount) Index(ctx context.Context) (spec.ValidatorIndex, error) {
 	return d.index, nil
 }
 
@@ -53,133 +56,142 @@ func (d *ValidatingAccount) State() api.ValidatorState {
 
 // SignSlotSelection returns a slot selection signature.
 // This signs a slot with the "selection proof" domain.
-func (d *ValidatingAccount) SignSlotSelection(ctx context.Context, slot uint64) ([]byte, error) {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "dirk.SignSlotSelection")
-	defer span.Finish()
+func (d *ValidatingAccount) SignSlotSelection(ctx context.Context, slot spec.Slot) (spec.BLSSignature, error) {
+	var messageRoot spec.Root
+	binary.LittleEndian.PutUint64(messageRoot[:], uint64(slot))
 
-	// Calculate the signature domain.
-	signatureDomain, err := d.signatureDomainProvider.SignatureDomain(ctx,
-		d.accountManager.selectionProofDomain,
-		slot/d.accountManager.slotsPerEpoch)
+	// Calculate the domain.
+	domain, err := d.domainProvider.Domain(ctx,
+		d.accountManager.selectionProofDomainType,
+		spec.Epoch(slot/d.accountManager.slotsPerEpoch))
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain signature domain for selection proof")
+		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for selection proof")
 	}
 
 	slotBytes := make([]byte, 32)
-	binary.LittleEndian.PutUint64(slotBytes, slot)
+	binary.LittleEndian.PutUint64(slotBytes, uint64(slot))
 
-	sig, err := d.account.(e2wtypes.AccountProtectingSigner).SignGeneric(ctx, slotBytes, signatureDomain)
+	sig, err := d.account.(e2wtypes.AccountProtectingSigner).SignGeneric(ctx, slotBytes, domain[:])
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to sign slot")
+		return spec.BLSSignature{}, errors.Wrap(err, "failed to sign slot")
 	}
-	return sig.Marshal(), nil
+
+	var signature spec.BLSSignature
+	copy(signature[:], sig.Marshal())
+	return signature, nil
 }
 
 // SignRANDAOReveal returns a RANDAO reveal signature.
 // This signs an epoch with the "RANDAO reveal" domain.
-// N.B. This passes in a slot, not an epoch.
-func (d *ValidatingAccount) SignRANDAOReveal(ctx context.Context, slot uint64) ([]byte, error) {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "dirk.SignRANDAOReveal")
-	defer span.Finish()
+func (d *ValidatingAccount) SignRANDAOReveal(ctx context.Context, slot spec.Slot) (spec.BLSSignature, error) {
+	var messageRoot spec.Root
+	epoch := spec.Epoch(slot / d.accountManager.slotsPerEpoch)
+	binary.LittleEndian.PutUint64(messageRoot[:], uint64(epoch))
 
-	epoch := slot / d.accountManager.slotsPerEpoch
 	// Obtain the RANDAO reveal signature domain.
-	signatureDomain, err := d.signatureDomainProvider.SignatureDomain(ctx,
-		d.accountManager.randaoDomain,
+	domain, err := d.domainProvider.Domain(ctx,
+		d.accountManager.randaoDomainType,
 		epoch)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain signature domain for RANDAO reveal")
+		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for RANDAO reveal")
 	}
 
 	epochBytes := make([]byte, 32)
-	binary.LittleEndian.PutUint64(epochBytes, epoch)
+	binary.LittleEndian.PutUint64(epochBytes, uint64(epoch))
 
-	sig, err := d.account.(e2wtypes.AccountProtectingSigner).SignGeneric(ctx, epochBytes, signatureDomain)
+	sig, err := d.account.(e2wtypes.AccountProtectingSigner).SignGeneric(ctx, epochBytes, domain[:])
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to sign RANDO reveal")
+		return spec.BLSSignature{}, errors.Wrap(err, "failed to sign RANDO reveal")
 	}
-	return sig.Marshal(), nil
+
+	var signature spec.BLSSignature
+	copy(signature[:], sig.Marshal())
+	return signature, nil
 }
 
 // SignBeaconBlockProposal signs a beacon block proposal item.
 func (d *ValidatingAccount) SignBeaconBlockProposal(ctx context.Context,
-	slot uint64,
-	proposerIndex uint64,
-	parentRoot []byte,
-	stateRoot []byte,
-	bodyRoot []byte) ([]byte, error) {
+	slot spec.Slot,
+	proposerIndex spec.ValidatorIndex,
+	parentRoot spec.Root,
+	stateRoot spec.Root,
+	bodyRoot spec.Root) (spec.BLSSignature, error) {
 
-	// Fetch the signature domain.
-	signatureDomain, err := d.signatureDomainProvider.SignatureDomain(ctx,
-		d.accountManager.beaconProposerDomain,
-		slot/d.accountManager.slotsPerEpoch)
+	// Fetch the domain.
+	domain, err := d.domainProvider.Domain(ctx,
+		d.accountManager.beaconProposerDomainType,
+		spec.Epoch(slot/d.accountManager.slotsPerEpoch))
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain signature domain for beacon proposal")
+		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for beacon proposal")
 	}
 
 	sig, err := d.account.(e2wtypes.AccountProtectingSigner).SignBeaconProposal(ctx,
-		slot,
-		proposerIndex,
-		parentRoot,
-		stateRoot,
-		bodyRoot,
-		signatureDomain)
+		uint64(slot),
+		uint64(proposerIndex),
+		parentRoot[:],
+		stateRoot[:],
+		bodyRoot[:],
+		domain[:])
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to sign beacon block proposal")
+		return spec.BLSSignature{}, errors.Wrap(err, "failed to sign beacon block proposal")
 	}
-	return sig.Marshal(), nil
+
+	var signature spec.BLSSignature
+	copy(signature[:], sig.Marshal())
+	return signature, nil
 }
 
 // SignBeaconAttestation signs a beacon attestation item.
 func (d *ValidatingAccount) SignBeaconAttestation(ctx context.Context,
-	slot uint64,
-	committeeIndex uint64,
-	blockRoot []byte,
-	sourceEpoch uint64,
-	sourceRoot []byte,
-	targetEpoch uint64,
-	targetRoot []byte) ([]byte, error) {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "dirk.SignBeaconAttestation")
-	defer span.Finish()
+	slot spec.Slot,
+	committeeIndex spec.CommitteeIndex,
+	blockRoot spec.Root,
+	sourceEpoch spec.Epoch,
+	sourceRoot spec.Root,
+	targetEpoch spec.Epoch,
+	targetRoot spec.Root) (spec.BLSSignature, error) {
 
-	signatureDomain, err := d.signatureDomainProvider.SignatureDomain(ctx,
-		d.accountManager.beaconAttesterDomain,
-		slot/d.accountManager.slotsPerEpoch)
+	domain, err := d.domainProvider.Domain(ctx,
+		d.accountManager.beaconAttesterDomainType,
+		spec.Epoch(slot/d.accountManager.slotsPerEpoch))
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
+		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
 	}
 
 	sig, err := d.account.(e2wtypes.AccountProtectingSigner).SignBeaconAttestation(ctx,
-		slot,
-		committeeIndex,
-		blockRoot,
-		sourceEpoch,
-		sourceRoot,
-		targetEpoch,
-		targetRoot,
-		signatureDomain)
+		uint64(slot),
+		uint64(committeeIndex),
+		blockRoot[:],
+		uint64(sourceEpoch),
+		sourceRoot[:],
+		uint64(targetEpoch),
+		targetRoot[:],
+		domain[:])
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to sign beacon attestation")
+		return spec.BLSSignature{}, errors.Wrap(err, "failed to sign beacon attestation")
 	}
-	return sig.Marshal(), nil
+
+	var signature spec.BLSSignature
+	copy(signature[:], sig.Marshal())
+	return signature, nil
 }
 
 // SignAggregateAndProof signs an aggregate and proof item.
-func (d *ValidatingAccount) SignAggregateAndProof(ctx context.Context, slot uint64, aggregateAndProofRoot []byte) ([]byte, error) {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "dirk.SignAggregateAndProof")
-	defer span.Finish()
-
-	// Fetch the signature domain.
-	signatureDomain, err := d.signatureDomainProvider.SignatureDomain(ctx,
-		d.accountManager.aggregateAndProofDomain,
-		slot)
+func (d *ValidatingAccount) SignAggregateAndProof(ctx context.Context, slot spec.Slot, aggregateAndProofRoot spec.Root) (spec.BLSSignature, error) {
+	// Fetch the domain.
+	domain, err := d.domainProvider.Domain(ctx,
+		d.accountManager.aggregateAndProofDomainType,
+		spec.Epoch(slot/d.accountManager.slotsPerEpoch))
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain signature domain for beacon aggregate and proof")
+		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for beacon aggregate and proof")
 	}
 
-	sig, err := d.account.(e2wtypes.AccountProtectingSigner).SignGeneric(ctx, aggregateAndProofRoot, signatureDomain)
+	sig, err := d.account.(e2wtypes.AccountProtectingSigner).SignGeneric(ctx, aggregateAndProofRoot[:], domain[:])
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to aggregate and proof")
+		return spec.BLSSignature{}, errors.Wrap(err, "failed to aggregate and proof")
 	}
-	return sig.Marshal(), nil
+
+	var signature spec.BLSSignature
+	copy(signature[:], sig.Marshal())
+	return signature, nil
 }

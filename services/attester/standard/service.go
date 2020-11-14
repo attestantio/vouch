@@ -85,8 +85,8 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 		s.monitor.AttestationCompleted(started, "failed")
 		return nil, errors.New("passed invalid data structure")
 	}
-	log := log.With().Uint64("slot", duty.Slot()).Logger()
-	log.Trace().Uints64("validator_indices", duty.ValidatorIndices()).Msg("Attesting")
+	log := log.With().Uint64("slot", uint64(duty.Slot())).Logger()
+	log.Trace().Strs("duties", duty.Tuples()).Msg("Attesting")
 
 	attestations := make([]*spec.Attestation, 0, len(duty.ValidatorIndices()))
 	var attestationsMutex sync.Mutex
@@ -110,10 +110,10 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 		s.monitor.AttestationCompleted(started, "failed")
 		return nil, errors.New("failed to obtain attesting validator accounts")
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Uints64("validator_indices", duty.ValidatorIndices()).Msg("Obtained validating accounts")
+	log.Trace().Dur("elapsed", time.Since(started)).Strs("tuples", duty.Tuples()).Msg("Obtained validating accounts")
 
 	// Run the attestations in parallel, up to a concurrency limit.
-	validatorIndexToArrayIndexMap := make(map[uint64]int)
+	validatorIndexToArrayIndexMap := make(map[spec.ValidatorIndex]int)
 	for i := range duty.ValidatorIndices() {
 		validatorIndexToArrayIndexMap[duty.ValidatorIndices()[i]] = i
 	}
@@ -134,7 +134,7 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 				log.Warn().Err(err).Msg("Failed to obtain validator index")
 				return
 			}
-			log := log.With().Uint64("validator_index", validatorIndex).Logger()
+			log := log.With().Uint64("validator_index", uint64(validatorIndex)).Logger()
 			attestation, err := s.attest(ctx,
 				duty.Slot(),
 				duty.CommitteeIndices()[validatorIndexToArrayIndexMap[validatorIndex]],
@@ -163,8 +163,8 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 
 func (s *Service) attest(
 	ctx context.Context,
-	slot uint64,
-	committeeIndex uint64,
+	slot spec.Slot,
+	committeeIndex spec.CommitteeIndex,
 	validatorCommitteeIndex uint64,
 	committeeSize uint64,
 	account accountmanager.ValidatingAccount,

@@ -17,8 +17,8 @@ import (
 	"context"
 	"encoding/json"
 
+	api "github.com/attestantio/go-eth2-client/api/v1"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -81,7 +81,7 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 }
 
 // SubmitBeaconCommitteeSubscriptions submits a batch of beacon committee subscriptions.
-func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*submitter.BeaconCommitteeSubscription) error {
+func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*api.BeaconCommitteeSubscription) error {
 	if subscriptions == nil {
 		return errors.New("no subscriptions supplied")
 	}
@@ -90,7 +90,7 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 		// Summary counts.
 		aggregating := 0
 		for i := range subscriptions {
-			if subscriptions[i].Aggregate {
+			if subscriptions[i].IsAggregator {
 				aggregating++
 			}
 		}
