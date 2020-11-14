@@ -32,6 +32,7 @@ type parameters struct {
 	clientMonitor                metrics.ClientMonitor
 	processConcurrency           int64
 	beaconBlockProposalProviders map[string]eth2client.BeaconBlockProposalProvider
+	signedBeaconBlockProvider    eth2client.SignedBeaconBlockProvider
 	timeout                      time.Duration
 }
 
@@ -50,6 +51,13 @@ func (f parameterFunc) apply(p *parameters) {
 func WithLogLevel(logLevel zerolog.Level) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.logLevel = logLevel
+	})
+}
+
+// WithTimeout sets the timeout for beacon block proposal requests.
+func WithTimeout(timeout time.Duration) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.timeout = timeout
 	})
 }
 
@@ -74,10 +82,10 @@ func WithBeaconBlockProposalProviders(providers map[string]eth2client.BeaconBloc
 	})
 }
 
-// WithTimeout sets the timeout for beacon block proposal requests.
-func WithTimeout(timeout time.Duration) Parameter {
+// WithSignedBeaconBlockProvider sets the signed beacon block provider.
+func WithSignedBeaconBlockProvider(provider eth2client.SignedBeaconBlockProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.timeout = timeout
+		p.signedBeaconBlockProvider = provider
 	})
 }
 
@@ -106,6 +114,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if len(parameters.beaconBlockProposalProviders) == 0 {
 		return nil, errors.New("no beacon block proposal providers specified")
+	}
+	if parameters.signedBeaconBlockProvider == nil {
+		return nil, errors.New("no signed beacon block provider specified")
 	}
 
 	return &parameters, nil

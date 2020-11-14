@@ -65,8 +65,12 @@ func (s *Service) createProposerJobs(ctx context.Context,
 	currentSlot := s.chainTimeService.CurrentSlot()
 	for _, duty := range duties {
 		// Do not schedule proposals for past slots (or the current slot if we've just started).
-		if duty.Slot() < currentSlot || firstRun && duty.Slot() == currentSlot {
-			log.Debug().Uint64("proposal_slot", uint64(duty.Slot())).Uint64("current_slot", uint64(currentSlot)).Msg("Proposal in the past; not scheduling")
+		if duty.Slot() < currentSlot {
+			log.Debug().Uint64("proposal_slot", uint64(duty.Slot())).Uint64("current_slot", uint64(currentSlot)).Msg("Proposal for a past slot; not scheduling")
+			continue
+		}
+		if firstRun && duty.Slot() == currentSlot {
+			log.Debug().Uint64("proposal_slot", uint64(duty.Slot())).Uint64("current_slot", uint64(currentSlot)).Msg("Proposal for the current slot and this is our first run; not scheduling")
 			continue
 		}
 		go func(duty *beaconblockproposer.Duty) {

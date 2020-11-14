@@ -602,6 +602,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 			bestbeaconblockproposalstrategy.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
 			bestbeaconblockproposalstrategy.WithLogLevel(logLevel(viper.GetString("strategies.beaconblockproposal.log-level"))),
 			bestbeaconblockproposalstrategy.WithBeaconBlockProposalProviders(beaconBlockProposalProviders),
+			bestbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start best beacon block proposal strategy")

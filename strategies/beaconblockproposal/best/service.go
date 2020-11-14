@@ -29,6 +29,7 @@ type Service struct {
 	clientMonitor                metrics.ClientMonitor
 	processConcurrency           int64
 	beaconBlockProposalProviders map[string]eth2client.BeaconBlockProposalProvider
+	signedBeaconBlockProvider    eth2client.SignedBeaconBlockProvider
 	timeout                      time.Duration
 }
 
@@ -51,6 +52,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	s := &Service{
 		processConcurrency:           parameters.processConcurrency,
 		beaconBlockProposalProviders: parameters.beaconBlockProposalProviders,
+		signedBeaconBlockProvider:    parameters.signedBeaconBlockProvider,
 		timeout:                      parameters.timeout,
 		clientMonitor:                parameters.clientMonitor,
 	}

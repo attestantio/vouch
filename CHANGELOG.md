@@ -1,4 +1,5 @@
 Development
+  - beacon block proposal strategy now scales per-node scores based on the distance between the slot and its parent
   - add a default process concurrency for strategies
   - fix race condition in "first" beacon block proposal strategy
   - tidy up trace logging for scheduler

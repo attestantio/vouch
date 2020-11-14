@@ -22,7 +22,7 @@ import (
 
 // scoreBeaconBlockPropsal generates a score for a beacon block.
 // The score is relative to the reward expected by proposing the block.
-func scoreBeaconBlockProposal(ctx context.Context, name string, blockProposal *spec.BeaconBlock) float64 {
+func scoreBeaconBlockProposal(ctx context.Context, name string, parentSlot spec.Slot, blockProposal *spec.BeaconBlock) float64 {
 	if blockProposal == nil {
 		return 0
 	}
@@ -83,17 +83,28 @@ func scoreBeaconBlockProposal(ctx context.Context, name string, blockProposal *s
 	}
 	attesterSlashingScore := slashingWeight * float64(indicesSlashed)
 
+	// Scale scores by the distance between the proposal and parent slots.
+	scale := uint64(1)
+	if blockProposal.Slot <= parentSlot {
+		log.Warn().Uint64("slot", uint64(blockProposal.Slot)).Uint64("parent_slot", uint64(parentSlot)).Msg("Invalid parent slot for proposal")
+		scale = 32
+	} else {
+		scale = uint64(blockProposal.Slot - parentSlot)
+	}
+
 	log.Trace().
 		Uint64("slot", uint64(blockProposal.Slot)).
+		Uint64("parent_slot", uint64(parentSlot)).
 		Str("provider", name).
 		Float64("immediate_attestations", immediateAttestationScore).
 		Float64("attestations", attestationScore).
 		Float64("proposer_slashings", proposerSlashingScore).
 		Float64("attester_slashings", attesterSlashingScore).
-		Float64("total", attestationScore+proposerSlashingScore+attesterSlashingScore).
+		Uint64("scale", scale).
+		Float64("total", (attestationScore+proposerSlashingScore+attesterSlashingScore)/float64(scale)).
 		Msg("Scored block")
 
-	return attestationScore + proposerSlashingScore + attesterSlashingScore
+	return (attestationScore + proposerSlashingScore + attesterSlashingScore) / float64(scale)
 }
 
 // intersection returns a list of items common between the two sets.

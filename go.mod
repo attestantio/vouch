@@ -46,3 +46,5 @@ require (
 	google.golang.org/grpc v1.33.2
 	gotest.tools v2.2.0+incompatible
 )
+
+replace github.com/attestantio/go-eth2-client => ../go-eth2-client

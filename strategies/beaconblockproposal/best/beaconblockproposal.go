@@ -15,6 +15,7 @@ package best
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -56,8 +57,23 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot spec.Slot, randa
 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
 			cancel()
 
+			// Obtain the slot of the block to which the proposal refers.
+			// We use this to allow the scorer to score blocks with earlier parents lower.
+			var parentSlot spec.Slot
+			parentBlock, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, fmt.Sprintf("%#x", proposal.ParentRoot[:]))
+			switch {
+			case err != nil:
+				log.Warn().Err(err).Msg("Failed to obtain parent block")
+				parentSlot = proposal.Slot - 1
+			case parentBlock == nil:
+				log.Warn().Err(err).Msg("Failed to obtain parent block")
+				parentSlot = proposal.Slot - 1
+			default:
+				parentSlot = parentBlock.Message.Slot
+			}
+
 			mu.Lock()
-			score := scoreBeaconBlockProposal(ctx, name, proposal)
+			score := scoreBeaconBlockProposal(ctx, name, parentSlot, proposal)
 			if score > bestScore || bestProposal == nil {
 				bestScore = score
 				bestProposal = proposal

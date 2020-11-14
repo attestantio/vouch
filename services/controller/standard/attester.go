@@ -16,6 +16,7 @@ package standard
 import (
 	"context"
 	"fmt"
+	"time"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
@@ -98,6 +99,7 @@ func (s *Service) createAttesterJobs(ctx context.Context,
 
 // AttestAndScheduleAggregate attests, then schedules aggregation jobs as required.
 func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface{}) {
+	started := time.Now()
 	duty, ok := data.(*attester.Duty)
 	if !ok {
 		log.Error().Msg("Passed invalid data")
@@ -109,6 +111,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 		log.Warn().Err(err).Msg("Failed to attest")
 		return
 	}
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Attested")
 
 	if len(attestations) == 0 || attestations[0].Data == nil {
 		log.Debug().Msg("No attestations; nothing to aggregate")
@@ -125,7 +128,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 	}
 
 	for _, attestation := range attestations {
-		log := log.With().Uint64("attestation_slot", uint64(attestation.Data.Slot)).Logger()
+		log := log.With().Uint64("attestation_slot", uint64(attestation.Data.Slot)).Uint64("committee_index", uint64(attestation.Data.Index)).Logger()
 		slotInfoMap, exists := subscriptionInfoMap[attestation.Data.Slot]
 		if !exists {
 			log.Debug().Msg("No slot info; not aggregating")
