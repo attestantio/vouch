@@ -33,7 +33,7 @@ type parameters struct {
 	randaoDomainProvider            eth2client.RANDAODomainProvider
 	selectionProofDomainProvider    eth2client.SelectionProofDomainProvider
 	aggregateAndProofDomainProvider eth2client.AggregateAndProofDomainProvider
-	signatureDomainProvider         eth2client.SignatureDomainProvider
+	domainProvider                  eth2client.DomainProvider
 }
 
 // Parameter is the interface for service parameters.
@@ -131,10 +131,10 @@ func WithAggregateAndProofDomainProvider(provider eth2client.AggregateAndProofDo
 	})
 }
 
-// WithSignatureDomainProvider sets the signature domain provider.
-func WithSignatureDomainProvider(provider eth2client.SignatureDomainProvider) Parameter {
+// WithDomainProvider sets the domain provider.
+func WithDomainProvider(provider eth2client.DomainProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.signatureDomainProvider = provider
+		p.domainProvider = provider
 	})
 }
 
@@ -179,8 +179,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.aggregateAndProofDomainProvider == nil {
 		return nil, errors.New("no aggregate and proof domain provider specified")
 	}
-	if parameters.signatureDomainProvider == nil {
-		return nil, errors.New("no signature domain provider specified")
+	if parameters.domainProvider == nil {
+		return nil, errors.New("no domain provider specified")
 	}
 
 	return &parameters, nil

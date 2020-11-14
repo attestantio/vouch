@@ -310,11 +310,17 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	}
 
 	log.Trace().Msg("Starting beacon attestation aggregator")
+	var aggregationAttester standardattestationaggregator.Parameter
+	if provider, isProvider := eth2Client.(eth2client.AggregateAttestationProvider); isProvider {
+		aggregationAttester = standardattestationaggregator.WithAggregateAttestationDataProvider(provider)
+	} else {
+		aggregationAttester = standardattestationaggregator.WithPrysmAggregateAttestationDataProvider(eth2Client.(eth2client.PrysmAggregateAttestationProvider))
+	}
 	attestationAggregator, err := standardattestationaggregator.New(ctx,
 		standardattestationaggregator.WithLogLevel(logLevel(viper.GetString("attestationaggregator.log-level"))),
 		standardattestationaggregator.WithTargetAggregatorsPerCommitteeProvider(eth2Client.(eth2client.TargetAggregatorsPerCommitteeProvider)),
-		standardattestationaggregator.WithAggregateAttestationDataProvider(eth2Client.(eth2client.AggregateAttestationProvider)),
-		standardattestationaggregator.WithAggregateAttestationsSubmitter(submitterStrategy.(submitter.AggregateAttestationsSubmitter)),
+		aggregationAttester,
+		standardattestationaggregator.WithAggregateAttestationsSubmitter(eth2Client.(eth2client.AggregateAttestationsSubmitter)),
 		standardattestationaggregator.WithMonitor(monitor.(metrics.AttestationAggregationMonitor)),
 		standardattestationaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 	)
@@ -524,7 +530,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 			dirkaccountmanager.WithRANDAODomainProvider(eth2Client.(eth2client.RANDAODomainProvider)),
 			dirkaccountmanager.WithSelectionProofDomainProvider(eth2Client.(eth2client.SelectionProofDomainProvider)),
 			dirkaccountmanager.WithAggregateAndProofDomainProvider(eth2Client.(eth2client.AggregateAndProofDomainProvider)),
-			dirkaccountmanager.WithSignatureDomainProvider(eth2Client.(eth2client.SignatureDomainProvider)),
+			dirkaccountmanager.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
 			dirkaccountmanager.WithClientCert(certPEMBlock),
 			dirkaccountmanager.WithClientKey(keyPEMBlock),
 			dirkaccountmanager.WithCACert(caPEMBlock),
@@ -563,7 +569,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 			walletaccountmanager.WithRANDAODomainProvider(eth2Client.(eth2client.RANDAODomainProvider)),
 			walletaccountmanager.WithSelectionProofDomainProvider(eth2Client.(eth2client.SelectionProofDomainProvider)),
 			walletaccountmanager.WithAggregateAndProofDomainProvider(eth2Client.(eth2client.AggregateAndProofDomainProvider)),
-			walletaccountmanager.WithSignatureDomainProvider(eth2Client.(eth2client.SignatureDomainProvider)),
+			walletaccountmanager.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start wallet account manager service")

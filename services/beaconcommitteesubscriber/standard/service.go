@@ -20,6 +20,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
@@ -71,13 +72,16 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 // Subscribe subscribes to beacon committees for a given epoch.
 // This returns data about the subnets to which we are subscribing.
-func (s *Service) Subscribe(ctx context.Context, epoch uint64, accounts []accountmanager.ValidatingAccount) (map[uint64]map[uint64]*beaconcommitteesubscriber.Subscription, error) {
+func (s *Service) Subscribe(ctx context.Context,
+	epoch spec.Epoch,
+	accounts []accountmanager.ValidatingAccount,
+) (map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
 	started := time.Now()
 
-	log := log.With().Uint64("epoch", epoch).Logger()
+	log := log.With().Uint64("epoch", uint64(epoch)).Logger()
 	log.Trace().Msg("Subscribing")
 
-	validatorIDs := make([]uint64, len(accounts))
+	validatorIDs := make([]spec.ValidatorIndex, len(accounts))
 	var err error
 	for i, account := range accounts {
 		validatorIDs[i], err = account.Index(ctx)
@@ -149,17 +153,17 @@ func (s *Service) Subscribe(ctx context.Context, epoch uint64, accounts []accoun
 // calculateSubscriptionInfo calculates our beacon block attesation subnet requirements given a set of duties.
 // It returns a map of slot => committee => subscription information.
 func (s *Service) calculateSubscriptionInfo(ctx context.Context,
-	epoch uint64,
+	epoch spec.Epoch,
 	accounts []accountmanager.ValidatingAccount,
 	duties []*attester.Duty,
-) (map[uint64]map[uint64]*beaconcommitteesubscriber.Subscription, error) {
+) (map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
 
 	// Map is slot => committee => info.
-	subscriptionInfo := make(map[uint64]map[uint64]*beaconcommitteesubscriber.Subscription)
+	subscriptionInfo := make(map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription)
 	subscriptionInfoMutex := deadlock.RWMutex{}
 
 	// Map is validator ID => account.
-	accountMap := make(map[uint64]accountmanager.ValidatingAccount, len(accounts))
+	accountMap := make(map[spec.ValidatorIndex]accountmanager.ValidatingAccount, len(accounts))
 	for _, account := range accounts {
 		index, err := account.Index(ctx)
 		if err != nil {
@@ -211,7 +215,7 @@ func (s *Service) calculateSubscriptionInfo(ctx context.Context,
 					}
 					subscriptionInfoMutex.Lock()
 					if _, exists := subscriptionInfo[duty.Slot()]; !exists {
-						subscriptionInfo[duty.Slot()] = make(map[uint64]*beaconcommitteesubscriber.Subscription)
+						subscriptionInfo[duty.Slot()] = make(map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription)
 					}
 					subscriptionInfo[duty.Slot()][duty.CommitteeIndices()[i]] = &beaconcommitteesubscriber.Subscription{
 						Duty: &api.AttesterDuty{

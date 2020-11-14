@@ -15,24 +15,26 @@ package attestationaggregator
 
 import (
 	"context"
+
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // Duty contains information about an attestation aggregation duty.
 type Duty struct {
 	// Slot is the slot of the attestation aggregation; required for obtaining the aggregate.
-	Slot uint64
+	Slot spec.Slot
 	// Attestation data root is the root of the attestation to be aggregated; required for obtaining the aggregate.
-	AttestationDataRoot []byte
+	AttestationDataRoot spec.Root
 	// ValidatorIndex is the index of the validator carrying out the aggregation; reuqired for submitting the aggregate.
-	ValidatorIndex uint64
+	ValidatorIndex spec.ValidatorIndex
 	// SlotSignature is the signature of the slot by the validator carrying out the aggregation; reuqired for submitting the aggregate.
-	SlotSignature []byte
+	SlotSignature spec.BLSSignature
 }
 
 // IsAggregatorProvider provides information about if a validator is an aggregator.
 type IsAggregatorProvider interface {
 	// IsAggregator returns true if the given validator is an aggregator for the given committee at the given slot.
-	IsAggregator(ctx context.Context, validatorIndex uint64, committeeIndex uint64, slot uint64, committeeSize uint64) (bool, []byte, error)
+	IsAggregator(ctx context.Context, validatorIndex spec.ValidatorIndex, committeeIndex spec.CommitteeIndex, slot spec.Slot, committeeSize uint64) (bool, spec.BLSSignature, error)
 }
 
 // Service is the attestation aggregation service.

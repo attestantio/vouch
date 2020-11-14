@@ -35,11 +35,11 @@ func scoreBeaconBlockProposal(ctx context.Context, name string, blockProposal *s
 
 	// We need to avoid duplicates in attestations.
 	// Map is slot -> committee index -> validator committee index -> attested.
-	attested := make(map[uint64]map[uint64]map[uint64]bool)
+	attested := make(map[spec.Slot]map[spec.CommitteeIndex]map[uint64]bool)
 	for _, attestation := range blockProposal.Body.Attestations {
 		slotAttested, exists := attested[attestation.Data.Slot]
 		if !exists {
-			slotAttested = make(map[uint64]map[uint64]bool)
+			slotAttested = make(map[spec.CommitteeIndex]map[uint64]bool)
 			attested[attestation.Data.Slot] = slotAttested
 		}
 		committeeAttested, exists := slotAttested[attestation.Data.Index]
@@ -84,7 +84,7 @@ func scoreBeaconBlockProposal(ctx context.Context, name string, blockProposal *s
 	attesterSlashingScore := slashingWeight * float64(indicesSlashed)
 
 	log.Trace().
-		Uint64("slot", blockProposal.Slot).
+		Uint64("slot", uint64(blockProposal.Slot)).
 		Str("provider", name).
 		Float64("immediate_attestations", immediateAttestationScore).
 		Float64("attestations", attestationScore).

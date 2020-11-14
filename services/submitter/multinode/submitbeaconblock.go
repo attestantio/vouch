@@ -42,7 +42,7 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaco
 			submitter eth2client.BeaconBlockSubmitter,
 		) {
 			defer wg.Done()
-			log := log.With().Str("beacon_node_address", name).Uint64("slot", block.Message.Slot).Logger()
+			log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(block.Message.Slot)).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return

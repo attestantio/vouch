@@ -43,7 +43,7 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 			submitter eth2client.AttestationSubmitter,
 		) {
 			defer wg.Done()
-			log := log.With().Str("beacon_node_address", name).Uint64("slot", attestation.Data.Slot).Logger()
+			log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(attestation.Data.Slot)).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return

@@ -33,11 +33,12 @@ import (
 
 // Service is an attestation aggregator.
 type Service struct {
-	monitor                        metrics.AttestationAggregationMonitor
-	targetAggregatorsPerCommittee  uint64
-	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
-	aggregateAttestationProvider   eth2client.AggregateAttestationProvider
-	aggregateAttestationsSubmitter submitter.AggregateAttestationsSubmitter
+	monitor                           metrics.AttestationAggregationMonitor
+	targetAggregatorsPerCommittee     uint64
+	validatingAccountsProvider        accountmanager.ValidatingAccountsProvider
+	aggregateAttestationProvider      eth2client.AggregateAttestationProvider
+	prysmAggregateAttestationProvider eth2client.PrysmAggregateAttestationProvider
+	aggregateAttestationsSubmitter    submitter.AggregateAttestationsSubmitter
 }
 
 // module-wide log.
@@ -62,11 +63,12 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		monitor:                        parameters.monitor,
-		targetAggregatorsPerCommittee:  targetAggregatorsPerCommittee,
-		validatingAccountsProvider:     parameters.validatingAccountsProvider,
-		aggregateAttestationProvider:   parameters.aggregateAttestationProvider,
-		aggregateAttestationsSubmitter: parameters.aggregateAttestationsSubmitter,
+		monitor:                           parameters.monitor,
+		targetAggregatorsPerCommittee:     targetAggregatorsPerCommittee,
+		validatingAccountsProvider:        parameters.validatingAccountsProvider,
+		aggregateAttestationProvider:      parameters.aggregateAttestationProvider,
+		prysmAggregateAttestationProvider: parameters.prysmAggregateAttestationProvider,
+		aggregateAttestationsSubmitter:    parameters.aggregateAttestationsSubmitter,
 	}
 
 	return s, nil
@@ -82,20 +84,32 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 		s.monitor.AttestationAggregationCompleted(started, "failed")
 		return
 	}
-	log := log.With().Uint64("slot", duty.Slot).Str("attestation_data_root", fmt.Sprintf("%#x", duty.AttestationDataRoot)).Logger()
+	log := log.With().Uint64("slot", uint64(duty.Slot)).Str("attestation_data_root", fmt.Sprintf("%#x", duty.AttestationDataRoot)).Logger()
 	log.Trace().Msg("Aggregating")
 
 	// Obtain the aggregate attestation.
-	aggregateAttestation, err := s.aggregateAttestationProvider.AggregateAttestation(ctx, duty.Slot, duty.AttestationDataRoot)
+	var aggregateAttestation *spec.Attestation
+	var err error
+	if s.aggregateAttestationProvider != nil {
+		aggregateAttestation, err = s.aggregateAttestationProvider.AggregateAttestation(ctx, duty.Slot, duty.AttestationDataRoot)
+	} else {
+		// TODO
+		log.Debug().Msg("Not aggregating for non-spec beacon node")
+		return
+	}
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain aggregate attestation")
 		s.monitor.AttestationAggregationCompleted(started, "failed")
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained aggregate attestation")
+	if aggregateAttestation == nil {
+		log.Debug().Msg("Obtained nil aggregate attestation")
+		return
+	}
 
 	// Fetch the validating account.
-	accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, []uint64{duty.ValidatorIndex})
+	accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, []spec.ValidatorIndex{duty.ValidatorIndex})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain proposing validator account")
 		s.monitor.AttestationAggregationCompleted(started, "failed")
@@ -126,7 +140,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate hash tree root of aggregate and proof")
 	}
-	sig, err := signer.SignAggregateAndProof(ctx, duty.Slot, aggregateAndProofRoot[:])
+	sig, err := signer.SignAggregateAndProof(ctx, duty.Slot, spec.Root(aggregateAndProofRoot))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign aggregate and proof")
 		s.monitor.AttestationAggregationCompleted(started, "failed")
@@ -155,7 +169,12 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 }
 
 // IsAggregator reports if we are an attestation aggregator for a given validator/committee/slot combination.
-func (s *Service) IsAggregator(ctx context.Context, validatorIndex uint64, committeeIndex uint64, slot uint64, committeeSize uint64) (bool, []byte, error) {
+func (s *Service) IsAggregator(ctx context.Context,
+	validatorIndex spec.ValidatorIndex,
+	committeeIndex spec.CommitteeIndex,
+	slot spec.Slot,
+	committeeSize uint64,
+) (bool, spec.BLSSignature, error) {
 	modulo := committeeSize / s.targetAggregatorsPerCommittee
 	if modulo == 0 {
 		// Modulo must be at least 1.
@@ -163,34 +182,34 @@ func (s *Service) IsAggregator(ctx context.Context, validatorIndex uint64, commi
 	}
 
 	// Fetch the validator from the account manager.
-	accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, []uint64{validatorIndex})
+	accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, []spec.ValidatorIndex{validatorIndex})
 	if err != nil {
-		return false, nil, errors.Wrap(err, "failed to obtain validator")
+		return false, spec.BLSSignature{}, errors.Wrap(err, "failed to obtain validator")
 	}
 	if len(accounts) == 0 {
-		return false, nil, errors.New("validator unknown")
+		return false, spec.BLSSignature{}, errors.New("validator unknown")
 	}
 	account := accounts[0]
 
 	slotSelectionSigner, isSlotSelectionSigner := account.(accountmanager.SlotSelectionSigner)
 	if !isSlotSelectionSigner {
-		return false, nil, errors.New("validating account is not a slot selection signer")
+		return false, spec.BLSSignature{}, errors.New("validating account is not a slot selection signer")
 	}
 
 	// Sign the slot.
 	signature, err := slotSelectionSigner.SignSlotSelection(ctx, slot)
 	if err != nil {
-		return false, nil, errors.Wrap(err, "failed to sign the slot")
+		return false, spec.BLSSignature{}, errors.Wrap(err, "failed to sign the slot")
 	}
 
 	// Hash the signature.
 	sigHash := sha256.New()
-	n, err := sigHash.Write(signature)
+	n, err := sigHash.Write(signature[:])
 	if err != nil {
-		return false, nil, errors.Wrap(err, "failed to hash the slot signature")
+		return false, spec.BLSSignature{}, errors.Wrap(err, "failed to hash the slot signature")
 	}
 	if n != len(signature) {
-		return false, nil, errors.New("failed to write all bytes of the slot signature to the hash")
+		return false, spec.BLSSignature{}, errors.New("failed to write all bytes of the slot signature to the hash")
 	}
 	hash := sigHash.Sum(nil)
 

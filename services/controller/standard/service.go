@@ -20,6 +20,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
@@ -50,9 +51,8 @@ type Service struct {
 	attestationAggregator      attestationaggregator.Service
 	beaconCommitteeSubscriber  beaconcommitteesubscriber.Service
 	activeAccounts             int
-	// Epoch => slot => committee => subscription info cache.
-	subscriptionInfos      map[uint64]map[uint64]map[uint64]*beaconcommitteesubscriber.Subscription
-	subscriptionInfosMutex sync.Mutex
+	subscriptionInfos          map[spec.Epoch]map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription
+	subscriptionInfosMutex     sync.Mutex
 }
 
 // module-wide log.
@@ -94,15 +94,14 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		beaconBlockProposer:        parameters.beaconBlockProposer,
 		attestationAggregator:      parameters.attestationAggregator,
 		beaconCommitteeSubscriber:  parameters.beaconCommitteeSubscriber,
-		subscriptionInfos:          make(map[uint64]map[uint64]map[uint64]*beaconcommitteesubscriber.Subscription),
+		subscriptionInfos:          make(map[spec.Epoch]map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
 	}
 
-	// Subscribe to head events.
+	// Subscribe to head events.  This allows us to go early for attestations if a block arrives, as well as
+	// re-request duties if there is a change in beacon block.
 	if err := parameters.eventsProvider.Events(ctx, []string{"head"}, s.HandleHeadEvent); err != nil {
 		return nil, errors.Wrap(err, "failed to add head event handler")
 	}
-
-	// TODO subscribe to reorg events.
 
 	// Subscriptions are usually updated one epoch in advance, but as we're
 	// just starting we don't have subscriptions (or subscription information)
@@ -208,10 +207,10 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	epochTickerData := data.(*epochTickerData)
 	currentEpoch := s.chainTimeService.CurrentEpoch()
 	firstRun := epochTickerData.latestEpochRan == -1
-	log.Trace().Uint64("epoch", currentEpoch).Bool("first_run", firstRun).Msg("Starting per-epoch duties")
+	log.Trace().Uint64("epoch", uint64(currentEpoch)).Bool("first_run", firstRun).Msg("Starting per-epoch duties")
 	epochTickerData.mutex.Lock()
 	if epochTickerData.latestEpochRan >= int64(currentEpoch) {
-		log.Trace().Uint64("epoch", currentEpoch).Msg("Already ran for this epoch; skipping")
+		log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Already ran for this epoch; skipping")
 		epochTickerData.mutex.Unlock()
 		return
 	}
@@ -265,7 +264,6 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	epochTickerData.atGenesis = false
 }
 
-// TODO REMOVE
 // // OnBeaconChainHeadUpdated runs attestations for a slot immediately, if the update is for the current slot.
 // func (s *Service) OnBeaconChainHeadUpdated(ctx context.Context, slot uint64, stateRoot []byte, bodyRoot []byte, epochTransitioni bool) {
 // 	if slot != s.chainTimeService.CurrentSlot() {

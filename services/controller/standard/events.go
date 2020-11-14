@@ -25,19 +25,24 @@ import (
 func (s *Service) HandleHeadEvent(event *api.Event) {
 	ctx := context.Background()
 	data := event.Data.(*api.HeadEvent)
-	log.Trace().Uint64("slot", data.Slot).Msg("Received head event")
+	log.Trace().Uint64("slot", uint64(data.Slot)).Msg("Received head event")
+
 	if data.Slot != s.chainTimeService.CurrentSlot() {
 		return
 	}
 	s.monitor.BlockDelay(time.Since(s.chainTimeService.StartOfSlot(data.Slot)))
 
+	// Kick off attestations for the block's slot immediately.
 	jobName := fmt.Sprintf("Beacon block attestations for slot %d", data.Slot)
 	if s.scheduler.JobExists(ctx, jobName) {
-		log.Trace().Uint64("slot", data.Slot).Msg("Kicking off attestations for slot early due to receiving relevant block")
+		log.Trace().Uint64("slot", uint64(data.Slot)).Msg("Kicking off attestations for slot early due to receiving relevant block")
 		if err := s.scheduler.RunJobIfExists(ctx, jobName); err != nil {
 			log.Error().Str("job", jobName).Err(err).Msg("Failed to run attester job")
 		}
 	}
+
+	// If the head is in a new fork it may result in different attester duties.
+	// TODO
 
 	// Remove old subscriptions if present.
 	delete(s.subscriptionInfos, s.chainTimeService.SlotToEpoch(data.Slot)-2)

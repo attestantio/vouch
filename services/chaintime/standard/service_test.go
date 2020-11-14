@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/chaintime/standard"
@@ -143,7 +144,7 @@ func TestCurrentSlot(t *testing.T) {
 	s, err := createMockService(slotDuration, slotsPerEpoch, genesisTime)
 	require.NoError(t, err)
 
-	require.Equal(t, uint64(5), s.CurrentSlot())
+	require.Equal(t, spec.Slot(5), s.CurrentSlot())
 }
 
 func TestCurrentSlotPreGenesis(t *testing.T) {
@@ -154,7 +155,7 @@ func TestCurrentSlotPreGenesis(t *testing.T) {
 	s, err := createMockService(slotDuration, slotsPerEpoch, genesisTime)
 	require.NoError(t, err)
 
-	require.Equal(t, uint64(0), s.CurrentSlot())
+	require.Equal(t, spec.Slot(0), s.CurrentSlot())
 }
 
 func TestCurrentEpoch(t *testing.T) {
@@ -165,7 +166,7 @@ func TestCurrentEpoch(t *testing.T) {
 	s, err := createMockService(slotDuration, slotsPerEpoch, genesisTime)
 	require.NoError(t, err)
 
-	require.Equal(t, uint64(2), s.CurrentEpoch())
+	require.Equal(t, spec.Epoch(2), s.CurrentEpoch())
 }
 
 func TestCurrentEpochPreGenesis(t *testing.T) {
@@ -176,14 +177,14 @@ func TestCurrentEpochPreGenesis(t *testing.T) {
 	s, err := createMockService(slotDuration, slotsPerEpoch, genesisTime)
 	require.NoError(t, err)
 
-	require.Equal(t, uint64(0), s.CurrentEpoch())
+	require.Equal(t, spec.Epoch(0), s.CurrentEpoch())
 }
 
 func TestSlotToEpoch(t *testing.T) {
 	tests := []struct {
 		name  string
-		slot  uint64
-		epoch uint64
+		slot  spec.Slot
+		epoch spec.Epoch
 	}{
 		{
 			name:  "ZeroFirstSlot",
@@ -220,8 +221,8 @@ func TestSlotToEpoch(t *testing.T) {
 func TestFirstSlotOfEpoch(t *testing.T) {
 	tests := []struct {
 		name  string
-		epoch uint64
-		slot  uint64
+		epoch spec.Epoch
+		slot  spec.Slot
 	}{
 		{
 			name:  "Zero",

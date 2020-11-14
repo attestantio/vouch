@@ -42,7 +42,7 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []
 			submitter eth2client.AggregateAttestationsSubmitter,
 		) {
 			defer wg.Done()
-			log := log.With().Str("beacon_node_address", name).Uint64("slot", aggregates[0].Message.Aggregate.Data.Slot).Logger()
+			log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(aggregates[0].Message.Aggregate.Data.Slot)).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return

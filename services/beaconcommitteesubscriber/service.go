@@ -18,6 +18,7 @@ import (
 	"context"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 )
 
@@ -26,12 +27,11 @@ type Subscription struct {
 	Duty         *api.AttesterDuty
 	IsAggregator bool
 	// TODO is this in the correct place?
-	Signature []byte
+	Signature spec.BLSSignature
 }
 
 // Service is the beacon committee subscriber service.
 type Service interface {
 	// Subscribe subscribes to beacon committees for a given epoch.
-	// It returns a map of slot => committee => subscription info.
-	Subscribe(ctx context.Context, epoch uint64, accounts []accountmanager.ValidatingAccount) (map[uint64]map[uint64]*Subscription, error)
+	Subscribe(ctx context.Context, epoch spec.Epoch, accounts []accountmanager.ValidatingAccount) (map[spec.Slot]map[spec.CommitteeIndex]*Subscription, error)
 }
