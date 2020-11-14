@@ -73,6 +73,8 @@ github.com/attestantio/dirk v0.9.3/go.mod h1:EfppeT+VjQXnE9Ti5/vxa6ptZJAN2vMXO6K
 github.com/attestantio/go-eth2-client v0.6.9/go.mod h1:ODAZ4yS1YYYew/EsgGsVb/siNEoa505CrGsvlVFdkfo=
 github.com/attestantio/go-eth2-client v0.6.10 h1:PMNBMLk6xfMEUqhaUnsI0/HZRrstZF18Gt6Dm5GelW4=
 github.com/attestantio/go-eth2-client v0.6.10/go.mod h1:ODAZ4yS1YYYew/EsgGsVb/siNEoa505CrGsvlVFdkfo=
+github.com/attestantio/go-eth2-client v0.6.12 h1:7yha5QtDg5xsdTPIc8GWba97+gBkOhmowLVFzRCjdoc=
+github.com/attestantio/go-eth2-client v0.6.12/go.mod h1:ODAZ4yS1YYYew/EsgGsVb/siNEoa505CrGsvlVFdkfo=
 github.com/aws/aws-lambda-go v1.13.3/go.mod h1:4UKl9IzQMoD+QF79YdCuzCwp8VbmG4VAQwij/eHl5CU=
 github.com/aws/aws-sdk-go v1.27.0/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/aws/aws-sdk-go v1.33.5/go.mod h1:5zCpMtNQVjRREroY7sYe8lOMRSxkhG6MZveU8YkpAk0=

@@ -17,6 +17,7 @@ import (
 	"context"
 
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/accountmanager"
 )
 
 // Duty contains information about an attestation aggregation duty.
@@ -29,6 +30,12 @@ type Duty struct {
 	ValidatorIndex spec.ValidatorIndex
 	// SlotSignature is the signature of the slot by the validator carrying out the aggregation; reuqired for submitting the aggregate.
 	SlotSignature spec.BLSSignature
+	// Attestation is the attestation from the validator that is part of the related to the aggregate.
+	// Required for Prysm non-spec GRPC method.
+	Attestation *spec.Attestation
+	// Account is the account carrying out the aggregation.
+	// Required for Prysm non-spec GRPC method.
+	Account accountmanager.ValidatingAccount
 }
 
 // IsAggregatorProvider provides information about if a validator is an aggregator.

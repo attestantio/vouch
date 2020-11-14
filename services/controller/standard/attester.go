@@ -145,6 +145,17 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 			continue
 		}
 		if info.IsAggregator {
+			accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, []spec.ValidatorIndex{info.Duty.ValidatorIndex})
+			if err != nil {
+				// Don't return here; we want to try to set up as many aggregator jobs as possible.
+				log.Error().Err(err).Msg("Failed to obtain accounts")
+				continue
+			}
+			if len(accounts) == 0 {
+				// Don't return here; we want to try to set up as many aggregator jobs as possible.
+				log.Error().Msg("Failed to obtain account of attester")
+				continue
+			}
 			attestationDataRoot, err := attestation.Data.HashTreeRoot()
 			if err != nil {
 				// Don't return here; we want to try to set up as many aggregator jobs as possible.
@@ -156,6 +167,8 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 				AttestationDataRoot: attestationDataRoot,
 				ValidatorIndex:      info.Duty.ValidatorIndex,
 				SlotSignature:       info.Signature,
+				Account:             accounts[0],
+				Attestation:         attestation,
 			}
 			if err := s.scheduler.ScheduleJob(ctx,
 				fmt.Sprintf("Beacon block attestation aggregation for slot %d committee %d", attestation.Data.Slot, attestation.Data.Index),

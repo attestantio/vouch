@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go v0.72.0 // indirect
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/attestantio/dirk v0.9.3
-	github.com/attestantio/go-eth2-client v0.6.10
+	github.com/attestantio/go-eth2-client v0.6.12
 	github.com/aws/aws-sdk-go v1.35.28
 	github.com/ferranbt/fastssz v0.0.0-20201030134205-9b9624098321
 	github.com/goccy/go-yaml v1.8.4 // indirect
@@ -46,5 +46,3 @@ require (
 	google.golang.org/grpc v1.33.2
 	gotest.tools v2.2.0+incompatible
 )
-
-replace github.com/attestantio/go-eth2-client => ../go-eth2-client

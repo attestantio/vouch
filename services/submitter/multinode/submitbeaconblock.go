@@ -15,7 +15,6 @@ package multinode
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"time"
 
@@ -31,6 +30,7 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaco
 		return errors.New("no beacon block supplied")
 	}
 
+	log := log.With().Uint64("slot", uint64(block.Message.Slot)).Logger()
 	sem := semaphore.NewWeighted(s.processConcurrency)
 	var wg sync.WaitGroup
 	for name, submitter := range s.beaconBlockSubmitters {
@@ -42,7 +42,7 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaco
 			submitter eth2client.BeaconBlockSubmitter,
 		) {
 			defer wg.Done()
-			log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(block.Message.Slot)).Logger()
+			log := log.With().Str("submitter", name).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
@@ -64,13 +64,7 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaco
 		}(ctx, sem, &wg, name, submitter)
 	}
 	wg.Wait()
-
-	if e := log.Trace(); e.Enabled() {
-		data, err := json.Marshal(block)
-		if err == nil {
-			e.Str("block", string(data)).Msg("Submitted beacon block")
-		}
-	}
+	log.Trace().Msg("Submitted beacon block")
 
 	return nil
 }

@@ -93,9 +93,11 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	if s.aggregateAttestationProvider != nil {
 		aggregateAttestation, err = s.aggregateAttestationProvider.AggregateAttestation(ctx, duty.Slot, duty.AttestationDataRoot)
 	} else {
-		// TODO
-		log.Debug().Msg("Not aggregating for non-spec beacon node")
-		return
+		validatorPubKey, err := duty.Account.PubKey(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to obtain validator public key")
+		}
+		aggregateAttestation, err = s.prysmAggregateAttestationProvider.PrysmAggregateAttestation(ctx, duty.Attestation, validatorPubKey, duty.SlotSignature)
 	}
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain aggregate attestation")
