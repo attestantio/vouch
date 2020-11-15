@@ -20,6 +20,8 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -174,6 +176,58 @@ func (d *ValidatingAccount) SignBeaconAttestation(ctx context.Context,
 	var signature spec.BLSSignature
 	copy(signature[:], sig.Marshal())
 	return signature, nil
+}
+
+// SignBeaconAttestations signs multiple beacon attestations.
+func (d *ValidatingAccount) SignBeaconAttestations(ctx context.Context,
+	slot spec.Slot,
+	accounts []accountmanager.ValidatingAccount,
+	committeeIndices []spec.CommitteeIndex,
+	blockRoot spec.Root,
+	sourceEpoch spec.Epoch,
+	sourceRoot spec.Root,
+	targetEpoch spec.Epoch,
+	targetRoot spec.Root) ([]spec.BLSSignature, error) {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "dirk.SignBeaconAttestations")
+	defer span.Finish()
+
+	signatureDomain, err := d.domainProvider.Domain(ctx,
+		d.accountManager.beaconAttesterDomainType,
+		spec.Epoch(slot/d.accountManager.slotsPerEpoch))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
+	}
+
+	e2Accounts := make([]e2wtypes.Account, len(accounts))
+	for i := range accounts {
+		e2Accounts[i] = accounts[i].(*ValidatingAccount).account
+	}
+	uintCommitteeIndices := make([]uint64, len(committeeIndices))
+	for i := range committeeIndices {
+		uintCommitteeIndices[i] = uint64(committeeIndices[i])
+	}
+	sigs, err := d.account.(e2wtypes.AccountProtectingMultiSigner).SignBeaconAttestations(ctx,
+		uint64(slot),
+		e2Accounts,
+		uintCommitteeIndices,
+		blockRoot[:],
+		uint64(sourceEpoch),
+		sourceRoot[:],
+		uint64(targetEpoch),
+		targetRoot[:],
+		signatureDomain[:],
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to sign beacon attestation")
+	}
+
+	res := make([]spec.BLSSignature, len(sigs))
+	for i := range sigs {
+		if sigs[i] != nil {
+			copy(res[i][:], sigs[i].Marshal())
+		}
+	}
+	return res, nil
 }
 
 // SignAggregateAndProof signs an aggregate and proof item.

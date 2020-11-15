@@ -20,7 +20,7 @@ import (
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
-// Duty contains information about a beacon block attester duty.
+// Duty contains information about beacon block attester duties for a given slot.
 type Duty struct {
 	slot                      spec.Slot
 	committeesAtSlot          uint64

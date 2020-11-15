@@ -116,6 +116,20 @@ type BeaconAttestationSigner interface {
 		targetRoot spec.Root) (spec.BLSSignature, error)
 }
 
+// BeaconAttestationsSigner provides methods to sign multiple beacon attestations.
+type BeaconAttestationsSigner interface {
+	// SignBeaconAttestation signs multiple beacon attestations.
+	SignBeaconAttestations(ctx context.Context,
+		slot spec.Slot,
+		accounts []ValidatingAccount,
+		committeeIndices []spec.CommitteeIndex,
+		blockRoot spec.Root,
+		sourceEpoch spec.Epoch,
+		sourceRoot spec.Root,
+		targetEpoch spec.Epoch,
+		targetRoot spec.Root) ([]spec.BLSSignature, error)
+}
+
 // AggregateAndProofSigner provides methods to sign aggregate and proofs.
 type AggregateAndProofSigner interface {
 	// SignAggregateAndProof signs an aggregate attestation for given slot and root.

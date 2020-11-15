@@ -70,6 +70,8 @@ github.com/attestantio/dirk v0.9.1 h1:oof1Xm0uI4a2T9vhQB+f3Wjlngd2rnfsKi8aj1wqNh
 github.com/attestantio/dirk v0.9.1/go.mod h1:oWsyIb/OXdx9pvDQqS3hdFBB1eFaYnrNjuvLtVwo69w=
 github.com/attestantio/dirk v0.9.3 h1:hJj/X63n7UV+DseKlR8Kjs+zLYtf+2Alqk9A6nI8mUg=
 github.com/attestantio/dirk v0.9.3/go.mod h1:EfppeT+VjQXnE9Ti5/vxa6ptZJAN2vMXO6KZojvSOXA=
+github.com/attestantio/go-eth2-client v0.6.8 h1:Lsjx5P0pB8ruZBfJUbqy5hpevD4Zt8Z0Lg4V5m2s53E=
+github.com/attestantio/go-eth2-client v0.6.8/go.mod h1:lYEayGHzZma9HMUJgyxFIzDWRck8n2IedP7KTkIwe0g=
 github.com/attestantio/go-eth2-client v0.6.9/go.mod h1:ODAZ4yS1YYYew/EsgGsVb/siNEoa505CrGsvlVFdkfo=
 github.com/attestantio/go-eth2-client v0.6.10 h1:PMNBMLk6xfMEUqhaUnsI0/HZRrstZF18Gt6Dm5GelW4=
 github.com/attestantio/go-eth2-client v0.6.10/go.mod h1:ODAZ4yS1YYYew/EsgGsVb/siNEoa505CrGsvlVFdkfo=
@@ -629,6 +631,7 @@ github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.0 h1:41H6hnVsI/csBx20UHpI
 github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.0/go.mod h1:XtXHbl4OV/XenQsvGmXbh+bVXaGS788oa30DB7kDInA=
 github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.1 h1:vv9lR8K76FUSNbzUU25MN4HNhZIBBI1kJBNfHq2WjRY=
 github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.1/go.mod h1:qnI6/VRpFyKGV+DhzdC1zmx2sA7mRRanCFlk4RYzoYs=
+github.com/wealdtech/go-eth2-wallet-types/v2 v2.5.0 h1:J29mbkSCUMl2xdu8Lg6U+JptFGfmli6xl04DAHtq9aM=
 github.com/wealdtech/go-eth2-wallet-types/v2 v2.5.0/go.mod h1:X9kYUH/E5YMqFMZ4xL6MJanABUkJGaH/yPZRT2o+yYA=
 github.com/wealdtech/go-eth2-wallet-types/v2 v2.6.0/go.mod h1:X9kYUH/E5YMqFMZ4xL6MJanABUkJGaH/yPZRT2o+yYA=
 github.com/wealdtech/go-eth2-wallet-types/v2 v2.8.0 h1:30sYrHQBchcOv+N2yIB2APnqf1RjwAbgXK+IzmXS6cw=
@@ -929,6 +932,7 @@ google.golang.org/api v0.24.0/go.mod h1:lIXQywCXRcnZPGlsd8NbLnOjtAoL6em04bJ9+z0M
 google.golang.org/api v0.28.0/go.mod h1:lIXQywCXRcnZPGlsd8NbLnOjtAoL6em04bJ9+z0MncE=
 google.golang.org/api v0.29.0/go.mod h1:Lcubydp8VUV7KeIHD9z2Bys/sm/vGKnG1UHuDBSrHWM=
 google.golang.org/api v0.30.0/go.mod h1:QGmEvQ87FHZNiUVJkT14jQNYJ4ZJjdRF23ZXz5138Fc=
+google.golang.org/api v0.32.0 h1:Le77IccnTqEa8ryp9wIpX5W3zYm7Gf9LhOp9PHcwFts=
 google.golang.org/api v0.32.0/go.mod h1:/XrVsuzM0rZmrsbjJutiuftIzeuTQcEeaYcSk/mQ1dg=
 google.golang.org/api v0.33.0 h1:+gL0XvACeMIvpwLZ5rQZzLn5cwOsgg8dIcfJ2SYfBVw=
 google.golang.org/api v0.33.0/go.mod h1:/XrVsuzM0rZmrsbjJutiuftIzeuTQcEeaYcSk/mQ1dg=
