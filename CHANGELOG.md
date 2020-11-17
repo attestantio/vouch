@@ -1,4 +1,4 @@
-Development
+0.9.0
   - use go-eth2-client for all beacon node communications
   - beacon block proposal strategy now scales per-node scores based on the distance between the slot and its parent
   - add a default process concurrency for strategies
