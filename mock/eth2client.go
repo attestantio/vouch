@@ -303,6 +303,86 @@ func (m *SignedBeaconBlockProvider) SignedBeaconBlock(ctx context.Context, state
 	}, nil
 }
 
+// AttestationDataProvider is a mock for eth2client.AttestationDataProvider.
+type AttestationDataProvider struct{}
+
+// NewAttestationDataProvider returns a mock attestation data provider.
+func NewAttestationDataProvider() eth2client.AttestationDataProvider {
+	return &AttestationDataProvider{}
+}
+
+// AttestationData is a mock.
+func (m *AttestationDataProvider) AttestationData(ctx context.Context, slot spec.Slot, committeeIndex spec.CommitteeIndex) (*spec.AttestationData, error) {
+	return &spec.AttestationData{
+		Slot:  slot,
+		Index: committeeIndex,
+		BeaconBlockRoot: spec.Root([32]byte{
+			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+			0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+		}),
+		Source: &spec.Checkpoint{
+			Epoch: 1,
+			Root: spec.Root([32]byte{
+				0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+				0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+			}),
+		},
+		Target: &spec.Checkpoint{
+			Epoch: 2,
+			Root: spec.Root([32]byte{
+				0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
+				0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+			}),
+		},
+	}, nil
+}
+
+// ErroringAttestationDataProvider is a mock for eth2client.AttestationDataProvider.
+type ErroringAttestationDataProvider struct{}
+
+// NewErroringAttestationDataProvider returns a mock attestation data provider.
+func NewErroringAttestationDataProvider() eth2client.AttestationDataProvider {
+	return &ErroringAttestationDataProvider{}
+}
+
+// AttestationData is a mock.
+func (m *ErroringAttestationDataProvider) AttestationData(ctx context.Context, slot spec.Slot, committeeIndex spec.CommitteeIndex) (*spec.AttestationData, error) {
+	return nil, errors.New("mock error")
+}
+
+// NilAttestationDataProvider is a mock for eth2client.AttestationDataProvider.
+type NilAttestationDataProvider struct{}
+
+// NewNilAttestationDataProvider returns a mock attestation data provider.
+func NewNilAttestationDataProvider() eth2client.AttestationDataProvider {
+	return &NilAttestationDataProvider{}
+}
+
+// AttestationData is a mock.
+func (m *NilAttestationDataProvider) AttestationData(ctx context.Context, slot spec.Slot, committeeIndex spec.CommitteeIndex) (*spec.AttestationData, error) {
+	return nil, nil
+}
+
+// SleepyAttestationDataProvider is a mock for eth2client.AttestationDataProvider.
+type SleepyAttestationDataProvider struct {
+	wait time.Duration
+	next eth2client.AttestationDataProvider
+}
+
+// NewSleepyAttestationDataProvider returns a mock attestation data provider.
+func NewSleepyAttestationDataProvider(wait time.Duration, next eth2client.AttestationDataProvider) eth2client.AttestationDataProvider {
+	return &SleepyAttestationDataProvider{
+		wait: wait,
+		next: next,
+	}
+}
+
+// AttestationData is a mock.
+func (m *SleepyAttestationDataProvider) AttestationData(ctx context.Context, slot spec.Slot, committeeIndex spec.CommitteeIndex) (*spec.AttestationData, error) {
+	time.Sleep(m.wait)
+	return m.next.AttestationData(ctx, slot, committeeIndex)
+}
+
 // BeaconProposerDomainProvider is a mock for eth2client.BeaconProposerDomainProvider.
 type BeaconProposerDomainProvider struct{}
 

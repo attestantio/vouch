@@ -56,6 +56,9 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot spec.Slot, randa
 			}
 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
 			cancel()
+			if proposal == nil {
+				return
+			}
 
 			// Obtain the slot of the block to which the proposal refers.
 			// We use this to allow the scorer to score blocks with earlier parents lower.
