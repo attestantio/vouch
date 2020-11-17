@@ -41,9 +41,6 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 		}
 	}
 
-	// If the head is in a new fork it may result in different attester duties.
-	// TODO
-
 	// Remove old subscriptions if present.
 	delete(s.subscriptionInfos, s.chainTimeService.SlotToEpoch(data.Slot)-2)
 }

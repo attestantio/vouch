@@ -93,7 +93,8 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	if s.aggregateAttestationProvider != nil {
 		aggregateAttestation, err = s.aggregateAttestationProvider.AggregateAttestation(ctx, duty.Slot, duty.AttestationDataRoot)
 	} else {
-		validatorPubKey, err := duty.Account.PubKey(ctx)
+		var validatorPubKey spec.BLSPubKey
+		validatorPubKey, err = duty.Account.PubKey(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to obtain validator public key")
 		}

@@ -5,9 +5,9 @@ go 1.14
 require (
 	cloud.google.com/go v0.72.0 // indirect
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
-	github.com/attestantio/dirk v0.9.3
+	github.com/attestantio/dirk v0.9.6
 	github.com/attestantio/go-eth2-client v0.6.12
-	github.com/aws/aws-sdk-go v1.35.28
+	github.com/aws/aws-sdk-go v1.35.29
 	github.com/ferranbt/fastssz v0.0.0-20201030134205-9b9624098321
 	github.com/goccy/go-yaml v1.8.4 // indirect
 	github.com/google/go-cmp v0.5.3 // indirect
@@ -38,11 +38,8 @@ require (
 	github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.1
 	github.com/wealdtech/go-eth2-wallet-types/v2 v2.8.1
 	github.com/wealdtech/go-majordomo v1.0.1
-	golang.org/x/crypto v0.0.0-20201112155050-0c6587e931a9 // indirect
 	golang.org/x/oauth2 v0.0.0-20201109201403-9fd604954f58 // indirect
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
-	golang.org/x/sys v0.0.0-20201113233024-12cec1faf1ba // indirect
-	google.golang.org/genproto v0.0.0-20201113130914-ce600e9a6f9e // indirect
 	google.golang.org/grpc v1.33.2
 	gotest.tools v2.2.0+incompatible
 )

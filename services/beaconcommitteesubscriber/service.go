@@ -26,8 +26,7 @@ import (
 type Subscription struct {
 	Duty         *api.AttesterDuty
 	IsAggregator bool
-	// TODO is this in the correct place?
-	Signature spec.BLSSignature
+	Signature    spec.BLSSignature
 }
 
 // Service is the beacon committee subscriber service.

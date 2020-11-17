@@ -162,7 +162,7 @@ func (s *Service) UpdateAccountsState(ctx context.Context) error {
 		log.Trace().Msg("No unactivated keys")
 		return nil
 	}
-	// TODO unactivated validators can have an index of 0, so cannot send via an API call that is by index.  Need to use bypubkeys.
+	// Unactivated validators can have an index of 0, so cannot send via an API call that is by index.  Need to use bypubkeys.
 	log.Trace().Int("total", len(s.accounts)).Int("unactivated", len(validatorIDProviders)).Msg("Updating state of unactivated keys")
 	var validators map[spec.ValidatorIndex]*api.Validator
 	var err error

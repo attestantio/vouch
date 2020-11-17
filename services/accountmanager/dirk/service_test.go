@@ -34,11 +34,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func _byte(input string) []byte {
-	res, _ := hex.DecodeString(strings.TrimPrefix(input, "0x"))
-	return res
-}
-
 func _root(input string) spec.Root {
 	res, err := hex.DecodeString(strings.TrimPrefix(input, "0x"))
 	if err != nil {

@@ -84,7 +84,7 @@ func scoreBeaconBlockProposal(ctx context.Context, name string, parentSlot spec.
 	attesterSlashingScore := slashingWeight * float64(indicesSlashed)
 
 	// Scale scores by the distance between the proposal and parent slots.
-	scale := uint64(1)
+	var scale uint64
 	if blockProposal.Slot <= parentSlot {
 		log.Warn().Uint64("slot", uint64(blockProposal.Slot)).Uint64("parent_slot", uint64(parentSlot)).Msg("Invalid parent slot for proposal")
 		scale = 32
