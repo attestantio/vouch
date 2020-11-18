@@ -1,3 +1,6 @@
+Development:
+  - upgrade wallet account manager to be able to accept multiple attestations to sign in a single request
+
 0.9.0
   - use go-eth2-client for all beacon node communications
   - beacon block proposal strategy now scales per-node scores based on the distance between the slot and its parent

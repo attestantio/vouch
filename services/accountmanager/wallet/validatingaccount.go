@@ -20,6 +20,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/pkg/errors"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -122,6 +123,36 @@ func (d *ValidatingAccount) SignBeaconBlockProposal(ctx context.Context,
 	}
 
 	return d.sign(ctx, messageRoot, domain)
+}
+
+// SignBeaconAttestations signs multiple beacon attestations.
+func (d *ValidatingAccount) SignBeaconAttestations(ctx context.Context,
+	slot spec.Slot,
+	accounts []accountmanager.ValidatingAccount,
+	committeeIndices []spec.CommitteeIndex,
+	blockRoot spec.Root,
+	sourceEpoch spec.Epoch,
+	sourceRoot spec.Root,
+	targetEpoch spec.Epoch,
+	targetRoot spec.Root) ([]spec.BLSSignature, error) {
+
+	signatures := make([]spec.BLSSignature, len(accounts))
+	var err error
+	for i, account := range accounts {
+		signatures[i], err = account.(*ValidatingAccount).SignBeaconAttestation(ctx,
+			slot,
+			committeeIndices[i],
+			blockRoot,
+			sourceEpoch,
+			sourceRoot,
+			targetEpoch,
+			targetRoot)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return signatures, nil
 }
 
 // SignBeaconAttestation signs a beacon attestation item.
