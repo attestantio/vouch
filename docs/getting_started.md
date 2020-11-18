@@ -1,6 +1,8 @@
 # Getting started
 This document provides steps to set up a Vouch instance using validators in a local wallet.
 
+**Please note that the wallet keymanager does not provide slashing protection.  It is recommended that the Dirk keymanager be used for all production installations, due to the additional protections it provides.**
+
 It assumes there is a local wallet called "Validators" that has been created by `ethdo`, that the wallet has one or more accounts in it, and that those accounts have been configured as validators on an Ethereum 2 network.
 
 It also assumes there is an accessible instance of the Ethereum 2 beacon chain that is fully synced with the current state of the chain.
