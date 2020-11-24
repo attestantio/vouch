@@ -49,13 +49,10 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaco
 			}
 			defer sem.Release(1)
 
+			_, address := s.serviceInfo(ctx, submitter)
 			started := time.Now()
 			err := submitter.SubmitBeaconBlock(ctx, block)
-			if service, isService := submitter.(eth2client.Service); isService {
-				s.clientMonitor.ClientOperation(service.Address(), "submit beacon block", err == nil, time.Since(started))
-			} else {
-				s.clientMonitor.ClientOperation("<unknown>", "submit beacon block", err == nil, time.Since(started))
-			}
+			s.clientMonitor.ClientOperation(address, "submit beacon block", err == nil, time.Since(started))
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to submit beacon block")
 				return

@@ -49,13 +49,10 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []
 			}
 			defer sem.Release(1)
 
+			_, address := s.serviceInfo(ctx, submitter)
 			started := time.Now()
 			err := submitter.SubmitAggregateAttestations(ctx, aggregates)
-			if service, isService := submitter.(eth2client.Service); isService {
-				s.clientMonitor.ClientOperation(service.Address(), "submit aggregate attestation", err == nil, time.Since(started))
-			} else {
-				s.clientMonitor.ClientOperation("<unknown>", "submit aggregate attestation", err == nil, time.Since(started))
-			}
+			s.clientMonitor.ClientOperation(address, "submit aggregate attestation", err == nil, time.Since(started))
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to submit aggregate attestations")
 				return

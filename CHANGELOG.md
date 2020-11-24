@@ -1,4 +1,5 @@
 Development:
+  - provide clearer log messages for submitter
   - upgrade wallet account manager to be able to accept multiple attestations to sign in a single request
 
 0.9.0

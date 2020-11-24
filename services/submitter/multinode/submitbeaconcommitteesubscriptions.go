@@ -49,13 +49,10 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 			}
 			defer sem.Release(1)
 
+			_, address := s.serviceInfo(ctx, submitter)
 			started := time.Now()
 			err := submitter.SubmitBeaconCommitteeSubscriptions(ctx, subscriptions)
-			if service, isService := submitter.(eth2client.Service); isService {
-				s.clientMonitor.ClientOperation(service.Address(), "submit beacon committee subscription", err == nil, time.Since(started))
-			} else {
-				s.clientMonitor.ClientOperation("<unknown>", "submit beacon committee subscription", err == nil, time.Since(started))
-			}
+			s.clientMonitor.ClientOperation(address, "submit beacon committee subscription", err == nil, time.Since(started))
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to submit beacon committee subscription")
 				return

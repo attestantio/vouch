@@ -50,22 +50,25 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 			}
 			defer sem.Release(1)
 
+			serverType, address := s.serviceInfo(ctx, submitter)
 			started := time.Now()
 			err := submitter.SubmitAttestation(ctx, attestation)
-			if service, isService := submitter.(eth2client.Service); isService {
-				s.clientMonitor.ClientOperation(service.Address(), "submit attestation", err == nil, time.Since(started))
-			} else {
-				s.clientMonitor.ClientOperation("<unknown>", "submit attestation", err == nil, time.Since(started))
-			}
+			s.clientMonitor.ClientOperation(address, "submit attestation", err == nil, time.Since(started))
 			if err != nil {
-				if strings.Contains(err.Error(), "PriorAttestationKnown") {
+				switch {
+				case serverType == "lighthouse" && strings.Contains(err.Error(), "PriorAttestationKnown"):
 					// Lighthouse rejects duplicate attestations.  It is possible that an attestation we sent
 					// to another node already propagated to this node, so ignore the error.
 					log.Trace().Msg("Node already knows about attestation; ignored")
-				} else {
+				case serverType == "lighthouse" && strings.Contains(err.Error(), "UnknownHeadBlock"):
+					// Lighthouse rejects an attestation for a block  that is not its current head.  It is possible
+					// that the node is just behind, and we can't do anything about it anyway at this point having
+					// already signed an attestation for this slot, so ignore the error.
+					log.Trace().Msg("Node does not know head slot; ignored")
+				default:
 					log.Warn().Err(err).Msg("Failed to submit attestation")
+					return
 				}
-				return
 			}
 			log.Trace().Msg("Submitted attestation")
 		}(ctx, sem, &wg, name, submitter)
@@ -80,4 +83,28 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 	}
 
 	return nil
+}
+
+// serviceInfo returns the service name and provider information.
+func (s *Service) serviceInfo(ctx context.Context, submitter interface{}) (string, string) {
+	serviceName := "<unknown>"
+	provider := "<unknown>"
+	if service, isService := submitter.(eth2client.Service); isService {
+		provider = service.Address()
+	}
+	if service, isService := submitter.(eth2client.NodeVersionProvider); isService {
+		nodeVersion, err := service.NodeVersion(ctx)
+		if err == nil {
+			switch {
+			case strings.Contains(strings.ToLower(nodeVersion), "lighthouse"):
+				serviceName = "lighthouse"
+			case strings.Contains(strings.ToLower(nodeVersion), "prysm"):
+				serviceName = "prysm"
+			case strings.Contains(strings.ToLower(nodeVersion), "teku"):
+				serviceName = "teku"
+			}
+		}
+	}
+
+	return serviceName, provider
 }
