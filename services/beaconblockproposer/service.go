@@ -18,7 +18,7 @@ import (
 	"fmt"
 
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/accountmanager"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // Duty contains information about a beacon block proposal duty.
@@ -31,15 +31,15 @@ type Duty struct {
 	randaoReveal spec.BLSSignature
 
 	// account is used to sign the proposal; can be pre-fetched.
-	account accountmanager.ValidatingAccount
+	account e2wtypes.Account
 }
 
 // NewDuty creates a new beacon block proposer duty.
-func NewDuty(ctx context.Context, slot spec.Slot, validatorIndex spec.ValidatorIndex) (*Duty, error) {
+func NewDuty(slot spec.Slot, validatorIndex spec.ValidatorIndex) *Duty {
 	return &Duty{
 		slot:           slot,
 		validatorIndex: validatorIndex,
-	}, nil
+	}
 }
 
 // Slot provides the slot for the beacon block proposer.
@@ -68,12 +68,12 @@ func (d *Duty) RANDAOReveal() spec.BLSSignature {
 }
 
 // SetAccount sets the account.
-func (d *Duty) SetAccount(account accountmanager.ValidatingAccount) {
+func (d *Duty) SetAccount(account e2wtypes.Account) {
 	d.account = account
 }
 
 // Account provides the account.
-func (d *Duty) Account() accountmanager.ValidatingAccount {
+func (d *Duty) Account() e2wtypes.Account {
 	return d.account
 }
 

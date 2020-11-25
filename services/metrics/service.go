@@ -81,3 +81,11 @@ type ClientMonitor interface {
 	// ClientOperation provides a generic monitor for client operations.
 	ClientOperation(provider string, name string, succeeded bool, duration time.Duration)
 }
+
+// ValidatorsManagerMonitor provides methods to monitor the validators manager.
+type ValidatorsManagerMonitor interface {
+}
+
+// SignerMonitor provides methods to monitor signers.
+type SignerMonitor interface {
+}

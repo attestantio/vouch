@@ -60,6 +60,23 @@ func (m *SlotDurationProvider) SlotDuration(ctx context.Context) (time.Duration,
 	return m.slotDuration, nil
 }
 
+// FarFutureEpochProvider is a mock for eth2client.FarFutureEpochProvider.
+type FarFutureEpochProvider struct {
+	farFutureEpoch spec.Epoch
+}
+
+// NewFarFutureEpochProvider returns a mock far future epoch provider with the provided value.
+func NewFarFutureEpochProvider(farFutureEpoch spec.Epoch) eth2client.FarFutureEpochProvider {
+	return &FarFutureEpochProvider{
+		farFutureEpoch: farFutureEpoch,
+	}
+}
+
+// FarFutureEpoch is a mock.
+func (m *FarFutureEpochProvider) FarFutureEpoch(ctx context.Context) (spec.Epoch, error) {
+	return m.farFutureEpoch, nil
+}
+
 // SlotsPerEpochProvider is a mock for eth2client.SlotsPerEpochProvider.
 type SlotsPerEpochProvider struct {
 	slotsPerEpoch uint64
@@ -595,14 +612,6 @@ func (m *ErroringDomainProvider) Domain(ctx context.Context, domainType spec.Dom
 	return spec.Domain{}, errors.New("error")
 }
 
-// ValidatorsProvider is a mock for eth2client.ValidatorsProvider.
-type ValidatorsProvider struct{}
-
-// NewValidatorsProvider returns a mock validators provider.
-func NewValidatorsProvider() eth2client.ValidatorsProvider {
-	return &ValidatorsProvider{}
-}
-
 func _byte(input string) []byte {
 	res, _ := hex.DecodeString(strings.TrimPrefix(input, "0x"))
 	return res
@@ -633,9 +642,17 @@ func _epochValidator(index spec.ValidatorIndex, pubKey string, withdrwalCredenti
 	}
 }
 
+// ValidatorsProvider is a mock.
+type ValidatorsProvider struct{}
+
+// NewValidatorsProvider returns a mock validators provider.
+func NewValidatorsProvider() eth2client.ValidatorsProvider {
+	return &ValidatorsProvider{}
+}
+
 // Validators is a mock.
 func (m *ValidatorsProvider) Validators(ctx context.Context, stateID string, validators []spec.ValidatorIndex) (map[spec.ValidatorIndex]*api.Validator, error) {
-	return map[spec.ValidatorIndex]*api.Validator{
+	base := map[spec.ValidatorIndex]*api.Validator{
 		0: _epochValidator(0,
 			"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
 			"0x00fad2a6bfb0e7f1f0f45460944fbd8dfa7f37da06a4d13b3983cc90bb46963b"),
@@ -732,12 +749,27 @@ func (m *ValidatorsProvider) Validators(ctx context.Context, stateID string, val
 		31: _epochValidator(31,
 			"0xa4855c83d868f772a579133d9f23818008417b743e8447e235d8eb78b1d8f8a9f63f98c551beb7de254400f89592314d",
 			"0x0077c6a139204cbdaae840e0beb43b384c35182aabbc1104207b6a5a626fe75b"),
-	}, nil
+	}
+
+	if len(validators) == 0 {
+		return base, nil
+	}
+
+	res := make(map[spec.ValidatorIndex]*api.Validator)
+	for k, v := range base {
+		for _, index := range validators {
+			if k == index {
+				res[k] = v
+				break
+			}
+		}
+	}
+	return res, nil
 }
 
 // ValidatorsByPubKey is a mock.
 func (m *ValidatorsProvider) ValidatorsByPubKey(ctx context.Context, stateID string, validators []spec.BLSPubKey) (map[spec.ValidatorIndex]*api.Validator, error) {
-	return map[spec.ValidatorIndex]*api.Validator{
+	base := map[spec.ValidatorIndex]*api.Validator{
 		0: _epochValidator(0,
 			"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
 			"0x00fad2a6bfb0e7f1f0f45460944fbd8dfa7f37da06a4d13b3983cc90bb46963b"),
@@ -834,7 +866,22 @@ func (m *ValidatorsProvider) ValidatorsByPubKey(ctx context.Context, stateID str
 		31: _epochValidator(31,
 			"0xa4855c83d868f772a579133d9f23818008417b743e8447e235d8eb78b1d8f8a9f63f98c551beb7de254400f89592314d",
 			"0x0077c6a139204cbdaae840e0beb43b384c35182aabbc1104207b6a5a626fe75b"),
-	}, nil
+	}
+
+	if len(validators) == 0 {
+		return base, nil
+	}
+
+	res := make(map[spec.ValidatorIndex]*api.Validator)
+	for k, v := range base {
+		for _, pubKey := range validators {
+			if v.Validator.PublicKey == pubKey {
+				res[k] = v
+				break
+			}
+		}
+	}
+	return res, nil
 }
 
 // ValidatorsWithoutBalanceProvider is a mock for eth2client.ValidatorsProvider with eth2client.ValidatorsWithoutBalanceProvider.
@@ -847,7 +894,7 @@ func NewValidatorsWithoutBalanceProvider() eth2client.ValidatorsProvider {
 
 // Validators is a mock.
 func (m *ValidatorsWithoutBalanceProvider) Validators(ctx context.Context, stateID string, validators []spec.ValidatorIndex) (map[spec.ValidatorIndex]*api.Validator, error) {
-	return map[spec.ValidatorIndex]*api.Validator{
+	base := map[spec.ValidatorIndex]*api.Validator{
 		0: _epochValidator(0,
 			"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
 			"0x00fad2a6bfb0e7f1f0f45460944fbd8dfa7f37da06a4d13b3983cc90bb46963b"),
@@ -944,12 +991,27 @@ func (m *ValidatorsWithoutBalanceProvider) Validators(ctx context.Context, state
 		31: _epochValidator(31,
 			"0xa4855c83d868f772a579133d9f23818008417b743e8447e235d8eb78b1d8f8a9f63f98c551beb7de254400f89592314d",
 			"0x0077c6a139204cbdaae840e0beb43b384c35182aabbc1104207b6a5a626fe75b"),
-	}, nil
+	}
+
+	if len(validators) == 0 {
+		return base, nil
+	}
+
+	res := make(map[spec.ValidatorIndex]*api.Validator)
+	for k, v := range base {
+		for _, index := range validators {
+			if k == index {
+				res[k] = v
+				break
+			}
+		}
+	}
+	return res, nil
 }
 
 // ValidatorsByPubKey is a mock.
 func (m *ValidatorsWithoutBalanceProvider) ValidatorsByPubKey(ctx context.Context, stateID string, validators []spec.BLSPubKey) (map[spec.ValidatorIndex]*api.Validator, error) {
-	return map[spec.ValidatorIndex]*api.Validator{
+	base := map[spec.ValidatorIndex]*api.Validator{
 		0: _epochValidator(0,
 			"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
 			"0x00fad2a6bfb0e7f1f0f45460944fbd8dfa7f37da06a4d13b3983cc90bb46963b"),
@@ -1046,12 +1108,27 @@ func (m *ValidatorsWithoutBalanceProvider) ValidatorsByPubKey(ctx context.Contex
 		31: _epochValidator(31,
 			"0xa4855c83d868f772a579133d9f23818008417b743e8447e235d8eb78b1d8f8a9f63f98c551beb7de254400f89592314d",
 			"0x0077c6a139204cbdaae840e0beb43b384c35182aabbc1104207b6a5a626fe75b"),
-	}, nil
+	}
+
+	if len(validators) == 0 {
+		return base, nil
+	}
+
+	res := make(map[spec.ValidatorIndex]*api.Validator)
+	for k, v := range base {
+		for _, pubKey := range validators {
+			if v.Validator.PublicKey == pubKey {
+				res[k] = v
+				break
+			}
+		}
+	}
+	return res, nil
 }
 
 // ValidatorsWithoutBalance is a mock.
 func (m *ValidatorsWithoutBalanceProvider) ValidatorsWithoutBalance(ctx context.Context, stateID string, validators []spec.ValidatorIndex) (map[spec.ValidatorIndex]*api.Validator, error) {
-	res := map[spec.ValidatorIndex]*api.Validator{
+	base := map[spec.ValidatorIndex]*api.Validator{
 		0: _epochValidator(0,
 			"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
 			"0x00fad2a6bfb0e7f1f0f45460944fbd8dfa7f37da06a4d13b3983cc90bb46963b"),
@@ -1150,9 +1227,22 @@ func (m *ValidatorsWithoutBalanceProvider) ValidatorsWithoutBalance(ctx context.
 			"0x0077c6a139204cbdaae840e0beb43b384c35182aabbc1104207b6a5a626fe75b"),
 	}
 
-	for _, validator := range res {
+	for _, validator := range base {
 		validator.Balance = 0
 	}
 
+	if len(validators) == 0 {
+		return base, nil
+	}
+
+	res := make(map[spec.ValidatorIndex]*api.Validator)
+	for k, v := range base {
+		for _, index := range validators {
+			if k == index {
+				res[k] = v
+				break
+			}
+		}
+	}
 	return res, nil
 }

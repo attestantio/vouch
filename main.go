@@ -45,9 +45,15 @@ import (
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	prometheusmetrics "github.com/attestantio/vouch/services/metrics/prometheus"
 	basicscheduler "github.com/attestantio/vouch/services/scheduler/basic"
+	"github.com/attestantio/vouch/services/signer"
+	standardsigner "github.com/attestantio/vouch/services/signer/standard"
 	"github.com/attestantio/vouch/services/submitter"
 	immediatesubmitter "github.com/attestantio/vouch/services/submitter/immediate"
 	multinodesubmitter "github.com/attestantio/vouch/services/submitter/multinode"
+	"github.com/attestantio/vouch/services/validatorsmanager"
+	standardvalidatorsmanager "github.com/attestantio/vouch/services/validatorsmanager/standard"
+	bestattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/best"
+	firstattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/first"
 	bestbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	firstbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/first"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -258,8 +264,20 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		return errors.Wrap(err, "failed to start scheduler service")
 	}
 
+	log.Trace().Msg("Starting validators manager")
+	validatorsManager, err := startValidatorsManager(ctx, monitor, eth2Client)
+	if err != nil {
+		return errors.Wrap(err, "failed to start validators manager")
+	}
+
+	log.Trace().Msg("Starting signer")
+	signerSvc, err := startSigner(ctx, monitor, eth2Client)
+	if err != nil {
+		return errors.Wrap(err, "failed to start signer")
+	}
+
 	log.Trace().Msg("Starting account manager")
-	accountManager, err := startAccountManager(ctx, monitor, eth2Client, majordomo)
+	accountManager, err := startAccountManager(ctx, monitor, eth2Client, validatorsManager, majordomo)
 	if err != nil {
 		return errors.Wrap(err, "failed to start account manager")
 	}
@@ -285,28 +303,38 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	log.Trace().Msg("Starting beacon block proposer")
 	beaconBlockProposer, err := standardbeaconblockproposer.New(ctx,
 		standardbeaconblockproposer.WithLogLevel(logLevel(viper.GetString("beaconblockproposer.log-level"))),
+		standardbeaconblockproposer.WithChainTimeService(chainTime),
 		standardbeaconblockproposer.WithProposalDataProvider(beaconBlockProposalProvider),
 		standardbeaconblockproposer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardbeaconblockproposer.WithGraffitiProvider(graffitiProvider),
 		standardbeaconblockproposer.WithMonitor(monitor.(metrics.BeaconBlockProposalMonitor)),
 		standardbeaconblockproposer.WithBeaconBlockSubmitter(submitterStrategy.(submitter.BeaconBlockSubmitter)),
+		standardbeaconblockproposer.WithRANDAORevealSigner(signerSvc.(signer.RANDAORevealSigner)),
+		standardbeaconblockproposer.WithBeaconBlockSigner(signerSvc.(signer.BeaconBlockSigner)),
 	)
 	if err != nil {
 		return errors.Wrap(err, "failed to start beacon block proposer service")
 	}
 
-	log.Trace().Msg("Starting beacon block attester")
+	log.Trace().Msg("Selecting attestation data provider")
+	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, eth2Client)
+	if err != nil {
+		return errors.Wrap(err, "failed to select attestation data provider")
+	}
+
+	log.Trace().Msg("Starting attester")
 	attester, err := standardattester.New(ctx,
 		standardattester.WithLogLevel(logLevel(viper.GetString("attester.log-level"))),
 		standardattester.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
 		standardattester.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
-		standardattester.WithAttestationDataProvider(eth2Client.(eth2client.AttestationDataProvider)),
+		standardattester.WithAttestationDataProvider(attestationDataProvider),
 		standardattester.WithAttestationSubmitter(submitterStrategy.(submitter.AttestationSubmitter)),
 		standardattester.WithMonitor(monitor.(metrics.AttestationMonitor)),
 		standardattester.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+		standardattester.WithBeaconAttestationsSigner(signerSvc.(signer.BeaconAttestationsSigner)),
 	)
 	if err != nil {
-		return errors.Wrap(err, "failed to start beacon block attester service")
+		return errors.Wrap(err, "failed to start attester service")
 	}
 
 	log.Trace().Msg("Starting beacon attestation aggregator")
@@ -323,6 +351,9 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardattestationaggregator.WithAggregateAttestationsSubmitter(eth2Client.(eth2client.AggregateAttestationsSubmitter)),
 		standardattestationaggregator.WithMonitor(monitor.(metrics.AttestationAggregationMonitor)),
 		standardattestationaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+		standardattestationaggregator.WithSlotSelectionSigner(signerSvc.(signer.SlotSelectionSigner)),
+		standardattestationaggregator.WithAggregateAndProofSigner(signerSvc.(signer.AggregateAndProofSigner)),
+		standardattestationaggregator.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
 	)
 	if err != nil {
 		return errors.Wrap(err, "failed to start beacon attestation aggregator service")
@@ -357,6 +388,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardcontroller.WithBeaconBlockProposer(beaconBlockProposer),
 		standardcontroller.WithAttestationAggregator(attestationAggregator),
 		standardcontroller.WithBeaconCommitteeSubscriber(beaconCommitteeSubscriber),
+		standardcontroller.WithAccountsRefresher(accountManager.(accountmanager.Refresher)),
 	)
 	if err != nil {
 		return errors.Wrap(err, "failed to start controller service")
@@ -498,7 +530,46 @@ func startGraffitiProvider(ctx context.Context, majordomo majordomo.Service) (gr
 	}
 }
 
-func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service, majordomo majordomo.Service) (accountmanager.Service, error) {
+func startValidatorsManager(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (validatorsmanager.Service, error) {
+	farFutureEpoch, err := eth2Client.(eth2client.FarFutureEpochProvider).FarFutureEpoch(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain far future epoch")
+	}
+	validatorsManager, err := standardvalidatorsmanager.New(ctx,
+		standardvalidatorsmanager.WithLogLevel(logLevel(viper.GetString("validatorsmanager.log-level"))),
+		standardvalidatorsmanager.WithMonitor(monitor.(metrics.ValidatorsManagerMonitor)),
+		standardvalidatorsmanager.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+		standardvalidatorsmanager.WithValidatorsProvider(eth2Client.(eth2client.ValidatorsProvider)),
+		standardvalidatorsmanager.WithFarFutureEpoch(farFutureEpoch),
+	)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start standard validators manager service")
+	}
+	return validatorsManager, nil
+}
+
+func startSigner(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (signer.Service, error) {
+	signer, err := standardsigner.New(ctx,
+		standardsigner.WithLogLevel(logLevel(viper.GetString("signer.log-level"))),
+		standardsigner.WithMonitor(monitor.(metrics.SignerMonitor)),
+		standardsigner.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+		standardsigner.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
+		standardsigner.WithBeaconProposerDomainTypeProvider(eth2Client.(eth2client.BeaconProposerDomainProvider)),
+		standardsigner.WithBeaconAttesterDomainTypeProvider(eth2Client.(eth2client.BeaconAttesterDomainProvider)),
+		standardsigner.WithRANDAODomainTypeProvider(eth2Client.(eth2client.RANDAODomainProvider)),
+		standardsigner.WithSelectionProofDomainTypeProvider(eth2Client.(eth2client.SelectionProofDomainProvider)),
+		standardsigner.WithAggregateAndProofDomainTypeProvider(eth2Client.(eth2client.AggregateAndProofDomainProvider)),
+		standardsigner.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
+	)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start signer provider service")
+	}
+	return signer, nil
+}
+
+func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service, validatorsManager validatorsmanager.Service, majordomo majordomo.Service) (accountmanager.Service, error) {
 	var accountManager accountmanager.Service
 	if viper.Get("accountmanager.dirk") != nil {
 		log.Info().Msg("Starting dirk account manager")
@@ -521,19 +592,14 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 			dirkaccountmanager.WithLogLevel(logLevel(viper.GetString("accountmanager.dirk.log-level"))),
 			dirkaccountmanager.WithMonitor(monitor.(metrics.AccountManagerMonitor)),
 			dirkaccountmanager.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			dirkaccountmanager.WithValidatorsProvider(eth2Client.(eth2client.ValidatorsProvider)),
+			dirkaccountmanager.WithValidatorsManager(validatorsManager),
 			dirkaccountmanager.WithEndpoints(viper.GetStringSlice("accountmanager.dirk.endpoints")),
 			dirkaccountmanager.WithAccountPaths(viper.GetStringSlice("accountmanager.dirk.accounts")),
-			dirkaccountmanager.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
-			dirkaccountmanager.WithBeaconProposerDomainProvider(eth2Client.(eth2client.BeaconProposerDomainProvider)),
-			dirkaccountmanager.WithBeaconAttesterDomainProvider(eth2Client.(eth2client.BeaconAttesterDomainProvider)),
-			dirkaccountmanager.WithRANDAODomainProvider(eth2Client.(eth2client.RANDAODomainProvider)),
-			dirkaccountmanager.WithSelectionProofDomainProvider(eth2Client.(eth2client.SelectionProofDomainProvider)),
-			dirkaccountmanager.WithAggregateAndProofDomainProvider(eth2Client.(eth2client.AggregateAndProofDomainProvider)),
-			dirkaccountmanager.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
 			dirkaccountmanager.WithClientCert(certPEMBlock),
 			dirkaccountmanager.WithClientKey(keyPEMBlock),
 			dirkaccountmanager.WithCACert(caPEMBlock),
+			dirkaccountmanager.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
+			dirkaccountmanager.WithFarFutureEpochProvider(eth2Client.(eth2client.FarFutureEpochProvider)),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start dirk account manager service")
@@ -559,16 +625,12 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 		accountManager, err = walletaccountmanager.New(ctx,
 			walletaccountmanager.WithLogLevel(logLevel(viper.GetString("accountmanager.wallet.log-level"))),
 			walletaccountmanager.WithMonitor(monitor.(metrics.AccountManagerMonitor)),
-			walletaccountmanager.WithValidatorsProvider(eth2Client.(eth2client.ValidatorsProvider)),
+			walletaccountmanager.WithValidatorsManager(validatorsManager),
 			walletaccountmanager.WithAccountPaths(viper.GetStringSlice("accountmanager.wallet.accounts")),
 			walletaccountmanager.WithPassphrases(passphrases),
 			walletaccountmanager.WithLocations(viper.GetStringSlice("accountmanager.wallet.locations")),
 			walletaccountmanager.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
-			walletaccountmanager.WithBeaconProposerDomainProvider(eth2Client.(eth2client.BeaconProposerDomainProvider)),
-			walletaccountmanager.WithBeaconAttesterDomainProvider(eth2Client.(eth2client.BeaconAttesterDomainProvider)),
-			walletaccountmanager.WithRANDAODomainProvider(eth2Client.(eth2client.RANDAODomainProvider)),
-			walletaccountmanager.WithSelectionProofDomainProvider(eth2Client.(eth2client.SelectionProofDomainProvider)),
-			walletaccountmanager.WithAggregateAndProofDomainProvider(eth2Client.(eth2client.AggregateAndProofDomainProvider)),
+			walletaccountmanager.WithFarFutureEpochProvider(eth2Client.(eth2client.FarFutureEpochProvider)),
 			walletaccountmanager.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
 		)
 		if err != nil {
@@ -578,6 +640,58 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 	}
 
 	return nil, errors.New("no account manager defined")
+}
+
+func selectAttestationDataProvider(ctx context.Context,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+) (eth2client.AttestationDataProvider, error) {
+	var attestationDataProvider eth2client.AttestationDataProvider
+	var err error
+	switch viper.GetString("strategies.attestationdata.style") {
+	case "best":
+		log.Info().Msg("Starting best attestation data strategy")
+		attestationDataProviders := make(map[string]eth2client.AttestationDataProvider)
+		for _, address := range viper.GetStringSlice("strategies.attestationdata.beacon-node-addresses") {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for attestation data strategy", address))
+			}
+			attestationDataProviders[address] = client.(eth2client.AttestationDataProvider)
+		}
+		attestationDataProvider, err = bestattestationdatastrategy.New(ctx,
+			bestattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			bestattestationdatastrategy.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
+			bestattestationdatastrategy.WithLogLevel(logLevel(viper.GetString("strategies.attestationdata.log-level"))),
+			bestattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start best attestation data strategy")
+		}
+	case "first":
+		log.Info().Msg("Starting first attestation data strategy")
+		attestationDataProviders := make(map[string]eth2client.AttestationDataProvider)
+		for _, address := range viper.GetStringSlice("strategies.attestationdata.beacon-node-addresses") {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for attestation data strategy", address))
+			}
+			attestationDataProviders[address] = client.(eth2client.AttestationDataProvider)
+		}
+		attestationDataProvider, err = firstattestationdatastrategy.New(ctx,
+			firstattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			firstattestationdatastrategy.WithLogLevel(logLevel(viper.GetString("strategies.attestationdata.log-level"))),
+			firstattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start first attestation data strategy")
+		}
+	default:
+		log.Info().Msg("Starting simple attestation data strategy")
+		attestationDataProvider = eth2Client.(eth2client.AttestationDataProvider)
+	}
+
+	return attestationDataProvider, nil
 }
 
 func selectBeaconBlockProposalProvider(ctx context.Context,

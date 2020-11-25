@@ -22,8 +22,10 @@ import (
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/graffitiprovider"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -33,10 +35,13 @@ import (
 // Service is a beacon block proposer.
 type Service struct {
 	monitor                    metrics.BeaconBlockProposalMonitor
+	chainTimeService           chaintime.Service
 	proposalProvider           eth2client.BeaconBlockProposalProvider
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	graffitiProvider           graffitiprovider.Service
 	beaconBlockSubmitter       submitter.BeaconBlockSubmitter
+	randaoRevealSigner         signer.RANDAORevealSigner
+	beaconBlockSigner          signer.BeaconBlockSigner
 }
 
 // module-wide log.
@@ -57,10 +62,13 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	s := &Service{
 		monitor:                    parameters.monitor,
+		chainTimeService:           parameters.chainTimeService,
 		proposalProvider:           parameters.proposalProvider,
 		validatingAccountsProvider: parameters.validatingAccountsProvider,
 		graffitiProvider:           parameters.graffitiProvider,
 		beaconBlockSubmitter:       parameters.beaconBlockSubmitter,
+		randaoRevealSigner:         parameters.randaoRevealSigner,
+		beaconBlockSigner:          parameters.beaconBlockSigner,
 	}
 
 	return s, nil
@@ -78,23 +86,23 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 	log := log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Preparing")
 
+	dutyEpoch := s.chainTimeService.SlotToEpoch(duty.Slot())
 	// Fetch the validating account.
-	accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, []spec.ValidatorIndex{duty.ValidatorIndex()})
+	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx,
+		dutyEpoch,
+		[]spec.ValidatorIndex{duty.ValidatorIndex()},
+	)
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain proposing validator account")
 	}
 	if len(accounts) != 1 {
 		return fmt.Errorf("unknown proposing validator account %d", duty.ValidatorIndex())
 	}
-	account := accounts[0]
+	account := accounts[duty.ValidatorIndex()]
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained proposing account")
 	duty.SetAccount(account)
 
-	revealSigner, isRevealSigner := account.(accountmanager.RANDAORevealSigner)
-	if !isRevealSigner {
-		return errors.New("account is not a RANDAO reveal signer")
-	}
-	randaoReveal, err := revealSigner.SignRANDAOReveal(ctx, duty.Slot())
+	randaoReveal, err := s.randaoRevealSigner.SignRANDAOReveal(ctx, account, duty.Slot())
 	if err != nil {
 		return errors.Wrap(err, "failed to sign RANDAO reveal")
 	}
@@ -154,14 +162,8 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 		return
 	}
 
-	// Sign the block.
-	signer, isSigner := duty.Account().(accountmanager.BeaconBlockSigner)
-	if !isSigner {
-		log.Error().Msg("Account is not a beacon block signer")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
-		return
-	}
-	sig, err := signer.SignBeaconBlockProposal(ctx,
+	sig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
+		duty.Account(),
 		proposal.Slot,
 		duty.ValidatorIndex(),
 		proposal.ParentRoot,

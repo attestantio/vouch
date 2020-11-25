@@ -1,4 +1,7 @@
 Development:
+  - rework controller to schedule jobs in separate functions, allowing future flexibility
+  - break accountmanager in to accountmanager, signer and validatorsmanager
+    - better for maintainability and additional features
   - provide clearer log messages for submitter
   - upgrade wallet account manager to be able to accept multiple attestations to sign in a single request
 

@@ -81,7 +81,9 @@ Modules levels are used for each module, overriding the global log level.  The a
   - **graffiti** provision of graffiti for proposed blocks
   - **majordomo** accesss to secrets
   - **scheduler** starting internal jobs such as proposing a block at the appropriate time
+  - **signer** carries out signing activities
   - **strategies.beaconblockproposer** decisions on how to obtain information from multiple beacon nodes
   - **submitter** decisions on how to submit information to multiple beacon nodes
+  - **validatorsmanager** obtaining validator state from beacon nodes and providing it to other modules
 
 This can be configured using the environment variables `VOUCH_<MODULE>_LOG_LEVEL` or the configuration option `<module>.log-level`.  For example, the controller module logging could be configured using the environment variable `VOUCH_CONTROLLER_LOG_LEVEL` or the configuration option `controller.log-level`.

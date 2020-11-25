@@ -17,6 +17,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -30,6 +31,7 @@ type parameters struct {
 	attestationDataProvider    eth2client.AttestationDataProvider
 	attestationSubmitter       submitter.AttestationSubmitter
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
+	beaconAttestationsSigner   signer.BeaconAttestationsSigner
 }
 
 // Parameter is the interface for service parameters.
@@ -92,6 +94,13 @@ func WithValidatingAccountsProvider(provider accountmanager.ValidatingAccountsPr
 	})
 }
 
+// WithBeaconAttestationsSigner sets the beacon attestations signer.
+func WithBeaconAttestationsSigner(signer signer.BeaconAttestationsSigner) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.beaconAttestationsSigner = signer
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -120,6 +129,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.validatingAccountsProvider == nil {
 		return nil, errors.New("no validating accounts provider specified")
+	}
+	if parameters.beaconAttestationsSigner == nil {
+		return nil, errors.New("no beacon attestations signer specified")
 	}
 
 	return &parameters, nil

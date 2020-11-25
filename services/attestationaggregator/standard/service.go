@@ -25,20 +25,25 @@ import (
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // Service is an attestation aggregator.
 type Service struct {
 	monitor                           metrics.AttestationAggregationMonitor
 	targetAggregatorsPerCommittee     uint64
+	slotsPerEpoch                     uint64
 	validatingAccountsProvider        accountmanager.ValidatingAccountsProvider
 	aggregateAttestationProvider      eth2client.AggregateAttestationProvider
 	prysmAggregateAttestationProvider eth2client.PrysmAggregateAttestationProvider
 	aggregateAttestationsSubmitter    submitter.AggregateAttestationsSubmitter
+	slotSelectionSigner               signer.SlotSelectionSigner
+	aggregateAndProofSigner           signer.AggregateAndProofSigner
 }
 
 // module-wide log.
@@ -61,14 +66,21 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain target aggregators per committee")
 	}
+	slotsPerEpoch, err := parameters.slotsPerEpochProvider.SlotsPerEpoch(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain slots per epoch")
+	}
 
 	s := &Service{
 		monitor:                           parameters.monitor,
 		targetAggregatorsPerCommittee:     targetAggregatorsPerCommittee,
+		slotsPerEpoch:                     slotsPerEpoch,
 		validatingAccountsProvider:        parameters.validatingAccountsProvider,
 		aggregateAttestationProvider:      parameters.aggregateAttestationProvider,
 		prysmAggregateAttestationProvider: parameters.prysmAggregateAttestationProvider,
 		aggregateAttestationsSubmitter:    parameters.aggregateAttestationsSubmitter,
+		slotSelectionSigner:               parameters.slotSelectionSigner,
+		aggregateAndProofSigner:           parameters.aggregateAndProofSigner,
 	}
 
 	return s, nil
@@ -94,9 +106,10 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 		aggregateAttestation, err = s.aggregateAttestationProvider.AggregateAttestation(ctx, duty.Slot, duty.AttestationDataRoot)
 	} else {
 		var validatorPubKey spec.BLSPubKey
-		validatorPubKey, err = duty.Account.PubKey(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to obtain validator public key")
+		if provider, isProvider := duty.Account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
+			copy(validatorPubKey[:], provider.CompositePublicKey().Marshal())
+		} else {
+			copy(validatorPubKey[:], duty.Account.PublicKey().Marshal())
 		}
 		aggregateAttestation, err = s.prysmAggregateAttestationProvider.PrysmAggregateAttestation(ctx, duty.Attestation, validatorPubKey, duty.SlotSignature)
 	}
@@ -112,7 +125,8 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	}
 
 	// Fetch the validating account.
-	accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, []spec.ValidatorIndex{duty.ValidatorIndex})
+	epoch := spec.Epoch(uint64(aggregateAttestation.Data.Slot) / s.slotsPerEpoch)
+	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []spec.ValidatorIndex{duty.ValidatorIndex})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain proposing validator account")
 		s.monitor.AttestationAggregationCompleted(started, "failed")
@@ -123,27 +137,20 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 		s.monitor.AttestationAggregationCompleted(started, "failed")
 		return
 	}
-	account := accounts[0]
+	account := accounts[duty.ValidatorIndex]
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained aggregating account")
 
 	// Sign the aggregate attestation.
-	signer, isSigner := account.(accountmanager.AggregateAndProofSigner)
-	if !isSigner {
-		log.Error().Msg("Account is not an aggregate and proof signer")
-		s.monitor.AttestationAggregationCompleted(started, "failed")
-		return
-	}
 	aggregateAndProof := &spec.AggregateAndProof{
 		AggregatorIndex: duty.ValidatorIndex,
 		Aggregate:       aggregateAttestation,
 		SelectionProof:  duty.SlotSignature,
 	}
-
 	aggregateAndProofRoot, err := aggregateAndProof.HashTreeRoot()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate hash tree root of aggregate and proof")
 	}
-	sig, err := signer.SignAggregateAndProof(ctx, duty.Slot, spec.Root(aggregateAndProofRoot))
+	sig, err := s.aggregateAndProofSigner.SignAggregateAndProof(ctx, account, duty.Slot, spec.Root(aggregateAndProofRoot))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign aggregate and proof")
 		s.monitor.AttestationAggregationCompleted(started, "failed")
@@ -185,22 +192,18 @@ func (s *Service) IsAggregator(ctx context.Context,
 	}
 
 	// Fetch the validator from the account manager.
-	accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, []spec.ValidatorIndex{validatorIndex})
+	epoch := spec.Epoch(uint64(slot) / s.slotsPerEpoch)
+	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []spec.ValidatorIndex{validatorIndex})
 	if err != nil {
 		return false, spec.BLSSignature{}, errors.Wrap(err, "failed to obtain validator")
 	}
 	if len(accounts) == 0 {
 		return false, spec.BLSSignature{}, errors.New("validator unknown")
 	}
-	account := accounts[0]
-
-	slotSelectionSigner, isSlotSelectionSigner := account.(accountmanager.SlotSelectionSigner)
-	if !isSlotSelectionSigner {
-		return false, spec.BLSSignature{}, errors.New("validating account is not a slot selection signer")
-	}
+	account := accounts[validatorIndex]
 
 	// Sign the slot.
-	signature, err := slotSelectionSigner.SignSlotSelection(ctx, slot)
+	signature, err := s.slotSelectionSigner.SignSlotSelection(ctx, account, slot)
 	if err != nil {
 		return false, spec.BLSSignature{}, errors.Wrap(err, "failed to sign the slot")
 	}

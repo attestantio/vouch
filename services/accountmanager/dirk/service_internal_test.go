@@ -15,14 +15,9 @@ package dirk
 
 import (
 	"context"
-	"fmt"
-	"math/rand"
 	"regexp"
 	"testing"
-	"time"
 
-	"github.com/attestantio/dirk/testing/daemon"
-	api "github.com/attestantio/go-eth2-client/api/v1"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
@@ -58,43 +53,19 @@ func TestFetchAccountsForWallet(t *testing.T) {
 	// Test with wallet regex.
 	s, err := setupService(ctx, t, []string{"localhost:12345"}, []string{"wallet1", "wallet2"})
 	require.NoError(t, err)
-	validatingAccounts := make(map[spec.BLSPubKey]*ValidatingAccount)
-	for account := range wallets[0].Accounts(ctx) {
-		var key spec.BLSPubKey
-		copy(key[:], account.PublicKey().Marshal())
-		validatingAccounts[key] = &ValidatingAccount{
-			account: account,
-		}
-	}
 	verificationRegexes := make([]*regexp.Regexp, 0)
 	verificationRegexes = append(verificationRegexes, regexp.MustCompile("wallet1"))
-	s.fetchAccountsForWallet(ctx, wallets[0], validatingAccounts, verificationRegexes)
-	for _, validatingAccount := range validatingAccounts {
-		require.NotNil(t, validatingAccount.accountManager)
-	}
+	accounts := s.fetchAccountsForWallet(ctx, wallets[0], verificationRegexes)
+	require.Equal(t, 3, len(accounts))
 
 	// Test with single account regex.
 	capture := logger.NewLogCapture()
 	s, err = setupService(ctx, t, []string{"localhost:12345"}, []string{"wallet1", "wallet2"})
 	require.NoError(t, err)
-	validatingAccounts = make(map[spec.BLSPubKey]*ValidatingAccount)
-	for account := range wallets[0].Accounts(ctx) {
-		var key spec.BLSPubKey
-		copy(key[:], account.PublicKey().Marshal())
-		validatingAccounts[key] = &ValidatingAccount{
-			account: account,
-		}
-	}
 	verificationRegexes = make([]*regexp.Regexp, 0)
 	verificationRegexes = append(verificationRegexes, regexp.MustCompile("1$"))
-	s.fetchAccountsForWallet(ctx, wallets[0], validatingAccounts, verificationRegexes)
-	fetched := 0
-	for _, validatingAccount := range validatingAccounts {
-		if validatingAccount.accountManager != nil {
-			fetched++
-		}
-	}
-	require.Equal(t, 1, fetched)
+	accounts = s.fetchAccountsForWallet(ctx, wallets[0], verificationRegexes)
+	require.Equal(t, 1, len(accounts))
 	capture.AssertHasEntry(t, "Received unwanted account from server; ignoring")
 }
 
@@ -181,7 +152,7 @@ func TestAccountPathsToVerificationRegexes(t *testing.T) {
 func TestAccounts(t *testing.T) {
 	tests := []struct {
 		name     string
-		accounts map[spec.BLSPubKey]*ValidatingAccount
+		accounts map[spec.BLSPubKey]e2wtypes.Account
 		expected int
 	}{
 		{
@@ -195,94 +166,8 @@ func TestAccounts(t *testing.T) {
 			require.NoError(t, err)
 			// Manually add accounts.
 			s.accounts = test.accounts
-			accounts, err := s.Accounts(context.Background())
-			require.NoError(t, err)
-			require.Equal(t, test.expected, len(accounts))
 		})
 	}
-}
-
-func TestUpdateAccountsState(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	rand.Seed(time.Now().UnixNano())
-	// #nosec G404
-	port := uint32(1024 + rand.Intn(15359))
-	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
-	require.NoError(t, err)
-
-	s, err := setupService(context.Background(), t, []string{fmt.Sprintf("signer-test01:%d", port)}, []string{"Wallet 1", "Wallet 2"})
-	require.NoError(t, err)
-	accounts, err := s.Accounts(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 16, len(accounts))
-
-	// Manually clear out the accounts state.
-	for _, account := range s.accounts {
-		account.state = api.ValidatorStateUnknown
-	}
-
-	// Confirm that validators are unknown (hence not returned).
-	accounts, err = s.Accounts(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(accounts))
-
-	// Update and re-check.
-	require.NoError(t, s.UpdateAccountsState(ctx))
-	accounts, err = s.Accounts(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 16, len(accounts))
-}
-
-func TestUpdateAccountsStateWithoutBalances(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	rand.Seed(time.Now().UnixNano())
-	// #nosec G404
-	port := uint32(1024 + rand.Intn(15359))
-	_, _, err := daemon.New(ctx, "", 1, port, map[uint64]string{1: fmt.Sprintf("server-test01:%d", port)})
-	require.NoError(t, err)
-
-	s, err := New(ctx,
-		WithLogLevel(zerolog.TraceLevel),
-		WithMonitor(nullmetrics.New(context.Background())),
-		WithClientMonitor(nullmetrics.New(context.Background())),
-		WithEndpoints([]string{fmt.Sprintf("signer-test01:%d", port)}),
-		WithAccountPaths([]string{"Wallet 1", "Wallet 2"}),
-		WithClientCert([]byte(resources.ClientTest01Crt)),
-		WithClientKey([]byte(resources.ClientTest01Key)),
-		WithCACert([]byte(resources.CACrt)),
-		WithValidatorsProvider(mock.NewValidatorsWithoutBalanceProvider()),
-		WithSlotsPerEpochProvider(mock.NewSlotsPerEpochProvider(32)),
-		WithBeaconProposerDomainProvider(mock.NewBeaconProposerDomainProvider()),
-		WithBeaconAttesterDomainProvider(mock.NewBeaconAttesterDomainProvider()),
-		WithRANDAODomainProvider(mock.NewRANDAODomainProvider()),
-		WithSelectionProofDomainProvider(mock.NewSelectionProofDomainProvider()),
-		WithAggregateAndProofDomainProvider(mock.NewAggregateAndProofDomainProvider()),
-		WithDomainProvider(mock.NewDomainProvider()),
-	)
-	require.NoError(t, err)
-	accounts, err := s.Accounts(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 16, len(accounts))
-
-	// Manually clear out the accounts state.
-	for _, account := range s.accounts {
-		account.state = api.ValidatorStateUnknown
-	}
-
-	// Confirm that validators are unknown (hence not returned).
-	accounts, err = s.Accounts(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(accounts))
-
-	// Update and re-check.
-	require.NoError(t, s.UpdateAccountsState(ctx))
-	accounts, err = s.Accounts(ctx)
-	require.NoError(t, err)
-	require.Equal(t, 16, len(accounts))
 }
 
 func setupService(ctx context.Context, t *testing.T, endpoints []string, accountPaths []string) (*Service, error) {
@@ -295,14 +180,9 @@ func setupService(ctx context.Context, t *testing.T, endpoints []string, account
 		WithClientCert([]byte(resources.ClientTest01Crt)),
 		WithClientKey([]byte(resources.ClientTest01Key)),
 		WithCACert([]byte(resources.CACrt)),
-		WithValidatorsProvider(mock.NewValidatorsProvider()),
-		WithSlotsPerEpochProvider(mock.NewSlotsPerEpochProvider(32)),
-		WithBeaconProposerDomainProvider(mock.NewBeaconProposerDomainProvider()),
-		WithBeaconAttesterDomainProvider(mock.NewBeaconAttesterDomainProvider()),
-		WithRANDAODomainProvider(mock.NewRANDAODomainProvider()),
-		WithSelectionProofDomainProvider(mock.NewSelectionProofDomainProvider()),
-		WithAggregateAndProofDomainProvider(mock.NewAggregateAndProofDomainProvider()),
+		WithValidatorsManager(mock.NewValidatorsManager()),
 		WithDomainProvider(mock.NewDomainProvider()),
+		WithFarFutureEpochProvider(mock.NewFarFutureEpochProvider(0xffffffffffffffff)),
 	)
 }
 

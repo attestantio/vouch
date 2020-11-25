@@ -6,11 +6,11 @@ require (
 	cloud.google.com/go v0.72.0 // indirect
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/attestantio/dirk v0.9.6
-	github.com/attestantio/go-eth2-client v0.6.12
-	github.com/aws/aws-sdk-go v1.35.29
+	github.com/attestantio/go-eth2-client v0.6.14
+	github.com/aws/aws-sdk-go v1.35.35
 	github.com/ferranbt/fastssz v0.0.0-20201030134205-9b9624098321
 	github.com/goccy/go-yaml v1.8.4 // indirect
-	github.com/google/go-cmp v0.5.3 // indirect
+	github.com/google/go-cmp v0.5.4 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/herumi/bls-eth-go-binary v0.0.0-20201104034342-d782bdf735de
 	github.com/mitchellh/go-homedir v1.1.0
@@ -19,7 +19,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/common v0.15.0 // indirect
-	github.com/prysmaticlabs/ethereumapis v0.0.0-20201020182719-7f66dae2bbba
+	github.com/prysmaticlabs/ethereumapis v0.0.0-20201117145913-073714f478fb
 	github.com/prysmaticlabs/go-bitfield v0.0.0-20200618145306-2ae0807bef65
 	github.com/rs/zerolog v1.20.0
 	github.com/sasha-s/go-deadlock v0.2.0
@@ -38,8 +38,10 @@ require (
 	github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.1
 	github.com/wealdtech/go-eth2-wallet-types/v2 v2.8.1
 	github.com/wealdtech/go-majordomo v1.0.1
+	golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392 // indirect
 	golang.org/x/oauth2 v0.0.0-20201109201403-9fd604954f58 // indirect
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
+	google.golang.org/genproto v0.0.0-20201119123407-9b1e624d6bc4 // indirect
 	google.golang.org/grpc v1.33.2
 	gotest.tools v2.2.0+incompatible
 )

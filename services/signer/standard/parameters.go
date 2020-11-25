@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dirk
+package standard
 
 import (
 	"context"
@@ -19,23 +19,21 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
-	"github.com/attestantio/vouch/services/validatorsmanager"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 type parameters struct {
-	logLevel               zerolog.Level
-	monitor                metrics.AccountManagerMonitor
-	clientMonitor          metrics.ClientMonitor
-	endpoints              []string
-	accountPaths           []string
-	clientCert             []byte
-	clientKey              []byte
-	caCert                 []byte
-	domainProvider         eth2client.DomainProvider
-	validatorsManager      validatorsmanager.Service
-	farFutureEpochProvider eth2client.FarFutureEpochProvider
+	logLevel                            zerolog.Level
+	monitor                             metrics.SignerMonitor
+	clientMonitor                       metrics.ClientMonitor
+	slotsPerEpochProvider               eth2client.SlotsPerEpochProvider
+	beaconProposerDomainTypeProvider    eth2client.BeaconProposerDomainProvider
+	beaconAttesterDomainTypeProvider    eth2client.BeaconAttesterDomainProvider
+	randaoDomainTypeProvider            eth2client.RANDAODomainProvider
+	selectionProofDomainTypeProvider    eth2client.SelectionProofDomainProvider
+	aggregateAndProofDomainTypeProvider eth2client.AggregateAndProofDomainProvider
+	domainProvider                      eth2client.DomainProvider
 }
 
 // Parameter is the interface for service parameters.
@@ -57,7 +55,7 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 }
 
 // WithMonitor sets the monitor for the module.
-func WithMonitor(monitor metrics.AccountManagerMonitor) Parameter {
+func WithMonitor(monitor metrics.SignerMonitor) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})
@@ -70,45 +68,45 @@ func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
 	})
 }
 
-// WithEndpoints sets the endpoints to communicate with dirk.
-func WithEndpoints(endpoints []string) Parameter {
+// WithSlotsPerEpochProvider sets the slots per epoch provider.
+func WithSlotsPerEpochProvider(provider eth2client.SlotsPerEpochProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.endpoints = endpoints
+		p.slotsPerEpochProvider = provider
 	})
 }
 
-// WithAccountPaths sets the accounts paths for which to validate.
-func WithAccountPaths(accountPaths []string) Parameter {
+// WithBeaconProposerDomainTypeProvider sets the beacon proposer domain provider.
+func WithBeaconProposerDomainTypeProvider(provider eth2client.BeaconProposerDomainProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.accountPaths = accountPaths
+		p.beaconProposerDomainTypeProvider = provider
 	})
 }
 
-// WithClientCert sets the bytes of the client TLS certificate.
-func WithClientCert(cert []byte) Parameter {
+// WithBeaconAttesterDomainTypeProvider sets the beacon attester domain provider.
+func WithBeaconAttesterDomainTypeProvider(provider eth2client.BeaconAttesterDomainProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.clientCert = cert
+		p.beaconAttesterDomainTypeProvider = provider
 	})
 }
 
-// WithClientKey sets the bytes of the client TLS key.
-func WithClientKey(key []byte) Parameter {
+// WithRANDAODomainTypeProvider sets the RANDAO domain provider.
+func WithRANDAODomainTypeProvider(provider eth2client.RANDAODomainProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.clientKey = key
+		p.randaoDomainTypeProvider = provider
 	})
 }
 
-// WithCACert sets the bytes of the certificate authority TLS certificate.
-func WithCACert(cert []byte) Parameter {
+// WithSelectionProofDomainTypeProvider sets the RANDAO domain provider.
+func WithSelectionProofDomainTypeProvider(provider eth2client.SelectionProofDomainProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.caCert = cert
+		p.selectionProofDomainTypeProvider = provider
 	})
 }
 
-// WithValidatorsManager sets the validators manager.
-func WithValidatorsManager(provider validatorsmanager.Service) Parameter {
+// WithAggregateAndProofDomainTypeProvider sets the aggregate and proof domain provider.
+func WithAggregateAndProofDomainTypeProvider(provider eth2client.AggregateAndProofDomainProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.validatorsManager = provider
+		p.aggregateAndProofDomainTypeProvider = provider
 	})
 }
 
@@ -116,13 +114,6 @@ func WithValidatorsManager(provider validatorsmanager.Service) Parameter {
 func WithDomainProvider(provider eth2client.DomainProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.domainProvider = provider
-	})
-}
-
-// WithFarFutureEpochProvider sets the far future epoch provider.
-func WithFarFutureEpochProvider(provider eth2client.FarFutureEpochProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.farFutureEpochProvider = provider
 	})
 }
 
@@ -145,26 +136,26 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.clientMonitor == nil {
 		return nil, errors.New("no client monitor specified")
 	}
-	if len(parameters.endpoints) == 0 {
-		return nil, errors.New("no endpoints specified")
+	if parameters.slotsPerEpochProvider == nil {
+		return nil, errors.New("no slots per epoch provider specified")
 	}
-	if len(parameters.accountPaths) == 0 {
-		return nil, errors.New("no account paths specified")
+	if parameters.beaconProposerDomainTypeProvider == nil {
+		return nil, errors.New("no beacon proposer domain type provider specified")
 	}
-	if parameters.clientCert == nil {
-		return nil, errors.New("no client certificate specified")
+	if parameters.beaconAttesterDomainTypeProvider == nil {
+		return nil, errors.New("no beacon attester domain type provider specified")
 	}
-	if parameters.clientKey == nil {
-		return nil, errors.New("no client key specified")
+	if parameters.randaoDomainTypeProvider == nil {
+		return nil, errors.New("no RANDAO domain type provider specified")
 	}
-	if parameters.validatorsManager == nil {
-		return nil, errors.New("no validators manager specified")
+	if parameters.selectionProofDomainTypeProvider == nil {
+		return nil, errors.New("no selection proof domain type provider specified")
+	}
+	if parameters.aggregateAndProofDomainTypeProvider == nil {
+		return nil, errors.New("no aggregate and proof domain type provider specified")
 	}
 	if parameters.domainProvider == nil {
 		return nil, errors.New("no domain provider specified")
-	}
-	if parameters.farFutureEpochProvider == nil {
-		return nil, errors.New("no far future epoch provider specified")
 	}
 
 	return &parameters, nil

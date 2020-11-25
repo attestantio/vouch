@@ -16,24 +16,21 @@ package wallet
 import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/validatorsmanager"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 type parameters struct {
-	logLevel                        zerolog.Level
-	monitor                         metrics.AccountManagerMonitor
-	locations                       []string
-	accountPaths                    []string
-	passphrases                     [][]byte
-	validatorsProvider              eth2client.ValidatorsProvider
-	slotsPerEpochProvider           eth2client.SlotsPerEpochProvider
-	beaconProposerDomainProvider    eth2client.BeaconProposerDomainProvider
-	beaconAttesterDomainProvider    eth2client.BeaconAttesterDomainProvider
-	randaoDomainProvider            eth2client.RANDAODomainProvider
-	selectionProofDomainProvider    eth2client.SelectionProofDomainProvider
-	aggregateAndProofDomainProvider eth2client.AggregateAndProofDomainProvider
-	domainProvider                  eth2client.DomainProvider
+	logLevel               zerolog.Level
+	monitor                metrics.AccountManagerMonitor
+	locations              []string
+	accountPaths           []string
+	passphrases            [][]byte
+	validatorsManager      validatorsmanager.Service
+	slotsPerEpochProvider  eth2client.SlotsPerEpochProvider
+	domainProvider         eth2client.DomainProvider
+	farFutureEpochProvider eth2client.FarFutureEpochProvider
 }
 
 // Parameter is the interface for service parameters.
@@ -82,10 +79,10 @@ func WithPassphrases(passphrases [][]byte) Parameter {
 	})
 }
 
-// WithValidatorsProvider sets the validator status provider.
-func WithValidatorsProvider(provider eth2client.ValidatorsProvider) Parameter {
+// WithValidatorsManager sets the validator manager.
+func WithValidatorsManager(manager validatorsmanager.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.validatorsProvider = provider
+		p.validatorsManager = manager
 	})
 }
 
@@ -96,38 +93,10 @@ func WithSlotsPerEpochProvider(provider eth2client.SlotsPerEpochProvider) Parame
 	})
 }
 
-// WithBeaconProposerDomainProvider sets the beacon proposer domain provider.
-func WithBeaconProposerDomainProvider(provider eth2client.BeaconProposerDomainProvider) Parameter {
+// WithFarFutureEpochProvider sets the far future epoch provider.
+func WithFarFutureEpochProvider(provider eth2client.FarFutureEpochProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.beaconProposerDomainProvider = provider
-	})
-}
-
-// WithBeaconAttesterDomainProvider sets the beacon attester domain provider.
-func WithBeaconAttesterDomainProvider(provider eth2client.BeaconAttesterDomainProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.beaconAttesterDomainProvider = provider
-	})
-}
-
-// WithRANDAODomainProvider sets the RANDAO domain provider.
-func WithRANDAODomainProvider(provider eth2client.RANDAODomainProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.randaoDomainProvider = provider
-	})
-}
-
-// WithSelectionProofDomainProvider sets the RANDAO domain provider.
-func WithSelectionProofDomainProvider(provider eth2client.SelectionProofDomainProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.selectionProofDomainProvider = provider
-	})
-}
-
-// WithAggregateAndProofDomainProvider sets the aggregate and proof domain provider.
-func WithAggregateAndProofDomainProvider(provider eth2client.AggregateAndProofDomainProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.aggregateAndProofDomainProvider = provider
+		p.farFutureEpochProvider = provider
 	})
 }
 
@@ -158,26 +127,14 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if len(parameters.passphrases) == 0 {
 		return nil, errors.New("no passphrases specified")
 	}
-	if parameters.validatorsProvider == nil {
-		return nil, errors.New("no validators provider specified")
+	if parameters.validatorsManager == nil {
+		return nil, errors.New("no validators manager specified")
 	}
 	if parameters.slotsPerEpochProvider == nil {
 		return nil, errors.New("no slots per epoch provider specified")
 	}
-	if parameters.beaconProposerDomainProvider == nil {
-		return nil, errors.New("no beacon proposer domain provider specified")
-	}
-	if parameters.beaconAttesterDomainProvider == nil {
-		return nil, errors.New("no beacon attester domain provider specified")
-	}
-	if parameters.randaoDomainProvider == nil {
-		return nil, errors.New("no RANDAO domain provider specified")
-	}
-	if parameters.selectionProofDomainProvider == nil {
-		return nil, errors.New("no selection proof domain provider specified")
-	}
-	if parameters.aggregateAndProofDomainProvider == nil {
-		return nil, errors.New("no aggregate and proof domain provider specified")
+	if parameters.farFutureEpochProvider == nil {
+		return nil, errors.New("no far future epoch provider specified")
 	}
 	if parameters.domainProvider == nil {
 		return nil, errors.New("no domain provider specified")

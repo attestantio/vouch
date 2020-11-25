@@ -17,6 +17,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -25,11 +26,14 @@ import (
 type parameters struct {
 	logLevel                              zerolog.Level
 	monitor                               metrics.AttestationAggregationMonitor
+	slotsPerEpochProvider                 eth2client.SlotsPerEpochProvider
 	targetAggregatorsPerCommitteeProvider eth2client.TargetAggregatorsPerCommitteeProvider
 	validatingAccountsProvider            accountmanager.ValidatingAccountsProvider
 	aggregateAttestationProvider          eth2client.AggregateAttestationProvider
 	prysmAggregateAttestationProvider     eth2client.PrysmAggregateAttestationProvider
 	aggregateAttestationsSubmitter        submitter.AggregateAttestationsSubmitter
+	slotSelectionSigner                   signer.SlotSelectionSigner
+	aggregateAndProofSigner               signer.AggregateAndProofSigner
 }
 
 // Parameter is the interface for service parameters.
@@ -47,6 +51,13 @@ func (f parameterFunc) apply(p *parameters) {
 func WithLogLevel(logLevel zerolog.Level) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.logLevel = logLevel
+	})
+}
+
+// WithSlotsPerEpochProvider sets the slots per epoch provider.
+func WithSlotsPerEpochProvider(provider eth2client.SlotsPerEpochProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.slotsPerEpochProvider = provider
 	})
 }
 
@@ -92,6 +103,20 @@ func WithAggregateAttestationsSubmitter(submitter submitter.AggregateAttestation
 	})
 }
 
+// WithSlotSelectionSigner sets the slot selection submitter.
+func WithSlotSelectionSigner(signer signer.SlotSelectionSigner) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.slotSelectionSigner = signer
+	})
+}
+
+// WithAggregateAndProofSigner sets the aggregate and proof submitter.
+func WithAggregateAndProofSigner(signer signer.AggregateAndProofSigner) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.aggregateAndProofSigner = signer
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -106,6 +131,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.targetAggregatorsPerCommitteeProvider == nil {
 		return nil, errors.New("no target aggregators per committee provider specified")
 	}
+	if parameters.slotsPerEpochProvider == nil {
+		return nil, errors.New("no slots per epoch provider specified")
+	}
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")
 	}
@@ -117,6 +145,12 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.aggregateAttestationsSubmitter == nil {
 		return nil, errors.New("no aggregate attestations submitter specified")
+	}
+	if parameters.slotSelectionSigner == nil {
+		return nil, errors.New("no slot selection signer specified")
+	}
+	if parameters.aggregateAndProofSigner == nil {
+		return nil, errors.New("no aggregate and proof signer specified")
 	}
 
 	return &parameters, nil

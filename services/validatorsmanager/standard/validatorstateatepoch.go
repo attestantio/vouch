@@ -11,29 +11,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package beaconcommitteesubscriber is a package that manages subscriptions for beacon committees.
-package beaconcommitteesubscriber
+package standard
 
 import (
 	"context"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
-	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"github.com/pkg/errors"
 )
 
-// Subscription holds details of the committees to which we are subscribing.
-type Subscription struct {
-	Duty         *api.AttesterDuty
-	IsAggregator bool
-	Signature    spec.BLSSignature
-}
-
-// Service is the beacon committee subscriber service.
-type Service interface {
-	// Subscribe subscribes to beacon committees for a given epoch.
-	Subscribe(ctx context.Context,
-		epoch spec.Epoch,
-		accounts map[spec.ValidatorIndex]e2wtypes.Account,
-	) (map[spec.Slot]map[spec.CommitteeIndex]*Subscription, error)
+// ValidatorStateAtEpoch returns the validator's state at the given epoch.
+func (s *Service) ValidatorStateAtEpoch(ctx context.Context, index spec.ValidatorIndex, epoch spec.Epoch) (api.ValidatorState, error) {
+	s.validatorsMutex.RLock()
+	validator, exists := s.validatorsByIndex[index]
+	s.validatorsMutex.RUnlock()
+	if !exists {
+		return api.ValidatorStateUnknown, errors.New("not found")
+	}
+	return api.ValidatorToState(validator, epoch, s.farFutureEpoch), nil
 }

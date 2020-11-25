@@ -16,66 +16,64 @@ package standard
 import (
 	"context"
 	"fmt"
+	"time"
 
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 )
 
-// createProposerJobs creates proposal jobs for the given epoch.
-func (s *Service) createProposerJobs(ctx context.Context,
+// scheduleProposals schedules proposals for the given epoch and validator indices.
+func (s *Service) scheduleProposals(ctx context.Context,
 	epoch spec.Epoch,
-	accounts []accountmanager.ValidatingAccount,
-	firstRun bool) {
-	log.Trace().Msg("Creating proposer jobs")
+	validatorIndices []spec.ValidatorIndex,
+	notCurrentSlot bool,
+) {
+	started := time.Now()
+	log.Trace().Uint64("epoch", uint64(epoch)).Msg("Scheduling proposals")
 
-	validatorIDs := make([]spec.ValidatorIndex, len(accounts))
-	var err error
-	for i, account := range accounts {
-		validatorIDs[i], err = account.Index(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to obtain account index")
-			return
-		}
-	}
-
-	resp, err := s.proposerDutiesProvider.ProposerDuties(ctx, epoch, validatorIDs)
+	resp, err := s.proposerDutiesProvider.ProposerDuties(ctx, epoch, validatorIndices)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to obtain proposer duties")
+		log.Error().Err(err).Msg("Failed to fetch proposer duties")
 		return
 	}
+	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(resp)).Msg("Fetched proposer duties")
 
-	// Filter bad responses.
+	// Generate Vouch duties from the response.
 	duties := make([]*beaconblockproposer.Duty, 0, len(resp))
 	firstSlot := s.chainTimeService.FirstSlotOfEpoch(epoch)
 	lastSlot := s.chainTimeService.FirstSlotOfEpoch(epoch+1) - 1
 	for _, respDuty := range resp {
 		if respDuty.Slot < firstSlot || respDuty.Slot > lastSlot {
-			log.Warn().Uint64("epoch", uint64(epoch)).Uint64("duty_slot", uint64(respDuty.Slot)).Msg("Proposer duty has invalid slot for requested epoch; ignoring")
+			log.Warn().
+				Uint64("epoch", uint64(epoch)).
+				Uint64("duty_slot", uint64(respDuty.Slot)).
+				Msg("Proposer duty has invalid slot for requested epoch; ignoring")
 			continue
 		}
-		duty, err := beaconblockproposer.NewDuty(ctx, respDuty.Slot, respDuty.ValidatorIndex)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to create proposer duty")
-			continue
-		}
-		duties = append(duties, duty)
+		duties = append(duties, beaconblockproposer.NewDuty(respDuty.Slot, respDuty.ValidatorIndex))
 	}
+	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(duties)).Msg("Filtered proposer duties")
 
 	currentSlot := s.chainTimeService.CurrentSlot()
 	for _, duty := range duties {
-		// Do not schedule proposals for past slots (or the current slot if we've just started).
+		// Do not schedule proposals for past slots (or the current slot if so instructed).
 		if duty.Slot() < currentSlot {
-			log.Debug().Uint64("proposal_slot", uint64(duty.Slot())).Uint64("current_slot", uint64(currentSlot)).Msg("Proposal for a past slot; not scheduling")
+			log.Debug().
+				Uint64("proposal_slot", uint64(duty.Slot())).
+				Uint64("current_slot", uint64(currentSlot)).
+				Msg("Beacon block proposal for a past slot; not scheduling")
 			continue
 		}
-		if firstRun && duty.Slot() == currentSlot {
-			log.Debug().Uint64("proposal_slot", uint64(duty.Slot())).Uint64("current_slot", uint64(currentSlot)).Msg("Proposal for the current slot and this is our first run; not scheduling")
+		if duty.Slot() == currentSlot && notCurrentSlot {
+			log.Debug().
+				Uint64("proposal_slot", uint64(duty.Slot())).
+				Uint64("current_slot", uint64(currentSlot)).
+				Msg("Beacon block proposal for the current slot; not scheduling")
 			continue
 		}
 		go func(duty *beaconblockproposer.Duty) {
 			if err := s.beaconBlockProposer.Prepare(ctx, duty); err != nil {
-				log.Error().Uint64("proposal_slot", uint64(duty.Slot())).Err(err).Msg("Failed to prepare proposal")
+				log.Error().Uint64("proposal_slot", uint64(duty.Slot())).Err(err).Msg("Failed to prepare beacon block proposal")
 				return
 			}
 			if err := s.scheduler.ScheduleJob(ctx,
@@ -85,8 +83,9 @@ func (s *Service) createProposerJobs(ctx context.Context,
 				duty,
 			); err != nil {
 				// Don't return here; we want to try to set up as many proposer jobs as possible.
-				log.Error().Err(err).Msg("Failed to set proposer job")
+				log.Error().Err(err).Msg("Failed to schedule beacon block proposal")
 			}
 		}(duty)
 	}
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Scheduled beacon block proposals")
 }

@@ -22,13 +22,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/validatorsmanager"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -40,21 +39,18 @@ import (
 
 // Service is the manager for dirk accounts.
 type Service struct {
-	mutex                       sync.RWMutex
-	monitor                     metrics.AccountManagerMonitor
-	clientMonitor               metrics.ClientMonitor
-	endpoints                   []*dirk.Endpoint
-	accountPaths                []string
-	credentials                 credentials.TransportCredentials
-	accounts                    map[spec.BLSPubKey]*ValidatingAccount
-	validatorsProvider          eth2client.ValidatorsProvider
-	slotsPerEpoch               spec.Slot
-	beaconProposerDomainType    spec.DomainType
-	beaconAttesterDomainType    spec.DomainType
-	randaoDomainType            spec.DomainType
-	selectionProofDomainType    spec.DomainType
-	aggregateAndProofDomainType spec.DomainType
-	domainProvider              eth2client.DomainProvider
+	mutex             sync.RWMutex
+	monitor           metrics.AccountManagerMonitor
+	clientMonitor     metrics.ClientMonitor
+	endpoints         []*dirk.Endpoint
+	accountPaths      []string
+	credentials       credentials.TransportCredentials
+	accounts          map[spec.BLSPubKey]e2wtypes.Account
+	validatorsManager validatorsmanager.Service
+	domainProvider    eth2client.DomainProvider
+	farFutureEpoch    spec.Epoch
+	wallets           map[string]e2wtypes.Wallet
+	walletsMutex      sync.RWMutex
 }
 
 // module-wide log.
@@ -100,116 +96,47 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("no valid endpoints specified")
 	}
 
-	slotsPerEpoch, err := parameters.slotsPerEpochProvider.SlotsPerEpoch(ctx)
+	farFutureEpoch, err := parameters.farFutureEpochProvider.FarFutureEpoch(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain slots per epoch")
-	}
-	beaconAttesterDomainType, err := parameters.beaconAttesterDomainProvider.BeaconAttesterDomain(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain beacon attester domain")
-	}
-	beaconProposerDomainType, err := parameters.beaconProposerDomainProvider.BeaconProposerDomain(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain beacon proposer domain")
-	}
-	randaoDomainType, err := parameters.randaoDomainProvider.RANDAODomain(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain RANDAO domain")
-	}
-	selectionProofDomainType, err := parameters.selectionProofDomainProvider.SelectionProofDomain(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain selection proof domain")
-	}
-	aggregateAndProofDomainType, err := parameters.aggregateAndProofDomainProvider.AggregateAndProofDomain(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain aggregate and proof domain")
+		return nil, errors.Wrap(err, "failed to obtain far future epoch")
 	}
 
 	s := &Service{
-		monitor:                     parameters.monitor,
-		clientMonitor:               parameters.clientMonitor,
-		endpoints:                   endpoints,
-		accountPaths:                parameters.accountPaths,
-		credentials:                 credentials,
-		slotsPerEpoch:               spec.Slot(slotsPerEpoch),
-		beaconAttesterDomainType:    beaconAttesterDomainType,
-		beaconProposerDomainType:    beaconProposerDomainType,
-		randaoDomainType:            randaoDomainType,
-		selectionProofDomainType:    selectionProofDomainType,
-		aggregateAndProofDomainType: aggregateAndProofDomainType,
-		domainProvider:              parameters.domainProvider,
-		validatorsProvider:          parameters.validatorsProvider,
+		monitor:           parameters.monitor,
+		clientMonitor:     parameters.clientMonitor,
+		endpoints:         endpoints,
+		accountPaths:      parameters.accountPaths,
+		credentials:       credentials,
+		domainProvider:    parameters.domainProvider,
+		validatorsManager: parameters.validatorsManager,
+		farFutureEpoch:    farFutureEpoch,
+		wallets:           make(map[string]e2wtypes.Wallet),
 	}
 
-	if err := s.RefreshAccounts(ctx); err != nil {
-		return nil, errors.Wrap(err, "failed to fetch validating keys")
+	if err := s.refreshAccounts(ctx); err != nil {
+		return nil, errors.Wrap(err, "failed to fetch accounts")
+	}
+	if err := s.refreshValidators(ctx); err != nil {
+		return nil, errors.Wrap(err, "failed to fetch validator states")
 	}
 
 	return s, nil
 }
 
-// UpdateAccountsState updates account state with the latest information from the beacon chain.
-// This should be run at the beginning of each epoch to ensure that any newly-activated accounts are registered.
-func (s *Service) UpdateAccountsState(ctx context.Context) error {
-	validatorIDProviders := make([]eth2client.ValidatorIDProvider, 0, len(s.accounts))
-	for _, account := range s.accounts {
-		if !account.state.HasActivated() {
-			validatorIDProviders = append(validatorIDProviders, account)
-		}
+// Refresh refreshes the accounts from Dirk, and account validator state from
+// the validators provider.
+// This is a relatively expensive operation, so should not be run in the validating path.
+func (s *Service) Refresh(ctx context.Context) {
+	if err := s.refreshAccounts(ctx); err != nil {
+		log.Error().Err(err).Msg("Failed to refresh accounts")
 	}
-	if len(validatorIDProviders) == 0 {
-		// Nothing to do.
-		log.Trace().Msg("No unactivated keys")
-		return nil
+	if err := s.refreshValidators(ctx); err != nil {
+		log.Error().Err(err).Msg("Failed to refresh validators")
 	}
-	// Unactivated validators can have an index of 0, so cannot send via an API call that is by index.  Need to use bypubkeys.
-	log.Trace().Int("total", len(s.accounts)).Int("unactivated", len(validatorIDProviders)).Msg("Updating state of unactivated keys")
-	var validators map[spec.ValidatorIndex]*api.Validator
-	var err error
-	if validatorsWithoutBalanceProvider, isProvider := s.validatorsProvider.(eth2client.ValidatorsWithoutBalanceProvider); isProvider {
-		started := time.Now()
-		validators, err = validatorsWithoutBalanceProvider.ValidatorsWithoutBalance(ctx, "head", validatorIDProviders)
-		if service, isService := s.validatorsProvider.(eth2client.Service); isService {
-			s.clientMonitor.ClientOperation(service.Address(), "validators without balance", err == nil, time.Since(started))
-		} else {
-			s.clientMonitor.ClientOperation("<unknown>", "validators without balance", err == nil, time.Since(started))
-		}
-		if err != nil {
-			return errors.Wrap(err, "failed to obtain validators without balances")
-		}
-	} else {
-		started := time.Now()
-		validatorIDs := make([]spec.ValidatorIndex, 0, len(s.accounts))
-		for _, account := range s.accounts {
-			if !account.state.HasActivated() {
-				index, err := account.Index(ctx)
-				if err != nil {
-					return errors.Wrap(err, "failed to obtain account index")
-				}
-				validatorIDs = append(validatorIDs, index)
-			}
-		}
-		validators, err = s.validatorsProvider.Validators(ctx, "head", validatorIDs)
-		if service, isService := s.validatorsProvider.(eth2client.Service); isService {
-			s.clientMonitor.ClientOperation(service.Address(), "validators", err == nil, time.Since(started))
-		} else {
-			s.clientMonitor.ClientOperation("<unknown>", "validators", err == nil, time.Since(started))
-		}
-		if err != nil {
-			return errors.Wrap(err, "failed to obtain validators")
-		}
-	}
-	log.Trace().Int("received", len(validators)).Msg("Received state of known unactivated keys")
-
-	s.mutex.Lock()
-	s.updateAccountStates(ctx, s.accounts, validators)
-	s.mutex.Unlock()
-
-	return nil
 }
 
-// RefreshAccounts refreshes the entire list of validating keys.
-func (s *Service) RefreshAccounts(ctx context.Context) error {
+// refreshAccounts refreshes the accounts from Dirk.
+func (s *Service) refreshAccounts(ctx context.Context) error {
 	// Create the relevant wallets.
 	wallets := make(map[string]e2wtypes.Wallet)
 	pathsByWallet := make(map[string][]string)
@@ -222,7 +149,7 @@ func (s *Service) RefreshAccounts(ctx context.Context) error {
 			paths = make([]string, 0)
 		}
 		pathsByWallet[pathBits[0]] = append(paths, path)
-		wallet, err := dirk.OpenWallet(ctx, pathBits[0], s.credentials, s.endpoints)
+		wallet, err := s.openWallet(ctx, pathBits[0])
 		if err != nil {
 			log.Warn().Err(err).Str("wallet", pathBits[0]).Msg("Failed to open wallet")
 		} else {
@@ -232,61 +159,53 @@ func (s *Service) RefreshAccounts(ctx context.Context) error {
 
 	verificationRegexes := accountPathsToVerificationRegexes(s.accountPaths)
 	// Fetch accounts for each wallet.
-	accounts := make(map[spec.BLSPubKey]*ValidatingAccount)
+	accounts := make(map[spec.BLSPubKey]e2wtypes.Account)
 	for _, wallet := range wallets {
 		// if _, isProvider := wallet.(e2wtypes.WalletAccountsByPathProvider); isProvider {
 		// 	fmt.Printf("TODO: fetch accounts by path")
 		// } else {
-		s.fetchAccountsForWallet(ctx, wallet, accounts, verificationRegexes)
+		walletAccounts := s.fetchAccountsForWallet(ctx, wallet, verificationRegexes)
+		for k, v := range walletAccounts {
+			accounts[k] = v
+		}
 		//}
 	}
-
-	// Update indices for accounts.
-	pubKeys := make([]spec.BLSPubKey, 0, len(accounts))
-	for _, account := range accounts {
-		pubKey, err := account.PubKey(ctx)
-		if err != nil {
-			return errors.Wrap(err, "failed to obtain public key")
-		}
-		pubKeys = append(pubKeys, pubKey)
-	}
-	validators, err := s.validatorsProvider.ValidatorsByPubKey(ctx, "head", pubKeys)
-	if err != nil {
-		return errors.Wrap(err, "failed to obtain validators")
-	}
-
-	//	log.Trace().Int("accounts", len(validatorIDProviders)).Msg("Obtaining validator state of accounts")
-	//	var validators map[uint64]*api.Validator
-	//	var err error
-	//	if validatorsWithoutBalanceProvider, isProvider := s.validatorsProvider.(eth2client.ValidatorsWithoutBalanceProvider); isProvider {
-	//		validators, err = validatorsWithoutBalanceProvider.ValidatorsWithoutBalance(ctx, "head", validatorIDProviders)
-	//		if err != nil {
-	//			return errors.Wrap(err, "failed to obtain validators without balances")
-	//		}
-	//	} else {
-	//		validatorIDs := make([]uint64, 0, len(s.accounts))
-	//		for _, account := range s.accounts {
-	//			if !account.state.IsAttesting() {
-	//				index, err := account.Index(ctx)
-	//				if err != nil {
-	//					return errors.Wrap(err, "failed to obtain account index")
-	//				}
-	//				validatorIDs = append(validatorIDs, index)
-	//			}
-	//		}
-	//		validators, err = s.validatorsProvider.Validators(ctx, "head", validatorIDs)
-	//		if err != nil {
-	//			return errors.Wrap(err, "failed to obtain validators")
-	//		}
-	//	}
-	log.Trace().Int("received", len(validators)).Msg("Received state of accounts")
-
-	s.updateAccountStates(ctx, accounts, validators)
+	log.Trace().Int("accounts", len(accounts)).Msg("Obtained accounts")
 
 	s.mutex.Lock()
 	s.accounts = accounts
 	s.mutex.Unlock()
 
+	return nil
+}
+
+// openWallet opens a wallet, using an existing one if present.
+func (s *Service) openWallet(ctx context.Context, name string) (e2wtypes.Wallet, error) {
+	s.walletsMutex.Lock()
+	defer s.walletsMutex.Unlock()
+
+	wallet, exists := s.wallets[name]
+	var err error
+	if !exists {
+		wallet, err = dirk.OpenWallet(ctx, name, s.credentials, s.endpoints)
+		if err != nil {
+			return nil, err
+		}
+		s.wallets[name] = wallet
+	}
+
+	return wallet, nil
+}
+
+// refreshValidators refreshes the validator information for our known accounts.
+func (s *Service) refreshValidators(ctx context.Context) error {
+	accountPubKeys := make([]spec.BLSPubKey, 0, len(s.accounts))
+	for pubKey := range s.accounts {
+		accountPubKeys = append(accountPubKeys, pubKey)
+	}
+	if err := s.validatorsManager.RefreshValidatorsFromBeaconNode(ctx, accountPubKeys); err != nil {
+		return errors.Wrap(err, "failed to refresh validators")
+	}
 	return nil
 }
 
@@ -312,71 +231,49 @@ func credentialsFromCerts(ctx context.Context, clientCert []byte, clientKey []by
 	return credentials.NewTLS(tlsCfg), nil
 }
 
-// Accounts returns all attesting accounts.
-func (s *Service) Accounts(ctx context.Context) ([]accountmanager.ValidatingAccount, error) {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
+// ValidatingAccountsForEpoch obtains the validating accounts for a given epoch.
+func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch spec.Epoch) (map[spec.ValidatorIndex]e2wtypes.Account, error) {
+	validatingAccounts := make(map[spec.ValidatorIndex]e2wtypes.Account)
+	pubKeys := make([]spec.BLSPubKey, 0, len(s.accounts))
+	for pubKey := range s.accounts {
+		pubKeys = append(pubKeys, pubKey)
+	}
 
-	accounts := make([]accountmanager.ValidatingAccount, 0, len(s.accounts))
-	for _, account := range s.accounts {
-		if account.state.IsAttesting() {
-			accounts = append(accounts, account)
+	validators := s.validatorsManager.ValidatorsByPubKey(ctx, pubKeys)
+	for index, validator := range validators {
+		state := api.ValidatorToState(validator, epoch, s.farFutureEpoch)
+		if state == api.ValidatorStateActiveOngoing || state == api.ValidatorStateActiveExiting {
+			validatingAccounts[index] = s.accounts[validator.PublicKey]
 		}
 	}
 
-	return accounts, nil
+	return validatingAccounts, nil
 }
 
-// AccountsByIndex returns attesting accounts.
-func (s *Service) AccountsByIndex(ctx context.Context, indices []spec.ValidatorIndex) ([]accountmanager.ValidatingAccount, error) {
-	indexMap := make(map[spec.ValidatorIndex]bool)
+// ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
+func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch spec.Epoch, indices []spec.ValidatorIndex) (map[spec.ValidatorIndex]e2wtypes.Account, error) {
+	validatingAccounts := make(map[spec.ValidatorIndex]e2wtypes.Account)
+	pubKeys := make([]spec.BLSPubKey, 0, len(s.accounts))
+	for pubKey := range s.accounts {
+		pubKeys = append(pubKeys, pubKey)
+	}
+
+	indexPresenceMap := make(map[spec.ValidatorIndex]bool)
 	for _, index := range indices {
-		indexMap[index] = true
+		indexPresenceMap[index] = true
 	}
-
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-
-	accounts := make([]accountmanager.ValidatingAccount, 0, len(s.accounts))
-	for _, account := range s.accounts {
-		if !account.state.IsAttesting() {
+	validators := s.validatorsManager.ValidatorsByPubKey(ctx, pubKeys)
+	for index, validator := range validators {
+		if _, present := indexPresenceMap[index]; !present {
 			continue
 		}
-		index, err := account.Index(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("No index for account")
-			continue
-		}
-		if _, exists := indexMap[index]; exists {
-			accounts = append(accounts, account)
-
+		state := api.ValidatorToState(validator, epoch, s.farFutureEpoch)
+		if state == api.ValidatorStateActiveOngoing || state == api.ValidatorStateActiveExiting {
+			validatingAccounts[index] = s.accounts[validator.PublicKey]
 		}
 	}
 
-	return accounts, nil
-}
-
-// AccountsByPubKey returns validating accounts.
-func (s *Service) AccountsByPubKey(ctx context.Context, pubKeys []spec.BLSPubKey) ([]accountmanager.ValidatingAccount, error) {
-	pubKeyMap := make(map[spec.BLSPubKey]bool)
-	for _, pubKey := range pubKeys {
-		pubKeyMap[pubKey] = true
-	}
-
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-
-	accounts := make([]accountmanager.ValidatingAccount, 0, len(s.accounts))
-	for pubKey, account := range s.accounts {
-		if !account.state.IsAttesting() {
-			continue
-		}
-		if _, exists := pubKeyMap[pubKey]; exists {
-			accounts = append(accounts, account)
-		}
-	}
-
-	return accounts, nil
+	return validatingAccounts, nil
 }
 
 // accountPathsToVerificationRegexes turns account paths in to regexes to allow verification.
@@ -410,36 +307,8 @@ func accountPathsToVerificationRegexes(paths []string) []*regexp.Regexp {
 	return regexes
 }
 
-func (s *Service) updateAccountStates(ctx context.Context, accounts map[spec.BLSPubKey]*ValidatingAccount, validators map[spec.ValidatorIndex]*api.Validator) {
-	validatorsByPubKey := make(map[[48]byte]*api.Validator, len(validators))
-	for _, validator := range validators {
-		validatorsByPubKey[validator.Validator.PublicKey] = validator
-	}
-
-	validatorStateCounts := make(map[string]uint64)
-	for pubKey, account := range accounts {
-		if validator, exists := validatorsByPubKey[pubKey]; exists {
-			account.index = validator.Index
-			account.state = validator.Status
-		}
-		validatorStateCounts[strings.ToLower(account.state.String())]++
-	}
-	for state, count := range validatorStateCounts {
-		s.monitor.Accounts(state, count)
-	}
-
-	if e := log.Trace(); e.Enabled() {
-		for _, account := range accounts {
-			log.Trace().
-				Str("name", account.account.Name()).
-				Str("public_key", fmt.Sprintf("%x", account.account.PublicKey().Marshal())).
-				Str("state", account.state.String()).
-				Msg("Validating account")
-		}
-	}
-}
-
-func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wallet, accounts map[spec.BLSPubKey]*ValidatingAccount, verificationRegexes []*regexp.Regexp) {
+func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wallet, verificationRegexes []*regexp.Regexp) map[spec.BLSPubKey]e2wtypes.Account {
+	res := make(map[spec.BLSPubKey]e2wtypes.Account)
 	for account := range wallet.Accounts(ctx) {
 		// Ensure the name matches one of our account paths.
 		name := fmt.Sprintf("%s/%s", wallet.Name(), account.Name())
@@ -462,11 +331,7 @@ func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wa
 			pubKey = account.PublicKey().Marshal()
 		}
 
-		// Set up account as unknown to beacon chain.
-		accounts[bytesutil.ToBytes48(pubKey)] = &ValidatingAccount{
-			account:        account,
-			accountManager: s,
-			domainProvider: s.domainProvider,
-		}
+		res[bytesutil.ToBytes48(pubKey)] = account
 	}
+	return res
 }

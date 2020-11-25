@@ -42,6 +42,7 @@ type parameters struct {
 	beaconBlockProposer        beaconblockproposer.Service
 	attestationAggregator      attestationaggregator.Service
 	beaconCommitteeSubscriber  beaconcommitteesubscriber.Service
+	accountsRefresher          accountmanager.Refresher
 }
 
 // Parameter is the interface for service parameters.
@@ -153,6 +154,13 @@ func WithBeaconCommitteeSubscriber(subscriber beaconcommitteesubscriber.Service)
 	})
 }
 
+// WithAccountsRefresher sets the account refresher.
+func WithAccountsRefresher(refresher accountmanager.Refresher) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.accountsRefresher = refresher
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -199,6 +207,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.beaconCommitteeSubscriber == nil {
 		return nil, errors.New("no beacon committee subscriber specified")
+	}
+	if parameters.accountsRefresher == nil {
+		return nil, errors.New("no accounts refresher specified")
 	}
 
 	return &parameters, nil

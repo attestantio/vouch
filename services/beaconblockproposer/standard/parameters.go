@@ -18,8 +18,10 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/graffitiprovider"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/rs/zerolog"
 )
@@ -27,10 +29,13 @@ import (
 type parameters struct {
 	logLevel                   zerolog.Level
 	monitor                    metrics.BeaconBlockProposalMonitor
+	chainTimeService           chaintime.Service
 	proposalProvider           eth2client.BeaconBlockProposalProvider
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	graffitiProvider           graffitiprovider.Service
 	beaconBlockSubmitter       submitter.BeaconBlockSubmitter
+	randaoRevealSigner         signer.RANDAORevealSigner
+	beaconBlockSigner          signer.BeaconBlockSigner
 }
 
 // Parameter is the interface for service parameters.
@@ -48,6 +53,13 @@ func (f parameterFunc) apply(p *parameters) {
 func WithLogLevel(logLevel zerolog.Level) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.logLevel = logLevel
+	})
+}
+
+// WithChainTimeService sets the chaintime service.
+func WithChainTimeService(service chaintime.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.chainTimeService = service
 	})
 }
 
@@ -86,6 +98,20 @@ func WithBeaconBlockSubmitter(submitter submitter.BeaconBlockSubmitter) Paramete
 	})
 }
 
+// WithRANDAORevealSigner sets the RANDAO reveal signer.
+func WithRANDAORevealSigner(signer signer.RANDAORevealSigner) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.randaoRevealSigner = signer
+	})
+}
+
+// WithBeaconBlockSigner sets the beacon block signer.
+func WithBeaconBlockSigner(signer signer.BeaconBlockSigner) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.beaconBlockSigner = signer
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -100,6 +126,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.proposalProvider == nil {
 		return nil, errors.New("no proposal data provider specified")
 	}
+	if parameters.chainTimeService == nil {
+		return nil, errors.New("no chain time service specified")
+	}
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")
 	}
@@ -108,6 +137,12 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.beaconBlockSubmitter == nil {
 		return nil, errors.New("no beacon block submitter specified")
+	}
+	if parameters.randaoRevealSigner == nil {
+		return nil, errors.New("no RANDAO reveal signer specified")
+	}
+	if parameters.beaconBlockSigner == nil {
+		return nil, errors.New("no beacon block signer specified")
 	}
 
 	return &parameters, nil

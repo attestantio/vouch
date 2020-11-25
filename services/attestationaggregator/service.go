@@ -17,7 +17,7 @@ import (
 	"context"
 
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/accountmanager"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // Duty contains information about an attestation aggregation duty.
@@ -35,7 +35,7 @@ type Duty struct {
 	Attestation *spec.Attestation
 	// Account is the account carrying out the aggregation.
 	// Required for Prysm non-spec GRPC method.
-	Account accountmanager.ValidatingAccount
+	Account e2wtypes.Account
 }
 
 // IsAggregatorProvider provides information about if a validator is an aggregator.

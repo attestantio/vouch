@@ -32,6 +32,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // Service is the co-ordination system for vouch.
@@ -50,9 +51,10 @@ type Service struct {
 	beaconBlockProposer        beaconblockproposer.Service
 	attestationAggregator      attestationaggregator.Service
 	beaconCommitteeSubscriber  beaconcommitteesubscriber.Service
-	activeAccounts             int
+	activeValidators           int
 	subscriptionInfos          map[spec.Epoch]map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription
 	subscriptionInfosMutex     sync.Mutex
+	accountsRefresher          accountmanager.Refresher
 }
 
 // module-wide log.
@@ -94,6 +96,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		beaconBlockProposer:        parameters.beaconBlockProposer,
 		attestationAggregator:      parameters.attestationAggregator,
 		beaconCommitteeSubscriber:  parameters.beaconCommitteeSubscriber,
+		accountsRefresher:          parameters.accountsRefresher,
 		subscriptionInfos:          make(map[spec.Epoch]map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
 	}
 
@@ -103,43 +106,48 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.Wrap(err, "failed to add head event handler")
 	}
 
-	// Subscriptions are usually updated one epoch in advance, but as we're
-	// just starting we don't have subscriptions (or subscription information)
-	// for this or the next epoch; fetch them now.
-	go func() {
-		log.Trace().Msg("Fetching initial validator accounts")
-		accounts, err := s.validatingAccountsProvider.Accounts(ctx)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to obtain accounts for initial validators")
-			return
-		}
-		log.Info().Int("accounts", len(accounts)).Msg("Initial validating accounts")
-		if len(accounts) == 0 {
-			log.Debug().Msg("No active validating accounts")
-			return
-		}
-		currentEpoch := s.chainTimeService.CurrentEpoch()
-		subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, currentEpoch, accounts)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to fetch initial beacon committees for current epoch")
-			return
-		}
-		s.subscriptionInfosMutex.Lock()
-		s.subscriptionInfos[currentEpoch] = subscriptionInfo
-		s.subscriptionInfosMutex.Unlock()
-		subscriptionInfo, err = s.beaconCommitteeSubscriber.Subscribe(ctx, currentEpoch+1, accounts)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to fetch initial beacon committees for next epoch")
-			return
-		}
-		s.subscriptionInfosMutex.Lock()
-		s.subscriptionInfos[currentEpoch+1] = subscriptionInfo
-		s.subscriptionInfosMutex.Unlock()
-	}()
-
 	if err := s.startTickers(ctx); err != nil {
 		return nil, errors.Wrap(err, "failed to start controller tickers")
 	}
+
+	// Run specific actions now so we can carry out duties for the remainder of this epoch.
+	epoch := s.chainTimeService.CurrentEpoch()
+	accounts, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, epoch)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain active validator indices for the current epoch")
+	}
+	if len(validatorIndices) != s.activeValidators {
+		log.Info().Int("old_valdiators", s.activeValidators).Int("new_validators", len(validatorIndices)).Msg("Change in number of active validators")
+		s.activeValidators = len(validatorIndices)
+	}
+	nextEpochAccounts, nextEpochValidatorIndices, err := s.accountsAndIndicesForEpoch(ctx, epoch+1)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain active validator indices for the next epoch")
+	}
+	go s.scheduleProposals(ctx, epoch, validatorIndices, true /* notCurrentSlot */)
+	go s.scheduleAttestations(ctx, epoch, validatorIndices, true /* notCurrentSlot */)
+	go s.scheduleAttestations(ctx, epoch+1, nextEpochValidatorIndices, true /* notCurrentSlot */)
+	// Update beacon committee subscriptions this and the next epoch.
+	go func() {
+		subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, epoch, accounts)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to subscribe to beacon committees")
+			return
+		}
+		s.subscriptionInfosMutex.Lock()
+		s.subscriptionInfos[epoch] = subscriptionInfo
+		s.subscriptionInfosMutex.Unlock()
+	}()
+	go func() {
+		subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, epoch+1, nextEpochAccounts)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to subscribe to beacon committees")
+			return
+		}
+		s.subscriptionInfosMutex.Lock()
+		s.subscriptionInfos[epoch+1] = subscriptionInfo
+		s.subscriptionInfosMutex.Unlock()
+	}()
 
 	return s, nil
 }
@@ -158,10 +166,16 @@ func (s *Service) startTickers(ctx context.Context) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	// Start epoch ticker.
-	log.Trace().Msg("Starting epoch ticker")
+	// Start epoch tickers.
+	log.Trace().Msg("Starting epoch tickers")
 	if err := s.startEpochTicker(ctx, waitedForGenesis); err != nil {
 		return errors.Wrap(err, "failed to start epoch ticker")
+	}
+
+	// Start account refresher.
+	log.Trace().Msg("Starting accounts refresher")
+	if err := s.startAccountsRefresher(ctx); err != nil {
+		return errors.Wrap(err, "failed to start accounts refresher")
 	}
 
 	return nil
@@ -193,11 +207,6 @@ func (s *Service) startEpochTicker(ctx context.Context, waitedForGenesis bool) e
 		return errors.Wrap(err, "Failed to schedule epoch ticker")
 	}
 
-	// Kick off the job immediately to fetch any duties for the current epoch.
-	if err := s.scheduler.RunJob(ctx, "Epoch ticker"); err != nil {
-		return errors.Wrap(err, "Failed to run epoch ticker")
-	}
-
 	return nil
 }
 
@@ -206,8 +215,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	// Ensure we don't run for the same epoch twice.
 	epochTickerData := data.(*epochTickerData)
 	currentEpoch := s.chainTimeService.CurrentEpoch()
-	firstRun := epochTickerData.latestEpochRan == -1
-	log.Trace().Uint64("epoch", uint64(currentEpoch)).Bool("first_run", firstRun).Msg("Starting per-epoch duties")
+	log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Starting per-epoch job")
 	epochTickerData.mutex.Lock()
 	if epochTickerData.latestEpochRan >= int64(currentEpoch) {
 		log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Already ran for this epoch; skipping")
@@ -218,40 +226,38 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	epochTickerData.mutex.Unlock()
 	s.monitor.NewEpoch()
 
-	// Wait for half a second for the beacon node to update.
-	time.Sleep(500 * time.Millisecond)
+	// We wait for the beacon node to update, but keep ourselves busy in the meantime.
+	waitCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 
-	// Do not update on first run because the service fetches accounts on startup.
-	if !firstRun {
-		log.Trace().Msg("Updating validating accounts")
-		err := s.validatingAccountsProvider.(accountmanager.AccountsUpdater).UpdateAccountsState(ctx)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to update account state")
-			// Don't return even though we have an error here, as we can continue with the accounts we have from the previous run.
-		}
-		log.Trace().Msg("Updated validating accounts")
-	}
-	accounts, err := s.validatingAccountsProvider.Accounts(ctx)
+	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, currentEpoch)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to obtain accounts")
+		log.Error().Err(err).Uint64("epoch", uint64(currentEpoch)).Msg("Failed to obtain active validators for epoch")
+		cancel()
 		return
 	}
-	if len(accounts) != s.activeAccounts {
-		log.Info().Int("old_accounts", s.activeAccounts).Int("accounts", len(accounts)).Msg("Change in number of validating accounts")
-		s.activeAccounts = len(accounts)
-	}
-	if len(accounts) == 0 {
-		// Expect at least one account.
-		log.Warn().Msg("No active validating accounts; not validating")
+	nextEpochAccounts, nextEpochValidatorIndices, err := s.accountsAndIndicesForEpoch(ctx, currentEpoch+1)
+	if err != nil {
+		log.Error().Err(err).Uint64("epoch", uint64(currentEpoch)).Msg("Failed to obtain active validators for next epoch")
+		cancel()
 		return
 	}
 
-	// Create the jobs for our individual functions.
-	go s.createProposerJobs(ctx, currentEpoch, accounts, firstRun && !epochTickerData.atGenesis)
-	go s.createAttesterJobs(ctx, currentEpoch, accounts, firstRun && !epochTickerData.atGenesis)
+	// Expect at least one validator.
+	if len(validatorIndices) == 0 && len(nextEpochValidatorIndices) == 0 {
+		log.Warn().Msg("No active validators; not validating")
+		cancel()
+		return
+	}
+
+	// Done the preparation work available to us; wait for the end of the timer.
+	<-waitCtx.Done()
+	cancel()
+
+	go s.scheduleProposals(ctx, currentEpoch, validatorIndices, false /* notCurrentSlot */)
+	go s.scheduleAttestations(ctx, currentEpoch+1, nextEpochValidatorIndices, false /* notCurrentSlot */)
 	go func() {
 		// Update beacon committee subscriptions for the next epoch.
-		subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, currentEpoch+1, accounts)
+		subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, currentEpoch+1, nextEpochAccounts)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to subscribe to beacon committees")
 			return
@@ -264,21 +270,23 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	epochTickerData.atGenesis = false
 }
 
-// // OnBeaconChainHeadUpdated runs attestations for a slot immediately, if the update is for the current slot.
-// func (s *Service) OnBeaconChainHeadUpdated(ctx context.Context, slot uint64, stateRoot []byte, bodyRoot []byte, epochTransitioni bool) {
-// 	if slot != s.chainTimeService.CurrentSlot() {
-// 		return
-// 	}
-// 	s.monitor.BlockDelay(time.Since(s.chainTimeService.StartOfSlot(slot)))
-//
-// 	jobName := fmt.Sprintf("Beacon block attestations for slot %d", slot)
-// 	if s.scheduler.JobExists(ctx, jobName) {
-// 		log.Trace().Uint64("slot", slot).Msg("Kicking off attestations for slot early due to receiving relevant block")
-// 		if err := s.scheduler.RunJobIfExists(ctx, jobName); err != nil {
-// 			log.Error().Str("job", jobName).Err(err).Msg("Failed to run attester job")
-// 		}
-// 	}
-//
-// 	// Remove old subscriptions if present.
-// 	delete(s.subscriptionInfos, s.chainTimeService.SlotToEpoch(slot)-2)
-// }
+// accountsAndIndicesForEpoch obtains the accounts and validator indices for the specified epoch.
+func (s *Service) accountsAndIndicesForEpoch(ctx context.Context,
+	epoch spec.Epoch,
+) (
+	map[spec.ValidatorIndex]e2wtypes.Account,
+	[]spec.ValidatorIndex,
+	error,
+) {
+	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpoch(ctx, epoch)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to obtain accounts")
+	}
+
+	validatorIndices := make([]spec.ValidatorIndex, 0, len(accounts))
+	for index := range accounts {
+		validatorIndices = append(validatorIndices, index)
+	}
+
+	return accounts, validatorIndices, nil
+}

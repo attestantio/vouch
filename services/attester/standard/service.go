@@ -25,12 +25,14 @@ import (
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attester"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // Service is a beacon block attester.
@@ -41,6 +43,7 @@ type Service struct {
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	attestationDataProvider    eth2client.AttestationDataProvider
 	attestationSubmitter       submitter.AttestationSubmitter
+	beaconAttestationsSigner   signer.BeaconAttestationsSigner
 }
 
 // module-wide log.
@@ -71,6 +74,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		validatingAccountsProvider: parameters.validatingAccountsProvider,
 		attestationDataProvider:    parameters.attestationDataProvider,
 		attestationSubmitter:       parameters.attestationSubmitter,
+		beaconAttestationsSigner:   parameters.beaconAttestationsSigner,
 	}
 
 	return s, nil
@@ -114,35 +118,40 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 	}
 
 	// Fetch the validating accounts.
-	accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, duty.ValidatorIndices())
+	validatingAccounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, spec.Epoch(uint64(duty.Slot())/s.slotsPerEpoch), duty.ValidatorIndices())
 	if err != nil {
 		s.monitor.AttestationCompleted(started, "failed")
 		return nil, errors.New("failed to obtain attesting validator accounts")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
 
+	// Break the map in to two arrays.
+	accountValidatorIndices := make([]spec.ValidatorIndex, 0, len(validatingAccounts))
+	accountsArray := make([]e2wtypes.Account, 0, len(validatingAccounts))
+	for index, account := range validatingAccounts {
+		accountValidatorIndices = append(accountValidatorIndices, index)
+		accountsArray = append(accountsArray, account)
+	}
+
 	// Set the per-validator information.
 	validatorIndexToArrayIndexMap := make(map[spec.ValidatorIndex]int)
 	for i := range duty.ValidatorIndices() {
 		validatorIndexToArrayIndexMap[duty.ValidatorIndices()[i]] = i
 	}
-	committeeIndices := make([]spec.CommitteeIndex, len(accounts))
-	validatorCommitteeIndices := make([]spec.ValidatorIndex, len(accounts))
-	committeeSizes := make([]uint64, len(accounts))
-	for i := range accounts {
-		validatorIndex, err := accounts[i].Index(ctx)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to obtain validator index")
-		}
-		committeeIndices[i] = duty.CommitteeIndices()[validatorIndexToArrayIndexMap[validatorIndex]]
-		validatorCommitteeIndices[i] = spec.ValidatorIndex(duty.ValidatorCommitteeIndices()[validatorIndexToArrayIndexMap[validatorIndex]])
+	committeeIndices := make([]spec.CommitteeIndex, len(validatingAccounts))
+	validatorCommitteeIndices := make([]spec.ValidatorIndex, len(validatingAccounts))
+	committeeSizes := make([]uint64, len(validatingAccounts))
+	for i := range accountsArray {
+		committeeIndices[i] = duty.CommitteeIndices()[validatorIndexToArrayIndexMap[accountValidatorIndices[i]]]
+		validatorCommitteeIndices[i] = spec.ValidatorIndex(duty.ValidatorCommitteeIndices()[validatorIndexToArrayIndexMap[accountValidatorIndices[i]]])
 		committeeSizes[i] = duty.CommitteeSize(committeeIndices[i])
 	}
 
 	attestations, err := s.attest(ctx,
 		duty.Slot(),
 		duty,
-		accounts,
+		accountsArray,
+		accountValidatorIndices,
 		committeeIndices,
 		validatorCommitteeIndices,
 		committeeSizes,
@@ -156,149 +165,30 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 	return attestations, nil
 }
 
-// // Attest carries out attestations for a slot.
-// // It returns a map of attestations made, keyed on the validator index.
-// func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attestation, error) {
-// 	started := time.Now()
-//
-// 	duty, ok := data.(*attester.Duty)
-// 	if !ok {
-// 		s.monitor.AttestationCompleted(started, "failed")
-// 		return nil, errors.New("passed invalid data structure")
-// 	}
-// 	log := log.With().Uint64("slot", uint64(duty.Slot())).Logger()
-// 	log.Trace().Strs("duties", duty.Tuples()).Msg("Attesting")
-//
-// 	// Fetch the attestation data.
-// 	attestationData, err := s.attestationDataProvider.AttestationData(ctx, duty.Slot(), duty.CommitteeIndices()[0])
-// 	if err != nil {
-// 		s.monitor.AttestationCompleted(started, "failed")
-// 		return nil, errors.Wrap(err, "failed to obtain attestation data")
-// 	}
-// 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")
-//
-// 	if attestationData.Slot != duty.Slot() {
-// 		s.monitor.AttestationCompleted(started, "failed")
-// 		return nil, fmt.Errorf("attestation request for slot %d returned data for slot %d", duty.Slot(), attestationData.Slot)
-// 	}
-// 	if attestationData.Source.Epoch > attestationData.Target.Epoch {
-// 		s.monitor.AttestationCompleted(started, "failed")
-// 		return nil, fmt.Errorf("attestation request for slot %d returned source epoch %d greater than target epoch %d", duty.Slot(), attestationData.Source.Epoch, attestationData.Target.Epoch)
-// 	}
-// 	if attestationData.Target.Epoch > duty.Slot()/s.slotsPerEpoch {
-// 		s.monitor.AttestationCompleted(started, "failed")
-// 		return nil, fmt.Errorf("attestation request for slot %d returned target epoch %d greater than current epoch %d", duty.Slot(), attestationData.Target.Epoch, duty.Slot()/s.slotsPerEpoch)
-// 	}
-//
-// 	// Fetch the validating accounts.
-// 	accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, duty.ValidatorIndices())
-// 	if err != nil {
-// 		s.monitor.AttestationCompleted(started, "failed")
-// 		return nil, errors.New("failed to obtain attesting validator accounts")
-// 	}
-// 	log.Trace().Dur("elapsed", time.Since(started)).Strs("tuples", duty.Tuples()).Msg("Obtained validating accounts")
-//
-// 	// Run the attestations in parallel, up to a concurrency limit.
-// 	validatorIndexToArrayIndexMap := make(map[spec.ValidatorIndex]int)
-// 	for i := range duty.ValidatorIndices() {
-// 		validatorIndexToArrayIndexMap[duty.ValidatorIndices()[i]] = i
-// 	}
-// 	sem := semaphore.NewWeighted(s.processConcurrency)
-// 	var wg sync.WaitGroup
-// 	for _, account := range accounts {
-// 		wg.Add(1)
-// 		go func(sem *semaphore.Weighted, wg *sync.WaitGroup, account accountmanager.ValidatingAccount, attestations *[]*spec.Attestation, attestationsMutex *sync.Mutex) {
-// 				// TODO update to common code format.
-// 			defer wg.Done()
-// 			if err := sem.Acquire(ctx, 1); err != nil {
-// 				log.Error().Err(err).Msg("Failed to acquire semaphore")
-// 				return
-// 			}
-// 			defer sem.Release(1)
-//
-// 			validatorIndex, err := account.Index(ctx)
-// 			if err != nil {
-// 				log.Warn().Err(err).Msg("Failed to obtain validator index")
-// 				return
-// 			}
-// 			log := log.With().Uint64("validator_index", uint64(validatorIndex)).Logger()
-// 			attestation, err := s.attest(ctx,
-// 				duty.Slot(),
-// 				duty.CommitteeIndices()[validatorIndexToArrayIndexMap[validatorIndex]],
-// 				duty.ValidatorCommitteeIndices()[validatorIndexToArrayIndexMap[validatorIndex]],
-// 				duty.CommitteeSize(duty.CommitteeIndices()[validatorIndexToArrayIndexMap[validatorIndex]]),
-// 				account,
-// 				attestationData,
-// 			)
-// 			if err != nil {
-// 				log.Warn().Err(err).Msg("Failed to attest")
-// 				s.monitor.AttestationCompleted(started, "failed")
-// 				return
-// 			}
-// 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Attested")
-// 			s.monitor.AttestationCompleted(started, "succeeded")
-// 			attestationsMutex.Lock()
-// 			*attestations = append(*attestations, attestation)
-// 			attestationsMutex.Unlock()
-// //	// Set the per-validator information.
-// //	validatorIndexToArrayIndexMap := make(map[uint64]int)
-// //	for i := range duty.ValidatorIndices() {
-// //		validatorIndexToArrayIndexMap[duty.ValidatorIndices()[i]] = i
-// //	}
-// //	committeeIndices := make([]uint64, len(accounts))
-// //	validatorCommitteeIndices := make([]uint64, len(accounts))
-// //	committeeSizes := make([]uint64, len(accounts))
-// //	for i := range accounts {
-// //		validatorIndex, err := accounts[i].Index(ctx)
-// //		if err != nil {
-// //			return nil, errors.Wrap(err, "failed to obtain validator index")
-// //		}
-// //		committeeIndices[i] = duty.CommitteeIndices()[validatorIndexToArrayIndexMap[validatorIndex]]
-// //		validatorCommitteeIndices[i] = duty.ValidatorCommitteeIndices()[validatorIndexToArrayIndexMap[validatorIndex]]
-// //		committeeSizes[i] = duty.CommitteeSize(committeeIndices[i])
-// //	}
-//
-// 	attestations, err := s.attest(ctx,
-// 		slot,
-// 		duty,
-// 		accounts,
-// 		committeeIndices,
-// 		validatorCommitteeIndices,
-// 		committeeSizes,
-// 		attestationData,
-// 		started,
-// 	)
-// 	if err != nil {
-// 		log.Error().Err(err).Msg("Failed to attest")
-// 	}
-// 	}
-//
-// 	return attestations, nil
-// }
-
 func (s *Service) attest(
 	ctx context.Context,
 	slot spec.Slot,
 	duty *attester.Duty,
-	accounts []accountmanager.ValidatingAccount,
+	accounts []e2wtypes.Account,
+	validatorIndices []spec.ValidatorIndex,
 	committeeIndices []spec.CommitteeIndex,
 	validatorCommitteeIndices []spec.ValidatorIndex,
 	committeeSizes []uint64,
 	data *spec.AttestationData,
 	started time.Time,
 ) ([]*spec.Attestation, error) {
-	// Multisign the attestation for all validating accounts.
-	signer, isSigner := accounts[0].(accountmanager.BeaconAttestationsSigner)
-	if !isSigner {
-		return nil, errors.New("account is not a beacon attestations signer")
-	}
+
+	// Sign the attestation for all validating accounts.
 	uintCommitteeIndices := make([]uint64, len(committeeIndices))
 	for i := range committeeIndices {
 		uintCommitteeIndices[i] = uint64(committeeIndices[i])
 	}
-	sigs, err := signer.SignBeaconAttestations(ctx,
+	accountsArray := make([]e2wtypes.Account, 0, len(accounts))
+	accountsArray = append(accountsArray, accounts...)
+
+	sigs, err := s.beaconAttestationsSigner.SignBeaconAttestations(ctx,
+		accountsArray,
 		duty.Slot(),
-		accounts,
 		committeeIndices,
 		data.BeaconBlockRoot,
 		data.Source.Epoch,
@@ -316,12 +206,7 @@ func (s *Service) attest(
 	attestations := make([]*spec.Attestation, len(sigs))
 	_, err = util.Scatter(len(sigs), func(offset int, entries int, _ *sync.RWMutex) (interface{}, error) {
 		for i := offset; i < offset+entries; i++ {
-			validatorIndex, err := accounts[i].Index(ctx)
-			if err != nil {
-				log.Warn().Err(err).Msg("failed to obtain validator index")
-				continue
-			}
-			log := log.With().Uint64("slot", uint64(duty.Slot())).Uint64("validator_index", uint64(validatorIndex)).Logger()
+			log := log.With().Uint64("slot", uint64(duty.Slot())).Uint64("validator_index", uint64(validatorIndices[i])).Logger()
 			if bytes.Equal(sigs[i][:], zeroSig[:]) {
 				log.Warn().Msg("No signature for validator; not creating attestation")
 				continue

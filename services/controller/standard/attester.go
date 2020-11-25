@@ -20,50 +20,48 @@ import (
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
 )
 
-// createAttesterJobs creates attestation jobs for the given epoch provided accounts.
-func (s *Service) createAttesterJobs(ctx context.Context,
+// scheduleAttestations schedules attestations for the given epoch and validator indices.
+func (s *Service) scheduleAttestations(ctx context.Context,
 	epoch spec.Epoch,
-	accounts []accountmanager.ValidatingAccount,
-	firstRun bool) {
-	log.Trace().Msg("Creating attester jobs")
+	validatorIndices []spec.ValidatorIndex,
+	notCurrentSlot bool,
+) {
+	started := time.Now()
+	log.Trace().Uint64("epoch", uint64(epoch)).Msg("Scheduling attestations")
 
-	validatorIDs := make([]spec.ValidatorIndex, len(accounts))
-	var err error
-	for i, account := range accounts {
-		validatorIDs[i], err = account.Index(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to obtain account index")
-			return
-		}
-	}
-	resp, err := s.attesterDutiesProvider.AttesterDuties(ctx, epoch, validatorIDs)
+	resp, err := s.attesterDutiesProvider.AttesterDuties(ctx, epoch, validatorIndices)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to obtain attester duties")
+		log.Error().Err(err).Msg("Failed to fetch attester duties")
 		return
 	}
+	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(resp)).Msg("Fetched attester duties")
 
-	// Filter bad responses.
+	// Generate Vouch duties from the response.
 	filteredDuties := make([]*api.AttesterDuty, 0, len(resp))
-	firstSlot := spec.Slot(uint64(epoch) * s.slotsPerEpoch)
-	lastSlot := spec.Slot((uint64(epoch)+1)*s.slotsPerEpoch - 1)
+	firstSlot := s.chainTimeService.FirstSlotOfEpoch(epoch)
+	lastSlot := s.chainTimeService.FirstSlotOfEpoch(epoch+1) - 1
 	for _, duty := range resp {
 		if duty.Slot < firstSlot || duty.Slot > lastSlot {
-			log.Warn().Uint64("epoch", uint64(epoch)).Uint64("duty_slot", uint64(duty.Slot)).Msg("Attester duty has invalid slot for requested epoch; ignoring")
+			log.Warn().
+				Uint64("epoch", uint64(epoch)).
+				Uint64("duty_slot", uint64(duty.Slot)).
+				Msg("Attester duty has invalid slot for requested epoch; ignoring")
 			continue
 		}
 		filteredDuties = append(filteredDuties, duty)
 	}
+	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(filteredDuties)).Msg("Filtered attester duties")
 
 	duties, err := attester.MergeDuties(ctx, filteredDuties)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to merge attester duties")
 		return
 	}
+	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(duties)).Msg("Merged attester duties")
 
 	if e := log.Trace(); e.Enabled() {
 		for _, duty := range duties {
@@ -76,25 +74,35 @@ func (s *Service) createAttesterJobs(ctx context.Context,
 
 	currentSlot := s.chainTimeService.CurrentSlot()
 	for _, duty := range duties {
-		// Do not schedule attestations for past slots (or the current slot if we've just started).
+		// Do not schedule attestations for past slots (or the current slot if so instructed).
 		if duty.Slot() < currentSlot {
-			log.Debug().Uint64("attestation_slot", uint64(duty.Slot())).Uint64("current_slot", uint64(currentSlot)).Msg("Attestation for a past slot; not scheduling")
+			log.Debug().
+				Uint64("attestation_slot", uint64(duty.Slot())).
+				Uint64("current_slot", uint64(currentSlot)).
+				Msg("Attestation for a past slot; not scheduling")
 			continue
 		}
-		if firstRun && duty.Slot() == currentSlot {
-			log.Debug().Uint64("attestation_slot", uint64(duty.Slot())).Uint64("current_slot", uint64(currentSlot)).Msg("Attestation for the current slot and this is our first run; not scheduling")
+		if duty.Slot() == currentSlot && notCurrentSlot {
+			log.Debug().
+				Uint64("attestation_slot", uint64(duty.Slot())).
+				Uint64("current_slot", uint64(currentSlot)).
+				Msg("Attestation for the current slot and this is our first run; not scheduling")
 			continue
 		}
-		if err := s.scheduler.ScheduleJob(ctx,
-			fmt.Sprintf("Beacon block attestations for slot %d", duty.Slot()),
-			s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.slotDuration/3),
-			s.AttestAndScheduleAggregate,
-			duty,
-		); err != nil {
-			// Don't return here; we want to try to set up as many attester jobs as possible.
-			log.Error().Err(err).Msg("Failed to set attester job")
-		}
+		go func(duty *attester.Duty) {
+			if err := s.scheduler.ScheduleJob(ctx,
+				fmt.Sprintf("Beacon block attestations for slot %d", duty.Slot()),
+				// Adding 200 ms to ensure that head is up to date before we fetch attester duties.
+				s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.slotDuration/3).Add(200*time.Millisecond),
+				s.AttestAndScheduleAggregate,
+				duty,
+			); err != nil {
+				// Don't return here; we want to try to set up as many attester jobs as possible.
+				log.Error().Err(err).Msg("Failed to schedule attestation")
+			}
+		}(duty)
 	}
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Scheduled attestations")
 }
 
 // AttestAndScheduleAggregate attests, then schedules aggregation jobs as required.
@@ -118,12 +126,15 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 		return
 	}
 
-	epoch := s.chainTimeService.SlotToEpoch(attestations[0].Data.Slot)
+	epoch := s.chainTimeService.SlotToEpoch(duty.Slot())
 	s.subscriptionInfosMutex.Lock()
 	subscriptionInfoMap, exists := s.subscriptionInfos[epoch]
 	s.subscriptionInfosMutex.Unlock()
 	if !exists {
-		log.Debug().Uint64("epoch", uint64(epoch)).Msg("No subscription info for this epoch; not aggregating")
+		log.Debug().
+			Uint64("slot", uint64(duty.Slot())).
+			Uint64("epoch", uint64(epoch)).
+			Msg("No subscription info for this epoch; not aggregating")
 		return
 	}
 
@@ -145,7 +156,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 			continue
 		}
 		if info.IsAggregator {
-			accounts, err := s.validatingAccountsProvider.AccountsByIndex(ctx, []spec.ValidatorIndex{info.Duty.ValidatorIndex})
+			accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []spec.ValidatorIndex{info.Duty.ValidatorIndex})
 			if err != nil {
 				// Don't return here; we want to try to set up as many aggregator jobs as possible.
 				log.Error().Err(err).Msg("Failed to obtain accounts")
@@ -167,7 +178,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 				AttestationDataRoot: attestationDataRoot,
 				ValidatorIndex:      info.Duty.ValidatorIndex,
 				SlotSignature:       info.Signature,
-				Account:             accounts[0],
+				Account:             accounts[info.Duty.ValidatorIndex],
 				Attestation:         attestation,
 			}
 			if err := s.scheduler.ScheduleJob(ctx,
