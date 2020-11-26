@@ -32,7 +32,9 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	}
 	s.monitor.BlockDelay(time.Since(s.chainTimeService.StartOfSlot(data.Slot)))
 
-	// Kick off attestations for the block's slot immediately.
+	// We give the block half a second to propagate around the rest of the network before
+	// kicking off attestations for the block's slot.
+	time.Sleep(500 * time.Millisecond)
 	jobName := fmt.Sprintf("Beacon block attestations for slot %d", data.Slot)
 	if s.scheduler.JobExists(ctx, jobName) {
 		log.Trace().Uint64("slot", uint64(data.Slot)).Msg("Kicking off attestations for slot early due to receiving relevant block")
