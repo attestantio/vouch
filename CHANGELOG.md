@@ -1,4 +1,5 @@
 Development:
+  - introduce attestation data strategy, allowing selection of best or first attestation from a set
   - rework controller to schedule jobs in separate functions, allowing future flexibility
   - break accountmanager in to accountmanager, signer and validatorsmanager
     - better for maintainability and additional features

@@ -44,8 +44,18 @@ submitter:
 
 # strategies provide advanced strategies for dealing with multiple beacon nodes
 strategies:
+  # The beaconblockproposal strategy obtains beacon block proposals from multiple sources.
   beaconblockproposal:
-    # style can be 'best', which obtains blocks from all nodes and compares them, or 'first', which uses the first returned
+    # style can be 'best', which obtains blocks from all nodes and selects the best, or 'first', which uses the first returned
+    style: best
+    # beacon-node-addresses are the addresses of beacon nodes to use for this strategy.
+    beacon-node-addresses:
+      - localhost:4000
+      - localhost:5051
+      - localhost:5052
+  # The attestationdata strategy obtains attestation data from multiple sources.
+  attestationdata:
+    # style can be 'best', which obtains attestations from all nodes and selects the best, or 'first', which uses the first returned
     style: best
     # beacon-node-addresses are the addresses of beacon nodes to use for this strategy.
     beacon-node-addresses:
