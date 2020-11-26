@@ -89,14 +89,17 @@ func main2() int {
 		return 1
 	}
 
-	if err := initLogging(); err != nil {
-		log.Error().Err(err).Msg("Failed to initialise logging")
-		return 1
-	}
-
 	majordomo, err := initMajordomo(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialise majordomo")
+		return 1
+	}
+
+	// runCommands will not return if a command is run.
+	runCommands(ctx, majordomo)
+
+	if err := initLogging(); err != nil {
+		log.Error().Err(err).Msg("Failed to initialise logging")
 		return 1
 	}
 
@@ -152,6 +155,7 @@ func fetchConfig() error {
 	pflag.String("profile-address", "", "Address on which to run Go profile server")
 	pflag.String("tracing-address", "", "Address to which to send tracing data")
 	pflag.String("beacon-node-address", "localhost:4000", "Address on which to contact the beacon node")
+	pflag.Bool("version", false, "show Vouch version and exit")
 	pflag.Parse()
 	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
 		return errors.Wrap(err, "failed to bind pflags to viper")
@@ -791,4 +795,11 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 		return nil, errors.Wrap(err, "failed to start submitter service")
 	}
 	return submitter, nil
+}
+
+func runCommands(ctx context.Context, majordomo majordomo.Service) {
+	if viper.GetBool("version") {
+		fmt.Printf("%s\n", ReleaseVersion)
+		os.Exit(0)
+	}
 }
