@@ -49,7 +49,8 @@ func (s *Service) AttestationData(ctx context.Context, slot spec.Slot, committee
 			if attestationData == nil {
 				return
 			}
-			score := s.scoreAttestationData(ctx, name, attestationData)
+
+			score := s.scoreAttestationData(ctx, provider, name, attestationData)
 			respCh <- &attestationDataResponse{
 				attestationData: attestationData,
 				score:           score,

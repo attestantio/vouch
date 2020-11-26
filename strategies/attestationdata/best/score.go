@@ -15,27 +15,50 @@ package best
 
 import (
 	"context"
+	"fmt"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // scoreAttestationData generates a score for attestation data.
 // The score is relative to the reward expected by proposing the block.
-func (s *Service) scoreAttestationData(ctx context.Context, name string, attestationData *spec.AttestationData) float64 {
+func (s *Service) scoreAttestationData(ctx context.Context,
+	provider eth2client.AttestationDataProvider,
+	name string,
+	attestationData *spec.AttestationData,
+) float64 {
 	if attestationData == nil {
 		return 0
 	}
 
-	//	log.Trace().
-	//		Uint64("slot", blockProposal.Slot).
-	//		Str("provider", name).
-	//		Float64("immediate_attestations", immediateAttestationScore).
-	//		Float64("attestations", attestationScore).
-	//		Float64("proposer_slashings", proposerSlashingScore).
-	//		Float64("attester_slashings", attesterSlashingScore).
-	//		Float64("total", attestationScore+proposerSlashingScore+attesterSlashingScore).
-	//		Msg("Scored block")
-	//
-	//	return attestationScore + proposerSlashingScore + attesterSlashingScore
-	return 0
+	var slot spec.Slot
+	if headerProvider, isProvider := provider.(eth2client.BeaconBlockHeadersProvider); isProvider {
+		block, err := headerProvider.BeaconBlockHeader(ctx, fmt.Sprintf("%#x", attestationData.BeaconBlockRoot))
+		if err != nil {
+			log.Error().Err(err).Msg("failed to obtain block header")
+			return float64(1) / float64(32)
+		}
+		slot = block.Header.Message.Slot
+	} else if blockProvider, isProvider := provider.(eth2client.SignedBeaconBlockProvider); isProvider {
+		block, err := blockProvider.SignedBeaconBlock(ctx, fmt.Sprintf("%#x", attestationData.BeaconBlockRoot))
+		if err != nil {
+			log.Error().Err(err).Msg("failed to obtain block")
+			return float64(1) / float64(32)
+		}
+		slot = block.Message.Slot
+	} else {
+		log.Warn().Msg("Cannot score attestation")
+		// Give minimal score.
+		slot = attestationData.Slot - 32
+	}
+	score := float64(1) / float64(1+attestationData.Slot-slot)
+
+	log.Trace().
+		Str("provider", name).
+		Uint64("attestation_slot", uint64(attestationData.Slot)).
+		Uint64("head_slot", uint64(slot)).
+		Float64("score", score).
+		Msg("Scored attestation data")
+	return score
 }
