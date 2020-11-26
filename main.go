@@ -328,7 +328,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardattester.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
 		standardattester.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
 		standardattester.WithAttestationDataProvider(attestationDataProvider),
-		standardattester.WithAttestationSubmitter(submitterStrategy.(submitter.AttestationSubmitter)),
+		standardattester.WithAttestationsSubmitter(submitterStrategy.(submitter.AttestationsSubmitter)),
 		standardattester.WithMonitor(monitor.(metrics.AttestationMonitor)),
 		standardattester.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardattester.WithBeaconAttestationsSigner(signerSvc.(signer.BeaconAttestationsSigner)),
@@ -751,10 +751,10 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 	var submitter submitter.Service
 	var err error
 	switch viper.GetString("submitter.style") {
-	case "all":
+	case "all", "multinode":
 		log.Info().Msg("Starting multinode submitter strategy")
 		beaconBlockSubmitters := make(map[string]eth2client.BeaconBlockSubmitter)
-		attestationSubmitters := make(map[string]eth2client.AttestationSubmitter)
+		attestationsSubmitters := make(map[string]eth2client.AttestationsSubmitter)
 		aggregateAttestationSubmitters := make(map[string]eth2client.AggregateAttestationsSubmitter)
 		beaconCommitteeSubscriptionsSubmitters := make(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter)
 		for _, address := range viper.GetStringSlice("submitter.beacon-node-addresses") {
@@ -763,7 +763,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for submitter strategy", address))
 			}
 			beaconBlockSubmitters[address] = client.(eth2client.BeaconBlockSubmitter)
-			attestationSubmitters[address] = client.(eth2client.AttestationSubmitter)
+			attestationsSubmitters[address] = client.(eth2client.AttestationsSubmitter)
 			aggregateAttestationSubmitters[address] = client.(eth2client.AggregateAttestationsSubmitter)
 			beaconCommitteeSubscriptionsSubmitters[address] = client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)
 		}
@@ -772,7 +772,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			multinodesubmitter.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
 			multinodesubmitter.WithLogLevel(logLevel(viper.GetString("submitter.log-level"))),
 			multinodesubmitter.WithBeaconBlockSubmitters(beaconBlockSubmitters),
-			multinodesubmitter.WithAttestationSubmitters(attestationSubmitters),
+			multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),
 			multinodesubmitter.WithAggregateAttestationsSubmitters(aggregateAttestationSubmitters),
 			multinodesubmitter.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 		)
@@ -782,7 +782,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			immediatesubmitter.WithLogLevel(logLevel(viper.GetString("submitter.log-level"))),
 			immediatesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			immediatesubmitter.WithBeaconBlockSubmitter(eth2Client.(eth2client.BeaconBlockSubmitter)),
-			immediatesubmitter.WithAttestationSubmitter(eth2Client.(eth2client.AttestationSubmitter)),
+			immediatesubmitter.WithAttestationsSubmitter(eth2Client.(eth2client.AttestationsSubmitter)),
 			immediatesubmitter.WithBeaconCommitteeSubscriptionsSubmitter(eth2Client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)),
 			immediatesubmitter.WithAggregateAttestationsSubmitter(eth2Client.(eth2client.AggregateAttestationsSubmitter)),
 		)

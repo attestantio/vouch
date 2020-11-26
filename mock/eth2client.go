@@ -107,29 +107,29 @@ func (m *ErroringSlotsPerEpochProvider) SlotsPerEpoch(ctx context.Context) (uint
 	return 0, errors.New("error")
 }
 
-// AttestationSubmitter is a mock for eth2client.AttestationSubmitter.
-type AttestationSubmitter struct{}
+// AttestationsSubmitter is a mock for eth2client.AttestationsSubmitter.
+type AttestationsSubmitter struct{}
 
-// NewAttestationSubmitter returns a mock attestation submitter.
-func NewAttestationSubmitter() eth2client.AttestationSubmitter {
-	return &AttestationSubmitter{}
+// NewAttestationsSubmitter returns a mock attestations submitter.
+func NewAttestationsSubmitter() eth2client.AttestationsSubmitter {
+	return &AttestationsSubmitter{}
 }
 
-// SubmitAttestation is a mock.
-func (m *AttestationSubmitter) SubmitAttestation(ctx context.Context, attestation *spec.Attestation) error {
+// SubmitAttestations is a mock.
+func (m *AttestationsSubmitter) SubmitAttestations(ctx context.Context, attestation []*spec.Attestation) error {
 	return nil
 }
 
-// ErroringAttestationSubmitter is a mock for eth2client.AttestationSubmitter that returns errors.
-type ErroringAttestationSubmitter struct{}
+// ErroringAttestationsSubmitter is a mock for eth2client.AttestationsSubmitter that returns errors.
+type ErroringAttestationsSubmitter struct{}
 
-// NewErroringAttestationSubmitter returns a mock attestation submitter.
-func NewErroringAttestationSubmitter() eth2client.AttestationSubmitter {
-	return &ErroringAttestationSubmitter{}
+// NewErroringAttestationsSubmitter returns a mock attestation submitter.
+func NewErroringAttestationsSubmitter() eth2client.AttestationsSubmitter {
+	return &ErroringAttestationsSubmitter{}
 }
 
-// SubmitAttestation is a mock.
-func (m *ErroringAttestationSubmitter) SubmitAttestation(ctx context.Context, attestation *spec.Attestation) error {
+// SubmitAttestations is a mock.
+func (m *ErroringAttestationsSubmitter) SubmitAttestations(ctx context.Context, attestations []*spec.Attestation) error {
 	return errors.New("error")
 }
 

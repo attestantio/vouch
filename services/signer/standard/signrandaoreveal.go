@@ -43,15 +43,13 @@ func (s *Service) SignRANDAOReveal(ctx context.Context,
 		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for RANDAO reveal")
 	}
 
-	epochBytes := make([]byte, 32)
-	binary.LittleEndian.PutUint64(epochBytes, uint64(epoch))
+	var epochBytes spec.Root
+	binary.LittleEndian.PutUint64(epochBytes[:], uint64(epoch))
 
-	sig, err := account.(e2wtypes.AccountProtectingSigner).SignGeneric(ctx, epochBytes, domain[:])
+	sig, err := s.sign(ctx, account, epochBytes, domain)
 	if err != nil {
 		return spec.BLSSignature{}, errors.Wrap(err, "failed to sign RANDO reveal")
 	}
 
-	var signature spec.BLSSignature
-	copy(signature[:], sig.Marshal())
-	return signature, nil
+	return sig, nil
 }

@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go v0.72.0 // indirect
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/attestantio/dirk v0.9.6
-	github.com/attestantio/go-eth2-client v0.6.14
+	github.com/attestantio/go-eth2-client v0.6.15
 	github.com/aws/aws-sdk-go v1.35.35
 	github.com/ferranbt/fastssz v0.0.0-20201030134205-9b9624098321
 	github.com/goccy/go-yaml v1.8.4 // indirect

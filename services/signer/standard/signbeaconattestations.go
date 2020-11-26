@@ -36,7 +36,7 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 	[]spec.BLSSignature,
 	error,
 ) {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "dirk.SignBeaconAttestations")
+	span, ctx := opentracing.StartSpanFromContext(ctx, "signer.SignBeaconAttestations")
 	defer span.Finish()
 
 	if len(accounts) == 0 {
@@ -50,30 +50,51 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
 	}
 
-	uintCommitteeIndices := make([]uint64, len(committeeIndices))
-	for i := range committeeIndices {
-		uintCommitteeIndices[i] = uint64(committeeIndices[i])
+	sigs := make([]spec.BLSSignature, len(accounts))
+	if multiSigner, isMultiSigner := accounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
+		uintCommitteeIndices := make([]uint64, len(committeeIndices))
+		for i := range committeeIndices {
+			uintCommitteeIndices[i] = uint64(committeeIndices[i])
+		}
+		signatures, err := multiSigner.SignBeaconAttestations(ctx,
+			uint64(slot),
+			accounts,
+			uintCommitteeIndices,
+			blockRoot[:],
+			uint64(sourceEpoch),
+			sourceRoot[:],
+			uint64(targetEpoch),
+			targetRoot[:],
+			signatureDomain[:],
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to multisign beacon attestation")
+		}
+		for i := range signatures {
+			if signatures[i] != nil {
+				copy(sigs[i][:], signatures[i].Marshal())
+			}
+		}
+	} else {
+		for i := range accounts {
+			sigs[i], err = s.SignBeaconAttestation(ctx,
+				accounts[i],
+				slot,
+				committeeIndices[i],
+				blockRoot,
+				sourceEpoch,
+				sourceRoot,
+				targetEpoch,
+				targetRoot,
+			)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to sign beacon attestation")
+			}
+		}
 	}
-	sigs, err := accounts[0].(e2wtypes.AccountProtectingMultiSigner).SignBeaconAttestations(ctx,
-		uint64(slot),
-		accounts,
-		uintCommitteeIndices,
-		blockRoot[:],
-		uint64(sourceEpoch),
-		sourceRoot[:],
-		uint64(targetEpoch),
-		targetRoot[:],
-		signatureDomain[:],
-	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to sign beacon attestation")
 	}
 
-	res := make([]spec.BLSSignature, len(sigs))
-	for i := range sigs {
-		if sigs[i] != nil {
-			copy(res[i][:], sigs[i].Marshal())
-		}
-	}
-	return res, nil
+	return sigs, nil
 }

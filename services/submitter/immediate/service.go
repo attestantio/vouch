@@ -30,7 +30,7 @@ import (
 // Service is the submitter for signed items.
 type Service struct {
 	clientMonitor                         metrics.ClientMonitor
-	attestationSubmitter                  eth2client.AttestationSubmitter
+	attestationsSubmitter                 eth2client.AttestationsSubmitter
 	beaconBlockSubmitter                  eth2client.BeaconBlockSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
@@ -54,7 +54,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	s := &Service{
 		clientMonitor:                         parameters.clientMonitor,
-		attestationSubmitter:                  parameters.attestationSubmitter,
+		attestationsSubmitter:                 parameters.attestationsSubmitter,
 		beaconBlockSubmitter:                  parameters.beaconBlockSubmitter,
 		beaconCommitteeSubscriptionsSubmitter: parameters.beaconCommitteeSubscriptionsSubmitter,
 		aggregateAttestationsSubmitter:        parameters.aggregateAttestationsSubmitter,
@@ -90,27 +90,27 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaco
 	return nil
 }
 
-// SubmitAttestation submits an attestation.
-func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attestation) error {
-	if attestation == nil {
-		return errors.New("no attestation supplied")
+// SubmitAttestations submits multiple attestations.
+func (s *Service) SubmitAttestations(ctx context.Context, attestations []*spec.Attestation) error {
+	if len(attestations) == 0 {
+		return errors.New("no attestations supplied")
 	}
 
 	started := time.Now()
-	err := s.attestationSubmitter.SubmitAttestation(ctx, attestation)
-	if service, isService := s.attestationSubmitter.(eth2client.Service); isService {
-		s.clientMonitor.ClientOperation(service.Address(), "submit attestation", err == nil, time.Since(started))
+	err := s.attestationsSubmitter.SubmitAttestations(ctx, attestations)
+	if service, isService := s.attestationsSubmitter.(eth2client.Service); isService {
+		s.clientMonitor.ClientOperation(service.Address(), "submit attestations", err == nil, time.Since(started))
 	} else {
-		s.clientMonitor.ClientOperation("<unknown>", "submit attestation", err == nil, time.Since(started))
+		s.clientMonitor.ClientOperation("<unknown>", "submit attestations", err == nil, time.Since(started))
 	}
 	if err != nil {
-		return errors.Wrap(err, "failed to submit attestation")
+		return errors.Wrap(err, "failed to submit attestations")
 	}
 
 	if e := log.Trace(); e.Enabled() {
-		data, err := json.Marshal(attestation)
+		data, err := json.Marshal(attestations)
 		if err == nil {
-			e.Str("attestation", string(data)).Msg("Submitted attestation")
+			e.Str("attestations", string(data)).Msg("Submitted attestations")
 		}
 	}
 

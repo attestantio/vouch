@@ -64,16 +64,16 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaco
 	return nil
 }
 
-// SubmitAttestation submits a beacon block attestation.
-func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attestation) error {
-	if attestation == nil {
-		return errors.New("no attestation supplied")
+// SubmitAttestations submits multiple attestations.
+func (s *Service) SubmitAttestations(ctx context.Context, attestations []*spec.Attestation) error {
+	if len(attestations) == 0 {
+		return errors.New("no attestations supplied")
 	}
 
 	if e := log.Trace(); e.Enabled() {
-		data, err := json.Marshal(attestation)
+		data, err := json.Marshal(attestations)
 		if err == nil {
-			e.Str("attestation", string(data)).Msg("Not submitting attestation")
+			e.Str("attestations", string(data)).Msg("Not submitting attestations")
 		}
 	}
 

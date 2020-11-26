@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -27,7 +26,6 @@ import (
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
-	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/rs/zerolog"
@@ -42,7 +40,7 @@ type Service struct {
 	slotsPerEpoch              uint64
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	attestationDataProvider    eth2client.AttestationDataProvider
-	attestationSubmitter       submitter.AttestationSubmitter
+	attestationsSubmitter      submitter.AttestationsSubmitter
 	beaconAttestationsSigner   signer.BeaconAttestationsSigner
 }
 
@@ -73,7 +71,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		slotsPerEpoch:              slotsPerEpoch,
 		validatingAccountsProvider: parameters.validatingAccountsProvider,
 		attestationDataProvider:    parameters.attestationDataProvider,
-		attestationSubmitter:       parameters.attestationSubmitter,
+		attestationsSubmitter:      parameters.attestationsSubmitter,
 		beaconAttestationsSigner:   parameters.beaconAttestationsSigner,
 	}
 
@@ -201,49 +199,41 @@ func (s *Service) attest(
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed")
 
-	// Submit the attestations.
+	// Create the attestations.
 	zeroSig := spec.BLSSignature{}
-	attestations := make([]*spec.Attestation, len(sigs))
-	_, err = util.Scatter(len(sigs), func(offset int, entries int, _ *sync.RWMutex) (interface{}, error) {
-		for i := offset; i < offset+entries; i++ {
-			log := log.With().Uint64("slot", uint64(duty.Slot())).Uint64("validator_index", uint64(validatorIndices[i])).Logger()
-			if bytes.Equal(sigs[i][:], zeroSig[:]) {
-				log.Warn().Msg("No signature for validator; not creating attestation")
-				continue
-			}
-
-			aggregationBits := bitfield.NewBitlist(committeeSizes[i])
-			aggregationBits.SetBitAt(uint64(validatorCommitteeIndices[i]), true)
-			attestation := &spec.Attestation{
-				AggregationBits: aggregationBits,
-				Data: &spec.AttestationData{
-					Slot:            duty.Slot(),
-					Index:           committeeIndices[i],
-					BeaconBlockRoot: data.BeaconBlockRoot,
-					Source: &spec.Checkpoint{
-						Epoch: data.Source.Epoch,
-						Root:  data.Source.Root,
-					},
-					Target: &spec.Checkpoint{
-						Epoch: data.Target.Epoch,
-						Root:  data.Target.Root,
-					},
-				},
-			}
-			copy(attestation.Signature[:], sigs[i][:])
-			if err := s.attestationSubmitter.SubmitAttestation(ctx, attestation); err != nil {
-				log.Warn().Err(err).Msg("Failed to submit attestation")
-				continue
-			}
-			attestations[i] = attestation
-			s.monitor.AttestationCompleted(started, "succeeded")
+	attestations := make([]*spec.Attestation, 0, len(sigs))
+	for i := range sigs {
+		if bytes.Equal(sigs[i][:], zeroSig[:]) {
+			log.Warn().Msg("No signature for validator; not creating attestation")
+			continue
 		}
-		return nil, nil
-	})
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to scatter submit")
+		aggregationBits := bitfield.NewBitlist(committeeSizes[i])
+		aggregationBits.SetBitAt(uint64(validatorCommitteeIndices[i]), true)
+		attestation := &spec.Attestation{
+			AggregationBits: aggregationBits,
+			Data: &spec.AttestationData{
+				Slot:            duty.Slot(),
+				Index:           committeeIndices[i],
+				BeaconBlockRoot: data.BeaconBlockRoot,
+				Source: &spec.Checkpoint{
+					Epoch: data.Source.Epoch,
+					Root:  data.Source.Root,
+				},
+				Target: &spec.Checkpoint{
+					Epoch: data.Target.Epoch,
+					Root:  data.Target.Root,
+				},
+			},
+		}
+		copy(attestation.Signature[:], sigs[i][:])
+		attestations = append(attestations, attestation)
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted")
+
+	// Submit the attestations.
+	if err := s.attestationsSubmitter.SubmitAttestations(ctx, attestations); err != nil {
+		log.Warn().Err(err).Msg("Failed to submit attestations")
+	}
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted attestations")
 
 	return attestations, nil
 }

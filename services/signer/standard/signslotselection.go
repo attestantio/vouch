@@ -42,15 +42,13 @@ func (s *Service) SignSlotSelection(ctx context.Context,
 		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for selection proof")
 	}
 
-	slotBytes := make([]byte, 32)
-	binary.LittleEndian.PutUint64(slotBytes, uint64(slot))
+	var slotBytes spec.Root
+	binary.LittleEndian.PutUint64(slotBytes[:], uint64(slot))
 
-	sig, err := account.(e2wtypes.AccountProtectingSigner).SignGeneric(ctx, slotBytes, domain[:])
+	sig, err := s.sign(ctx, account, slotBytes, domain)
 	if err != nil {
-		return spec.BLSSignature{}, errors.Wrap(err, "failed to sign slot")
+		return spec.BLSSignature{}, errors.Wrap(err, "failed to sign RANDO reveal")
 	}
 
-	var signature spec.BLSSignature
-	copy(signature[:], sig.Marshal())
-	return signature, nil
+	return sig, nil
 }

@@ -28,7 +28,7 @@ type Service struct {
 	clientMonitor                         metrics.ClientMonitor
 	processConcurrency                    int64
 	beaconBlockSubmitters                 map[string]eth2client.BeaconBlockSubmitter
-	attestationSubmitters                 map[string]eth2client.AttestationSubmitter
+	attestationsSubmitters                map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters       map[string]eth2client.AggregateAttestationsSubmitter
 	beaconCommitteeSubscriptionSubmitters map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter
 }
@@ -53,7 +53,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		clientMonitor:                         parameters.clientMonitor,
 		processConcurrency:                    parameters.processConcurrency,
 		beaconBlockSubmitters:                 parameters.beaconBlockSubmitters,
-		attestationSubmitters:                 parameters.attestationSubmitters,
+		attestationsSubmitters:                parameters.attestationsSubmitters,
 		aggregateAttestationsSubmitters:       parameters.aggregateAttestationsSubmitters,
 		beaconCommitteeSubscriptionSubmitters: parameters.beaconCommitteeSubscriptionsSubmitters,
 	}

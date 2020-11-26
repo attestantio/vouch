@@ -30,7 +30,7 @@ type parameters struct {
 	clientMonitor                          metrics.ClientMonitor
 	processConcurrency                     int64
 	beaconBlockSubmitters                  map[string]eth2client.BeaconBlockSubmitter
-	attestationSubmitters                  map[string]eth2client.AttestationSubmitter
+	attestationsSubmitters                 map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters        map[string]eth2client.AggregateAttestationsSubmitter
 	beaconCommitteeSubscriptionsSubmitters map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter
 }
@@ -74,10 +74,10 @@ func WithBeaconBlockSubmitters(submitters map[string]eth2client.BeaconBlockSubmi
 	})
 }
 
-// WithAttestationSubmitters sets the attestation submitters.
-func WithAttestationSubmitters(submitters map[string]eth2client.AttestationSubmitter) Parameter {
+// WithAttestationsSubmitters sets the attestation submitters.
+func WithAttestationsSubmitters(submitters map[string]eth2client.AttestationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.attestationSubmitters = submitters
+		p.attestationsSubmitters = submitters
 	})
 }
 
@@ -116,8 +116,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if len(parameters.beaconBlockSubmitters) == 0 {
 		return nil, errors.New("no beacon block submitters specified")
 	}
-	if len(parameters.attestationSubmitters) == 0 {
-		return nil, errors.New("no attestation submitters specified")
+	if len(parameters.attestationsSubmitters) == 0 {
+		return nil, errors.New("no attestations submitters specified")
 	}
 	if len(parameters.aggregateAttestationsSubmitters) == 0 {
 		return nil, errors.New("no aggregate attestations submitters specified")

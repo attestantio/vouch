@@ -23,10 +23,10 @@ import (
 // Service is the submitter service.
 type Service interface{}
 
-// AttestationSubmitter is the interface for a submitter of attestations.
-type AttestationSubmitter interface {
-	// SubmitAttestation submits an attestation.
-	SubmitAttestation(ctx context.Context, block *spec.Attestation) error
+// AttestationsSubmitter is the interface for a submitter of attestations.
+type AttestationsSubmitter interface {
+	// SubmitAttestations submits multiple attestations.
+	SubmitAttestations(ctx context.Context, attestations []*spec.Attestation) error
 }
 
 // BeaconBlockSubmitter is the interface for a submitter of beacon blocks.

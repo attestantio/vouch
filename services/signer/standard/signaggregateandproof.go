@@ -38,12 +38,10 @@ func (s *Service) SignAggregateAndProof(ctx context.Context,
 		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for beacon aggregate and proof")
 	}
 
-	sig, err := account.(e2wtypes.AccountProtectingSigner).SignGeneric(ctx, aggregateAndProofRoot[:], domain[:])
+	sig, err := s.sign(ctx, account, aggregateAndProofRoot, domain)
 	if err != nil {
 		return spec.BLSSignature{}, errors.Wrap(err, "failed to aggregate and proof")
 	}
 
-	var signature spec.BLSSignature
-	copy(signature[:], sig.Marshal())
-	return signature, nil
+	return sig, nil
 }

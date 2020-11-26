@@ -29,7 +29,7 @@ type parameters struct {
 	monitor                    metrics.AttestationMonitor
 	slotsPerEpochProvider      eth2client.SlotsPerEpochProvider
 	attestationDataProvider    eth2client.AttestationDataProvider
-	attestationSubmitter       submitter.AttestationSubmitter
+	attestationsSubmitter      submitter.AttestationsSubmitter
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	beaconAttestationsSigner   signer.BeaconAttestationsSigner
 }
@@ -73,10 +73,10 @@ func WithAttestationDataProvider(provider eth2client.AttestationDataProvider) Pa
 	})
 }
 
-// WithAttestationSubmitter sets the attestation submitter.
-func WithAttestationSubmitter(submitter submitter.AttestationSubmitter) Parameter {
+// WithAttestationsSubmitter sets the attestations submitter.
+func WithAttestationsSubmitter(submitter submitter.AttestationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.attestationSubmitter = submitter
+		p.attestationsSubmitter = submitter
 	})
 }
 
@@ -121,8 +121,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.attestationDataProvider == nil {
 		return nil, errors.New("no attestation data provider specified")
 	}
-	if parameters.attestationSubmitter == nil {
-		return nil, errors.New("no attestation submitter specified")
+	if parameters.attestationsSubmitter == nil {
+		return nil, errors.New("no attestations submitter specified")
 	}
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")

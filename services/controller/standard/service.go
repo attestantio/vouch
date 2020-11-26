@@ -117,7 +117,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.Wrap(err, "failed to obtain active validator indices for the current epoch")
 	}
 	if len(validatorIndices) != s.activeValidators {
-		log.Info().Int("old_valdiators", s.activeValidators).Int("new_validators", len(validatorIndices)).Msg("Change in number of active validators")
+		log.Info().Int("old_validators", s.activeValidators).Int("new_validators", len(validatorIndices)).Msg("Change in number of active validators")
 		s.activeValidators = len(validatorIndices)
 	}
 	nextEpochAccounts, nextEpochValidatorIndices, err := s.accountsAndIndicesForEpoch(ctx, epoch+1)
@@ -162,8 +162,6 @@ func (s *Service) startTickers(ctx context.Context) error {
 		// Wait for genesis.
 		log.Info().Str("genesis", fmt.Sprintf("%v", genesisTime)).Msg("Waiting for genesis")
 		time.Sleep(time.Until(genesisTime))
-		// Give it another half second to let the beacon node be ready.
-		time.Sleep(500 * time.Millisecond)
 	}
 
 	// Start epoch tickers.

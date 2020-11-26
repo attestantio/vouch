@@ -26,24 +26,24 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-// SubmitAttestation submits an attestation.
-func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attestation) error {
-	if attestation == nil {
-		return errors.New("no attestation supplied")
+// SubmitAttestations submits a batch of attestations.
+func (s *Service) SubmitAttestations(ctx context.Context, attestations []*spec.Attestation) error {
+	if len(attestations) == 0 {
+		return errors.New("no attestations supplied")
 	}
 
 	sem := semaphore.NewWeighted(s.processConcurrency)
 	var wg sync.WaitGroup
-	for name, submitter := range s.attestationSubmitters {
+	for name, submitter := range s.attestationsSubmitters {
 		wg.Add(1)
 		go func(ctx context.Context,
 			sem *semaphore.Weighted,
 			wg *sync.WaitGroup,
 			name string,
-			submitter eth2client.AttestationSubmitter,
+			submitter eth2client.AttestationsSubmitter,
 		) {
 			defer wg.Done()
-			log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(attestation.Data.Slot)).Logger()
+			log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(attestations[0].Data.Slot)).Logger()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
@@ -52,8 +52,8 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 
 			serverType, address := s.serviceInfo(ctx, submitter)
 			started := time.Now()
-			err := submitter.SubmitAttestation(ctx, attestation)
-			s.clientMonitor.ClientOperation(address, "submit attestation", err == nil, time.Since(started))
+			err := submitter.SubmitAttestations(ctx, attestations)
+			s.clientMonitor.ClientOperation(address, "submit attestations", err == nil, time.Since(started))
 			if err != nil {
 				switch {
 				case serverType == "lighthouse" && strings.Contains(err.Error(), "PriorAttestationKnown"):
@@ -64,47 +64,22 @@ func (s *Service) SubmitAttestation(ctx context.Context, attestation *spec.Attes
 					// Lighthouse rejects an attestation for a block  that is not its current head.  It is possible
 					// that the node is just behind, and we can't do anything about it anyway at this point having
 					// already signed an attestation for this slot, so ignore the error.
-					log.Trace().Msg("Node does not know head slot; ignored")
+					log.Debug().Err(err).Msg("Node does not know head block; rejected")
+				case serverType == "lighthouse" && strings.Contains(err.Error(), "InvalidSignature"):
+					data, err2 := json.Marshal(attestations)
+					if err2 != nil {
+						log.Error().Err(err).Msg("Failed to marshal JSON")
+					}
+					log.Warn().Err(err).Str("data", string(data)).Msg("Invalid signature!")
 				default:
 					log.Warn().Err(err).Msg("Failed to submit attestation")
-					return
 				}
+			} else {
+				log.Trace().Msg("Submitted attestations")
 			}
-			log.Trace().Msg("Submitted attestation")
 		}(ctx, sem, &wg, name, submitter)
 	}
 	wg.Wait()
 
-	if e := log.Trace(); e.Enabled() {
-		data, err := json.Marshal(attestation)
-		if err == nil {
-			e.Str("attestation", string(data)).Msg("Submitted attestation")
-		}
-	}
-
 	return nil
-}
-
-// serviceInfo returns the service name and provider information.
-func (s *Service) serviceInfo(ctx context.Context, submitter interface{}) (string, string) {
-	serviceName := "<unknown>"
-	provider := "<unknown>"
-	if service, isService := submitter.(eth2client.Service); isService {
-		provider = service.Address()
-	}
-	if service, isService := submitter.(eth2client.NodeVersionProvider); isService {
-		nodeVersion, err := service.NodeVersion(ctx)
-		if err == nil {
-			switch {
-			case strings.Contains(strings.ToLower(nodeVersion), "lighthouse"):
-				serviceName = "lighthouse"
-			case strings.Contains(strings.ToLower(nodeVersion), "prysm"):
-				serviceName = "prysm"
-			case strings.Contains(strings.ToLower(nodeVersion), "teku"):
-				serviceName = "teku"
-			}
-		}
-	}
-
-	return serviceName, provider
 }

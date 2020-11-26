@@ -35,7 +35,6 @@ func (s *Service) SignBeaconAttestation(ctx context.Context,
 	spec.BLSSignature,
 	error,
 ) {
-
 	domain, err := s.domainProvider.Domain(ctx,
 		s.beaconAttesterDomainType,
 		spec.Epoch(slot/s.slotsPerEpoch))
@@ -43,20 +42,44 @@ func (s *Service) SignBeaconAttestation(ctx context.Context,
 		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
 	}
 
-	sig, err := account.(e2wtypes.AccountProtectingSigner).SignBeaconAttestation(ctx,
-		uint64(slot),
-		uint64(committeeIndex),
-		blockRoot[:],
-		uint64(sourceEpoch),
-		sourceRoot[:],
-		uint64(targetEpoch),
-		targetRoot[:],
-		domain[:])
-	if err != nil {
-		return spec.BLSSignature{}, errors.Wrap(err, "failed to sign beacon attestation")
+	var sig spec.BLSSignature
+	if protectingSigner, isProtectingSigner := account.(e2wtypes.AccountProtectingSigner); isProtectingSigner {
+		signature, err := protectingSigner.SignBeaconAttestation(ctx,
+			uint64(slot),
+			uint64(committeeIndex),
+			blockRoot[:],
+			uint64(sourceEpoch),
+			sourceRoot[:],
+			uint64(targetEpoch),
+			targetRoot[:],
+			domain[:])
+		if err != nil {
+			return spec.BLSSignature{}, errors.Wrap(err, "failed to sign beacon attestation")
+		}
+		copy(sig[:], signature.Marshal())
+	} else {
+		attestation := &spec.AttestationData{
+			Slot:            slot,
+			Index:           committeeIndex,
+			BeaconBlockRoot: blockRoot,
+			Source: &spec.Checkpoint{
+				Epoch: sourceEpoch,
+				Root:  sourceRoot,
+			},
+			Target: &spec.Checkpoint{
+				Epoch: targetEpoch,
+				Root:  targetRoot,
+			},
+		}
+		root, err := attestation.HashTreeRoot()
+		if err != nil {
+			return spec.BLSSignature{}, errors.Wrap(err, "failed to generate hash tree root")
+		}
+		sig, err = s.sign(ctx, account, root, domain)
+		if err != nil {
+			return spec.BLSSignature{}, err
+		}
 	}
 
-	var signature spec.BLSSignature
-	copy(signature[:], sig.Marshal())
-	return signature, nil
+	return sig, nil
 }

@@ -18,60 +18,42 @@ import (
 
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
+	e2types "github.com/wealdtech/go-eth2-types/v2"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
-// SignBeaconBlockProposal signs a beacon block proposal.
-func (s *Service) SignBeaconBlockProposal(ctx context.Context,
+// sign signs a root, using protected methods if possible.
+func (s *Service) sign(ctx context.Context,
 	account e2wtypes.Account,
-	slot spec.Slot,
-	proposerIndex spec.ValidatorIndex,
-	parentRoot spec.Root,
-	stateRoot spec.Root,
-	bodyRoot spec.Root,
+	root spec.Root,
+	domain spec.Domain,
 ) (
 	spec.BLSSignature,
 	error,
 ) {
-
-	// Fetch the domain.
-	domain, err := s.domainProvider.Domain(ctx,
-		s.beaconProposerDomainType,
-		spec.Epoch(slot/s.slotsPerEpoch))
-	if err != nil {
-		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for beacon proposal")
-	}
-
-	var sig spec.BLSSignature
+	var sig e2types.Signature
 	if protectingSigner, isProtectingSigner := account.(e2wtypes.AccountProtectingSigner); isProtectingSigner {
-		signature, err := protectingSigner.SignBeaconProposal(ctx,
-			uint64(slot),
-			uint64(proposerIndex),
-			parentRoot[:],
-			stateRoot[:],
-			bodyRoot[:],
-			domain[:])
+		var err error
+		sig, err = protectingSigner.SignGeneric(ctx, root[:], domain[:])
 		if err != nil {
-			return spec.BLSSignature{}, errors.Wrap(err, "failed to sign beacon block proposal")
+			return spec.BLSSignature{}, err
 		}
-		copy(sig[:], signature.Marshal())
 	} else {
-		header := &spec.BeaconBlockHeader{
-			Slot:          slot,
-			ProposerIndex: proposerIndex,
-			ParentRoot:    parentRoot,
-			StateRoot:     stateRoot,
-			BodyRoot:      bodyRoot,
+		container := spec.SigningData{
+			ObjectRoot: root,
+			Domain:     domain,
 		}
-		root, err := header.HashTreeRoot()
+		root, err := container.HashTreeRoot()
 		if err != nil {
 			return spec.BLSSignature{}, errors.Wrap(err, "failed to generate hash tree root")
 		}
-		sig, err = s.sign(ctx, account, root, domain)
+		sig, err = account.(e2wtypes.AccountSigner).Sign(ctx, root[:])
 		if err != nil {
 			return spec.BLSSignature{}, err
 		}
 	}
 
-	return sig, nil
+	var signature spec.BLSSignature
+	copy(signature[:], sig.Marshal())
+	return signature, nil
 }
