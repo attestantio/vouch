@@ -76,8 +76,12 @@ func (s *Service) Subscribe(ctx context.Context,
 	epoch spec.Epoch,
 	accounts map[spec.ValidatorIndex]e2wtypes.Account,
 ) (map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
-	started := time.Now()
+	if len(accounts) == 0 {
+		// Nothing to do.
+		return map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription{}, nil
+	}
 
+	started := time.Now()
 	log := log.With().Uint64("epoch", uint64(epoch)).Logger()
 	log.Trace().Msg("Subscribing")
 

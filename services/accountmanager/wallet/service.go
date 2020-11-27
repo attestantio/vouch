@@ -278,18 +278,18 @@ func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wa
 		}
 
 		// Ensure we can unlock the account with a known passphrase.
+		unlocked := false
 		if unlocker, isUnlocker := account.(e2wtypes.AccountLocker); isUnlocker {
-			unlocked := false
 			for _, passphrase := range s.passphrases {
 				if err := unlocker.Unlock(ctx, passphrase); err == nil {
 					unlocked = true
 					break
 				}
 			}
-			if !unlocked {
-				log.Warn().Str("account", name).Msg("Failed to unlock account with any passphrase")
-				continue
-			}
+		}
+		if !unlocked {
+			log.Warn().Str("account", name).Msg("Failed to unlock account with any passphrase")
+			continue
 		}
 
 		// Set up account as unknown to beacon chain.

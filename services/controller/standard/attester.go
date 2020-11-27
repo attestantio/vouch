@@ -30,6 +30,11 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 	validatorIndices []spec.ValidatorIndex,
 	notCurrentSlot bool,
 ) {
+	if len(validatorIndices) == 0 {
+		// Nothing to do.
+		return
+	}
+
 	started := time.Now()
 	log.Trace().Uint64("epoch", uint64(epoch)).Msg("Scheduling attestations")
 

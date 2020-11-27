@@ -69,13 +69,19 @@ func (s *Service) SubmitAttestations(ctx context.Context, attestations []*spec.A
 					data, err2 := json.Marshal(attestations)
 					if err2 != nil {
 						log.Error().Err(err).Msg("Failed to marshal JSON")
+					} else {
+						log.Warn().Err(err).Str("data", string(data)).Msg("Invalid signature!")
 					}
-					log.Warn().Err(err).Str("data", string(data)).Msg("Invalid signature!")
 				default:
 					log.Warn().Err(err).Msg("Failed to submit attestation")
 				}
 			} else {
-				log.Trace().Msg("Submitted attestations")
+				data, err := json.Marshal(attestations)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to marshal JSON")
+				} else {
+					log.Trace().Str("data", string(data)).Msg("Submitted attestations")
+				}
 			}
 		}(ctx, sem, &wg, name, submitter)
 	}
