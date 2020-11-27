@@ -63,16 +63,19 @@ jobs:
     - name: Create windows zip file
       run: |
        mv vouch-windows-4.0-amd64.exe vouch.exe
+       sha256sum vouch.exe >vouch-${RELEASE_VERSION}-windows.sha256
        zip --junk-paths vouch-${RELEASE_VERSION}-windows-exe.zip vouch.exe
 
     - name: Create linux AMD64 tgz file
       run: |
        mv vouch-linux-amd64 vouch
+       sha256sum vouch >vouch-${RELEASE_VERSION}-linux-amd64.sha256
        tar zcf vouch-${RELEASE_VERSION}-linux-amd64.tar.gz vouch
 
     - name: Create linux ARM64 tgz file
       run: |
        mv vouch-linux-arm64 vouch
+       sha256sum vouch >vouch-${RELEASE_VERSION}-linux-arm64.sha256
        tar zcf vouch-${RELEASE_VERSION}-linux-arm64.tar.gz vouch
 
     - name: Create release
@@ -83,8 +86,19 @@ jobs:
       with:
         tag_name: ${{ github.ref }}
         release_name: Release ${{ env.RELEASE_VERSION }}
-        draft: false
+        draft: true
         prerelease: false
+
+    - name: Upload windows checksum file
+      id: upload-release-asset-windows-checksum
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./vouch-${{ env.RELEASE_VERSION }}-windows.sha256
+        asset_name: vouch-${{ env.RELEASE_VERSION }}-windows.sha256
+        asset_content_type: text/plain
 
     - name: Upload windows zip file
       id: upload-release-asset-windows
@@ -97,6 +111,17 @@ jobs:
         asset_name: vouch-${{ env.RELEASE_VERSION }}-windows-exe.zip
         asset_content_type: application/zip
 
+    - name: Upload linux AMD64 checksum file
+      id: upload-release-asset-linux-amd64-checksum
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./vouch-${{ env.RELEASE_VERSION }}-linux-amd64.sha256
+        asset_name: vouch-${{ env.RELEASE_VERSION }}-linux-amd64.sha256
+        asset_content_type: text/plain
+
     - name: Upload linux AMD64 tgz file
       id: upload-release-asset-linux-amd64
       uses: actions/upload-release-asset@v1
@@ -107,6 +132,17 @@ jobs:
         asset_path: ./vouch-${{ env.RELEASE_VERSION }}-linux-amd64.tar.gz
         asset_name: vouch-${{ env.RELEASE_VERSION }}-linux-amd64.tar.gz
         asset_content_type: application/gzip
+
+    - name: Upload linux ARM64 checksum file
+      id: upload-release-asset-linux-arm64-checksum
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./vouch-${{ env.RELEASE_VERSION }}-linux-arm64.sha256
+        asset_name: vouch-${{ env.RELEASE_VERSION }}-linux-arm64.sha256
+        asset_content_type: text/plain
 
     - name: Upload linux ARM64 tgz file
       id: upload-release-asset-linux-arm64
