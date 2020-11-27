@@ -1,5 +1,7 @@
-Development:
+1.0.0:
+  - mainnet-ready
   - introduce attestation data strategy, allowing selection of best or first attestation from a set
+  - used updated go-eth2-client to support current beacon node API versions
   - rework controller to schedule jobs in separate functions, allowing future flexibility
   - break accountmanager in to accountmanager, signer and validatorsmanager
     - better for maintainability and additional features
