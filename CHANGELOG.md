@@ -1,4 +1,4 @@
-Development:
+1.0.1:
   - include source and target epochs when scoring attestation data
 
 1.0.0:
