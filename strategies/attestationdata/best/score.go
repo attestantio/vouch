@@ -37,27 +37,28 @@ func (s *Service) scoreAttestationData(ctx context.Context,
 		block, err := headerProvider.BeaconBlockHeader(ctx, fmt.Sprintf("%#x", attestationData.BeaconBlockRoot))
 		if err != nil {
 			log.Error().Err(err).Msg("failed to obtain block header")
-			return float64(1) / float64(32)
+			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
 		}
 		slot = block.Header.Message.Slot
 	} else if blockProvider, isProvider := provider.(eth2client.SignedBeaconBlockProvider); isProvider {
 		block, err := blockProvider.SignedBeaconBlock(ctx, fmt.Sprintf("%#x", attestationData.BeaconBlockRoot))
 		if err != nil {
 			log.Error().Err(err).Msg("failed to obtain block")
-			return float64(1) / float64(32)
+			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
 		}
 		slot = block.Message.Slot
 	} else {
 		log.Warn().Msg("Cannot score attestation")
-		// Give minimal score.
-		slot = attestationData.Slot - 32
+		return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
 	}
-	score := float64(1) / float64(1+attestationData.Slot-slot)
+	score := float64(attestationData.Source.Epoch+attestationData.Target.Epoch) + float64(1)/float64(1+attestationData.Slot-slot)
 
 	log.Trace().
 		Str("provider", name).
 		Uint64("attestation_slot", uint64(attestationData.Slot)).
 		Uint64("head_slot", uint64(slot)).
+		Uint64("source_epoch", uint64(attestationData.Source.Epoch)).
+		Uint64("target_epoch", uint64(attestationData.Target.Epoch)).
 		Float64("score", score).
 		Msg("Scored attestation data")
 	return score

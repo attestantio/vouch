@@ -1,3 +1,6 @@
+Development:
+  - include source and target epochs when scoring attestation data
+
 1.0.0:
   - mainnet-ready
   - introduce attestation data strategy, allowing selection of best or first attestation from a set

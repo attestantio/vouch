@@ -75,6 +75,7 @@ func (s *Service) AttestationData(ctx context.Context, slot spec.Slot, committee
 			responded++
 			if bestAttestationData == nil || resp.score > bestScore {
 				bestAttestationData = resp.attestationData
+				bestScore = resp.score
 			}
 		}
 	}
@@ -83,6 +84,7 @@ func (s *Service) AttestationData(ctx context.Context, slot spec.Slot, committee
 	if bestAttestationData == nil {
 		return nil, errors.New("no attestations received")
 	}
+	log.Trace().Stringer("attestation_data", bestAttestationData).Float64("score", bestScore).Msg("Selected best attestation")
 
 	return bestAttestationData, nil
 }
