@@ -36,14 +36,22 @@ func (s *Service) scoreAttestationData(ctx context.Context,
 	if headerProvider, isProvider := provider.(eth2client.BeaconBlockHeadersProvider); isProvider {
 		block, err := headerProvider.BeaconBlockHeader(ctx, fmt.Sprintf("%#x", attestationData.BeaconBlockRoot))
 		if err != nil {
-			log.Error().Err(err).Msg("failed to obtain block header")
+			log.Error().Err(err).Msg("Failed to obtain block header")
 			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
 		}
 		slot = block.Header.Message.Slot
 	} else if blockProvider, isProvider := provider.(eth2client.SignedBeaconBlockProvider); isProvider {
 		block, err := blockProvider.SignedBeaconBlock(ctx, fmt.Sprintf("%#x", attestationData.BeaconBlockRoot))
 		if err != nil {
-			log.Error().Err(err).Msg("failed to obtain block")
+			log.Error().Err(err).Msg("Failed to obtain block")
+			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
+		}
+		if block == nil {
+			log.Warn().Str("block_root", fmt.Sprintf("%#x", attestationData.BeaconBlockRoot)).Msg("No block returned by provider")
+			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
+		}
+		if block.Message == nil {
+			log.Warn().Str("block_root", fmt.Sprintf("%#x", attestationData.BeaconBlockRoot)).Msg("Empty block returned by provider")
 			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
 		}
 		slot = block.Message.Slot
