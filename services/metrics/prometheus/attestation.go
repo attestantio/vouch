@@ -48,8 +48,11 @@ func (s *Service) setupAttestationMetrics() error {
 	return nil
 }
 
-// AttestationCompleted is called when a block attestation process has completed.
-func (s *Service) AttestationCompleted(started time.Time, result string) {
-	s.attestationProcessTimer.Observe(time.Since(started).Seconds())
-	s.attestationProcessRequests.WithLabelValues(result).Inc()
+// AttestationsCompleted is called when an attestation process has completed.
+func (s *Service) AttestationsCompleted(started time.Time, count int, result string) {
+	duration := time.Since(started).Seconds()
+	for i := 0; i < count; i++ {
+		s.attestationProcessTimer.Observe(duration)
+	}
+	s.attestationProcessRequests.WithLabelValues(result).Add(float64(count))
 }

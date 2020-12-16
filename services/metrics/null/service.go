@@ -48,8 +48,8 @@ func (s *Service) BlockDelay(delay time.Duration) {}
 // BeaconBlockProposalCompleted is called when a block proposal process has completed.
 func (s *Service) BeaconBlockProposalCompleted(started time.Time, result string) {}
 
-// AttestationCompleted is called when a block attestation process has completed.
-func (s *Service) AttestationCompleted(started time.Time, result string) {}
+// AttestationsCompleted is called when an attestation process has completed.
+func (s *Service) AttestationsCompleted(started time.Time, count int, result string) {}
 
 // AttestationAggregationCompleted is called when an attestation aggregation process has completed.
 func (s *Service) AttestationAggregationCompleted(started time.Time, result string) {}

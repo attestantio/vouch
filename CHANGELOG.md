@@ -1,4 +1,5 @@
 Development:
+  - metric 'vouch_attestation_process_duration_seconds' now counts multiple attestations correctly
   - re-implement accountmanager metrics
 1.0.2:
   - avoid crash in "best" attestationdata strategy

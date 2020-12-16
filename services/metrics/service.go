@@ -47,8 +47,8 @@ type BeaconBlockProposalMonitor interface {
 
 // AttestationMonitor provides methods to monitor the attestation process.
 type AttestationMonitor interface {
-	// AttestationsCompleted is called when a attestation process has completed.
-	AttestationCompleted(started time.Time, result string)
+	// AttestationsCompleted is called when an attestation process has completed.
+	AttestationsCompleted(started time.Time, count int, result string)
 }
 
 // AttestationAggregationMonitor provides methods to monitor the attestation aggregation process.

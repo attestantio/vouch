@@ -85,7 +85,7 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 
 	duty, ok := data.(*attester.Duty)
 	if !ok {
-		s.monitor.AttestationCompleted(started, "failed")
+		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
 		return nil, errors.New("passed invalid data structure")
 	}
 	uints := make([]uint64, len(duty.ValidatorIndices()))
@@ -97,28 +97,28 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 	// Fetch the attestation data.
 	attestationData, err := s.attestationDataProvider.AttestationData(ctx, duty.Slot(), duty.CommitteeIndices()[0])
 	if err != nil {
-		s.monitor.AttestationCompleted(started, "failed")
+		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
 		return nil, errors.Wrap(err, "failed to obtain attestation data")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")
 
 	if attestationData.Slot != duty.Slot() {
-		s.monitor.AttestationCompleted(started, "failed")
+		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
 		return nil, fmt.Errorf("attestation request for slot %d returned data for slot %d", duty.Slot(), attestationData.Slot)
 	}
 	if attestationData.Source.Epoch > attestationData.Target.Epoch {
-		s.monitor.AttestationCompleted(started, "failed")
+		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
 		return nil, fmt.Errorf("attestation request for slot %d returned source epoch %d greater than target epoch %d", duty.Slot(), attestationData.Source.Epoch, attestationData.Target.Epoch)
 	}
 	if attestationData.Target.Epoch > spec.Epoch(uint64(duty.Slot())/s.slotsPerEpoch) {
-		s.monitor.AttestationCompleted(started, "failed")
+		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
 		return nil, fmt.Errorf("attestation request for slot %d returned target epoch %d greater than current epoch %d", duty.Slot(), attestationData.Target.Epoch, spec.Epoch(uint64(duty.Slot())/s.slotsPerEpoch))
 	}
 
 	// Fetch the validating accounts.
 	validatingAccounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, spec.Epoch(uint64(duty.Slot())/s.slotsPerEpoch), duty.ValidatorIndices())
 	if err != nil {
-		s.monitor.AttestationCompleted(started, "failed")
+		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
 		return nil, errors.New("failed to obtain attesting validator accounts")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
@@ -158,6 +158,7 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to attest")
+		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
 	}
 
 	return attestations, nil
@@ -234,6 +235,7 @@ func (s *Service) attest(
 		log.Warn().Err(err).Msg("Failed to submit attestations")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted attestations")
+	s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "succeeded")
 
 	return attestations, nil
 }
