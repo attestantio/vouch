@@ -1,3 +1,7 @@
+Development:
+  - re-implement accountmanager metrics
+1.0.2:
+  - avoid crash in "best" attestationdata strategy
 1.0.1:
   - include source and target epochs when scoring attestation data
 

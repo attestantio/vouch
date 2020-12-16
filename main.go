@@ -36,6 +36,7 @@ import (
 	standardattester "github.com/attestantio/vouch/services/attester/standard"
 	standardbeaconblockproposer "github.com/attestantio/vouch/services/beaconblockproposer/standard"
 	standardbeaconcommitteesubscriber "github.com/attestantio/vouch/services/beaconcommitteesubscriber/standard"
+	"github.com/attestantio/vouch/services/chaintime"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	standardcontroller "github.com/attestantio/vouch/services/controller/standard"
 	"github.com/attestantio/vouch/services/graffitiprovider"
@@ -281,7 +282,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	}
 
 	log.Trace().Msg("Starting account manager")
-	accountManager, err := startAccountManager(ctx, monitor, eth2Client, validatorsManager, majordomo)
+	accountManager, err := startAccountManager(ctx, monitor, eth2Client, validatorsManager, majordomo, chainTime)
 	if err != nil {
 		return errors.Wrap(err, "failed to start account manager")
 	}
@@ -573,7 +574,7 @@ func startSigner(ctx context.Context, monitor metrics.Service, eth2Client eth2cl
 	return signer, nil
 }
 
-func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service, validatorsManager validatorsmanager.Service, majordomo majordomo.Service) (accountmanager.Service, error) {
+func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service, validatorsManager validatorsmanager.Service, majordomo majordomo.Service, chainTime chaintime.Service) (accountmanager.Service, error) {
 	var accountManager accountmanager.Service
 	if viper.Get("accountmanager.dirk") != nil {
 		log.Info().Msg("Starting dirk account manager")
@@ -604,6 +605,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 			dirkaccountmanager.WithCACert(caPEMBlock),
 			dirkaccountmanager.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
 			dirkaccountmanager.WithFarFutureEpochProvider(eth2Client.(eth2client.FarFutureEpochProvider)),
+			dirkaccountmanager.WithCurrentEpochProvider(chainTime),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start dirk account manager service")

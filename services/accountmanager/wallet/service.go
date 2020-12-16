@@ -23,6 +23,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/validatorsmanager"
 	"github.com/pkg/errors"
@@ -36,16 +37,17 @@ import (
 
 // Service is the manager for wallet accounts.
 type Service struct {
-	mutex             sync.RWMutex
-	monitor           metrics.AccountManagerMonitor
-	stores            []e2wtypes.Store
-	accountPaths      []string
-	passphrases       [][]byte
-	accounts          map[spec.BLSPubKey]e2wtypes.Account
-	validatorsManager validatorsmanager.Service
-	slotsPerEpoch     spec.Slot
-	domainProvider    eth2client.DomainProvider
-	farFutureEpoch    spec.Epoch
+	mutex                sync.RWMutex
+	monitor              metrics.AccountManagerMonitor
+	stores               []e2wtypes.Store
+	accountPaths         []string
+	passphrases          [][]byte
+	accounts             map[spec.BLSPubKey]e2wtypes.Account
+	validatorsManager    validatorsmanager.Service
+	slotsPerEpoch        spec.Slot
+	domainProvider       eth2client.DomainProvider
+	farFutureEpoch       spec.Epoch
+	currentEpochProvider chaintime.Service
 }
 
 // module-wide log.
@@ -87,14 +89,15 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		monitor:           parameters.monitor,
-		stores:            stores,
-		accountPaths:      parameters.accountPaths,
-		passphrases:       parameters.passphrases,
-		validatorsManager: parameters.validatorsManager,
-		slotsPerEpoch:     spec.Slot(slotsPerEpoch),
-		domainProvider:    parameters.domainProvider,
-		farFutureEpoch:    farFutureEpoch,
+		monitor:              parameters.monitor,
+		stores:               stores,
+		accountPaths:         parameters.accountPaths,
+		passphrases:          parameters.passphrases,
+		validatorsManager:    parameters.validatorsManager,
+		slotsPerEpoch:        spec.Slot(slotsPerEpoch),
+		domainProvider:       parameters.domainProvider,
+		farFutureEpoch:       farFutureEpoch,
+		currentEpochProvider: parameters.currentEpochProvider,
 	}
 
 	if err := s.refreshAccounts(ctx); err != nil {
@@ -181,6 +184,20 @@ func (s *Service) refreshValidators(ctx context.Context) error {
 
 // ValidatingAccountsForEpoch obtains the validating accounts for a given epoch.
 func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch spec.Epoch) (map[spec.ValidatorIndex]e2wtypes.Account, error) {
+	// stateCount is used to update metrics.
+	stateCount := map[api.ValidatorState]uint64{
+		api.ValidatorStateUnknown:            0,
+		api.ValidatorStatePendingInitialized: 0,
+		api.ValidatorStatePendingQueued:      0,
+		api.ValidatorStateActiveOngoing:      0,
+		api.ValidatorStateActiveExiting:      0,
+		api.ValidatorStateActiveSlashed:      0,
+		api.ValidatorStateExitedUnslashed:    0,
+		api.ValidatorStateExitedSlashed:      0,
+		api.ValidatorStateWithdrawalPossible: 0,
+		api.ValidatorStateWithdrawalDone:     0,
+	}
+
 	validatingAccounts := make(map[spec.ValidatorIndex]e2wtypes.Account)
 	pubKeys := make([]spec.BLSPubKey, 0, len(s.accounts))
 	for pubKey := range s.accounts {
@@ -190,8 +207,24 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch spec.Epo
 	validators := s.validatorsManager.ValidatorsByPubKey(ctx, pubKeys)
 	for index, validator := range validators {
 		state := api.ValidatorToState(validator, epoch, s.farFutureEpoch)
+		stateCount[state]++
 		if state == api.ValidatorStateActiveOngoing || state == api.ValidatorStateActiveExiting {
-			validatingAccounts[index] = s.accounts[validator.PublicKey]
+			account := s.accounts[validator.PublicKey]
+			log.Trace().
+				Str("name", account.Name()).
+				Str("public_key", fmt.Sprintf("%x", account.PublicKey().Marshal())).
+				Uint64("index", uint64(index)).
+				Str("state", state.String()).
+				Msg("Validating account")
+			validatingAccounts[index] = account
+		}
+	}
+
+	// Update metrics if this is the current epoch.
+	if epoch == s.currentEpochProvider.CurrentEpoch() {
+		stateCount[api.ValidatorStateUnknown] += uint64(len(s.accounts) - len(validators))
+		for state, count := range stateCount {
+			s.monitor.Accounts(strings.ToLower(state.String()), count)
 		}
 	}
 

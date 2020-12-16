@@ -17,9 +17,11 @@ import (
 	"context"
 	"regexp"
 	"testing"
+	"time"
 
 	spec "github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
+	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/attestantio/vouch/testing/resources"
@@ -171,6 +173,19 @@ func TestAccounts(t *testing.T) {
 }
 
 func setupService(ctx context.Context, t *testing.T, endpoints []string, accountPaths []string) (*Service, error) {
+	genesisTime := time.Now()
+	slotDuration := 12 * time.Second
+	slotsPerEpoch := uint64(32)
+	mockGenesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
+	mockSlotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
+	mockSlotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithGenesisTimeProvider(mockGenesisTimeProvider),
+		standardchaintime.WithSlotDurationProvider(mockSlotDurationProvider),
+		standardchaintime.WithSlotsPerEpochProvider(mockSlotsPerEpochProvider),
+	)
+	require.NoError(t, err)
+
 	return New(ctx,
 		WithLogLevel(zerolog.TraceLevel),
 		WithMonitor(nullmetrics.New(context.Background())),
@@ -183,6 +198,7 @@ func setupService(ctx context.Context, t *testing.T, endpoints []string, account
 		WithValidatorsManager(mock.NewValidatorsManager()),
 		WithDomainProvider(mock.NewDomainProvider()),
 		WithFarFutureEpochProvider(mock.NewFarFutureEpochProvider(0xffffffffffffffff)),
+		WithCurrentEpochProvider(chainTime),
 	)
 }
 

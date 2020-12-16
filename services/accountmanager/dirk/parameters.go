@@ -17,6 +17,7 @@ import (
 	"context"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/validatorsmanager"
@@ -36,6 +37,7 @@ type parameters struct {
 	domainProvider         eth2client.DomainProvider
 	validatorsManager      validatorsmanager.Service
 	farFutureEpochProvider eth2client.FarFutureEpochProvider
+	currentEpochProvider   chaintime.Service
 }
 
 // Parameter is the interface for service parameters.
@@ -126,6 +128,13 @@ func WithFarFutureEpochProvider(provider eth2client.FarFutureEpochProvider) Para
 	})
 }
 
+// WithCurrentEpochProvider sets the current epoch provider.
+func WithCurrentEpochProvider(provider chaintime.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.currentEpochProvider = provider
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -165,6 +174,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.farFutureEpochProvider == nil {
 		return nil, errors.New("no far future epoch provider specified")
+	}
+	if parameters.currentEpochProvider == nil {
+		return nil, errors.New("no current epoch provider specified")
 	}
 
 	return &parameters, nil

@@ -15,6 +15,7 @@ package wallet
 
 import (
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/validatorsmanager"
 	"github.com/pkg/errors"
@@ -31,6 +32,7 @@ type parameters struct {
 	slotsPerEpochProvider  eth2client.SlotsPerEpochProvider
 	domainProvider         eth2client.DomainProvider
 	farFutureEpochProvider eth2client.FarFutureEpochProvider
+	currentEpochProvider   chaintime.Service
 }
 
 // Parameter is the interface for service parameters.
@@ -107,6 +109,13 @@ func WithDomainProvider(provider eth2client.DomainProvider) Parameter {
 	})
 }
 
+// WithCurrentEpochProvider sets the current epoch provider.
+func WithCurrentEpochProvider(provider chaintime.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.currentEpochProvider = provider
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -138,6 +147,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.domainProvider == nil {
 		return nil, errors.New("no domain provider specified")
+	}
+	if parameters.currentEpochProvider == nil {
+		return nil, errors.New("no current epoch provider specified")
 	}
 
 	return &parameters, nil
