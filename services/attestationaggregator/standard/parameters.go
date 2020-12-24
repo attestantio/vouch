@@ -82,15 +82,15 @@ func WithValidatingAccountsProvider(provider accountmanager.ValidatingAccountsPr
 	})
 }
 
-// WithAggregateAttestationDataProvider sets the aggregate attestation provider.
-func WithAggregateAttestationDataProvider(provider eth2client.AggregateAttestationProvider) Parameter {
+// WithAggregateAttestationProvider sets the aggregate attestation provider.
+func WithAggregateAttestationProvider(provider eth2client.AggregateAttestationProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.aggregateAttestationProvider = provider
 	})
 }
 
-// WithPrysmAggregateAttestationDataProvider sets the non-spec aggregate attestation provider.
-func WithPrysmAggregateAttestationDataProvider(provider eth2client.PrysmAggregateAttestationProvider) Parameter {
+// WithPrysmAggregateAttestationProvider sets the non-spec aggregate attestation provider.
+func WithPrysmAggregateAttestationProvider(provider eth2client.PrysmAggregateAttestationProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.prysmAggregateAttestationProvider = provider
 	})

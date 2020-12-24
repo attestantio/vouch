@@ -55,11 +55,22 @@ strategies:
       - localhost:5052
   # The attestationdata strategy obtains attestation data from multiple sources.
   attestationdata:
-    # style can be 'best', which obtains attestations from all nodes and selects the best, or 'first', which uses the first returned
+    # style can be 'best', which obtains attestation data from all nodes and selects the best, or 'first', which uses the first returned
     style: best
     # beacon-node-addresses are the addresses of beacon nodes to use for this strategy.
     beacon-node-addresses:
       - localhost:4000
+      - localhost:5051
+      - localhost:5052
+  # The aggregateattestation strategy obtains aggregate attestations from multiple sources.
+  # Note that the list of nodes here must be a subset of those in the attestationdata strategy.  If not, the nodes will not have
+  # been gathering the attestations to aggregate and will error when the aggregate request is made.
+  aggregateattestation:
+    # style can be 'best', which obtains aggregates from all nodes and selects the best, or 'first', which uses the first returned
+    style: best
+    # beacon-node-addresses are the addresses of beacon nodes to use for this strategy.
+    # Note that prysm nodes are not supported at current in this strategy.
+    beacon-node-addresses:
       - localhost:5051
       - localhost:5052
 ```
