@@ -36,7 +36,7 @@ type ControllerMonitor interface {
 	// NewEpoch is called when vouch starts processing a new epoch.
 	NewEpoch()
 	// BlockDelay provides the delay between the start of a slot and vouch receiving its block.
-	BlockDelay(delay time.Duration)
+	BlockDelay(epochSlot uint, delay time.Duration)
 }
 
 // BeaconBlockProposalMonitor provides methods to monitor the block proposal process.

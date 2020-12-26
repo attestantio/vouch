@@ -31,7 +31,7 @@ type Service struct {
 	schedulerJobsStarted   *prometheus.CounterVec
 
 	epochsProcessed   prometheus.Counter
-	blockReceiptDelay prometheus.Histogram
+	blockReceiptDelay *prometheus.HistogramVec
 
 	beaconBlockProposalProcessTimer    prometheus.Histogram
 	beaconBlockProposalProcessRequests *prometheus.CounterVec

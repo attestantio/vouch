@@ -14,6 +14,7 @@
 package prometheus
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -40,7 +41,7 @@ func (s *Service) setupControllerMetrics() error {
 	}
 
 	s.blockReceiptDelay =
-		prometheus.NewHistogram(prometheus.HistogramOpts{
+		prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: "vouch",
 			Name:      "block_receipt_delay_seconds",
 			Help:      "The delay between the start of a slot and the time vouch receives it.",
@@ -58,7 +59,7 @@ func (s *Service) setupControllerMetrics() error {
 				10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 11.0,
 				11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 12.0,
 			},
-		})
+		}, []string{"epoch_slot"})
 	if err := prometheus.Register(s.blockReceiptDelay); err != nil {
 		return err
 	}
@@ -72,6 +73,6 @@ func (s *Service) NewEpoch() {
 }
 
 // BlockDelay provides the delay between the start of a slot and vouch receiving its block.
-func (s *Service) BlockDelay(delay time.Duration) {
-	s.blockReceiptDelay.Observe(delay.Seconds())
+func (s *Service) BlockDelay(epochSlot uint, delay time.Duration) {
+	s.blockReceiptDelay.WithLabelValues(fmt.Sprintf("%d", epochSlot)).Observe(delay.Seconds())
 }

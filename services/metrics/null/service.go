@@ -43,7 +43,7 @@ func (s *Service) JobStartedOnSignal() {}
 func (s *Service) NewEpoch() {}
 
 // BlockDelay provides the delay between the start of a slot and vouch receiving its block.
-func (s *Service) BlockDelay(delay time.Duration) {}
+func (s *Service) BlockDelay(epochSlot uint, delay time.Duration) {}
 
 // BeaconBlockProposalCompleted is called when a block proposal process has completed.
 func (s *Service) BeaconBlockProposalCompleted(started time.Time, result string) {}

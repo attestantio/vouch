@@ -30,7 +30,9 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	if data.Slot != s.chainTimeService.CurrentSlot() {
 		return
 	}
-	s.monitor.BlockDelay(time.Since(s.chainTimeService.StartOfSlot(data.Slot)))
+
+	epochSlot := uint(uint64(data.Slot) % s.slotsPerEpoch)
+	s.monitor.BlockDelay(epochSlot, time.Since(s.chainTimeService.StartOfSlot(data.Slot)))
 
 	// We give the block half a second to propagate around the rest of the network before
 	// kicking off attestations for the block's slot.
