@@ -1,5 +1,6 @@
 Development:
   - add 'epoch_slot' label to 'vouch_block_receipt_delay_seconds' metric
+1.0.3:
   - metric 'vouch_attestation_process_duration_seconds' now counts multiple attestations correctly
   - re-implement accountmanager metrics
 1.0.2:
