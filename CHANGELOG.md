@@ -1,4 +1,5 @@
-Development:
+1.0.3:
+  - update go-eth2-client to avoid crash with Lighthouse 1.0.4+
   - metric 'vouch_attestation_process_duration_seconds' now counts multiple attestations correctly
   - re-implement accountmanager metrics
 1.0.2:
