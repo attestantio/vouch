@@ -55,6 +55,7 @@ type Service struct {
 	subscriptionInfos          map[spec.Epoch]map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription
 	subscriptionInfosMutex     sync.Mutex
 	accountsRefresher          accountmanager.Refresher
+	maxAttestationDelay        time.Duration
 }
 
 // module-wide log.
@@ -97,6 +98,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		attestationAggregator:      parameters.attestationAggregator,
 		beaconCommitteeSubscriber:  parameters.beaconCommitteeSubscriber,
 		accountsRefresher:          parameters.accountsRefresher,
+		maxAttestationDelay:        parameters.maxAttestationDelay,
 		subscriptionInfos:          make(map[spec.Epoch]map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
 	}
 

@@ -108,3 +108,9 @@ Modules levels are used for each module, overriding the global log level.  The a
   - **validatorsmanager** obtaining validator state from beacon nodes and providing it to other modules
 
 This can be configured using the environment variables `VOUCH_<MODULE>_LOG_LEVEL` or the configuration option `<module>.log-level`.  For example, the controller module logging could be configured using the environment variable `VOUCH_CONTROLLER_LOG_LEVEL` or the configuration option `controller.log-level`.
+
+## Advanced options
+Advanced options can change the performance of Vouch to be severely detrimental to its operation.  It is strongly recommended that these options are not changed unless the user understands completely what they do and their possible performance impact.
+
+### controller.max-attestation-delay
+This is a duration parameter, that defaults to `4s`.  It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.

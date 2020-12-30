@@ -1,4 +1,5 @@
 Development:
+  - add `controller.max_attestation_delay` option
   - add 'epoch_slot' label to 'vouch_block_receipt_delay_seconds' metric
 
 1.0.3:
