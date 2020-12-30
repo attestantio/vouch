@@ -1,11 +1,14 @@
 Development:
   - add 'epoch_slot' label to 'vouch_block_receipt_delay_seconds' metric
+
 1.0.3:
   - update go-eth2-client to avoid crash with Lighthouse 1.0.4+
   - metric 'vouch_attestation_process_duration_seconds' now counts multiple attestations correctly
   - re-implement accountmanager metrics
+
 1.0.2:
   - avoid crash in "best" attestationdata strategy
+
 1.0.1:
   - include source and target epochs when scoring attestation data
 
