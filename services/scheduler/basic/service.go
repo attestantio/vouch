@@ -64,8 +64,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // ScheduleJob schedules a one-off job for a given time.
-// This function returns two cancel funcs.  If the first is triggered the job will not run.  If the second is triggered the job
-// runs immediately.
 // Note that if the parent context is cancelled the job wil not run.
 func (s *Service) ScheduleJob(ctx context.Context, name string, runtime time.Time, jobFunc scheduler.JobFunc, data interface{}) error {
 	if name == "" {
@@ -101,9 +99,7 @@ func (s *Service) ScheduleJob(ctx context.Context, name string, runtime time.Tim
 			s.monitor.JobCancelled()
 		case <-cancelCh:
 			log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Cancel triggered; job not running")
-			s.mutex.Lock()
-			// The job will have already been removed.
-			s.mutex.Unlock()
+			// The job will have been removed by the function that sent the cancel.
 			s.monitor.JobCancelled()
 		case <-runCh:
 			s.mutex.Lock()
@@ -197,9 +193,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeF
 				return
 			case <-cancelCh:
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Cancel triggered; job not running")
-				s.mutex.Lock()
-				// The job will have already been removed.
-				s.mutex.Unlock()
+				// The job will have been removed by the function that sent the cancel.
 				s.monitor.JobCancelled()
 				return
 			case <-runCh:
