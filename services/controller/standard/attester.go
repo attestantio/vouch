@@ -95,10 +95,11 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 			continue
 		}
 		go func(duty *attester.Duty) {
+			// Adding 200 ms to ensure that head is up to date before we fetch attester duties.
+			jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxAttestationDelay).Add(200 * time.Millisecond)
 			if err := s.scheduler.ScheduleJob(ctx,
-				fmt.Sprintf("Beacon block attestations for slot %d", duty.Slot()),
-				// Adding 200 ms to ensure that head is up to date before we fetch attester duties.
-				s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.slotDuration/3).Add(200*time.Millisecond),
+				fmt.Sprintf("Attestations for slot %d", duty.Slot()),
+				jobTime,
 				s.AttestAndScheduleAggregate,
 				duty,
 			); err != nil {

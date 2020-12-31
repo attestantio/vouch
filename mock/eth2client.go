@@ -60,6 +60,19 @@ func (m *SlotDurationProvider) SlotDuration(ctx context.Context) (time.Duration,
 	return m.slotDuration, nil
 }
 
+// ErroringSlotDurationProvider is a mock for eth2client.SlotDurationProvider.
+type ErroringSlotDurationProvider struct{}
+
+// NewErroringSlotDurationProvider returns a mock slot duration provider that errors.
+func NewErroringSlotDurationProvider() eth2client.SlotDurationProvider {
+	return &ErroringSlotDurationProvider{}
+}
+
+// SlotDuration is a mock.
+func (m *ErroringSlotDurationProvider) SlotDuration(ctx context.Context) (time.Duration, error) {
+	return 0, errors.New("mock")
+}
+
 // FarFutureEpochProvider is a mock for eth2client.FarFutureEpochProvider.
 type FarFutureEpochProvider struct {
 	farFutureEpoch spec.Epoch
@@ -105,6 +118,45 @@ func NewErroringSlotsPerEpochProvider() eth2client.SlotsPerEpochProvider {
 // SlotsPerEpoch is a mock.
 func (m *ErroringSlotsPerEpochProvider) SlotsPerEpoch(ctx context.Context) (uint64, error) {
 	return 0, errors.New("error")
+}
+
+// ProposerDutiesProvider is a mock for eth2client.ProposerDutiesProvider.
+type ProposerDutiesProvider struct{}
+
+// NewProposerDutiesProvider returns a mock proposer duties provider.
+func NewProposerDutiesProvider() eth2client.ProposerDutiesProvider {
+	return &ProposerDutiesProvider{}
+}
+
+// ProposerDuties is a mock.
+func (m *ProposerDutiesProvider) ProposerDuties(ctx context.Context, epoch spec.Epoch, validatorIndices []spec.ValidatorIndex) ([]*api.ProposerDuty, error) {
+	return make([]*api.ProposerDuty, 0), nil
+}
+
+// AttesterDutiesProvider is a mock for eth2client.AttesterDutiesProvider.
+type AttesterDutiesProvider struct{}
+
+// NewAttesterDutiesProvider returns a mock attester duties provider.
+func NewAttesterDutiesProvider() eth2client.AttesterDutiesProvider {
+	return &AttesterDutiesProvider{}
+}
+
+// AttesterDuties is a mock.
+func (m *AttesterDutiesProvider) AttesterDuties(ctx context.Context, epoch spec.Epoch, validatorIndices []spec.ValidatorIndex) ([]*api.AttesterDuty, error) {
+	return make([]*api.AttesterDuty, 0), nil
+}
+
+// EventsProvider is a mock for eth2client.EventsProvider.
+type EventsProvider struct{}
+
+// NewEventsProvider returns a mock events provider.
+func NewEventsProvider() eth2client.EventsProvider {
+	return &EventsProvider{}
+}
+
+// Events is a mock
+func (m *EventsProvider) Events(ctx context.Context, topics []string, handler eth2client.EventHandlerFunc) error {
+	return nil
 }
 
 // AttestationsSubmitter is a mock for eth2client.AttestationsSubmitter.

@@ -37,7 +37,7 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	// We give the block half a second to propagate around the rest of the network before
 	// kicking off attestations for the block's slot.
 	time.Sleep(500 * time.Millisecond)
-	jobName := fmt.Sprintf("Beacon block attestations for slot %d", data.Slot)
+	jobName := fmt.Sprintf("Attestations for slot %d", data.Slot)
 	if s.scheduler.JobExists(ctx, jobName) {
 		log.Trace().Uint64("slot", uint64(data.Slot)).Msg("Kicking off attestations for slot early due to receiving relevant block")
 		if err := s.scheduler.RunJobIfExists(ctx, jobName); err != nil {

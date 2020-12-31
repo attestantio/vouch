@@ -397,6 +397,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardcontroller.WithAttestationAggregator(attestationAggregator),
 		standardcontroller.WithBeaconCommitteeSubscriber(beaconCommitteeSubscriber),
 		standardcontroller.WithAccountsRefresher(accountManager.(accountmanager.Refresher)),
+		standardcontroller.WithMaxAttestationDelay(viper.GetDuration("controller.max-attestation-delay")),
 	)
 	if err != nil {
 		return errors.Wrap(err, "failed to start controller service")

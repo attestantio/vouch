@@ -14,6 +14,8 @@
 package standard
 
 import (
+	"time"
+
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
@@ -43,6 +45,7 @@ type parameters struct {
 	attestationAggregator      attestationaggregator.Service
 	beaconCommitteeSubscriber  beaconcommitteesubscriber.Service
 	accountsRefresher          accountmanager.Refresher
+	maxAttestationDelay        time.Duration
 }
 
 // Parameter is the interface for service parameters.
@@ -161,10 +164,18 @@ func WithAccountsRefresher(refresher accountmanager.Refresher) Parameter {
 	})
 }
 
+// WithMaxAttestationDelay sets the maximum delay before attesting.
+func WithMaxAttestationDelay(delay time.Duration) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.maxAttestationDelay = delay
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel: zerolog.GlobalLevel(),
+		logLevel:            zerolog.GlobalLevel(),
+		maxAttestationDelay: 4 * time.Second,
 	}
 	for _, p := range params {
 		if params != nil {
@@ -193,6 +204,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.eventsProvider == nil {
 		return nil, errors.New("no events provider specified")
 	}
+	if parameters.validatingAccountsProvider == nil {
+		return nil, errors.New("no validating accounts provider specified")
+	}
 	if parameters.scheduler == nil {
 		return nil, errors.New("no scheduler service specified")
 	}
@@ -210,6 +224,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.accountsRefresher == nil {
 		return nil, errors.New("no accounts refresher specified")
+	}
+	if parameters.maxAttestationDelay == 0 {
+		return nil, errors.New("no maximum attestation delay specified")
 	}
 
 	return &parameters, nil
