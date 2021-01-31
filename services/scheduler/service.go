@@ -61,9 +61,13 @@ type Service interface {
 	// If this is a period job then all future instances are cancelled.
 	CancelJob(ctx context.Context, name string) error
 
+	// CancelJobIfExists cancels a job that may or may not exist.
+	// If this is a period job then all future instances are cancelled.
+	CancelJobIfExists(ctx context.Context, name string)
+
 	// CancelJobs cancels all jobs with the given prefix.
 	// If the prefix matches a period job then all future instances are cancelled.
-	CancelJobs(ctx context.Context, prefix string) error
+	CancelJobs(ctx context.Context, prefix string)
 
 	// RunJob runs a known job.
 	// If this is a period job then the next instance will be scheduled.
@@ -73,9 +77,8 @@ type Service interface {
 	JobExists(ctx context.Context, name string) bool
 
 	// RunJobIfExists runs a job if it exists.
-	// This does not return an error if the job does not exist.
 	// If this is a period job then the next instance will be scheduled.
-	RunJobIfExists(ctx context.Context, name string) error
+	RunJobIfExists(ctx context.Context, name string)
 
 	// ListJobs returns the names of all jobs.
 	ListJobs(ctx context.Context) []string

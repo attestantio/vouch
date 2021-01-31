@@ -56,6 +56,10 @@ type Service struct {
 	subscriptionInfosMutex     sync.Mutex
 	accountsRefresher          accountmanager.Refresher
 	maxAttestationDelay        time.Duration
+
+	lastBlockRoot             spec.Root
+	currentDutyDependentRoot  spec.Root
+	previousDutyDependentRoot spec.Root
 }
 
 // module-wide log.
@@ -104,6 +108,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	// Subscribe to head events.  This allows us to go early for attestations if a block arrives, as well as
 	// re-request duties if there is a change in beacon block.
+	// This also allows us to re-request duties if the dependent roots change.
 	if err := parameters.eventsProvider.Events(ctx, []string{"head"}, s.HandleHeadEvent); err != nil {
 		return nil, errors.Wrap(err, "failed to add head event handler")
 	}

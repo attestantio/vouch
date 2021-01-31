@@ -45,5 +45,5 @@ func (s *Service) startAccountsRefresher(ctx context.Context) error {
 func (s *Service) refreshAccounts(ctx context.Context, data interface{}) {
 	started := time.Now()
 	s.accountsRefresher.Refresh(ctx)
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("************************************Refreshed accounts")
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Refreshed accounts")
 }

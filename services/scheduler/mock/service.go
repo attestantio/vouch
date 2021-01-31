@@ -54,16 +54,15 @@ func (s *service) ListJobs(ctx context.Context) []string {
 }
 
 // RunJobIfExists runs a job if it exists.
-func (s *service) RunJobIfExists(ctx context.Context, name string) error {
-	return nil
-}
+func (s *service) RunJobIfExists(ctx context.Context, name string) {}
 
 // CancelJob removes a named job.
 func (s *service) CancelJob(ctx context.Context, name string) error {
 	return nil
 }
 
+// CancelJobIfExists cancels a job that may or may not exist.
+func (s *service) CancelJobIfExists(ctx context.Context, name string) {}
+
 // CancelJobs cancels all jobs with the given prefix.
-func (s *service) CancelJobs(ctx context.Context, prefix string) error {
-	return nil
-}
+func (s *service) CancelJobs(ctx context.Context, prefix string) {}

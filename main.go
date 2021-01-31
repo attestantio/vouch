@@ -184,8 +184,9 @@ func fetchConfig() error {
 	viper.AutomaticEnv()
 
 	// Defaults.
-	viper.Set("process-concurrency", 16)
-	viper.Set("eth2client.timeout", 2*time.Minute)
+	viper.SetDefault("process-concurrency", 16)
+	viper.SetDefault("eth2client.timeout", 2*time.Minute)
+	viper.SetDefault("controller.max-attestation-delay", 4*time.Second)
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -642,6 +643,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 			walletaccountmanager.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
 			walletaccountmanager.WithFarFutureEpochProvider(eth2Client.(eth2client.FarFutureEpochProvider)),
 			walletaccountmanager.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
+			walletaccountmanager.WithCurrentEpochProvider(chainTime),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start wallet account manager service")
