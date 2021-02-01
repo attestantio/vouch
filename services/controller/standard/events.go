@@ -45,7 +45,7 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	// for the purposes of this function, so ignore them.
 	if !bytes.Equal(s.lastBlockRoot[:], zeroRoot[:]) &&
 		bytes.Equal(s.lastBlockRoot[:], data.Block[:]) {
-		log.Info().Msg("Synthetic head event; ignoring")
+		log.Trace().Msg("Synthetic head event; ignoring")
 		return
 	}
 	s.lastBlockRoot = data.Block
