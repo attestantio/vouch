@@ -258,21 +258,20 @@ func (s *Service) ListJobs(ctx context.Context) []string {
 
 // RunJobIfExists runs a job if it exists.
 // This does not return an error if the job does not exist.
-func (s *Service) RunJobIfExists(ctx context.Context, name string) error {
+func (s *Service) RunJobIfExists(ctx context.Context, name string) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
 	if job, exists := s.jobs[name]; exists {
 		job.runCh <- struct{}{}
 	}
-	return nil
 }
 
 // CancelJob removes a named job.
 // If the job does not exist it will return an appropriate error.
 func (s *Service) CancelJob(ctx context.Context, name string) error {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
 	job, exists := s.jobs[name]
 	if !exists {
@@ -285,19 +284,30 @@ func (s *Service) CancelJob(ctx context.Context, name string) error {
 	return nil
 }
 
+// CancelJobIfExists cancels a job that may or may not exist.
+// If this is a period job then all future instances are cancelled.
+func (s *Service) CancelJobIfExists(ctx context.Context, name string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	job, exists := s.jobs[name]
+	if exists {
+		job.cancelCh <- struct{}{}
+		s.removeJob(ctx, name)
+	}
+}
+
 // CancelJobs cancels all jobs with the given prefix.
 // If the prefix matches a period job then all future instances are cancelled.
-func (s *Service) CancelJobs(ctx context.Context, prefix string) error {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
+func (s *Service) CancelJobs(ctx context.Context, prefix string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	for name, job := range s.jobs {
 		if strings.HasPrefix(name, prefix) {
 			job.cancelCh <- struct{}{}
 			s.removeJob(ctx, name)
 		}
 	}
-
-	return nil
 }
 
 // jobExists returns true if the job exists in the job list.

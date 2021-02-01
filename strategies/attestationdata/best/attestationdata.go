@@ -30,6 +30,7 @@ type attestationDataResponse struct {
 // AttestationData provides the best attestation data from a number of beacon nodes.
 func (s *Service) AttestationData(ctx context.Context, slot spec.Slot, committeeIndex spec.CommitteeIndex) (*spec.AttestationData, error) {
 	started := time.Now()
+	log := log.With().Uint64("slot", uint64(slot)).Logger()
 
 	// We create a cancelable context with a timeout.  If the context times out we take the best to date.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
@@ -68,7 +69,7 @@ func (s *Service) AttestationData(ctx context.Context, slot spec.Slot, committee
 		case <-ctx.Done():
 			// Anyone not responded by now is considered errored.
 			errored = len(s.attestationDataProviders) - responded
-			log.Info().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Msg("Timed out waiting for responses")
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Msg("Timed out waiting for responses")
 		case <-errCh:
 			errored++
 		case resp := <-respCh:
@@ -80,6 +81,7 @@ func (s *Service) AttestationData(ctx context.Context, slot spec.Slot, committee
 		}
 	}
 	cancel()
+	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Msg("Responses")
 
 	if bestAttestationData == nil {
 		return nil, errors.New("no attestations received")

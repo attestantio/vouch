@@ -140,7 +140,7 @@ func TestCancelJobs(t *testing.T) {
 	require.NoError(t, s.ScheduleJob(ctx, "Test job 2", time.Now().Add(100*time.Millisecond), runFunc, nil))
 	require.NoError(t, s.ScheduleJob(ctx, "No cancel job", time.Now().Add(100*time.Millisecond), runFunc, nil))
 	require.Equal(t, 0, run)
-	require.NoError(t, s.CancelJobs(ctx, "Test job"))
+	s.CancelJobs(ctx, "Test job")
 	time.Sleep(time.Duration(110) * time.Millisecond)
 	assert.Equal(t, 1, run)
 }
@@ -194,9 +194,9 @@ func TestRunJobIfExists(t *testing.T) {
 
 	require.NoError(t, s.ScheduleJob(ctx, "Test job", time.Now().Add(time.Second), runFunc, nil))
 	require.Equal(t, 0, run)
-	require.NoError(t, s.RunJobIfExists(ctx, "Unknown job"))
+	s.RunJobIfExists(ctx, "Unknown job")
 	require.Equal(t, 0, run)
-	require.NoError(t, s.RunJobIfExists(ctx, "Test job"))
+	s.RunJobIfExists(ctx, "Test job")
 	time.Sleep(time.Duration(100) * time.Millisecond)
 	assert.Equal(t, 1, run)
 }

@@ -6,14 +6,16 @@ require (
 	cloud.google.com/go v0.72.0 // indirect
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/attestantio/dirk v0.9.6
-	github.com/attestantio/go-eth2-client v0.6.18
-	github.com/aws/aws-sdk-go v1.35.35
-	github.com/ferranbt/fastssz v0.0.0-20201030134205-9b9624098321
+	github.com/attestantio/go-eth2-client v0.6.21
+	github.com/aws/aws-sdk-go v1.36.1
+	github.com/ferranbt/fastssz v0.0.0-20201203133411-08e10d27d26a
 	github.com/goccy/go-yaml v1.8.4 // indirect
 	github.com/google/go-cmp v0.5.4 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/herumi/bls-eth-go-binary v0.0.0-20201104034342-d782bdf735de
+	github.com/jackc/puddle v1.1.3 // indirect
 	github.com/mitchellh/go-homedir v1.1.0
+	github.com/mitchellh/mapstructure v1.4.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/pkg/errors v0.9.1
@@ -38,10 +40,14 @@ require (
 	github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.1
 	github.com/wealdtech/go-eth2-wallet-types/v2 v2.8.1
 	github.com/wealdtech/go-majordomo v1.0.1
-	golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392 // indirect
-	golang.org/x/oauth2 v0.0.0-20201109201403-9fd604954f58 // indirect
+	golang.org/x/crypto v0.0.0-20201203163018-be400aefbc4c // indirect
+	golang.org/x/net v0.0.0-20201202161906-c7110b5ffcbb // indirect
+	golang.org/x/oauth2 v0.0.0-20201203001011-0b49973bad19 // indirect
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
-	google.golang.org/genproto v0.0.0-20201119123407-9b1e624d6bc4 // indirect
-	google.golang.org/grpc v1.33.2
+	golang.org/x/sys v0.0.0-20201202213521-69691e467435 // indirect
+	google.golang.org/api v0.36.0 // indirect
+	google.golang.org/genproto v0.0.0-20201203001206-6486ece9c497 // indirect
+	google.golang.org/grpc v1.34.0
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools v2.2.0+incompatible
 )

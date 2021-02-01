@@ -1,5 +1,7 @@
 Development:
+  - handle chain reorganisations, updating duties as appropriate
   - add `controller.max_attestation_delay` option
+  - introduce aggregate attestation strategy, allowing selection of best or first aggregate attestation from a set
   - add 'epoch_slot' label to 'vouch_block_receipt_delay_seconds' metric
 
 1.0.3:

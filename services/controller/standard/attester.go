@@ -91,7 +91,7 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 			log.Debug().
 				Uint64("attestation_slot", uint64(duty.Slot())).
 				Uint64("current_slot", uint64(currentSlot)).
-				Msg("Attestation for the current slot and this is our first run; not scheduling")
+				Msg("Attestation for the current slot; not scheduling")
 			continue
 		}
 		go func(duty *attester.Duty) {
@@ -119,6 +119,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 		log.Error().Msg("Passed invalid data")
 		return
 	}
+	log := log.With().Uint64("slot", uint64(duty.Slot())).Logger()
 
 	attestations, err := s.attester.Attest(ctx, duty)
 	if err != nil {
@@ -138,7 +139,6 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 	s.subscriptionInfosMutex.Unlock()
 	if !exists {
 		log.Debug().
-			Uint64("slot", uint64(duty.Slot())).
 			Uint64("epoch", uint64(epoch)).
 			Msg("No subscription info for this epoch; not aggregating")
 		return

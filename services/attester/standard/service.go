@@ -121,7 +121,7 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
 		return nil, errors.New("failed to obtain attesting validator accounts")
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
+	log.Trace().Dur("elapsed", time.Since(started)).Int("validating_accounts", len(validatingAccounts)).Msg("Obtained validating accounts")
 
 	// Break the map in to two arrays.
 	accountValidatorIndices := make([]spec.ValidatorIndex, 0, len(validatingAccounts))
@@ -196,6 +196,7 @@ func (s *Service) attest(
 		data.Target.Root,
 	)
 	if err != nil {
+		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
 		return nil, errors.Wrap(err, "failed to sign beacon attestations")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed")
@@ -230,9 +231,15 @@ func (s *Service) attest(
 		attestations = append(attestations, attestation)
 	}
 
+	if len(attestations) == 0 {
+		log.Info().Msg("No signed attestations; not submitting")
+		return attestations, nil
+	}
+
 	// Submit the attestations.
 	if err := s.attestationsSubmitter.SubmitAttestations(ctx, attestations); err != nil {
-		log.Warn().Err(err).Msg("Failed to submit attestations")
+		s.monitor.AttestationsCompleted(started, len(attestations), "failed")
+		return nil, errors.Wrap(err, "failed to submit attestations")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted attestations")
 	s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "succeeded")
