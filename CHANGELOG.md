@@ -1,4 +1,4 @@
-Development:
+1.1.0:
   - provide release metric in `vouch_release`
   - provide ready metric in `vouch_ready`
   - handle chain reorganisations, updating duties as appropriate

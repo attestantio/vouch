@@ -75,6 +75,7 @@ github.com/attestantio/dirk v0.9.3 h1:hJj/X63n7UV+DseKlR8Kjs+zLYtf+2Alqk9A6nI8mU
 github.com/attestantio/dirk v0.9.3/go.mod h1:EfppeT+VjQXnE9Ti5/vxa6ptZJAN2vMXO6KZojvSOXA=
 github.com/attestantio/dirk v0.9.6 h1:UsVP0oU/2QWqr4gp+o57itGiOnNwzPt5sNYF+/rK3aY=
 github.com/attestantio/dirk v0.9.6/go.mod h1:D3vm3lUI6ioAL/NNxvu96zYSgWonh6McDS9OrFfMVb4=
+github.com/attestantio/dirk v1.0.2 h1:CYIRgQIbPqshwvgNJt98vV/ljhZmnAqfhQujoIpvGKg=
 github.com/attestantio/dirk v1.0.2/go.mod h1:QHXxAnKD9cpuPC7STamSW2nPXEn7YTypcNFPAKfWTFQ=
 github.com/attestantio/go-eth2-client v0.6.8 h1:Lsjx5P0pB8ruZBfJUbqy5hpevD4Zt8Z0Lg4V5m2s53E=
 github.com/attestantio/go-eth2-client v0.6.8/go.mod h1:lYEayGHzZma9HMUJgyxFIzDWRck8n2IedP7KTkIwe0g=
@@ -716,6 +717,7 @@ github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.0 h1:41H6hnVsI/csBx20UHpI
 github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.0/go.mod h1:XtXHbl4OV/XenQsvGmXbh+bVXaGS788oa30DB7kDInA=
 github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.1 h1:vv9lR8K76FUSNbzUU25MN4HNhZIBBI1kJBNfHq2WjRY=
 github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.1/go.mod h1:qnI6/VRpFyKGV+DhzdC1zmx2sA7mRRanCFlk4RYzoYs=
+github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.2 h1:VfEq3gu8yZ6hUll3XEUugm+lBtdWWXrcJaNLp8Je3aU=
 github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.2/go.mod h1:qEHxsSqhYd1N7UzN3iFils+z4HDnJl7L772hZiQEm0E=
 github.com/wealdtech/go-eth2-wallet-types/v2 v2.5.0 h1:J29mbkSCUMl2xdu8Lg6U+JptFGfmli6xl04DAHtq9aM=
 github.com/wealdtech/go-eth2-wallet-types/v2 v2.5.0/go.mod h1:X9kYUH/E5YMqFMZ4xL6MJanABUkJGaH/yPZRT2o+yYA=
