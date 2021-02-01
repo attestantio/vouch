@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -134,6 +134,7 @@ func main2() int {
 		log.Error().Err(err).Msg("Failed to initialise services")
 		return 1
 	}
+	setReady(ctx, true)
 	log.Info().Msg("All services operational")
 
 	// Wait for signal.
@@ -245,6 +246,11 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to start metrics service")
 	}
+	if err := registerMetrics(ctx, monitor); err != nil {
+		return errors.Wrap(err, "failed to register metrics")
+	}
+	setRelease(ctx, ReleaseVersion)
+	setReady(ctx, false)
 
 	log.Trace().Msg("Starting Ethereum 2 client service")
 	eth2Client, err := fetchClient(ctx, viper.GetString("beacon-node-address"))

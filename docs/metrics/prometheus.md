@@ -1,10 +1,15 @@
 # Prometheus metrics
 vouch provides a number of metrics to check the health and performance of its activities.  vouch's default implementation uses Prometheus to provide these metrics.  The metrics server listens on the address provided by the `metrics.address` configuration value.
 
+## Version
+The version of Vouch can be found in the `vouch_release` metric, in the `version` label.
+
 ## Health
 Health metrics provide a mechanism to confirm if vouch is active.  Due to vouch's nature there are multiple metrics that can be used to provide health and activity information that can be monitored.
 
 `vouch_start_time_secs` is the Unix timestamp at which vouch was started.  This value will remain the same throughout a run of vouch; if it increments it implies that vouch has restarted.
+
+`vouch_ready` is `1` if Vouch's services are all on-line and it is able to operate.  If not, this will be `0`.
 
 `vouch_epochs_processed_total` the number of epochs vouch has processed.  This number resets to 0 when vouch restarts, and increments every time vouch starts to process an epoch; if it fails to increment it implies that vouch has stopped processing.
 

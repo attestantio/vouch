@@ -1,4 +1,6 @@
 Development:
+  - provide release metric in `vouch_release`
+  - provide ready metric in `vouch_ready`
   - handle chain reorganisations, updating duties as appropriate
   - add `controller.max_attestation_delay` option
   - introduce aggregate attestation strategy, allowing selection of best or first aggregate attestation from a set

@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,16 +21,6 @@ import (
 )
 
 func (s *Service) setupControllerMetrics() error {
-	controllerStartTime := prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: "vouch",
-		Name:      "start_time_secs",
-		Help:      "The timestamp at which vouch started.",
-	})
-	if err := prometheus.Register(controllerStartTime); err != nil {
-		return err
-	}
-	controllerStartTime.SetToCurrentTime()
-
 	s.epochsProcessed = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: "vouch",
 		Name:      "epochs_processed_total",

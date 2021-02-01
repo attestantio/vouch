@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -25,6 +25,11 @@ type Service struct{}
 // New creates a new null metrics service.
 func New(ctx context.Context) *Service {
 	return &Service{}
+}
+
+// Presenter provides the presenter for this service.
+func (s *Service) Presenter() string {
+	return "null"
 }
 
 // JobScheduled is called when a job is scheduled.
