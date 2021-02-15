@@ -19,7 +19,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/attestantio/dirk/util"
+	"github.com/attestantio/vouch/util"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )

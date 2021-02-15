@@ -18,7 +18,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/attestantio/dirk/util"
+	"github.com/attestantio/vouch/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
