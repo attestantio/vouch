@@ -18,6 +18,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	// #nosec G108
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -405,6 +408,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardcontroller.WithBeaconCommitteeSubscriber(beaconCommitteeSubscriber),
 		standardcontroller.WithAccountsRefresher(accountManager.(accountmanager.Refresher)),
 		standardcontroller.WithMaxAttestationDelay(viper.GetDuration("controller.max-attestation-delay")),
+		standardcontroller.WithReorgs(viper.GetBool("controller.reorgs")),
 	)
 	if err != nil {
 		return errors.Wrap(err, "failed to start controller service")

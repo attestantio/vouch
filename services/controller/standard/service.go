@@ -56,6 +56,7 @@ type Service struct {
 	subscriptionInfosMutex     sync.Mutex
 	accountsRefresher          accountmanager.Refresher
 	maxAttestationDelay        time.Duration
+	reorgs                     bool
 
 	lastBlockRoot             spec.Root
 	currentDutyDependentRoot  spec.Root
@@ -103,6 +104,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		beaconCommitteeSubscriber:  parameters.beaconCommitteeSubscriber,
 		accountsRefresher:          parameters.accountsRefresher,
 		maxAttestationDelay:        parameters.maxAttestationDelay,
+		reorgs:                     parameters.reorgs,
 		subscriptionInfos:          make(map[spec.Epoch]map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
 	}
 

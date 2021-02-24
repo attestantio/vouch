@@ -56,23 +56,25 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	// Check to see if there is a change in duties.  Note that if this is the first slot
 	// in the epoch we expect to see different dependent roots anyway, and updated duties
 	// are fetched from the epoch ticker so we don't re-fetch them here.
-	if epochSlot != 0 {
-		if !bytes.Equal(s.previousDutyDependentRoot[:], zeroRoot[:]) &&
-			!bytes.Equal(s.previousDutyDependentRoot[:], data.PreviousDutyDependentRoot[:]) {
-			log.Debug().
-				Str("old_dependent_root", fmt.Sprintf("%#x", s.previousDutyDependentRoot[:])).
-				Str("new_dependent_root", fmt.Sprintf("%#x", data.PreviousDutyDependentRoot[:])).
-				Msg("Previous duty dependent root has changed")
-			go s.handlePreviousDependentRootChanged(ctx)
-		}
+	if s.reorgs {
+		if epochSlot != 0 {
+			if !bytes.Equal(s.previousDutyDependentRoot[:], zeroRoot[:]) &&
+				!bytes.Equal(s.previousDutyDependentRoot[:], data.PreviousDutyDependentRoot[:]) {
+				log.Debug().
+					Str("old_dependent_root", fmt.Sprintf("%#x", s.previousDutyDependentRoot[:])).
+					Str("new_dependent_root", fmt.Sprintf("%#x", data.PreviousDutyDependentRoot[:])).
+					Msg("Previous duty dependent root has changed")
+				go s.handlePreviousDependentRootChanged(ctx)
+			}
 
-		if !bytes.Equal(s.currentDutyDependentRoot[:], zeroRoot[:]) &&
-			!bytes.Equal(s.currentDutyDependentRoot[:], data.CurrentDutyDependentRoot[:]) {
-			log.Debug().
-				Str("old_dependent_root", fmt.Sprintf("%#x", s.currentDutyDependentRoot[:])).
-				Str("new_dependent_root", fmt.Sprintf("%#x", data.CurrentDutyDependentRoot[:])).
-				Msg("Current duty dependent root has changed")
-			go s.handleCurrentDependentRootChanged(ctx)
+			if !bytes.Equal(s.currentDutyDependentRoot[:], zeroRoot[:]) &&
+				!bytes.Equal(s.currentDutyDependentRoot[:], data.CurrentDutyDependentRoot[:]) {
+				log.Debug().
+					Str("old_dependent_root", fmt.Sprintf("%#x", s.currentDutyDependentRoot[:])).
+					Str("new_dependent_root", fmt.Sprintf("%#x", data.CurrentDutyDependentRoot[:])).
+					Msg("Current duty dependent root has changed")
+				go s.handleCurrentDependentRootChanged(ctx)
+			}
 		}
 	}
 	s.previousDutyDependentRoot = data.PreviousDutyDependentRoot
