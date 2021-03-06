@@ -117,10 +117,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	if err := s.refreshAccounts(ctx); err != nil {
-		return nil, errors.Wrap(err, "failed to fetch accounts")
+		return nil, errors.Wrap(err, "failed to fetch initial accounts")
 	}
 	if err := s.refreshValidators(ctx); err != nil {
-		return nil, errors.Wrap(err, "failed to fetch validator states")
+		return nil, errors.Wrap(err, "failed to fetch initial validator states")
 	}
 
 	return s, nil
@@ -174,6 +174,11 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 		//}
 	}
 	log.Trace().Int("accounts", len(accounts)).Msg("Obtained accounts")
+
+	if len(accounts) == 0 && len(s.accounts) != 0 {
+		log.Warn().Msg("No accounts obtained; retaining old list")
+		return nil
+	}
 
 	s.mutex.Lock()
 	s.accounts = accounts
