@@ -125,6 +125,13 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	log := log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Proposing")
 
+	var zeroSig spec.BLSSignature
+	if duty.RANDAOReveal() == zeroSig {
+		log.Error().Msg("Missing RANDAO reveal")
+		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		return
+	}
+
 	var graffiti []byte
 	var err error
 	if s.graffitiProvider != nil {
