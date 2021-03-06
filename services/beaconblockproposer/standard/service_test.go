@@ -46,7 +46,7 @@ func TestProposeNoRANDAOReveal(t *testing.T) {
 		standard.WithMonitor(nullmetrics.New(ctx)),
 		standard.WithProposalDataProvider(mock.NewBeaconBlockProposalProvider()),
 		standard.WithChainTimeService(chainTime),
-		standard.WithValidatingAccountsProvider(mockaccountsprovider.New()),
+		standard.WithValidatingAccountsProvider(mockaccountsprovider.NewValidatingAccountsProvider()),
 		standard.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 		standard.WithRANDAORevealSigner(mocksigner.New()),
 		standard.WithBeaconBlockSigner(mocksigner.New()),

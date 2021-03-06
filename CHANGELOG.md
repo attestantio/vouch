@@ -1,4 +1,5 @@
 1.1.0:
+  - address crash when proposing block for which a RANDAO reveal cannot be obtained
   - provide release metric in `vouch_release`
   - provide ready metric in `vouch_ready`
   - handle chain reorganisations, updating duties as appropriate

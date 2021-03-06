@@ -20,7 +20,7 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
-// service is a mock.
+// Service is a mock.
 type Service struct{}
 
 // New provides a mock signer.
@@ -57,7 +57,7 @@ func (s *Service) SignBeaconAttestation(ctx context.Context,
 	return spec.BLSSignature{}, nil
 }
 
-// SignBeaconAttestation signs multiple beacon attestations.
+// SignBeaconAttestations signs multiple beacon attestations.
 func (s *Service) SignBeaconAttestations(ctx context.Context,
 	accounts []e2wtypes.Account,
 	slot spec.Slot,
