@@ -1,11 +1,14 @@
 1.1.0:
-  - address crash when proposing block for which a RANDAO reveal cannot be obtained
   - provide release metric in `vouch_release`
   - provide ready metric in `vouch_ready`
   - handle chain reorganisations, updating duties as appropriate
   - add `controller.max_attestation_delay` option
   - introduce aggregate attestation strategy, allowing selection of best or first aggregate attestation from a set
   - add 'epoch_slot' label to 'vouch_block_receipt_delay_seconds' metric
+
+1.0.4:
+  - retain existing validator list if an attempted refresh returns no results
+  - avoid crash when a Vouch cannot obtain the RANDAO reveal for a block proposal
 
 1.0.3:
   - update go-eth2-client to avoid crash with Lighthouse 1.0.4+
