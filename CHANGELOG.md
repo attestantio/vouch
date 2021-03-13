@@ -1,9 +1,15 @@
+1.0.4:
+  - retain existing validator list if an attempted refresh returns no results
+  - avoid crash when a Vouch cannot obtain the RANDAO reveal for a block proposal
+
 1.0.3:
   - update go-eth2-client to avoid crash with Lighthouse 1.0.4+
   - metric 'vouch_attestation_process_duration_seconds' now counts multiple attestations correctly
   - re-implement accountmanager metrics
+
 1.0.2:
   - avoid crash in "best" attestationdata strategy
+
 1.0.1:
   - include source and target epochs when scoring attestation data
 
