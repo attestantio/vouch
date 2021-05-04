@@ -58,7 +58,9 @@ type Service struct {
 	maxAttestationDelay        time.Duration
 	reorgs                     bool
 
+	// Tracking for reorgs.
 	lastBlockRoot             spec.Root
+	lastBlockEpoch            spec.Epoch
 	currentDutyDependentRoot  spec.Root
 	previousDutyDependentRoot spec.Root
 }
