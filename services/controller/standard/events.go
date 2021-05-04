@@ -49,15 +49,31 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 		return
 	}
 	s.lastBlockRoot = data.Block
+	epoch := s.chainTimeService.SlotToEpoch(data.Slot)
 
-	epochSlot := uint(uint64(data.Slot) % s.slotsPerEpoch)
-	s.monitor.BlockDelay(epochSlot, time.Since(s.chainTimeService.StartOfSlot(data.Slot)))
+	s.monitor.BlockDelay(uint(uint64(data.Slot)%s.slotsPerEpoch), time.Since(s.chainTimeService.StartOfSlot(data.Slot)))
 
-	// Check to see if there is a change in duties.  Note that if this is the first slot
-	// in the epoch we expect to see different dependent roots anyway, and updated duties
-	// are fetched from the epoch ticker so we don't re-fetch them here.
-	if s.reorgs {
-		if epochSlot != 0 {
+	// Check to see if there is a reorganisation that requires re-fetching duties.
+	if s.reorgs && s.lastBlockEpoch != 0 {
+		if epoch > s.lastBlockEpoch {
+			log.Trace().
+				Str("old_previous_dependent_root", fmt.Sprintf("%#x", s.previousDutyDependentRoot)).
+				Str("new_previous_dependent_root", fmt.Sprintf("%#x", data.PreviousDutyDependentRoot)).
+				Str("old_current_dependent_root", fmt.Sprintf("%#x", s.currentDutyDependentRoot)).
+				Str("new_current_dependent_root", fmt.Sprintf("%#x", data.CurrentDutyDependentRoot)).
+				Msg("Change of epoch")
+			// Change of epoch.  Ensure that the new previous dependent root is the same as
+			// the old current root.
+			if !bytes.Equal(s.previousDutyDependentRoot[:], zeroRoot[:]) &&
+				!bytes.Equal(s.currentDutyDependentRoot[:], data.PreviousDutyDependentRoot[:]) {
+				log.Debug().
+					Str("old_current_dependent_root", fmt.Sprintf("%#x", s.currentDutyDependentRoot[:])).
+					Str("new_previous_dependent_root", fmt.Sprintf("%#x", data.PreviousDutyDependentRoot[:])).
+					Msg("Previous duty dependent root has changed on epoch transition")
+				go s.handlePreviousDependentRootChanged(ctx)
+			}
+		} else {
+			// Existing epoch.  Ensure that the roots are the same.
 			if !bytes.Equal(s.previousDutyDependentRoot[:], zeroRoot[:]) &&
 				!bytes.Equal(s.previousDutyDependentRoot[:], data.PreviousDutyDependentRoot[:]) {
 				log.Debug().
@@ -77,6 +93,7 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 			}
 		}
 	}
+	s.lastBlockEpoch = epoch
 	s.previousDutyDependentRoot = data.PreviousDutyDependentRoot
 	s.currentDutyDependentRoot = data.CurrentDutyDependentRoot
 
