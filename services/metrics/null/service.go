@@ -77,3 +77,7 @@ func (s *Service) Accounts(state string, count uint64) {}
 // ClientOperation provides a generic monitor for client operations.
 func (s *Service) ClientOperation(provider string, name string, succeeded bool, duration time.Duration) {
 }
+
+// StrategyOperation provides a generic monitor for strategy operations.
+func (s *Service) StrategyOperation(strategy string, provider string, operation string, duration time.Duration) {
+}

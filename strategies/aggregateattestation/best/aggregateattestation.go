@@ -23,6 +23,7 @@ import (
 )
 
 type aggregateAttestationResponse struct {
+	provider  string
 	aggregate *spec.Attestation
 	score     float64
 }
@@ -57,6 +58,7 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot spec.Slot, atte
 
 			score := s.scoreAggregateAttestation(ctx, name, aggregate)
 			respCh <- &aggregateAttestationResponse{
+				provider:  name,
 				aggregate: aggregate,
 				score:     score,
 			}
@@ -68,6 +70,8 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot spec.Slot, atte
 	errored := 0
 	bestScore := float64(0)
 	var bestAggregateAttestation *spec.Attestation
+	bestProvider := ""
+
 	for responded+errored != len(s.aggregateAttestationProviders) {
 		select {
 		case <-ctx.Done():
@@ -81,6 +85,7 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot spec.Slot, atte
 			if bestAggregateAttestation == nil || resp.score > bestScore {
 				bestAggregateAttestation = resp.aggregate
 				bestScore = resp.score
+				bestProvider = resp.provider
 			}
 		}
 	}
@@ -90,6 +95,9 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot spec.Slot, atte
 		return nil, errors.New("no aggregate attestations received")
 	}
 	log.Trace().Stringer("aggregate_attestation", bestAggregateAttestation).Float64("score", bestScore).Msg("Selected best aggregate attestation")
+	if bestProvider != "" {
+		s.clientMonitor.StrategyOperation("best", bestProvider, "aggregate attestation", time.Since(started))
+	}
 
 	return bestAggregateAttestation, nil
 }

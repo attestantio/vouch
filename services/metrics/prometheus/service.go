@@ -50,8 +50,10 @@ type Service struct {
 
 	accountManagerAccounts *prometheus.GaugeVec
 
-	clientOperationCounter *prometheus.CounterVec
-	clientOperationTimer   *prometheus.HistogramVec
+	clientOperationCounter   *prometheus.CounterVec
+	clientOperationTimer     *prometheus.HistogramVec
+	strategyOperationCounter *prometheus.CounterVec
+	strategyOperationTimer   *prometheus.HistogramVec
 }
 
 // module-wide log.
