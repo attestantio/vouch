@@ -77,7 +77,7 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot spec.Slot, atte
 		case <-ctx.Done():
 			// Anyone not responded by now is considered errored.
 			errored = len(s.aggregateAttestationProviders) - responded
-			log.Info().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Msg("Timed out waiting for responses")
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Msg("Timed out waiting for responses")
 		case <-errCh:
 			errored++
 		case resp := <-respCh:
