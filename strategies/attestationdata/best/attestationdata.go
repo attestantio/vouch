@@ -23,6 +23,7 @@ import (
 )
 
 type attestationDataResponse struct {
+	provider        string
 	attestationData *spec.AttestationData
 	score           float64
 }
@@ -53,6 +54,7 @@ func (s *Service) AttestationData(ctx context.Context, slot spec.Slot, committee
 
 			score := s.scoreAttestationData(ctx, provider, name, attestationData)
 			respCh <- &attestationDataResponse{
+				provider:        name,
 				attestationData: attestationData,
 				score:           score,
 			}
@@ -64,6 +66,8 @@ func (s *Service) AttestationData(ctx context.Context, slot spec.Slot, committee
 	errored := 0
 	bestScore := float64(0)
 	var bestAttestationData *spec.AttestationData
+	bestProvider := ""
+
 	for responded+errored != len(s.attestationDataProviders) {
 		select {
 		case <-ctx.Done():
@@ -77,6 +81,7 @@ func (s *Service) AttestationData(ctx context.Context, slot spec.Slot, committee
 			if bestAttestationData == nil || resp.score > bestScore {
 				bestAttestationData = resp.attestationData
 				bestScore = resp.score
+				bestProvider = resp.provider
 			}
 		}
 	}
@@ -87,6 +92,9 @@ func (s *Service) AttestationData(ctx context.Context, slot spec.Slot, committee
 		return nil, errors.New("no attestations received")
 	}
 	log.Trace().Stringer("attestation_data", bestAttestationData).Float64("score", bestScore).Msg("Selected best attestation")
+	if bestProvider != "" {
+		s.clientMonitor.StrategyOperation("best", bestProvider, "attestation data", time.Since(started))
+	}
 
 	return bestAttestationData, nil
 }

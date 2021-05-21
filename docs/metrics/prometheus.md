@@ -56,7 +56,7 @@ Vouch's job scheduler provides a number of metrics.  The specific metrics are:
 ## Client operations
 Client operations metrics provide information about the response time of beacon nodes, as well as if the request to them succeeded or failed.  This can be used to understand how quickly and how well beacon nodes are responding to requests, for example if Vouch using multiple beacon nodes in different data centres this can be used to obtain data about their response times due to network latency.
 
-`vouch_client_opeation_duration_seconds` is provided as a histogram, with buckets in increments of 0.1 seconds up to 4 seconds.  It has two labels:
+`vouch_client_operation_duration_seconds` is provided as a histogram, with buckets in increments of 0.1 seconds up to 4 seconds.  It has two labels:
 
   - `proposer` is the endpoint for the operation
   - `operation` is the operation that took place (_e.g._ "beacon block proposal")
@@ -66,6 +66,21 @@ There is also a companion metric `vouch_client_operation_requests_total`, which 
   - `proposer` is the endpoint for the operation
   - `operation` is the operation that took place (_e.g._ "beacon block proposal")
   - `result` is the result of the operation, either "succeeded" or "failed"
+
+## Strategy operations
+Strategy operations metrics provide information the results and calculation times of strategies.  This can be used to understand which beacon nodes are providing the most useful information to Vouch, and how quickly Vouch is deciding on which data to use in its attestations and proposals.
+
+`vouch_strategy_operation_duration_seconds` is provided as a histogram, with buckets in increments of 0.1 seconds up to 4 seconds.  It has three labels:
+
+  - `strategy` is the strategy for the operation
+  - `provider` is the provider for the operation
+  - `operation` is the operation that took place (_e.g._ "beacon block proposal")
+
+There is also a companion metric `vouch_strategy_operation_requests_total`, which is a simple count of the number of operations that have taken place.  It has three labels:
+
+  - `strategy` is the strategy for the operation
+  - `provider` is the provider for the operation
+  - `operation` is the operation that took place (_e.g._ "beacon block proposal")
 
 ## Network
 Network metrics provide information about the network from vouch's point of view.  Although these are not under vouch's control, they have an impact on the performance of the validator.  The specific metrics are:

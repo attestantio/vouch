@@ -29,6 +29,7 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot spec.Slot, randa
 	var mu sync.Mutex
 	bestScore := float64(0)
 	var bestProposal *spec.BeaconBlock
+	bestProvider := ""
 
 	started := time.Now()
 	sem := semaphore.NewWeighted(s.processConcurrency)
@@ -80,11 +81,16 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot spec.Slot, randa
 			if score > bestScore || bestProposal == nil {
 				bestScore = score
 				bestProposal = proposal
+				bestProvider = name
 			}
 			mu.Unlock()
 		}(ctx, sem, &wg, name, provider, &mu)
 	}
 	wg.Wait()
+
+	if bestProvider != "" {
+		s.clientMonitor.StrategyOperation("best", bestProvider, "beacon block proposal", time.Since(started))
+	}
 
 	return bestProposal, nil
 }
