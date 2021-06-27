@@ -29,6 +29,7 @@ import (
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/validatorsmanager"
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -141,7 +142,7 @@ func (s *Service) Refresh(ctx context.Context) {
 // refreshAccounts refreshes the accounts from Dirk.
 func (s *Service) refreshAccounts(ctx context.Context) error {
 	// Create the relevant wallets.
-	wallets := make(map[string]e2wtypes.Wallet)
+	wallets := make([]e2wtypes.Wallet, 0, len(s.accountPaths))
 	pathsByWallet := make(map[string][]string)
 	for _, path := range s.accountPaths {
 		pathBits := strings.Split(path, "/")
@@ -156,23 +157,28 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 		if err != nil {
 			log.Warn().Err(err).Str("wallet", pathBits[0]).Msg("Failed to open wallet")
 		} else {
-			wallets[wallet.Name()] = wallet
+			wallets = append(wallets, wallet)
 		}
 	}
 
 	verificationRegexes := accountPathsToVerificationRegexes(s.accountPaths)
 	// Fetch accounts for each wallet.
 	accounts := make(map[spec.BLSPubKey]e2wtypes.Account)
-	for _, wallet := range wallets {
-		// if _, isProvider := wallet.(e2wtypes.WalletAccountsByPathProvider); isProvider {
-		// 	fmt.Printf("TODO: fetch accounts by path")
-		// } else {
-		walletAccounts := s.fetchAccountsForWallet(ctx, wallet, verificationRegexes)
-		for k, v := range walletAccounts {
-			accounts[k] = v
+	_, err := util.Scatter(len(wallets), func(offset int, entries int, mu *sync.RWMutex) (interface{}, error) {
+		for i := offset; i < offset+entries; i++ {
+			walletAccounts := s.fetchAccountsForWallet(ctx, wallets[i], verificationRegexes)
+			mu.Lock()
+			for k, v := range walletAccounts {
+				accounts[k] = v
+			}
+			mu.Unlock()
 		}
-		//}
+		return nil, nil
+	})
+	if err != nil {
+		log.Error().Err(err).Str("result", "failed").Msg("Failed to obtain accounts")
 	}
+
 	log.Trace().Int("accounts", len(accounts)).Msg("Obtained accounts")
 
 	if len(accounts) == 0 && len(s.accounts) != 0 {
