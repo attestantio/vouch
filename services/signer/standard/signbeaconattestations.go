@@ -50,16 +50,73 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
 	}
 
-	sigs := make([]spec.BLSSignature, len(accounts))
-	if multiSigner, isMultiSigner := accounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
-		uintCommitteeIndices := make([]uint64, len(committeeIndices))
-		for i := range committeeIndices {
-			uintCommitteeIndices[i] = uint64(committeeIndices[i])
+	// Need to break the single request in to two: those for accounts and those for distributed accounts.
+	// This is because they operate differently (single shot Vs. threshold signing).
+	// We also keep a map to allow us to reassemble the signatures in the correct order.
+	accountCommitteeIndices := make([]uint64, 0, len(committeeIndices))
+	accountSigMap := make(map[int]int)
+	signingAccounts := make([]e2wtypes.Account, 0, len(accounts))
+	distributedAccountCommitteeIndices := make([]uint64, 0, len(committeeIndices))
+	distributedAccountSigMap := make(map[int]int)
+	signingDistributedAccounts := make([]e2wtypes.Account, 0, len(accounts))
+	for i := range accounts {
+		if _, isDistributedAccount := accounts[i].(e2wtypes.DistributedAccount); isDistributedAccount {
+			signingDistributedAccounts = append(signingDistributedAccounts, accounts[i])
+			distributedAccountSigMap[len(signingDistributedAccounts)-1] = i
+			distributedAccountCommitteeIndices = append(distributedAccountCommitteeIndices, uint64(committeeIndices[i]))
+		} else {
+			signingAccounts = append(signingAccounts, accounts[i])
+			accountSigMap[len(signingAccounts)-1] = i
+			accountCommitteeIndices = append(accountCommitteeIndices, uint64(committeeIndices[i]))
 		}
+	}
+
+	sigs := make([]spec.BLSSignature, len(accounts))
+	if len(signingAccounts) > 0 {
+		signatures, err := s.signBeaconAttestations(ctx, signingAccounts, slot, accountCommitteeIndices, blockRoot, sourceEpoch, sourceRoot, targetEpoch, targetRoot, signatureDomain)
+		if err != nil {
+			return nil, err
+		}
+		for i := range signatures {
+			sigs[accountSigMap[i]] = signatures[i]
+		}
+	}
+	if len(signingDistributedAccounts) > 0 {
+		signatures, err := s.signBeaconAttestations(ctx, signingDistributedAccounts, slot, distributedAccountCommitteeIndices, blockRoot, sourceEpoch, sourceRoot, targetEpoch, targetRoot, signatureDomain)
+		if err != nil {
+			return nil, err
+		}
+		for i := range signatures {
+			sigs[distributedAccountSigMap[i]] = signatures[i]
+		}
+	}
+
+	return sigs, nil
+}
+
+func (s *Service) signBeaconAttestations(ctx context.Context,
+	accounts []e2wtypes.Account,
+	slot spec.Slot,
+	committeeIndices []uint64,
+	blockRoot spec.Root,
+	sourceEpoch spec.Epoch,
+	sourceRoot spec.Root,
+	targetEpoch spec.Epoch,
+	targetRoot spec.Root,
+	signatureDomain spec.Domain,
+) ([]spec.BLSSignature, error) {
+	var err error
+	sigs := make([]spec.BLSSignature, len(accounts))
+
+	if len(accounts) == 0 {
+		return sigs, nil
+	}
+
+	if multiSigner, isMultiSigner := accounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
 		signatures, err := multiSigner.SignBeaconAttestations(ctx,
 			uint64(slot),
 			accounts,
-			uintCommitteeIndices,
+			committeeIndices,
 			blockRoot[:],
 			uint64(sourceEpoch),
 			sourceRoot[:],
@@ -80,7 +137,7 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 			sigs[i], err = s.SignBeaconAttestation(ctx,
 				accounts[i],
 				slot,
-				committeeIndices[i],
+				spec.CommitteeIndex(committeeIndices[i]),
 				blockRoot,
 				sourceEpoch,
 				sourceRoot,
