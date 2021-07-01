@@ -50,11 +50,11 @@ func (s *Service) scoreAttestationData(ctx context.Context,
 			log.Warn().Str("block_root", fmt.Sprintf("%#x", attestationData.BeaconBlockRoot)).Msg("No block returned by provider")
 			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
 		}
-		if block.Message == nil {
+		slot, err = block.Slot()
+		if err != nil {
 			log.Warn().Str("block_root", fmt.Sprintf("%#x", attestationData.BeaconBlockRoot)).Msg("Empty block returned by provider")
 			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
 		}
-		slot = block.Message.Slot
 	} else {
 		log.Warn().Msg("Cannot score attestation")
 		return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
