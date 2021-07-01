@@ -53,11 +53,7 @@ func (s *Service) setupAttestationAggregationMetrics() error {
 			Help:      "The ratio of included to possible attestations in the aggregate.",
 			Buckets:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
 		})
-	if err := prometheus.Register(s.attestationAggregationCoverageRatio); err != nil {
-		return err
-	}
-
-	return nil
+	return prometheus.Register(s.attestationAggregationCoverageRatio)
 }
 
 // AttestationAggregationCompleted is called when an attestation aggregationprocess has completed.

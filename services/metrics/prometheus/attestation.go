@@ -41,11 +41,7 @@ func (s *Service) setupAttestationMetrics() error {
 		Name:      "requests_total",
 		Help:      "The number of attestation processes.",
 	}, []string{"result"})
-	if err := prometheus.Register(s.attestationProcessRequests); err != nil {
-		return err
-	}
-
-	return nil
+	return prometheus.Register(s.attestationProcessRequests)
 }
 
 // AttestationsCompleted is called when an attestation process has completed.

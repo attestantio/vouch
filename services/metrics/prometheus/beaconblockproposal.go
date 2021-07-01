@@ -41,11 +41,7 @@ func (s *Service) setupBeaconBlockProposalMetrics() error {
 		Name:      "requests_total",
 		Help:      "The number of beacon block proposal processes.",
 	}, []string{"result"})
-	if err := prometheus.Register(s.beaconBlockProposalProcessRequests); err != nil {
-		return err
-	}
-
-	return nil
+	return prometheus.Register(s.beaconBlockProposalProcessRequests)
 }
 
 // BeaconBlockProposalCompleted is called when a block proposal process has completed.

@@ -44,11 +44,7 @@ func (s *Service) setupSchedulerMetrics() error {
 		Name:      "jobs_started_total",
 		Help:      "The total number of scheduled jobs started.",
 	}, []string{"trigger"})
-	if err := prometheus.Register(s.schedulerJobsStarted); err != nil {
-		return err
-	}
-
-	return nil
+	return prometheus.Register(s.schedulerJobsStarted)
 }
 
 // JobScheduled is called when a job is scheduled.
