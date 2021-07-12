@@ -1,4 +1,9 @@
 1.1.0:
+  - support Altair:
+    - support updated `go-eth2-client` for versioned data
+    - manage sync committee operations:
+      - generate sync committee messages
+      - act as sync committee aggregator as required
   - added metrics to track strategy operation results
   - provide release metric in `vouch_release`
   - provide ready metric in `vouch_ready`

@@ -63,14 +63,34 @@ type AttestationAggregationMonitor interface {
 	AttestationAggregationCoverage(frac float64)
 }
 
+// SyncCommitteeMessageMonitor provides methods to monitor the sync committee message process.
+type SyncCommitteeMessageMonitor interface {
+	// SyncCommitteeMessagesCompleted is called when a sync committee message process has completed.
+	SyncCommitteeMessagesCompleted(started time.Time, count int, result string)
+}
+
+// SyncCommitteeAggregationMonitor provides methods to monitor the sync committee aggregation process.
+type SyncCommitteeAggregationMonitor interface {
+	// SyncCommitteeAggregationsCompleted is called when a sync committee aggregation process has completed.
+	SyncCommitteeAggregationsCompleted(started time.Time, count int, result string)
+}
+
 // BeaconCommitteeSubscriptionMonitor provides methods to monitor the outcome of beacon committee subscriptions.
 type BeaconCommitteeSubscriptionMonitor interface {
-	// BeaconCommitteeSubscriptionCompleted is called when an beacon committee subscription process has completed.
+	// BeaconCommitteeSubscriptionCompleted is called when a beacon committee subscription process has completed.
 	BeaconCommitteeSubscriptionCompleted(started time.Time, result string)
 	// BeaconCommitteeSubscribers sets the number of beacon committees to which our validators are subscribed.
 	BeaconCommitteeSubscribers(subscribers int)
 	// BeaconCommitteeAggregators sets the number of beacon committees for which our validators are aggregating.
 	BeaconCommitteeAggregators(aggregators int)
+}
+
+// SyncCommitteeSubscriptionMonitor provides methods to monitor the outcome of sync committee subscriptions.
+type SyncCommitteeSubscriptionMonitor interface {
+	// SyncCommitteeSubscriptionCompleted is called when a sync committee subscription process has completed.
+	SyncCommitteeSubscriptionCompleted(started time.Time, result string)
+	// SyncCommitteeSubscribers sets the number of sync committees to which our validators are subscribed.
+	SyncCommitteeSubscribers(subscribers int)
 }
 
 // AccountManagerMonitor provides methods to monitor the account manager.

@@ -107,6 +107,11 @@ func scoreBeaconBlockProposal(ctx context.Context, name string, parentSlot phase
 
 	// Add sync committee score.
 	syncCommitteeScore := float64(0)
+	if blockProposal.Version == spec.DataVersionAltair {
+		// An individual sync proposal is worth x attestations.
+		// TODO
+		syncCommitteeScore = float64(blockProposal.Altair.Body.SyncAggregate.SyncCommitteeBits.Count())
+	}
 
 	// Scale scores by the distance between the proposal and parent slots.
 	var scale uint64

@@ -23,6 +23,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prysmaticlabs/go-bitfield"
 )
@@ -158,6 +159,84 @@ func NewSyncCommitteeDutiesProvider() eth2client.SyncCommitteeDutiesProvider {
 // SyncCommitteeDuties is a mock.
 func (m *SyncCommitteeDutiesProvider) SyncCommitteeDuties(ctx context.Context, epoch phase0.Epoch, validatorIndices []phase0.ValidatorIndex) ([]*api.SyncCommitteeDuty, error) {
 	return make([]*api.SyncCommitteeDuty, 0), nil
+}
+
+// SyncCommitteeSubscriptionsSubmitter is a mock for eth2client.SyncCommitteeSubscriptionsSubmitter.
+type SyncCommitteeSubscriptionsSubmitter struct{}
+
+// NewSyncCommitteeSubscriptionsSubmitter returns a mock attester duties submitter.
+func NewSyncCommitteeSubscriptionsSubmitter() eth2client.SyncCommitteeSubscriptionsSubmitter {
+	return &SyncCommitteeSubscriptionsSubmitter{}
+}
+
+// SubmitSyncCommitteeSubscriptions is a mock
+func (m *SyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+	return nil
+}
+
+// ErroringSyncCommitteeSubscriptionsSubmitter is a mock for eth2client.SyncCommitteeSubscriptionsSubmitter.
+type ErroringSyncCommitteeSubscriptionsSubmitter struct{}
+
+// NewErroringSyncCommitteeSubscriptionsSubmitter returns a mock attester duties submitter.
+func NewErroringSyncCommitteeSubscriptionsSubmitter() eth2client.SyncCommitteeSubscriptionsSubmitter {
+	return &ErroringSyncCommitteeSubscriptionsSubmitter{}
+}
+
+// SubmitSyncCommitteeSubscriptions is a mock
+func (m *ErroringSyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+	return errors.New("error")
+}
+
+// SyncCommitteeMessagesSubmitter is a mock for eth2client.SyncCommitteeMessagesSubmitter.
+type SyncCommitteeMessagesSubmitter struct{}
+
+// NewSyncCommitteeMessagesSubmitter returns a mock attester duties submitter.
+func NewSyncCommitteeMessagesSubmitter() eth2client.SyncCommitteeMessagesSubmitter {
+	return &SyncCommitteeMessagesSubmitter{}
+}
+
+// SubmitSyncCommitteeMessages submits sync committee messages.
+func (m *SyncCommitteeMessagesSubmitter) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
+	return nil
+}
+
+// ErroringSyncCommitteeMessagesSubmitter is a mock for eth2client.SyncCommitteeMessagesSubmitter.
+type ErroringSyncCommitteeMessagesSubmitter struct{}
+
+// NewErroringSyncCommitteeMessagesSubmitter returns a mock attester duties submitter.
+func NewErroringSyncCommitteeMessagesSubmitter() eth2client.SyncCommitteeMessagesSubmitter {
+	return &ErroringSyncCommitteeMessagesSubmitter{}
+}
+
+// SubmitSyncCommitteeMessages submits sync committee messages.
+func (m *ErroringSyncCommitteeMessagesSubmitter) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
+	return errors.New("error")
+}
+
+// SyncCommitteeContributionsSubmitter is a mock for eth2client.SyncCommitteeContributionsSubmitter.
+type SyncCommitteeContributionsSubmitter struct{}
+
+// NewSyncCommitteeContributionsSubmitter returns a mock attester duties submitter.
+func NewSyncCommitteeContributionsSubmitter() eth2client.SyncCommitteeContributionsSubmitter {
+	return &SyncCommitteeContributionsSubmitter{}
+}
+
+// SubmitSyncCommitteeContributions submits sync committee contributions.
+func (m *SyncCommitteeContributionsSubmitter) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
+	return nil
+}
+
+// ErroringSyncCommitteeContributionsSubmitter is a mock for eth2client.SyncCommitteeContributionsSubmitter.
+type ErroringSyncCommitteeContributionsSubmitter struct{}
+
+// NewErroringSyncCommitteeContributionsSubmitter returns a mock attester duties submitter.
+func NewErroringSyncCommitteeContributionsSubmitter() eth2client.SyncCommitteeContributionsSubmitter {
+	return &ErroringSyncCommitteeContributionsSubmitter{}
+}
+
+// SubmitSyncCommitteeContributions submits sync committee contributions.
+func (m *ErroringSyncCommitteeContributionsSubmitter) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
+	return errors.New("error")
 }
 
 // EventsProvider is a mock for eth2client.EventsProvider.
@@ -570,186 +649,45 @@ func (m *SleepyAggregateAttestationProvider) AggregateAttestation(ctx context.Co
 	return m.next.AggregateAttestation(ctx, slot, attestationDataRoot)
 }
 
-// BeaconProposerDomainProvider is a mock for eth2client.BeaconProposerDomainProvider.
-type BeaconProposerDomainProvider struct{}
+// ErroringSpecProvider is a mock for eth2client.SpecProvider.
+type ErroringSpecProvider struct{}
 
-// NewBeaconProposerDomainProvider returns a mock beacon proposer domain provider.
-func NewBeaconProposerDomainProvider() eth2client.BeaconProposerDomainProvider {
-	return &BeaconProposerDomainProvider{}
+// NewErroringSpecProvider returns a mock spec provider.
+func NewErroringSpecProvider() eth2client.SpecProvider {
+	return &ErroringSpecProvider{}
 }
 
-// BeaconProposerDomain is a mock.
-func (m *BeaconProposerDomainProvider) BeaconProposerDomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{0x00, 0x00, 0x00, 0x00}, nil
+// Spec is a mock.
+func (m *ErroringSpecProvider) Spec(ctx context.Context) (map[string]interface{}, error) {
+	return nil, errors.New("error")
 }
 
-// ErroringBeaconProposerDomainProvider is a mock for eth2client.BeaconProposerDomainProvider.
-type ErroringBeaconProposerDomainProvider struct{}
+// SpecProvider is a mock for eth2client.SpecProvider.
+type SpecProvider struct{}
 
-// NewErroringBeaconProposerDomainProvider returns a mock beacon proposer domain provider that errors.
-func NewErroringBeaconProposerDomainProvider() eth2client.BeaconProposerDomainProvider {
-	return &ErroringBeaconProposerDomainProvider{}
+// NewSpecProvider returns a mock spec provider.
+func NewSpecProvider() eth2client.SpecProvider {
+	return &SpecProvider{}
 }
 
-// BeaconProposerDomain is a mock.
-func (m *ErroringBeaconProposerDomainProvider) BeaconProposerDomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{}, errors.New("error")
-}
-
-// BeaconAttesterDomainProvider is a mock for eth2client.BeaconAttesterDomainProvider.
-type BeaconAttesterDomainProvider struct{}
-
-// NewBeaconAttesterDomainProvider returns a mock beacon attester domain provider.
-func NewBeaconAttesterDomainProvider() eth2client.BeaconAttesterDomainProvider {
-	return &BeaconAttesterDomainProvider{}
-}
-
-// BeaconAttesterDomain is a mock.
-func (m *BeaconAttesterDomainProvider) BeaconAttesterDomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{0x01, 0x00, 0x00, 0x00}, nil
-}
-
-// ErroringBeaconAttesterDomainProvider is a mock for eth2client.BeaconAttesterDomainProvider.
-type ErroringBeaconAttesterDomainProvider struct{}
-
-// NewErroringBeaconAttesterDomainProvider returns a mock beacon attester domain provider that errors.
-func NewErroringBeaconAttesterDomainProvider() eth2client.BeaconAttesterDomainProvider {
-	return &ErroringBeaconAttesterDomainProvider{}
-}
-
-// BeaconAttesterDomain is a mock.
-func (m *ErroringBeaconAttesterDomainProvider) BeaconAttesterDomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{}, errors.New("error")
-}
-
-// RANDAODomainProvider is a mock for eth2client.RANDAODomainProvider.
-type RANDAODomainProvider struct{}
-
-// NewRANDAODomainProvider returns a mock RANDAO domain provider.
-func NewRANDAODomainProvider() eth2client.RANDAODomainProvider {
-	return &RANDAODomainProvider{}
-}
-
-// RANDAODomain is a mock.
-func (m *RANDAODomainProvider) RANDAODomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{0x02, 0x00, 0x00, 0x00}, nil
-}
-
-// ErroringRANDAODomainProvider is a mock for eth2client.RANDAODomainProvider.
-type ErroringRANDAODomainProvider struct{}
-
-// NewErroringRANDAODomainProvider returns a mock RANDAO domain provider that errors.
-func NewErroringRANDAODomainProvider() eth2client.RANDAODomainProvider {
-	return &ErroringRANDAODomainProvider{}
-}
-
-// RANDAODomain is a mock.
-func (m *ErroringRANDAODomainProvider) RANDAODomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{}, errors.New("error")
-}
-
-// DepositDomainProvider is a mock for eth2client.DepositDomainProvider.
-type DepositDomainProvider struct{}
-
-// NewDepositDomainProvider returns a mock deposit domain provider.
-func NewDepositDomainProvider() eth2client.DepositDomainProvider {
-	return &DepositDomainProvider{}
-}
-
-// DepositDomain is a mock.
-func (m *DepositDomainProvider) DepositDomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{0x03, 0x00, 0x00, 0x00}, nil
-}
-
-// ErroringDepositDomainProvider is a mock for eth2client.DepositDomainProvider.
-type ErroringDepositDomainProvider struct{}
-
-// NewErroringDepositDomainProvider returns a mock deposit domain provider that errors.
-func NewErroringDepositDomainProvider() eth2client.DepositDomainProvider {
-	return &DepositDomainProvider{}
-}
-
-// DepositDomain is a mock.
-func (m *ErroringDepositDomainProvider) DepositDomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{}, errors.New("error")
-}
-
-// VoluntaryExitDomainProvider is a mock for eth2client.VoluntaryExitDomainProvider.
-type VoluntaryExitDomainProvider struct{}
-
-// NewVoluntaryExitDomainProvider returns a mock voluntary exit domain provider.
-func NewVoluntaryExitDomainProvider() eth2client.VoluntaryExitDomainProvider {
-	return &VoluntaryExitDomainProvider{}
-}
-
-// VoluntaryExitDomain is a mock.
-func (m *VoluntaryExitDomainProvider) VoluntaryExitDomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{0x04, 0x00, 0x00, 0x00}, nil
-}
-
-// ErroringVoluntaryExitDomainProvider is a mock for eth2client.VoluntaryExitDomainProvider.
-type ErroringVoluntaryExitDomainProvider struct{}
-
-// NewErroringVoluntaryExitDomainProvider returns a mock voluntary exit domain provider that errors.
-func NewErroringVoluntaryExitDomainProvider() eth2client.VoluntaryExitDomainProvider {
-	return &VoluntaryExitDomainProvider{}
-}
-
-// VoluntaryExitDomain is a mock.
-func (m *ErroringVoluntaryExitDomainProvider) VoluntaryExitDomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{}, errors.New("error")
-}
-
-// SelectionProofDomainProvider is a mock for eth2client.SelectionProofDomainProvider.
-type SelectionProofDomainProvider struct{}
-
-// NewSelectionProofDomainProvider returns a mock selection proof domain provider.
-func NewSelectionProofDomainProvider() eth2client.SelectionProofDomainProvider {
-	return &SelectionProofDomainProvider{}
-}
-
-// SelectionProofDomain is a mock.
-func (m *SelectionProofDomainProvider) SelectionProofDomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{0x05, 0x00, 0x00, 0x00}, nil
-}
-
-// ErroringSelectionProofDomainProvider is a mock for eth2client.SelectionProofDomainProvider.
-type ErroringSelectionProofDomainProvider struct{}
-
-// NewErroringSelectionProofDomainProvider returns a mock selection proof domain provider that errors.
-func NewErroringSelectionProofDomainProvider() eth2client.SelectionProofDomainProvider {
-	return &ErroringSelectionProofDomainProvider{}
-}
-
-// SelectionProofDomain is a mock.
-func (m *ErroringSelectionProofDomainProvider) SelectionProofDomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{}, errors.New("error")
-}
-
-// AggregateAndProofDomainProvider is a mock for eth2client.AggregateAndProofDomainProvider.
-type AggregateAndProofDomainProvider struct{}
-
-// NewAggregateAndProofDomainProvider returns a mock aggregate and proof domain provider.
-func NewAggregateAndProofDomainProvider() eth2client.AggregateAndProofDomainProvider {
-	return &AggregateAndProofDomainProvider{}
-}
-
-// AggregateAndProofDomain is a mock.
-func (m *AggregateAndProofDomainProvider) AggregateAndProofDomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{0x06, 0x00, 0x00, 0x00}, nil
-}
-
-// ErroringAggregateAndProofDomainProvider is a mock for eth2client.AggregateAndProofDomainProvider.
-type ErroringAggregateAndProofDomainProvider struct{}
-
-// NewErroringAggregateAndProofDomainProvider returns a mock aggregate and proof domain provider that errors.
-func NewErroringAggregateAndProofDomainProvider() eth2client.AggregateAndProofDomainProvider {
-	return &ErroringAggregateAndProofDomainProvider{}
-}
-
-// AggregateAndProofDomain is a mock.
-func (m *ErroringAggregateAndProofDomainProvider) AggregateAndProofDomain(ctx context.Context) (phase0.DomainType, error) {
-	return phase0.DomainType{}, errors.New("error")
+// Spec is a mock.
+func (m *SpecProvider) Spec(ctx context.Context) (map[string]interface{}, error) {
+	return map[string]interface{}{
+		// Mainnet params (give or take).
+		"DOMAIN_AGGREGATE_AND_PROOF":            phase0.DomainType{0x06, 0x00, 0x00, 0x00},
+		"DOMAIN_BEACON_ATTESTER":                phase0.DomainType{0x00, 0x00, 0x00, 0x00},
+		"DOMAIN_BEACON_PROPOSER":                phase0.DomainType{0x01, 0x00, 0x00, 0x00},
+		"DOMAIN_CONTRIBUTION_AND_PROOF":         phase0.DomainType{0x09, 0x00, 0x00, 0x00},
+		"DOMAIN_DEPOSIT":                        phase0.DomainType{0x03, 0x00, 0x00, 0x00},
+		"DOMAIN_RANDAO":                         phase0.DomainType{0x02, 0x00, 0x00, 0x00},
+		"DOMAIN_SELECTION_PROOF":                phase0.DomainType{0x05, 0x00, 0x00, 0x00},
+		"DOMAIN_SYNC_COMMITTEE":                 phase0.DomainType{0x07, 0x00, 0x00, 0x00},
+		"DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF": phase0.DomainType{0x08, 0x00, 0x00, 0x00},
+		"DOMAIN_VOLUNTARY_EXIT":                 phase0.DomainType{0x04, 0x00, 0x00, 0x00},
+		"EPOCHS_PER_SYNC_COMMITTEE_PERIOD":      uint64(256),
+		"SECONDS_PER_SLOT":                      12 * time.Second,
+		"SLOTS_PER_EPOCH":                       uint64(32),
+	}, nil
 }
 
 // DomainProvider is a mock for eth2client.DomainProvider.

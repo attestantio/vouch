@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,21 +14,18 @@
 package standard
 
 import (
-	"context"
-
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
-	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 type parameters struct {
-	logLevel       zerolog.Level
-	monitor        metrics.SignerMonitor
-	clientMonitor  metrics.ClientMonitor
-	specProvider   eth2client.SpecProvider
-	domainProvider eth2client.DomainProvider
+	logLevel               zerolog.Level
+	processConcurrency     int64
+	monitor                metrics.SyncCommitteeSubscriptionMonitor
+	syncCommitteeSubmitter submitter.SyncCommitteeSubscriptionsSubmitter
 }
 
 // Parameter is the interface for service parameters.
@@ -49,40 +46,31 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 	})
 }
 
+// WithProcessConcurrency sets the concurrency for the service.
+func WithProcessConcurrency(concurrency int64) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.processConcurrency = concurrency
+	})
+}
+
 // WithMonitor sets the monitor for the module.
-func WithMonitor(monitor metrics.SignerMonitor) Parameter {
+func WithMonitor(monitor metrics.SyncCommitteeSubscriptionMonitor) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})
 }
 
-// WithClientMonitor sets the client monitor for the module.
-func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
+// WithSyncCommitteeSubmitter sets the sync committee subscriptions provider.
+func WithSyncCommitteeSubmitter(provider eth2client.SyncCommitteeSubscriptionsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.clientMonitor = clientMonitor
-	})
-}
-
-// WithSpecProvider sets the spec provider.
-func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.specProvider = provider
-	})
-}
-
-// WithDomainProvider sets the signature domain provider.
-func WithDomainProvider(provider eth2client.DomainProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.domainProvider = provider
+		p.syncCommitteeSubmitter = provider
 	})
 }
 
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel:      zerolog.GlobalLevel(),
-		monitor:       nullmetrics.New(context.Background()),
-		clientMonitor: nullmetrics.New(context.Background()),
+		logLevel: zerolog.GlobalLevel(),
 	}
 	for _, p := range params {
 		if params != nil {
@@ -90,17 +78,14 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
+	if parameters.processConcurrency == 0 {
+		return nil, errors.New("no process concurrency specified")
+	}
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")
 	}
-	if parameters.clientMonitor == nil {
-		return nil, errors.New("no client monitor specified")
-	}
-	if parameters.specProvider == nil {
-		return nil, errors.New("no spec provider specified")
-	}
-	if parameters.domainProvider == nil {
-		return nil, errors.New("no domain provider specified")
+	if parameters.syncCommitteeSubmitter == nil {
+		return nil, errors.New("no sync committee submitter specified")
 	}
 
 	return &parameters, nil
