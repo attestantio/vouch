@@ -61,11 +61,7 @@ func (s *Service) setupBeaconCommitteeSubscriptionMetrics() error {
 		Name:      "aggregators_total",
 		Help:      "The number of beacon committee aggregated.",
 	})
-	if err := prometheus.Register(s.beaconCommitteeAggregators); err != nil {
-		return err
-	}
-
-	return nil
+	return prometheus.Register(s.beaconCommitteeAggregators)
 }
 
 // BeaconCommitteeSubscriptionCompleted is called when an beacon committee subscription process has completed.

@@ -50,11 +50,7 @@ func (s *Service) setupControllerMetrics() error {
 				11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 12.0,
 			},
 		}, []string{"epoch_slot"})
-	if err := prometheus.Register(s.blockReceiptDelay); err != nil {
-		return err
-	}
-
-	return nil
+	return prometheus.Register(s.blockReceiptDelay)
 }
 
 // NewEpoch is called when vouch starts processing a new epoch.

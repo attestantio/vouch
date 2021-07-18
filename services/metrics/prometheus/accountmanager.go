@@ -24,11 +24,7 @@ func (s *Service) setupAccountManagerMetrics() error {
 		Name:      "accounts_total",
 		Help:      "The number of accounts managed by Vouch.",
 	}, []string{"state"})
-	if err := prometheus.Register(s.accountManagerAccounts); err != nil {
-		return err
-	}
-
-	return nil
+	return prometheus.Register(s.accountManagerAccounts)
 }
 
 // Accounts sets the number of accounts in a given state.
