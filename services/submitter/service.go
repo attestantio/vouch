@@ -17,7 +17,7 @@ import (
 	"context"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // Service is the submitter service.
@@ -26,13 +26,13 @@ type Service interface{}
 // AttestationsSubmitter is the interface for a submitter of attestations.
 type AttestationsSubmitter interface {
 	// SubmitAttestations submits multiple attestations.
-	SubmitAttestations(ctx context.Context, attestations []*spec.Attestation) error
+	SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error
 }
 
 // BeaconBlockSubmitter is the interface for a submitter of beacon blocks.
 type BeaconBlockSubmitter interface {
 	// SubmitBeaconBlock submits a block.
-	SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaconBlock) error
+	SubmitBeaconBlock(ctx context.Context, block *phase0.SignedBeaconBlock) error
 }
 
 // BeaconCommitteeSubscriptionsSubmitter is the interface for a submitter of beacon committee subscriptions.
@@ -44,5 +44,5 @@ type BeaconCommitteeSubscriptionsSubmitter interface {
 // AggregateAttestationsSubmitter is the interface for a submitter of aggregate attestations.
 type AggregateAttestationsSubmitter interface {
 	// SubmitAggregateAttestations submits aggregate attestations.
-	SubmitAggregateAttestations(ctx context.Context, aggregateAttestations []*spec.SignedAggregateAndProof) error
+	SubmitAggregateAttestations(ctx context.Context, aggregateAttestations []*phase0.SignedAggregateAndProof) error
 }

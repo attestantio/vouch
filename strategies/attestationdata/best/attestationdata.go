@@ -18,18 +18,18 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 )
 
 type attestationDataResponse struct {
 	provider        string
-	attestationData *spec.AttestationData
+	attestationData *phase0.AttestationData
 	score           float64
 }
 
 // AttestationData provides the best attestation data from a number of beacon nodes.
-func (s *Service) AttestationData(ctx context.Context, slot spec.Slot, committeeIndex spec.CommitteeIndex) (*spec.AttestationData, error) {
+func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committeeIndex phase0.CommitteeIndex) (*phase0.AttestationData, error) {
 	started := time.Now()
 	log := log.With().Uint64("slot", uint64(slot)).Logger()
 
@@ -65,7 +65,7 @@ func (s *Service) AttestationData(ctx context.Context, slot spec.Slot, committee
 	responded := 0
 	errored := 0
 	bestScore := float64(0)
-	var bestAttestationData *spec.AttestationData
+	var bestAttestationData *phase0.AttestationData
 	bestProvider := ""
 
 	for responded+errored != len(s.attestationDataProviders) {

@@ -20,7 +20,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
@@ -52,17 +52,17 @@ type Service struct {
 	attestationAggregator      attestationaggregator.Service
 	beaconCommitteeSubscriber  beaconcommitteesubscriber.Service
 	activeValidators           int
-	subscriptionInfos          map[spec.Epoch]map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription
+	subscriptionInfos          map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription
 	subscriptionInfosMutex     sync.Mutex
 	accountsRefresher          accountmanager.Refresher
 	maxAttestationDelay        time.Duration
 	reorgs                     bool
 
 	// Tracking for reorgs.
-	lastBlockRoot             spec.Root
-	lastBlockEpoch            spec.Epoch
-	currentDutyDependentRoot  spec.Root
-	previousDutyDependentRoot spec.Root
+	lastBlockRoot             phase0.Root
+	lastBlockEpoch            phase0.Epoch
+	currentDutyDependentRoot  phase0.Root
+	previousDutyDependentRoot phase0.Root
 }
 
 // module-wide log.
@@ -107,7 +107,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		accountsRefresher:          parameters.accountsRefresher,
 		maxAttestationDelay:        parameters.maxAttestationDelay,
 		reorgs:                     parameters.reorgs,
-		subscriptionInfos:          make(map[spec.Epoch]map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
+		subscriptionInfos:          make(map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
 	}
 
 	// Subscribe to head events.  This allows us to go early for attestations if a block arrives, as well as
@@ -281,10 +281,10 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 
 // accountsAndIndicesForEpoch obtains the accounts and validator indices for the specified epoch.
 func (s *Service) accountsAndIndicesForEpoch(ctx context.Context,
-	epoch spec.Epoch,
+	epoch phase0.Epoch,
 ) (
-	map[spec.ValidatorIndex]e2wtypes.Account,
-	[]spec.ValidatorIndex,
+	map[phase0.ValidatorIndex]e2wtypes.Account,
+	[]phase0.ValidatorIndex,
 	error,
 ) {
 	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpoch(ctx, epoch)
@@ -292,7 +292,7 @@ func (s *Service) accountsAndIndicesForEpoch(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to obtain accounts")
 	}
 
-	validatorIndices := make([]spec.ValidatorIndex, 0, len(accounts))
+	validatorIndices := make([]phase0.ValidatorIndex, 0, len(accounts))
 	for index := range accounts {
 		validatorIndices = append(validatorIndices, index)
 	}

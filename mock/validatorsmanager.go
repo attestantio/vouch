@@ -17,7 +17,7 @@ import (
 	"context"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/validatorsmanager"
 )
 
@@ -29,21 +29,21 @@ func NewValidatorsManager() validatorsmanager.Service {
 }
 
 // RefreshValidatorsFromBeaconNode is a mock.
-func (v *validatorsManager) RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys []spec.BLSPubKey) error {
+func (v *validatorsManager) RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys []phase0.BLSPubKey) error {
 	return nil
 }
 
 // ValidatorsByIndex is a mock.
-func (v *validatorsManager) ValidatorsByIndex(ctx context.Context, indices []spec.ValidatorIndex) map[spec.ValidatorIndex]*spec.Validator {
-	return make(map[spec.ValidatorIndex]*spec.Validator)
+func (v *validatorsManager) ValidatorsByIndex(ctx context.Context, indices []phase0.ValidatorIndex) map[phase0.ValidatorIndex]*phase0.Validator {
+	return make(map[phase0.ValidatorIndex]*phase0.Validator)
 }
 
 // ValidatorsByIndex is a mock.
-func (v *validatorsManager) ValidatorsByPubKey(ctx context.Context, pubKeys []spec.BLSPubKey) map[spec.ValidatorIndex]*spec.Validator {
-	return make(map[spec.ValidatorIndex]*spec.Validator)
+func (v *validatorsManager) ValidatorsByPubKey(ctx context.Context, pubKeys []phase0.BLSPubKey) map[phase0.ValidatorIndex]*phase0.Validator {
+	return make(map[phase0.ValidatorIndex]*phase0.Validator)
 }
 
 // ValidatorStateAtEpoch is a mock.
-func (v *validatorsManager) ValidatorStateAtEpoch(ctx context.Context, index spec.ValidatorIndex, epoch spec.Epoch) (api.ValidatorState, error) {
+func (v *validatorsManager) ValidatorStateAtEpoch(ctx context.Context, index phase0.ValidatorIndex, epoch phase0.Epoch) (api.ValidatorState, error) {
 	return api.ValidatorStateUnknown, nil
 }

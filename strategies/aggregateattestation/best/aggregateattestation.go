@@ -18,18 +18,18 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 )
 
 type aggregateAttestationResponse struct {
 	provider  string
-	aggregate *spec.Attestation
+	aggregate *phase0.Attestation
 	score     float64
 }
 
 // AggregateAttestation provides the aggregate attestation from a number of beacon nodes.
-func (s *Service) AggregateAttestation(ctx context.Context, slot spec.Slot, attestationDataRoot spec.Root) (*spec.Attestation, error) {
+func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, attestationDataRoot phase0.Root) (*phase0.Attestation, error) {
 	started := time.Now()
 
 	// We create a cancelable context with a timeout.  If the context times out we take the best to date.
@@ -69,7 +69,7 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot spec.Slot, atte
 	responded := 0
 	errored := 0
 	bestScore := float64(0)
-	var bestAggregateAttestation *spec.Attestation
+	var bestAggregateAttestation *phase0.Attestation
 	bestProvider := ""
 
 	for responded+errored != len(s.aggregateAttestationProviders) {

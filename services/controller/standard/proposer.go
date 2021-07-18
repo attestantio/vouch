@@ -18,14 +18,14 @@ import (
 	"fmt"
 	"time"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 )
 
 // scheduleProposals schedules proposals for the given epoch and validator indices.
 func (s *Service) scheduleProposals(ctx context.Context,
-	epoch spec.Epoch,
-	validatorIndices []spec.ValidatorIndex,
+	epoch phase0.Epoch,
+	validatorIndices []phase0.ValidatorIndex,
 	notCurrentSlot bool,
 ) {
 	if len(validatorIndices) == 0 {

@@ -17,12 +17,12 @@ import (
 	"context"
 	"sort"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // scoreBeaconBlockPropsal generates a score for a beacon block.
 // The score is relative to the reward expected by proposing the block.
-func scoreBeaconBlockProposal(ctx context.Context, name string, parentSlot spec.Slot, blockProposal *spec.BeaconBlock) float64 {
+func scoreBeaconBlockProposal(ctx context.Context, name string, parentSlot phase0.Slot, blockProposal *phase0.BeaconBlock) float64 {
 	if blockProposal == nil {
 		return 0
 	}
@@ -35,11 +35,11 @@ func scoreBeaconBlockProposal(ctx context.Context, name string, parentSlot spec.
 
 	// We need to avoid duplicates in attestations.
 	// Map is slot -> committee index -> validator committee index -> attested.
-	attested := make(map[spec.Slot]map[spec.CommitteeIndex]map[uint64]bool)
+	attested := make(map[phase0.Slot]map[phase0.CommitteeIndex]map[uint64]bool)
 	for _, attestation := range blockProposal.Body.Attestations {
 		slotAttested, exists := attested[attestation.Data.Slot]
 		if !exists {
-			slotAttested = make(map[spec.CommitteeIndex]map[uint64]bool)
+			slotAttested = make(map[phase0.CommitteeIndex]map[uint64]bool)
 			attested[attestation.Data.Slot] = slotAttested
 		}
 		committeeAttested, exists := slotAttested[attestation.Data.Index]

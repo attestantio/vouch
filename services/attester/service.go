@@ -17,27 +17,27 @@ import (
 	"context"
 	"fmt"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // Duty contains information about beacon block attester duties for a given slot.
 type Duty struct {
-	slot                      spec.Slot
+	slot                      phase0.Slot
 	committeesAtSlot          uint64
-	validatorIndices          []spec.ValidatorIndex
-	committeeIndices          []spec.CommitteeIndex
+	validatorIndices          []phase0.ValidatorIndex
+	committeeIndices          []phase0.CommitteeIndex
 	validatorCommitteeIndices []uint64
-	committeeLengths          map[spec.CommitteeIndex]uint64
+	committeeLengths          map[phase0.CommitteeIndex]uint64
 }
 
 // NewDuty creates a new beacon block attester duty.
 func NewDuty(ctx context.Context,
-	slot spec.Slot,
+	slot phase0.Slot,
 	committeesAtSlot uint64,
-	validatorIndices []spec.ValidatorIndex,
-	committeeIndices []spec.CommitteeIndex,
+	validatorIndices []phase0.ValidatorIndex,
+	committeeIndices []phase0.CommitteeIndex,
 	validatorCommitteeIndices []uint64,
-	committeeLengths map[spec.CommitteeIndex]uint64,
+	committeeLengths map[phase0.CommitteeIndex]uint64,
 ) (*Duty, error) {
 	// Ensure there is a matching committee size for each committee index.
 	for i := range committeeIndices {
@@ -57,7 +57,7 @@ func NewDuty(ctx context.Context,
 }
 
 // Slot provides the slot for the beacon block attester.
-func (d *Duty) Slot() spec.Slot {
+func (d *Duty) Slot() phase0.Slot {
 	return d.slot
 }
 
@@ -67,12 +67,12 @@ func (d *Duty) CommitteesAtSlot() uint64 {
 }
 
 // ValidatorIndices provides the validator indices for the beacon block attester.
-func (d *Duty) ValidatorIndices() []spec.ValidatorIndex {
+func (d *Duty) ValidatorIndices() []phase0.ValidatorIndex {
 	return d.validatorIndices
 }
 
 // CommitteeIndices provides the committee indices for the beacon block attester.
-func (d *Duty) CommitteeIndices() []spec.CommitteeIndex {
+func (d *Duty) CommitteeIndices() []phase0.CommitteeIndex {
 	return d.committeeIndices
 }
 
@@ -82,7 +82,7 @@ func (d *Duty) ValidatorCommitteeIndices() []uint64 {
 }
 
 // CommitteeSize provides the committee size for a given index.
-func (d *Duty) CommitteeSize(committeeIndex spec.CommitteeIndex) uint64 {
+func (d *Duty) CommitteeSize(committeeIndex phase0.CommitteeIndex) uint64 {
 	return d.committeeLengths[committeeIndex]
 }
 
@@ -109,5 +109,5 @@ func (d *Duty) Tuples() []string {
 type Service interface {
 	// Attest carries out attestations for a slot.
 	// It returns a list of attestations made.
-	Attest(ctx context.Context, details interface{}) ([]*spec.Attestation, error)
+	Attest(ctx context.Context, details interface{}) ([]*phase0.Attestation, error)
 }

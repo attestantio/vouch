@@ -16,23 +16,23 @@ package attestationaggregator
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // Duty contains information about an attestation aggregation duty.
 type Duty struct {
 	// Slot is the slot of the attestation aggregation; required for obtaining the aggregate.
-	Slot spec.Slot
+	Slot phase0.Slot
 	// Attestation data root is the root of the attestation to be aggregated; required for obtaining the aggregate.
-	AttestationDataRoot spec.Root
+	AttestationDataRoot phase0.Root
 	// ValidatorIndex is the index of the validator carrying out the aggregation; reuqired for submitting the aggregate.
-	ValidatorIndex spec.ValidatorIndex
+	ValidatorIndex phase0.ValidatorIndex
 	// SlotSignature is the signature of the slot by the validator carrying out the aggregation; reuqired for submitting the aggregate.
-	SlotSignature spec.BLSSignature
+	SlotSignature phase0.BLSSignature
 	// Attestation is the attestation from the validator that is part of the related to the aggregate.
 	// Required for Prysm non-spec GRPC method.
-	Attestation *spec.Attestation
+	Attestation *phase0.Attestation
 	// Account is the account carrying out the aggregation.
 	// Required for Prysm non-spec GRPC method.
 	Account e2wtypes.Account
@@ -41,7 +41,7 @@ type Duty struct {
 // IsAggregatorProvider provides information about if a validator is an aggregator.
 type IsAggregatorProvider interface {
 	// IsAggregator returns true if the given validator is an aggregator for the given committee at the given slot.
-	IsAggregator(ctx context.Context, validatorIndex spec.ValidatorIndex, committeeIndex spec.CommitteeIndex, slot spec.Slot, committeeSize uint64) (bool, spec.BLSSignature, error)
+	IsAggregator(ctx context.Context, validatorIndex phase0.ValidatorIndex, committeeIndex phase0.CommitteeIndex, slot phase0.Slot, committeeSize uint64) (bool, phase0.BLSSignature, error)
 }
 
 // Service is the attestation aggregation service.

@@ -19,15 +19,15 @@ import (
 	"time"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
 )
 
 // scheduleAttestations schedules attestations for the given epoch and validator indices.
 func (s *Service) scheduleAttestations(ctx context.Context,
-	epoch spec.Epoch,
-	validatorIndices []spec.ValidatorIndex,
+	epoch phase0.Epoch,
+	validatorIndices []phase0.ValidatorIndex,
 	notCurrentSlot bool,
 ) {
 	if len(validatorIndices) == 0 {
@@ -162,7 +162,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 			continue
 		}
 		if info.IsAggregator {
-			accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []spec.ValidatorIndex{info.Duty.ValidatorIndex})
+			accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []phase0.ValidatorIndex{info.Duty.ValidatorIndex})
 			if err != nil {
 				// Don't return here; we want to try to set up as many aggregator jobs as possible.
 				log.Error().Err(err).Msg("Failed to obtain accounts")

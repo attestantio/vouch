@@ -16,12 +16,12 @@ package standard
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // ValidatorsByPubKey fetches the requested validators from local store given their public keys.
-func (s *Service) ValidatorsByPubKey(ctx context.Context, pubKeys []spec.BLSPubKey) map[spec.ValidatorIndex]*spec.Validator {
-	res := make(map[spec.ValidatorIndex]*spec.Validator)
+func (s *Service) ValidatorsByPubKey(ctx context.Context, pubKeys []phase0.BLSPubKey) map[phase0.ValidatorIndex]*phase0.Validator {
+	res := make(map[phase0.ValidatorIndex]*phase0.Validator)
 	s.validatorsMutex.RLock()
 	for _, pubKey := range pubKeys {
 		if validator, exists := s.validatorsByPubKey[pubKey]; exists {

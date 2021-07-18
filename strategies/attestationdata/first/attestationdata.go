@@ -18,20 +18,20 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 )
 
 // AttestationData provides the first attestation data from a number of beacon nodes.
-func (s *Service) AttestationData(ctx context.Context, slot spec.Slot, committeeIndex spec.CommitteeIndex) (*spec.AttestationData, error) {
+func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committeeIndex phase0.CommitteeIndex) (*phase0.AttestationData, error) {
 	started := time.Now()
 
 	// We create a cancelable context with a timeout.  When a provider responds we cancel the context to cancel the other requests.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 
-	respCh := make(chan *spec.AttestationData, 1)
+	respCh := make(chan *phase0.AttestationData, 1)
 	for name, provider := range s.attestationDataProviders {
-		go func(ctx context.Context, name string, provider eth2client.AttestationDataProvider, ch chan *spec.AttestationData) {
+		go func(ctx context.Context, name string, provider eth2client.AttestationDataProvider, ch chan *phase0.AttestationData) {
 			log := log.With().Str("provider", name).Uint64("slot", uint64(slot)).Logger()
 
 			attestationData, err := provider.AttestationData(ctx, slot, committeeIndex)

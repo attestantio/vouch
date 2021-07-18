@@ -16,7 +16,7 @@ package mock
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -29,19 +29,19 @@ func NewValidatingAccountsProvider() accountmanager.ValidatingAccountsProvider {
 }
 
 // ValidatingAccountsForEpoch is a mock.
-func (v *validatingAccountsProvider) ValidatingAccountsForEpoch(ctx context.Context, epoch spec.Epoch) (map[spec.ValidatorIndex]e2wtypes.Account, error) {
-	return make(map[spec.ValidatorIndex]e2wtypes.Account), nil
+func (v *validatingAccountsProvider) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	return make(map[phase0.ValidatorIndex]e2wtypes.Account), nil
 }
 
 // ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
 func (v *validatingAccountsProvider) ValidatingAccountsForEpochByIndex(ctx context.Context,
-	epoch spec.Epoch,
-	indices []spec.ValidatorIndex,
+	epoch phase0.Epoch,
+	indices []phase0.ValidatorIndex,
 ) (
-	map[spec.ValidatorIndex]e2wtypes.Account,
+	map[phase0.ValidatorIndex]e2wtypes.Account,
 	error,
 ) {
-	return make(map[spec.ValidatorIndex]e2wtypes.Account), nil
+	return make(map[phase0.ValidatorIndex]e2wtypes.Account), nil
 }
 
 type refresher struct{}

@@ -22,7 +22,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/validatorsmanager"
@@ -42,11 +42,11 @@ type Service struct {
 	stores               []e2wtypes.Store
 	accountPaths         []string
 	passphrases          [][]byte
-	accounts             map[spec.BLSPubKey]e2wtypes.Account
+	accounts             map[phase0.BLSPubKey]e2wtypes.Account
 	validatorsManager    validatorsmanager.Service
-	slotsPerEpoch        spec.Slot
+	slotsPerEpoch        phase0.Slot
 	domainProvider       eth2client.DomainProvider
-	farFutureEpoch       spec.Epoch
+	farFutureEpoch       phase0.Epoch
 	currentEpochProvider chaintime.Service
 }
 
@@ -94,7 +94,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		accountPaths:         parameters.accountPaths,
 		passphrases:          parameters.passphrases,
 		validatorsManager:    parameters.validatorsManager,
-		slotsPerEpoch:        spec.Slot(slotsPerEpoch),
+		slotsPerEpoch:        phase0.Slot(slotsPerEpoch),
 		domainProvider:       parameters.domainProvider,
 		farFutureEpoch:       farFutureEpoch,
 		currentEpochProvider: parameters.currentEpochProvider,
@@ -153,7 +153,7 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 
 	verificationRegexes := accountPathsToVerificationRegexes(s.accountPaths)
 	// Fetch accounts for each wallet.
-	accounts := make(map[spec.BLSPubKey]e2wtypes.Account)
+	accounts := make(map[phase0.BLSPubKey]e2wtypes.Account)
 	for _, wallet := range wallets {
 		// if _, isProvider := wallet.(e2wtypes.WalletAccountsByPathProvider); isProvider {
 		// 	fmt.Printf("TODO: fetch accounts by path")
@@ -172,7 +172,7 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 
 // refreshValidators refreshes the validator information for our known accounts.
 func (s *Service) refreshValidators(ctx context.Context) error {
-	accountPubKeys := make([]spec.BLSPubKey, 0, len(s.accounts))
+	accountPubKeys := make([]phase0.BLSPubKey, 0, len(s.accounts))
 	for pubKey := range s.accounts {
 		accountPubKeys = append(accountPubKeys, pubKey)
 	}
@@ -183,7 +183,7 @@ func (s *Service) refreshValidators(ctx context.Context) error {
 }
 
 // ValidatingAccountsForEpoch obtains the validating accounts for a given epoch.
-func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch spec.Epoch) (map[spec.ValidatorIndex]e2wtypes.Account, error) {
+func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
 	// stateCount is used to update metrics.
 	stateCount := map[api.ValidatorState]uint64{
 		api.ValidatorStateUnknown:            0,
@@ -198,8 +198,8 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch spec.Epo
 		api.ValidatorStateWithdrawalDone:     0,
 	}
 
-	validatingAccounts := make(map[spec.ValidatorIndex]e2wtypes.Account)
-	pubKeys := make([]spec.BLSPubKey, 0, len(s.accounts))
+	validatingAccounts := make(map[phase0.ValidatorIndex]e2wtypes.Account)
+	pubKeys := make([]phase0.BLSPubKey, 0, len(s.accounts))
 	for pubKey := range s.accounts {
 		pubKeys = append(pubKeys, pubKey)
 	}
@@ -232,14 +232,14 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch spec.Epo
 }
 
 // ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
-func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch spec.Epoch, indices []spec.ValidatorIndex) (map[spec.ValidatorIndex]e2wtypes.Account, error) {
-	validatingAccounts := make(map[spec.ValidatorIndex]e2wtypes.Account)
-	pubKeys := make([]spec.BLSPubKey, 0, len(s.accounts))
+func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch phase0.Epoch, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	validatingAccounts := make(map[phase0.ValidatorIndex]e2wtypes.Account)
+	pubKeys := make([]phase0.BLSPubKey, 0, len(s.accounts))
 	for pubKey := range s.accounts {
 		pubKeys = append(pubKeys, pubKey)
 	}
 
-	indexPresenceMap := make(map[spec.ValidatorIndex]bool)
+	indexPresenceMap := make(map[phase0.ValidatorIndex]bool)
 	for _, index := range indices {
 		indexPresenceMap[index] = true
 	}
@@ -287,7 +287,7 @@ func accountPathsToVerificationRegexes(paths []string) []*regexp.Regexp {
 	return regexes
 }
 
-func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wallet, accounts map[spec.BLSPubKey]e2wtypes.Account, verificationRegexes []*regexp.Regexp) {
+func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wallet, accounts map[phase0.BLSPubKey]e2wtypes.Account, verificationRegexes []*regexp.Regexp) {
 	for account := range wallet.Accounts(ctx) {
 		// Ensure the name matches one of our account paths.
 		name := fmt.Sprintf("%s/%s", wallet.Name(), account.Name())

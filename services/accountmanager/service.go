@@ -17,7 +17,7 @@ package accountmanager
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
@@ -27,14 +27,14 @@ type Service interface{}
 // ValidatingAccountsProvider provides methods for validating accounts.
 type ValidatingAccountsProvider interface {
 	// ValidatingAccountsForEpoch obtains the validating accounts for a given epoch.
-	ValidatingAccountsForEpoch(ctx context.Context, epoch spec.Epoch) (map[spec.ValidatorIndex]e2wtypes.Account, error)
+	ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error)
 
 	// ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
 	ValidatingAccountsForEpochByIndex(ctx context.Context,
-		epoch spec.Epoch,
-		indices []spec.ValidatorIndex,
+		epoch phase0.Epoch,
+		indices []phase0.ValidatorIndex,
 	) (
-		map[spec.ValidatorIndex]e2wtypes.Account,
+		map[phase0.ValidatorIndex]e2wtypes.Account,
 		error,
 	)
 }

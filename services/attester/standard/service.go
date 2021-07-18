@@ -20,7 +20,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attester"
 	"github.com/attestantio/vouch/services/metrics"
@@ -80,7 +80,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 // Attest carries out attestations for a slot.
 // It returns a map of attestations made, keyed on the validator index.
-func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attestation, error) {
+func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attestation, error) {
 	started := time.Now()
 
 	duty, ok := data.(*attester.Duty)
@@ -110,13 +110,13 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
 		return nil, fmt.Errorf("attestation request for slot %d returned source epoch %d greater than target epoch %d", duty.Slot(), attestationData.Source.Epoch, attestationData.Target.Epoch)
 	}
-	if attestationData.Target.Epoch > spec.Epoch(uint64(duty.Slot())/s.slotsPerEpoch) {
+	if attestationData.Target.Epoch > phase0.Epoch(uint64(duty.Slot())/s.slotsPerEpoch) {
 		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
-		return nil, fmt.Errorf("attestation request for slot %d returned target epoch %d greater than current epoch %d", duty.Slot(), attestationData.Target.Epoch, spec.Epoch(uint64(duty.Slot())/s.slotsPerEpoch))
+		return nil, fmt.Errorf("attestation request for slot %d returned target epoch %d greater than current epoch %d", duty.Slot(), attestationData.Target.Epoch, phase0.Epoch(uint64(duty.Slot())/s.slotsPerEpoch))
 	}
 
 	// Fetch the validating accounts.
-	validatingAccounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, spec.Epoch(uint64(duty.Slot())/s.slotsPerEpoch), duty.ValidatorIndices())
+	validatingAccounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, phase0.Epoch(uint64(duty.Slot())/s.slotsPerEpoch), duty.ValidatorIndices())
 	if err != nil {
 		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
 		return nil, errors.New("failed to obtain attesting validator accounts")
@@ -124,7 +124,7 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 	log.Trace().Dur("elapsed", time.Since(started)).Int("validating_accounts", len(validatingAccounts)).Msg("Obtained validating accounts")
 
 	// Break the map in to two arrays.
-	accountValidatorIndices := make([]spec.ValidatorIndex, 0, len(validatingAccounts))
+	accountValidatorIndices := make([]phase0.ValidatorIndex, 0, len(validatingAccounts))
 	accountsArray := make([]e2wtypes.Account, 0, len(validatingAccounts))
 	for index, account := range validatingAccounts {
 		accountValidatorIndices = append(accountValidatorIndices, index)
@@ -132,16 +132,16 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 	}
 
 	// Set the per-validator information.
-	validatorIndexToArrayIndexMap := make(map[spec.ValidatorIndex]int)
+	validatorIndexToArrayIndexMap := make(map[phase0.ValidatorIndex]int)
 	for i := range duty.ValidatorIndices() {
 		validatorIndexToArrayIndexMap[duty.ValidatorIndices()[i]] = i
 	}
-	committeeIndices := make([]spec.CommitteeIndex, len(validatingAccounts))
-	validatorCommitteeIndices := make([]spec.ValidatorIndex, len(validatingAccounts))
+	committeeIndices := make([]phase0.CommitteeIndex, len(validatingAccounts))
+	validatorCommitteeIndices := make([]phase0.ValidatorIndex, len(validatingAccounts))
 	committeeSizes := make([]uint64, len(validatingAccounts))
 	for i := range accountsArray {
 		committeeIndices[i] = duty.CommitteeIndices()[validatorIndexToArrayIndexMap[accountValidatorIndices[i]]]
-		validatorCommitteeIndices[i] = spec.ValidatorIndex(duty.ValidatorCommitteeIndices()[validatorIndexToArrayIndexMap[accountValidatorIndices[i]]])
+		validatorCommitteeIndices[i] = phase0.ValidatorIndex(duty.ValidatorCommitteeIndices()[validatorIndexToArrayIndexMap[accountValidatorIndices[i]]])
 		committeeSizes[i] = duty.CommitteeSize(committeeIndices[i])
 	}
 
@@ -166,16 +166,16 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attesta
 
 func (s *Service) attest(
 	ctx context.Context,
-	slot spec.Slot,
+	slot phase0.Slot,
 	duty *attester.Duty,
 	accounts []e2wtypes.Account,
-	validatorIndices []spec.ValidatorIndex,
-	committeeIndices []spec.CommitteeIndex,
-	validatorCommitteeIndices []spec.ValidatorIndex,
+	validatorIndices []phase0.ValidatorIndex,
+	committeeIndices []phase0.CommitteeIndex,
+	validatorCommitteeIndices []phase0.ValidatorIndex,
 	committeeSizes []uint64,
-	data *spec.AttestationData,
+	data *phase0.AttestationData,
 	started time.Time,
-) ([]*spec.Attestation, error) {
+) ([]*phase0.Attestation, error) {
 
 	// Sign the attestation for all validating accounts.
 	uintCommitteeIndices := make([]uint64, len(committeeIndices))
@@ -202,8 +202,8 @@ func (s *Service) attest(
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed")
 
 	// Create the attestations.
-	zeroSig := spec.BLSSignature{}
-	attestations := make([]*spec.Attestation, 0, len(sigs))
+	zeroSig := phase0.BLSSignature{}
+	attestations := make([]*phase0.Attestation, 0, len(sigs))
 	for i := range sigs {
 		if bytes.Equal(sigs[i][:], zeroSig[:]) {
 			log.Warn().Msg("No signature for validator; not creating attestation")
@@ -211,17 +211,17 @@ func (s *Service) attest(
 		}
 		aggregationBits := bitfield.NewBitlist(committeeSizes[i])
 		aggregationBits.SetBitAt(uint64(validatorCommitteeIndices[i]), true)
-		attestation := &spec.Attestation{
+		attestation := &phase0.Attestation{
 			AggregationBits: aggregationBits,
-			Data: &spec.AttestationData{
+			Data: &phase0.AttestationData{
 				Slot:            duty.Slot(),
 				Index:           committeeIndices[i],
 				BeaconBlockRoot: data.BeaconBlockRoot,
-				Source: &spec.Checkpoint{
+				Source: &phase0.Checkpoint{
 					Epoch: data.Source.Epoch,
 					Root:  data.Source.Root,
 				},
-				Target: &spec.Checkpoint{
+				Target: &phase0.Checkpoint{
 					Epoch: data.Target.Epoch,
 					Root:  data.Target.Root,
 				},

@@ -16,7 +16,7 @@ package mock
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // Service is a mock attester.
@@ -28,6 +28,6 @@ func New() *Service {
 }
 
 // Attest carries out attestations for a slot.
-func (s *Service) Attest(ctx context.Context, data interface{}) ([]*spec.Attestation, error) {
-	return make([]*spec.Attestation, 0), nil
+func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attestation, error) {
+	return make([]*phase0.Attestation, 0), nil
 }

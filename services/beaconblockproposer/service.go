@@ -17,25 +17,25 @@ import (
 	"context"
 	"fmt"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // Duty contains information about a beacon block proposal duty.
 type Duty struct {
 	// Details for the duty.
-	slot           spec.Slot
-	validatorIndex spec.ValidatorIndex
+	slot           phase0.Slot
+	validatorIndex phase0.ValidatorIndex
 
 	// randaoReveal is required to be passed to the beacon node when proposing the block; can be pre-calculated.
-	randaoReveal spec.BLSSignature
+	randaoReveal phase0.BLSSignature
 
 	// account is used to sign the proposal; can be pre-fetched.
 	account e2wtypes.Account
 }
 
 // NewDuty creates a new beacon block proposer duty.
-func NewDuty(slot spec.Slot, validatorIndex spec.ValidatorIndex) *Duty {
+func NewDuty(slot phase0.Slot, validatorIndex phase0.ValidatorIndex) *Duty {
 	return &Duty{
 		slot:           slot,
 		validatorIndex: validatorIndex,
@@ -43,12 +43,12 @@ func NewDuty(slot spec.Slot, validatorIndex spec.ValidatorIndex) *Duty {
 }
 
 // Slot provides the slot for the beacon block proposer.
-func (d *Duty) Slot() spec.Slot {
+func (d *Duty) Slot() phase0.Slot {
 	return d.slot
 }
 
 // ValidatorIndex provides the validator index for the beacon block proposer.
-func (d *Duty) ValidatorIndex() spec.ValidatorIndex {
+func (d *Duty) ValidatorIndex() phase0.ValidatorIndex {
 	return d.validatorIndex
 }
 
@@ -58,12 +58,12 @@ func (d *Duty) String() string {
 }
 
 // SetRandaoReveal sets the RANDAO reveal.
-func (d *Duty) SetRandaoReveal(randaoReveal spec.BLSSignature) {
+func (d *Duty) SetRandaoReveal(randaoReveal phase0.BLSSignature) {
 	d.randaoReveal = randaoReveal
 }
 
 // RANDAOReveal provides the RANDAO reveal.
-func (d *Duty) RANDAOReveal() spec.BLSSignature {
+func (d *Duty) RANDAOReveal() phase0.BLSSignature {
 	return d.randaoReveal
 }
 

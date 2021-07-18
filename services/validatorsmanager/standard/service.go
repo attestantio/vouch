@@ -18,7 +18,7 @@ import (
 	"sync"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -30,12 +30,12 @@ type Service struct {
 	monitor            metrics.ValidatorsManagerMonitor
 	clientMonitor      metrics.ClientMonitor
 	validatorsProvider eth2client.ValidatorsProvider
-	farFutureEpoch     spec.Epoch
+	farFutureEpoch     phase0.Epoch
 
 	validatorsMutex        sync.RWMutex
-	validatorsByIndex      map[spec.ValidatorIndex]*spec.Validator
-	validatorsByPubKey     map[spec.BLSPubKey]*spec.Validator
-	validatorPubKeyToIndex map[spec.BLSPubKey]spec.ValidatorIndex
+	validatorsByIndex      map[phase0.ValidatorIndex]*phase0.Validator
+	validatorsByPubKey     map[phase0.BLSPubKey]*phase0.Validator
+	validatorPubKeyToIndex map[phase0.BLSPubKey]phase0.ValidatorIndex
 }
 
 // module-wide log.
@@ -59,9 +59,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		clientMonitor:          parameters.clientMonitor,
 		farFutureEpoch:         parameters.farFutureEpoch,
 		validatorsProvider:     parameters.validatorsProvider,
-		validatorsByIndex:      make(map[spec.ValidatorIndex]*spec.Validator),
-		validatorsByPubKey:     make(map[spec.BLSPubKey]*spec.Validator),
-		validatorPubKeyToIndex: make(map[spec.BLSPubKey]spec.ValidatorIndex),
+		validatorsByIndex:      make(map[phase0.ValidatorIndex]*phase0.Validator),
+		validatorsByPubKey:     make(map[phase0.BLSPubKey]*phase0.Validator),
+		validatorPubKeyToIndex: make(map[phase0.BLSPubKey]phase0.ValidatorIndex),
 	}
 
 	return s, nil

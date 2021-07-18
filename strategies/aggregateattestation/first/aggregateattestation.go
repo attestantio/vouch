@@ -18,23 +18,23 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 )
 
 // AggregateAttestation provides the aggregate attestation from a number of beacon nodes.
-func (s *Service) AggregateAttestation(ctx context.Context, slot spec.Slot, attestationDataRoot spec.Root) (*spec.Attestation, error) {
+func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, attestationDataRoot phase0.Root) (*phase0.Attestation, error) {
 	started := time.Now()
 
 	// We create a cancelable context with a timeout.  When a provider responds we cancel the context to cancel the other requests.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 
-	respCh := make(chan *spec.Attestation, 1)
+	respCh := make(chan *phase0.Attestation, 1)
 	for name, provider := range s.aggregateAttestationProviders {
 		go func(ctx context.Context,
 			name string,
 			provider eth2client.AggregateAttestationProvider,
-			ch chan *spec.Attestation) {
+			ch chan *phase0.Attestation) {
 			log := log.With().Str("provider", name).Uint64("slot", uint64(slot)).Logger()
 
 			aggregate, err := provider.AggregateAttestation(ctx, slot, attestationDataRoot)

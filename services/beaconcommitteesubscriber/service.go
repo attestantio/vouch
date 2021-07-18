@@ -18,7 +18,7 @@ import (
 	"context"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
@@ -26,14 +26,14 @@ import (
 type Subscription struct {
 	Duty         *api.AttesterDuty
 	IsAggregator bool
-	Signature    spec.BLSSignature
+	Signature    phase0.BLSSignature
 }
 
 // Service is the beacon committee subscriber service.
 type Service interface {
 	// Subscribe subscribes to beacon committees for a given epoch.
 	Subscribe(ctx context.Context,
-		epoch spec.Epoch,
-		accounts map[spec.ValidatorIndex]e2wtypes.Account,
-	) (map[spec.Slot]map[spec.CommitteeIndex]*Subscription, error)
+		epoch phase0.Epoch,
+		accounts map[phase0.ValidatorIndex]e2wtypes.Account,
+	) (map[phase0.Slot]map[phase0.CommitteeIndex]*Subscription, error)
 }

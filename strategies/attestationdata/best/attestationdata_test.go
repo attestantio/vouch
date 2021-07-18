@@ -19,7 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/strategies/attestationdata/best"
 	"github.com/rs/zerolog"
@@ -30,8 +30,8 @@ func TestAttestationData(t *testing.T) {
 	tests := []struct {
 		name           string
 		params         []best.Parameter
-		slot           spec.Slot
-		committeeIndex spec.CommitteeIndex
+		slot           phase0.Slot
+		committeeIndex phase0.CommitteeIndex
 		err            string
 	}{
 		{

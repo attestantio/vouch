@@ -16,14 +16,14 @@ package best
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // scoreAggregateAttestation generates a score for an aggregate attestation.
 // The score is relative to the completeness of the aggregate.
 func (s *Service) scoreAggregateAttestation(ctx context.Context,
 	name string,
-	aggregate *spec.Attestation,
+	aggregate *phase0.Attestation,
 ) float64 {
 	if aggregate == nil {
 		return 0

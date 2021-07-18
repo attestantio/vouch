@@ -19,21 +19,21 @@ import (
 	"context"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // Service is the generic validators manager service.
 type Service interface {
 	// RefreshValidatorsFromBeaconNode refreshes the local store from the beacon node.
 	// This is an expensive operation, and should not be called in the validating path.
-	RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys []spec.BLSPubKey) error
+	RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys []phase0.BLSPubKey) error
 
 	// ValidatorsByIndex fetches the requested validators from local store given their indices.
-	ValidatorsByIndex(ctx context.Context, indices []spec.ValidatorIndex) map[spec.ValidatorIndex]*spec.Validator
+	ValidatorsByIndex(ctx context.Context, indices []phase0.ValidatorIndex) map[phase0.ValidatorIndex]*phase0.Validator
 
 	// ValidatorsByPubKey fetches the requested validators from local store given their public keys.
-	ValidatorsByPubKey(ctx context.Context, pubKeys []spec.BLSPubKey) map[spec.ValidatorIndex]*spec.Validator
+	ValidatorsByPubKey(ctx context.Context, pubKeys []phase0.BLSPubKey) map[phase0.ValidatorIndex]*phase0.Validator
 
 	// ValidatorStateAtEpoch returns the given validator's state at the given epoch.
-	ValidatorStateAtEpoch(ctx context.Context, index spec.ValidatorIndex, epoch spec.Epoch) (api.ValidatorState, error)
+	ValidatorStateAtEpoch(ctx context.Context, index phase0.ValidatorIndex, epoch phase0.Epoch) (api.ValidatorState, error)
 }
