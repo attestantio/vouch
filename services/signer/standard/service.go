@@ -15,6 +15,7 @@ package standard
 
 import (
 	"context"
+	"fmt"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -26,15 +27,18 @@ import (
 
 // Service is the manager for signers.
 type Service struct {
-	monitor                     metrics.SignerMonitor
-	clientMonitor               metrics.ClientMonitor
-	slotsPerEpoch               phase0.Slot
-	beaconProposerDomainType    phase0.DomainType
-	beaconAttesterDomainType    phase0.DomainType
-	randaoDomainType            phase0.DomainType
-	selectionProofDomainType    phase0.DomainType
-	aggregateAndProofDomainType phase0.DomainType
-	domainProvider              eth2client.DomainProvider
+	monitor                               metrics.SignerMonitor
+	clientMonitor                         metrics.ClientMonitor
+	slotsPerEpoch                         phase0.Slot
+	beaconProposerDomainType              phase0.DomainType
+	beaconAttesterDomainType              phase0.DomainType
+	randaoDomainType                      phase0.DomainType
+	selectionProofDomainType              phase0.DomainType
+	aggregateAndProofDomainType           phase0.DomainType
+	syncCommitteeDomainType               *phase0.DomainType
+	syncCommitteeSelectionProofDomainType *phase0.DomainType
+	contributionAndProofDomainType        *phase0.DomainType
+	domainProvider                        eth2client.DomainProvider
 }
 
 // module-wide log.
@@ -53,42 +57,87 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
-	slotsPerEpoch, err := parameters.slotsPerEpochProvider.SlotsPerEpoch(ctx)
+	spec, err := parameters.specProvider.Spec(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain slots per epoch")
+		return nil, errors.Wrap(err, "failed to obtain spec")
 	}
-	beaconAttesterDomainType, err := parameters.beaconAttesterDomainTypeProvider.BeaconAttesterDomain(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain beacon attester domain type")
+
+	tmp, exists := spec["SLOTS_PER_EPOCH"]
+	if !exists {
+		return nil, errors.New("SLOTS_PER_EPOCH not found in spec")
 	}
-	beaconProposerDomainType, err := parameters.beaconProposerDomainTypeProvider.BeaconProposerDomain(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain beacon proposer domain type")
+	slotsPerEpoch, ok := tmp.(uint64)
+	if !ok {
+		return nil, errors.New("SLOTS_PER_EPOCH of unexpected type")
 	}
-	randaoDomainType, err := parameters.randaoDomainTypeProvider.RANDAODomain(ctx)
+
+	beaconAttesterDomainType, err := domainType(spec, "DOMAIN_BEACON_ATTESTER")
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain RANDAO domain type")
+		return nil, err
 	}
-	selectionProofDomainType, err := parameters.selectionProofDomainTypeProvider.SelectionProofDomain(ctx)
+
+	beaconProposerDomainType, err := domainType(spec, "DOMAIN_BEACON_PROPOSER")
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain selection proof domain type")
+		return nil, err
 	}
-	aggregateAndProofDomainType, err := parameters.aggregateAndProofDomainTypeProvider.AggregateAndProofDomain(ctx)
+
+	randaoDomainType, err := domainType(spec, "DOMAIN_RANDAO")
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain aggregate and proof domain type")
+		return nil, err
+	}
+
+	selectionProofDomainType, err := domainType(spec, "DOMAIN_SELECTION_PROOF")
+	if err != nil {
+		return nil, err
+	}
+
+	aggregateAndProofDomainType, err := domainType(spec, "DOMAIN_AGGREGATE_AND_PROOF")
+	if err != nil {
+		return nil, err
+	}
+
+	// The following are optional.
+	var syncCommitteeDomainType *phase0.DomainType
+	if tmp, err := domainType(spec, "DOMAIN_SYNC_COMMITTEE"); err == nil {
+		syncCommitteeDomainType = &tmp
+	}
+
+	var syncCommitteeSelectionProofDomainType *phase0.DomainType
+	if tmp, err := domainType(spec, "DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF"); err == nil {
+		syncCommitteeSelectionProofDomainType = &tmp
+	}
+
+	var contributionAndProofDomainType *phase0.DomainType
+	if tmp, err := domainType(spec, "DOMAIN_CONTRIBUTION_AND_PROOF"); err == nil {
+		contributionAndProofDomainType = &tmp
 	}
 
 	s := &Service{
-		monitor:                     parameters.monitor,
-		clientMonitor:               parameters.clientMonitor,
-		slotsPerEpoch:               phase0.Slot(slotsPerEpoch),
-		beaconAttesterDomainType:    beaconAttesterDomainType,
-		beaconProposerDomainType:    beaconProposerDomainType,
-		randaoDomainType:            randaoDomainType,
-		selectionProofDomainType:    selectionProofDomainType,
-		aggregateAndProofDomainType: aggregateAndProofDomainType,
-		domainProvider:              parameters.domainProvider,
+		monitor:                               parameters.monitor,
+		clientMonitor:                         parameters.clientMonitor,
+		slotsPerEpoch:                         phase0.Slot(slotsPerEpoch),
+		beaconAttesterDomainType:              beaconAttesterDomainType,
+		beaconProposerDomainType:              beaconProposerDomainType,
+		randaoDomainType:                      randaoDomainType,
+		selectionProofDomainType:              selectionProofDomainType,
+		aggregateAndProofDomainType:           aggregateAndProofDomainType,
+		syncCommitteeDomainType:               syncCommitteeDomainType,
+		syncCommitteeSelectionProofDomainType: syncCommitteeSelectionProofDomainType,
+		contributionAndProofDomainType:        contributionAndProofDomainType,
+		domainProvider:                        parameters.domainProvider,
 	}
 
 	return s, nil
+}
+
+func domainType(spec map[string]interface{}, input string) (phase0.DomainType, error) {
+	tmp, exists := spec[input]
+	if !exists {
+		return phase0.DomainType{}, fmt.Errorf("%v not found in spec", input)
+	}
+	domainType, ok := tmp.(phase0.DomainType)
+	if !ok {
+		return phase0.DomainType{}, fmt.Errorf("%v of unexpected type", input)
+	}
+	return domainType, nil
 }

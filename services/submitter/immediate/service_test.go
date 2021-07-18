@@ -18,6 +18,8 @@ import (
 	"testing"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/submitter"
@@ -31,6 +33,9 @@ func TestService(t *testing.T) {
 	beaconBlockSubmitter := mock.NewBeaconBlockSubmitter()
 	beaconCommitteeSubscriptionSubmitter := mock.NewBeaconCommitteeSubscriptionsSubmitter()
 	aggregateAttestationSubmitter := mock.NewAggregateAttestationsSubmitter()
+	syncCommitteeMessagesSubmitter := mock.NewSyncCommitteeMessagesSubmitter()
+	syncCommitteeSubscriptionsSubmitter := mock.NewSyncCommitteeSubscriptionsSubmitter()
+	syncCommitteeContributionsSubmitter := mock.NewSyncCommitteeContributionsSubmitter()
 
 	tests := []struct {
 		name   string
@@ -38,12 +43,30 @@ func TestService(t *testing.T) {
 		err    string
 	}{
 		{
+			name: "ClientMonitorMisssing",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.TraceLevel),
+				immediate.WithClientMonitor(nil),
+				immediate.WithAttestationsSubmitter(attestationsSubmitter),
+				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
+				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(syncCommitteeSubscriptionsSubmitter),
+				immediate.WithSyncCommitteeMessagesSubmitter(syncCommitteeMessagesSubmitter),
+				immediate.WithSyncCommitteeContributionsSubmitter(syncCommitteeContributionsSubmitter),
+			},
+			err: "problem with parameters: no client monitor specified",
+		},
+		{
 			name: "AttestationsSubmitterMissing",
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
 				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(syncCommitteeSubscriptionsSubmitter),
+				immediate.WithSyncCommitteeMessagesSubmitter(syncCommitteeMessagesSubmitter),
+				immediate.WithSyncCommitteeContributionsSubmitter(syncCommitteeContributionsSubmitter),
 			},
 			err: "problem with parameters: no attestations submitter specified",
 		},
@@ -54,6 +77,9 @@ func TestService(t *testing.T) {
 				immediate.WithAttestationsSubmitter(attestationsSubmitter),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
 				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(syncCommitteeSubscriptionsSubmitter),
+				immediate.WithSyncCommitteeMessagesSubmitter(syncCommitteeMessagesSubmitter),
+				immediate.WithSyncCommitteeContributionsSubmitter(syncCommitteeContributionsSubmitter),
 			},
 			err: "problem with parameters: no beacon block submitter specified",
 		},
@@ -64,6 +90,9 @@ func TestService(t *testing.T) {
 				immediate.WithAttestationsSubmitter(attestationsSubmitter),
 				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
 				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(syncCommitteeSubscriptionsSubmitter),
+				immediate.WithSyncCommitteeMessagesSubmitter(syncCommitteeMessagesSubmitter),
+				immediate.WithSyncCommitteeContributionsSubmitter(syncCommitteeContributionsSubmitter),
 			},
 			err: "problem with parameters: no beacon committee subscriptions submitter specified",
 		},
@@ -74,8 +103,49 @@ func TestService(t *testing.T) {
 				immediate.WithAttestationsSubmitter(attestationsSubmitter),
 				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(syncCommitteeSubscriptionsSubmitter),
+				immediate.WithSyncCommitteeMessagesSubmitter(syncCommitteeMessagesSubmitter),
+				immediate.WithSyncCommitteeContributionsSubmitter(syncCommitteeContributionsSubmitter),
 			},
 			err: "problem with parameters: no aggregate attestations submitter specified",
+		},
+		{
+			name: "SyncCommitteeSubscriptionsSubmitterMissing",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.TraceLevel),
+				immediate.WithAttestationsSubmitter(attestationsSubmitter),
+				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
+				immediate.WithSyncCommitteeMessagesSubmitter(syncCommitteeMessagesSubmitter),
+				immediate.WithSyncCommitteeContributionsSubmitter(syncCommitteeContributionsSubmitter),
+			},
+			err: "problem with parameters: no sync committee subscriptions submitter specified",
+		},
+		{
+			name: "SyncCommitteeMessagesSubmitterMissing",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.TraceLevel),
+				immediate.WithAttestationsSubmitter(attestationsSubmitter),
+				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
+				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(syncCommitteeSubscriptionsSubmitter),
+				immediate.WithSyncCommitteeContributionsSubmitter(syncCommitteeContributionsSubmitter),
+			},
+			err: "problem with parameters: no sync committee messages submitter specified",
+		},
+		{
+			name: "SyncCommitteeContributionsSubmitterMissing",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.TraceLevel),
+				immediate.WithAttestationsSubmitter(attestationsSubmitter),
+				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
+				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(syncCommitteeSubscriptionsSubmitter),
+				immediate.WithSyncCommitteeMessagesSubmitter(syncCommitteeMessagesSubmitter),
+			},
+			err: "problem with parameters: no sync committee contributions submitter specified",
 		},
 		{
 			name: "Good",
@@ -85,6 +155,9 @@ func TestService(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
 				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(syncCommitteeSubscriptionsSubmitter),
+				immediate.WithSyncCommitteeMessagesSubmitter(syncCommitteeMessagesSubmitter),
+				immediate.WithSyncCommitteeContributionsSubmitter(syncCommitteeContributionsSubmitter),
 			},
 		},
 	}
@@ -107,6 +180,9 @@ func TestInterfaces(t *testing.T) {
 		immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 		immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 		immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+		immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+		immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+		immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 	)
 	require.NoError(t, err)
 	require.Implements(t, (*submitter.BeaconBlockSubmitter)(nil), s)
@@ -119,7 +195,7 @@ func TestSubmitBeaconBlock(t *testing.T) {
 	tests := []struct {
 		name   string
 		params []immediate.Parameter
-		block  *phase0.SignedBeaconBlock
+		block  *spec.VersionedSignedBeaconBlock
 		err    string
 	}{
 		{
@@ -130,6 +206,9 @@ func TestSubmitBeaconBlock(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
 			err: "no beacon block supplied",
 		},
@@ -141,8 +220,11 @@ func TestSubmitBeaconBlock(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			block: &phase0.SignedBeaconBlock{},
+			block: &spec.VersionedSignedBeaconBlock{},
 		},
 		{
 			name: "Erroring",
@@ -152,8 +234,11 @@ func TestSubmitBeaconBlock(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewErroringBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			block: &phase0.SignedBeaconBlock{},
+			block: &spec.VersionedSignedBeaconBlock{},
 			err:   "failed to submit beacon block: error",
 		},
 		{
@@ -164,8 +249,11 @@ func TestSubmitBeaconBlock(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			block: &phase0.SignedBeaconBlock{},
+			block: &spec.VersionedSignedBeaconBlock{},
 		},
 	}
 
@@ -199,6 +287,9 @@ func TestSubmitAttestations(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
 			err: "no attestations supplied",
 		},
@@ -210,6 +301,9 @@ func TestSubmitAttestations(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
 			attestations: []*phase0.Attestation{},
 			err:          "no attestations supplied",
@@ -222,6 +316,9 @@ func TestSubmitAttestations(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
 			attestations: []*phase0.Attestation{{}},
 			err:          "failed to submit attestations: error",
@@ -234,6 +331,9 @@ func TestSubmitAttestations(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
 			attestations: []*phase0.Attestation{{}},
 		},
@@ -269,6 +369,9 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
 			err: "no aggregate attestations supplied",
 		},
@@ -280,6 +383,9 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
 			aggregates: []*phase0.SignedAggregateAndProof{},
 			err:        "no aggregate attestations supplied",
@@ -292,6 +398,9 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewErroringAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
 			aggregates: []*phase0.SignedAggregateAndProof{
 				{},
@@ -306,6 +415,9 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
 			aggregates: []*phase0.SignedAggregateAndProof{
 				{},
@@ -343,6 +455,9 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
 			err: "no beacon committee subscriptions supplied",
 		},
@@ -354,6 +469,9 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
 			subscriptions: []*api.BeaconCommitteeSubscription{},
 			err:           "no beacon committee subscriptions supplied",
@@ -366,6 +484,9 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewErroringBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
 			subscriptions: []*api.BeaconCommitteeSubscription{
 				{},
@@ -380,6 +501,9 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
 			subscriptions: []*api.BeaconCommitteeSubscription{
 				{},
@@ -393,6 +517,264 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 
 		t.Run(test.name, func(t *testing.T) {
 			err := s.SubmitBeaconCommitteeSubscriptions(context.Background(), test.subscriptions)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestSubmitSyncCommitteeSubscriptions(t *testing.T) {
+	tests := []struct {
+		name          string
+		params        []immediate.Parameter
+		subscriptions []*api.SyncCommitteeSubscription
+		err           string
+	}{
+		{
+			name: "Nil",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.Disabled),
+				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+			},
+			err: "no sync committee subscriptions supplied",
+		},
+		{
+			name: "Empty",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.Disabled),
+				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+			},
+			subscriptions: []*api.SyncCommitteeSubscription{},
+			err:           "no sync committee subscriptions supplied",
+		},
+		{
+			name: "Erroring",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.Disabled),
+				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewErroringSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+			},
+			subscriptions: []*api.SyncCommitteeSubscription{
+				{},
+			},
+			err: "failed to submit sync committee subscriptions: error",
+		},
+		{
+			name: "Good",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.TraceLevel),
+				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+			},
+			subscriptions: []*api.SyncCommitteeSubscription{
+				{},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		s, err := immediate.New(context.Background(), test.params...)
+		require.NoError(t, err)
+
+		t.Run(test.name, func(t *testing.T) {
+			err := s.SubmitSyncCommitteeSubscriptions(context.Background(), test.subscriptions)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestSubmitSyncCommitteeMessages(t *testing.T) {
+	tests := []struct {
+		name     string
+		params   []immediate.Parameter
+		messages []*altair.SyncCommitteeMessage
+		err      string
+	}{
+		{
+			name: "Nil",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.Disabled),
+				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+			},
+			err: "no sync committee messages supplied",
+		},
+		{
+			name: "Empty",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.Disabled),
+				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+			},
+			messages: []*altair.SyncCommitteeMessage{},
+			err:      "no sync committee messages supplied",
+		},
+		{
+			name: "Erroring",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.Disabled),
+				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewErroringSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+			},
+			messages: []*altair.SyncCommitteeMessage{
+				{},
+			},
+			err: "failed to submit sync committee messages: error",
+		},
+		{
+			name: "Good",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.TraceLevel),
+				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+			},
+			messages: []*altair.SyncCommitteeMessage{
+				{},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		s, err := immediate.New(context.Background(), test.params...)
+		require.NoError(t, err)
+
+		t.Run(test.name, func(t *testing.T) {
+			err := s.SubmitSyncCommitteeMessages(context.Background(), test.messages)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestSubmitSyncCommitteeContributions(t *testing.T) {
+	tests := []struct {
+		name          string
+		params        []immediate.Parameter
+		contributions []*altair.SignedContributionAndProof
+		err           string
+	}{
+		{
+			name: "Nil",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.Disabled),
+				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+			},
+			err: "no sync committee contribution and proofs supplied",
+		},
+		{
+			name: "Empty",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.Disabled),
+				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+			},
+			contributions: []*altair.SignedContributionAndProof{},
+			err:           "no sync committee contribution and proofs supplied",
+		},
+		{
+			name: "Erroring",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.Disabled),
+				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewErroringSyncCommitteeContributionsSubmitter()),
+			},
+			contributions: []*altair.SignedContributionAndProof{
+				{},
+			},
+			err: "failed to submit sync committee contribution and proofs: error",
+		},
+		{
+			name: "Good",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.TraceLevel),
+				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+			},
+			contributions: []*altair.SignedContributionAndProof{
+				{},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		s, err := immediate.New(context.Background(), test.params...)
+		require.NoError(t, err)
+
+		t.Run(test.name, func(t *testing.T) {
+			err := s.SubmitSyncCommitteeContributions(context.Background(), test.contributions)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {

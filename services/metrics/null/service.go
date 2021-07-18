@@ -81,3 +81,11 @@ func (s *Service) ClientOperation(provider string, name string, succeeded bool, 
 // StrategyOperation provides a generic monitor for strategy operations.
 func (s *Service) StrategyOperation(strategy string, provider string, operation string, duration time.Duration) {
 }
+
+// SyncCommitteeAggregationsCompleted is called when a sync committee aggregation process has completed.
+func (s *Service) SyncCommitteeAggregationsCompleted(started time.Time, count int, result string) {
+}
+
+// SyncCommitteeMessagesCompleted is called when a sync committee message process has completed.
+func (s *Service) SyncCommitteeMessagesCompleted(started time.Time, count int, result string) {
+}

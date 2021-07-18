@@ -31,6 +31,9 @@ type Service struct {
 	attestationsSubmitters                map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters       map[string]eth2client.AggregateAttestationsSubmitter
 	beaconCommitteeSubscriptionSubmitters map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter
+	syncCommitteeMessagesSubmitter        map[string]eth2client.SyncCommitteeMessagesSubmitter
+	syncCommitteeSubscriptionSubmitters   map[string]eth2client.SyncCommitteeSubscriptionsSubmitter
+	syncCommitteeContributionsSubmitters  map[string]eth2client.SyncCommitteeContributionsSubmitter
 }
 
 // module-wide log.
@@ -56,6 +59,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		attestationsSubmitters:                parameters.attestationsSubmitters,
 		aggregateAttestationsSubmitters:       parameters.aggregateAttestationsSubmitters,
 		beaconCommitteeSubscriptionSubmitters: parameters.beaconCommitteeSubscriptionsSubmitters,
+		syncCommitteeMessagesSubmitter:        parameters.syncCommitteeMessagesSubmitter,
+		syncCommitteeSubscriptionSubmitters:   parameters.syncCommitteeSubscriptionsSubmitters,
+		syncCommitteeContributionsSubmitters:  parameters.syncCommitteeContributionsSubmitters,
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 

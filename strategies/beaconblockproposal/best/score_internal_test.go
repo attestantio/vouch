@@ -17,6 +17,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/testutil"
 	"github.com/prysmaticlabs/go-bitfield"
@@ -42,7 +43,7 @@ func specificAggregationBits(set []uint64, total uint64) bitfield.Bitlist {
 func TestScore(t *testing.T) {
 	tests := []struct {
 		name       string
-		block      *phase0.BeaconBlock
+		block      *spec.VersionedBeaconBlock
 		parentSlot phase0.Slot
 		score      float64
 		err        string
@@ -54,20 +55,23 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name:       "Empty",
-			block:      &phase0.BeaconBlock{},
+			block:      &spec.VersionedBeaconBlock{},
 			parentSlot: 1,
 			score:      0,
 		},
 		{
 			name: "SingleAttestation",
-			block: &phase0.BeaconBlock{
-				Slot: 12345,
-				Body: &phase0.BeaconBlockBody{
-					Attestations: []*phase0.Attestation{
-						{
-							AggregationBits: aggregationBits(1, 128),
-							Data: &phase0.AttestationData{
-								Slot: 12344,
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.BeaconBlock{
+					Slot: 12345,
+					Body: &phase0.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: aggregationBits(1, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12344,
+								},
 							},
 						},
 					},
@@ -78,14 +82,17 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "SingleAttestationParentRootDistance2",
-			block: &phase0.BeaconBlock{
-				Slot: 12345,
-				Body: &phase0.BeaconBlockBody{
-					Attestations: []*phase0.Attestation{
-						{
-							AggregationBits: aggregationBits(1, 128),
-							Data: &phase0.AttestationData{
-								Slot: 12344,
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.BeaconBlock{
+					Slot: 12345,
+					Body: &phase0.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: aggregationBits(1, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12344,
+								},
 							},
 						},
 					},
@@ -96,14 +103,17 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "SingleAttestationDistance2",
-			block: &phase0.BeaconBlock{
-				Slot: 12345,
-				Body: &phase0.BeaconBlockBody{
-					Attestations: []*phase0.Attestation{
-						{
-							AggregationBits: aggregationBits(1, 128),
-							Data: &phase0.AttestationData{
-								Slot: 12343,
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.BeaconBlock{
+					Slot: 12345,
+					Body: &phase0.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: aggregationBits(1, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12343,
+								},
 							},
 						},
 					},
@@ -114,20 +124,23 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "TwoAttestations",
-			block: &phase0.BeaconBlock{
-				Slot: 12345,
-				Body: &phase0.BeaconBlockBody{
-					Attestations: []*phase0.Attestation{
-						{
-							AggregationBits: aggregationBits(2, 128),
-							Data: &phase0.AttestationData{
-								Slot: 12344,
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.BeaconBlock{
+					Slot: 12345,
+					Body: &phase0.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: aggregationBits(2, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12344,
+								},
 							},
-						},
-						{
-							AggregationBits: aggregationBits(1, 128),
-							Data: &phase0.AttestationData{
-								Slot: 12341,
+							{
+								AggregationBits: aggregationBits(1, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12341,
+								},
 							},
 						},
 					},
@@ -138,24 +151,27 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "AttesterSlashing",
-			block: &phase0.BeaconBlock{
-				Slot: 12345,
-				Body: &phase0.BeaconBlockBody{
-					Attestations: []*phase0.Attestation{
-						{
-							AggregationBits: aggregationBits(50, 128),
-							Data: &phase0.AttestationData{
-								Slot: 12344,
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.BeaconBlock{
+					Slot: 12345,
+					Body: &phase0.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: aggregationBits(50, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12344,
+								},
 							},
 						},
-					},
-					AttesterSlashings: []*phase0.AttesterSlashing{
-						{
-							Attestation1: &phase0.IndexedAttestation{
-								AttestingIndices: []uint64{1, 2, 3},
-							},
-							Attestation2: &phase0.IndexedAttestation{
-								AttestingIndices: []uint64{2, 3, 4},
+						AttesterSlashings: []*phase0.AttesterSlashing{
+							{
+								Attestation1: &phase0.IndexedAttestation{
+									AttestingIndices: []uint64{1, 2, 3},
+								},
+								Attestation2: &phase0.IndexedAttestation{
+									AttestingIndices: []uint64{2, 3, 4},
+								},
 							},
 						},
 					},
@@ -166,20 +182,23 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "DuplicateAttestations",
-			block: &phase0.BeaconBlock{
-				Slot: 12345,
-				Body: &phase0.BeaconBlockBody{
-					Attestations: []*phase0.Attestation{
-						{
-							AggregationBits: specificAggregationBits([]uint64{1, 2, 3}, 128),
-							Data: &phase0.AttestationData{
-								Slot: 12344,
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.BeaconBlock{
+					Slot: 12345,
+					Body: &phase0.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: specificAggregationBits([]uint64{1, 2, 3}, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12344,
+								},
 							},
-						},
-						{
-							AggregationBits: specificAggregationBits([]uint64{2, 3, 4}, 128),
-							Data: &phase0.AttestationData{
-								Slot: 12344,
+							{
+								AggregationBits: specificAggregationBits([]uint64{2, 3, 4}, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12344,
+								},
 							},
 						},
 					},
@@ -190,48 +209,51 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "Full",
-			block: &phase0.BeaconBlock{
-				Slot: 12345,
-				Body: &phase0.BeaconBlockBody{
-					Attestations: []*phase0.Attestation{
-						{
-							AggregationBits: aggregationBits(50, 128),
-							Data: &phase0.AttestationData{
-								Slot: 12344,
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.BeaconBlock{
+					Slot: 12345,
+					Body: &phase0.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: aggregationBits(50, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12344,
+								},
 							},
 						},
-					},
-					AttesterSlashings: []*phase0.AttesterSlashing{
-						{
-							Attestation1: &phase0.IndexedAttestation{
-								AttestingIndices: []uint64{1, 2, 3},
-							},
-							Attestation2: &phase0.IndexedAttestation{
-								AttestingIndices: []uint64{2, 3, 4},
+						AttesterSlashings: []*phase0.AttesterSlashing{
+							{
+								Attestation1: &phase0.IndexedAttestation{
+									AttestingIndices: []uint64{1, 2, 3},
+								},
+								Attestation2: &phase0.IndexedAttestation{
+									AttestingIndices: []uint64{2, 3, 4},
+								},
 							},
 						},
-					},
-					ProposerSlashings: []*phase0.ProposerSlashing{
-						{
-							SignedHeader1: &phase0.SignedBeaconBlockHeader{
-								Message: &phase0.BeaconBlockHeader{
-									Slot:          10,
-									ProposerIndex: 1,
-									ParentRoot:    testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-									StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-									BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+						ProposerSlashings: []*phase0.ProposerSlashing{
+							{
+								SignedHeader1: &phase0.SignedBeaconBlockHeader{
+									Message: &phase0.BeaconBlockHeader{
+										Slot:          10,
+										ProposerIndex: 1,
+										ParentRoot:    testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+										BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+									},
+									Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 								},
-								Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
-							},
-							SignedHeader2: &phase0.SignedBeaconBlockHeader{
-								Message: &phase0.BeaconBlockHeader{
-									Slot:          10,
-									ProposerIndex: 1,
-									ParentRoot:    testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),
-									StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-									BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+								SignedHeader2: &phase0.SignedBeaconBlockHeader{
+									Message: &phase0.BeaconBlockHeader{
+										Slot:          10,
+										ProposerIndex: 1,
+										ParentRoot:    testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),
+										StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+										BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+									},
+									Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 								},
-								Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 							},
 						},
 					},
@@ -242,48 +264,51 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "FullParentRootDistance2",
-			block: &phase0.BeaconBlock{
-				Slot: 12345,
-				Body: &phase0.BeaconBlockBody{
-					Attestations: []*phase0.Attestation{
-						{
-							AggregationBits: aggregationBits(50, 128),
-							Data: &phase0.AttestationData{
-								Slot: 12344,
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.BeaconBlock{
+					Slot: 12345,
+					Body: &phase0.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: aggregationBits(50, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12344,
+								},
 							},
 						},
-					},
-					AttesterSlashings: []*phase0.AttesterSlashing{
-						{
-							Attestation1: &phase0.IndexedAttestation{
-								AttestingIndices: []uint64{1, 2, 3},
-							},
-							Attestation2: &phase0.IndexedAttestation{
-								AttestingIndices: []uint64{2, 3, 4},
+						AttesterSlashings: []*phase0.AttesterSlashing{
+							{
+								Attestation1: &phase0.IndexedAttestation{
+									AttestingIndices: []uint64{1, 2, 3},
+								},
+								Attestation2: &phase0.IndexedAttestation{
+									AttestingIndices: []uint64{2, 3, 4},
+								},
 							},
 						},
-					},
-					ProposerSlashings: []*phase0.ProposerSlashing{
-						{
-							SignedHeader1: &phase0.SignedBeaconBlockHeader{
-								Message: &phase0.BeaconBlockHeader{
-									Slot:          10,
-									ProposerIndex: 1,
-									ParentRoot:    testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-									StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-									BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+						ProposerSlashings: []*phase0.ProposerSlashing{
+							{
+								SignedHeader1: &phase0.SignedBeaconBlockHeader{
+									Message: &phase0.BeaconBlockHeader{
+										Slot:          10,
+										ProposerIndex: 1,
+										ParentRoot:    testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+										BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+									},
+									Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 								},
-								Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
-							},
-							SignedHeader2: &phase0.SignedBeaconBlockHeader{
-								Message: &phase0.BeaconBlockHeader{
-									Slot:          10,
-									ProposerIndex: 1,
-									ParentRoot:    testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),
-									StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-									BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+								SignedHeader2: &phase0.SignedBeaconBlockHeader{
+									Message: &phase0.BeaconBlockHeader{
+										Slot:          10,
+										ProposerIndex: 1,
+										ParentRoot:    testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),
+										StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+										BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+									},
+									Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 								},
-								Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 							},
 						},
 					},
@@ -294,48 +319,51 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "FullParentRootDistance4",
-			block: &phase0.BeaconBlock{
-				Slot: 12345,
-				Body: &phase0.BeaconBlockBody{
-					Attestations: []*phase0.Attestation{
-						{
-							AggregationBits: aggregationBits(50, 128),
-							Data: &phase0.AttestationData{
-								Slot: 12344,
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.BeaconBlock{
+					Slot: 12345,
+					Body: &phase0.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: aggregationBits(50, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12344,
+								},
 							},
 						},
-					},
-					AttesterSlashings: []*phase0.AttesterSlashing{
-						{
-							Attestation1: &phase0.IndexedAttestation{
-								AttestingIndices: []uint64{1, 2, 3},
-							},
-							Attestation2: &phase0.IndexedAttestation{
-								AttestingIndices: []uint64{2, 3, 4},
+						AttesterSlashings: []*phase0.AttesterSlashing{
+							{
+								Attestation1: &phase0.IndexedAttestation{
+									AttestingIndices: []uint64{1, 2, 3},
+								},
+								Attestation2: &phase0.IndexedAttestation{
+									AttestingIndices: []uint64{2, 3, 4},
+								},
 							},
 						},
-					},
-					ProposerSlashings: []*phase0.ProposerSlashing{
-						{
-							SignedHeader1: &phase0.SignedBeaconBlockHeader{
-								Message: &phase0.BeaconBlockHeader{
-									Slot:          10,
-									ProposerIndex: 1,
-									ParentRoot:    testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-									StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-									BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+						ProposerSlashings: []*phase0.ProposerSlashing{
+							{
+								SignedHeader1: &phase0.SignedBeaconBlockHeader{
+									Message: &phase0.BeaconBlockHeader{
+										Slot:          10,
+										ProposerIndex: 1,
+										ParentRoot:    testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+										BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+									},
+									Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 								},
-								Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
-							},
-							SignedHeader2: &phase0.SignedBeaconBlockHeader{
-								Message: &phase0.BeaconBlockHeader{
-									Slot:          10,
-									ProposerIndex: 1,
-									ParentRoot:    testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),
-									StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-									BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+								SignedHeader2: &phase0.SignedBeaconBlockHeader{
+									Message: &phase0.BeaconBlockHeader{
+										Slot:          10,
+										ProposerIndex: 1,
+										ParentRoot:    testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),
+										StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+										BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+									},
+									Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 								},
-								Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 							},
 						},
 					},

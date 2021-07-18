@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -49,7 +51,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // SubmitBeaconBlock submits a block.
-func (s *Service) SubmitBeaconBlock(ctx context.Context, block *phase0.SignedBeaconBlock) error {
+func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error {
 	if block == nil {
 		return errors.New("no beacon block supplied")
 	}
@@ -114,6 +116,54 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []
 		data, err := json.Marshal(aggregates)
 		if err == nil {
 			e.Str("attestation", string(data)).Msg("Not submitting aggregate attestations")
+		}
+	}
+
+	return nil
+}
+
+// SubmitSyncCommitteeMessages submits sync committee messages.
+func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
+	if len(messages) == 0 {
+		return errors.New("no sync committee messages supplied")
+	}
+
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(messages)
+		if err == nil {
+			e.Str("messages", string(data)).Msg("Not submitting sync committee messages")
+		}
+	}
+
+	return nil
+}
+
+// SubmitSyncCommitteeSubscriptions submits a batch of sync committee subscriptions.
+func (s *Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+	if len(subscriptions) == 0 {
+		return errors.New("no sync committee subscriptions supplied")
+	}
+
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(subscriptions)
+		if err == nil {
+			e.Str("subscriptions", string(data)).Msg("Not submitting sync committee subscriptions")
+		}
+	}
+
+	return nil
+}
+
+// SubmitSyncCommitteeContributions submits sync committee contributions.
+func (s *Service) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
+	if len(contributionAndProofs) == 0 {
+		return errors.New("no sync committee contribution and proofs supplied")
+	}
+
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(contributionAndProofs)
+		if err == nil {
+			e.Str("contribution_and_proofs", string(data)).Msg("Not submitting sync committee contribution and proofs")
 		}
 	}
 

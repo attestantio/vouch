@@ -17,7 +17,6 @@ package best
 
 import (
 	"context"
-	"runtime"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -92,10 +91,9 @@ func WithSignedBeaconBlockProvider(provider eth2client.SignedBeaconBlockProvider
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel:           zerolog.GlobalLevel(),
-		timeout:            2 * time.Second,
-		clientMonitor:      nullmetrics.New(context.Background()),
-		processConcurrency: int64(runtime.GOMAXPROCS(-1)),
+		logLevel:      zerolog.GlobalLevel(),
+		timeout:       2 * time.Second,
+		clientMonitor: nullmetrics.New(context.Background()),
 	}
 	for _, p := range params {
 		if params != nil {
