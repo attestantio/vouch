@@ -20,15 +20,15 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"golang.org/x/sync/semaphore"
 )
 
 // BeaconBlockProposal provides the best beacon block proposal from a number of beacon nodes.
-func (s *Service) BeaconBlockProposal(ctx context.Context, slot spec.Slot, randaoReveal spec.BLSSignature, graffiti []byte) (*spec.BeaconBlock, error) {
+func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*phase0.BeaconBlock, error) {
 	var mu sync.Mutex
 	bestScore := float64(0)
-	var bestProposal *spec.BeaconBlock
+	var bestProposal *phase0.BeaconBlock
 	bestProvider := ""
 
 	started := time.Now()
@@ -63,7 +63,7 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot spec.Slot, randa
 
 			// Obtain the slot of the block to which the proposal refers.
 			// We use this to allow the scorer to score blocks with earlier parents lower.
-			var parentSlot spec.Slot
+			var parentSlot phase0.Slot
 			parentBlock, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, fmt.Sprintf("%#x", proposal.ParentRoot[:]))
 			switch {
 			case err != nil:

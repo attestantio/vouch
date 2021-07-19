@@ -21,7 +21,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/metrics"
@@ -100,12 +100,12 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	log.Trace().Msg("Aggregating")
 
 	// Obtain the aggregate attestation.
-	var aggregateAttestation *spec.Attestation
+	var aggregateAttestation *phase0.Attestation
 	var err error
 	if s.aggregateAttestationProvider != nil {
 		aggregateAttestation, err = s.aggregateAttestationProvider.AggregateAttestation(ctx, duty.Slot, duty.AttestationDataRoot)
 	} else {
-		var validatorPubKey spec.BLSPubKey
+		var validatorPubKey phase0.BLSPubKey
 		if provider, isProvider := duty.Account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
 			copy(validatorPubKey[:], provider.CompositePublicKey().Marshal())
 		} else {
@@ -125,8 +125,8 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	}
 
 	// Fetch the validating account.
-	epoch := spec.Epoch(uint64(aggregateAttestation.Data.Slot) / s.slotsPerEpoch)
-	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []spec.ValidatorIndex{duty.ValidatorIndex})
+	epoch := phase0.Epoch(uint64(aggregateAttestation.Data.Slot) / s.slotsPerEpoch)
+	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []phase0.ValidatorIndex{duty.ValidatorIndex})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain proposing validator account")
 		s.monitor.AttestationAggregationCompleted(started, "failed")
@@ -141,7 +141,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained aggregating account")
 
 	// Sign the aggregate attestation.
-	aggregateAndProof := &spec.AggregateAndProof{
+	aggregateAndProof := &phase0.AggregateAndProof{
 		AggregatorIndex: duty.ValidatorIndex,
 		Aggregate:       aggregateAttestation,
 		SelectionProof:  duty.SlotSignature,
@@ -150,7 +150,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate hash tree root of aggregate and proof")
 	}
-	sig, err := s.aggregateAndProofSigner.SignAggregateAndProof(ctx, account, duty.Slot, spec.Root(aggregateAndProofRoot))
+	sig, err := s.aggregateAndProofSigner.SignAggregateAndProof(ctx, account, duty.Slot, phase0.Root(aggregateAndProofRoot))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign aggregate and proof")
 		s.monitor.AttestationAggregationCompleted(started, "failed")
@@ -159,7 +159,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed aggregate attestation")
 
 	// Submit the signed aggregate and proof.
-	signedAggregateAndProofs := []*spec.SignedAggregateAndProof{
+	signedAggregateAndProofs := []*phase0.SignedAggregateAndProof{
 		{
 			Message:   aggregateAndProof,
 			Signature: sig,
@@ -180,11 +180,11 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 
 // IsAggregator reports if we are an attestation aggregator for a given validator/committee/slot combination.
 func (s *Service) IsAggregator(ctx context.Context,
-	validatorIndex spec.ValidatorIndex,
-	committeeIndex spec.CommitteeIndex,
-	slot spec.Slot,
+	validatorIndex phase0.ValidatorIndex,
+	committeeIndex phase0.CommitteeIndex,
+	slot phase0.Slot,
 	committeeSize uint64,
-) (bool, spec.BLSSignature, error) {
+) (bool, phase0.BLSSignature, error) {
 	modulo := committeeSize / s.targetAggregatorsPerCommittee
 	if modulo == 0 {
 		// Modulo must be at least 1.
@@ -192,30 +192,30 @@ func (s *Service) IsAggregator(ctx context.Context,
 	}
 
 	// Fetch the validator from the account manager.
-	epoch := spec.Epoch(uint64(slot) / s.slotsPerEpoch)
-	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []spec.ValidatorIndex{validatorIndex})
+	epoch := phase0.Epoch(uint64(slot) / s.slotsPerEpoch)
+	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []phase0.ValidatorIndex{validatorIndex})
 	if err != nil {
-		return false, spec.BLSSignature{}, errors.Wrap(err, "failed to obtain validator")
+		return false, phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain validator")
 	}
 	if len(accounts) == 0 {
-		return false, spec.BLSSignature{}, errors.New("validator unknown")
+		return false, phase0.BLSSignature{}, errors.New("validator unknown")
 	}
 	account := accounts[validatorIndex]
 
 	// Sign the slot.
 	signature, err := s.slotSelectionSigner.SignSlotSelection(ctx, account, slot)
 	if err != nil {
-		return false, spec.BLSSignature{}, errors.Wrap(err, "failed to sign the slot")
+		return false, phase0.BLSSignature{}, errors.Wrap(err, "failed to sign the slot")
 	}
 
 	// Hash the signature.
 	sigHash := sha256.New()
 	n, err := sigHash.Write(signature[:])
 	if err != nil {
-		return false, spec.BLSSignature{}, errors.Wrap(err, "failed to hash the slot signature")
+		return false, phase0.BLSSignature{}, errors.Wrap(err, "failed to hash the slot signature")
 	}
 	if n != len(signature) {
-		return false, spec.BLSSignature{}, errors.New("failed to write all bytes of the slot signature to the hash")
+		return false, phase0.BLSSignature{}, errors.New("failed to write all bytes of the slot signature to the hash")
 	}
 	hash := sigHash.Sum(nil)
 

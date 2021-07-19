@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/attestantio/vouch/services/submitter/immediate"
@@ -119,7 +119,7 @@ func TestSubmitBeaconBlock(t *testing.T) {
 	tests := []struct {
 		name   string
 		params []immediate.Parameter
-		block  *spec.SignedBeaconBlock
+		block  *phase0.SignedBeaconBlock
 		err    string
 	}{
 		{
@@ -142,7 +142,7 @@ func TestSubmitBeaconBlock(t *testing.T) {
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 			},
-			block: &spec.SignedBeaconBlock{},
+			block: &phase0.SignedBeaconBlock{},
 		},
 		{
 			name: "Erroring",
@@ -153,7 +153,7 @@ func TestSubmitBeaconBlock(t *testing.T) {
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 			},
-			block: &spec.SignedBeaconBlock{},
+			block: &phase0.SignedBeaconBlock{},
 			err:   "failed to submit beacon block: error",
 		},
 		{
@@ -165,7 +165,7 @@ func TestSubmitBeaconBlock(t *testing.T) {
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 			},
-			block: &spec.SignedBeaconBlock{},
+			block: &phase0.SignedBeaconBlock{},
 		},
 	}
 
@@ -188,7 +188,7 @@ func TestSubmitAttestations(t *testing.T) {
 	tests := []struct {
 		name         string
 		params       []immediate.Parameter
-		attestations []*spec.Attestation
+		attestations []*phase0.Attestation
 		err          string
 	}{
 		{
@@ -211,7 +211,7 @@ func TestSubmitAttestations(t *testing.T) {
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 			},
-			attestations: []*spec.Attestation{},
+			attestations: []*phase0.Attestation{},
 			err:          "no attestations supplied",
 		},
 		{
@@ -223,7 +223,7 @@ func TestSubmitAttestations(t *testing.T) {
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 			},
-			attestations: []*spec.Attestation{{}},
+			attestations: []*phase0.Attestation{{}},
 			err:          "failed to submit attestations: error",
 		},
 		{
@@ -235,7 +235,7 @@ func TestSubmitAttestations(t *testing.T) {
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 			},
-			attestations: []*spec.Attestation{{}},
+			attestations: []*phase0.Attestation{{}},
 		},
 	}
 
@@ -258,7 +258,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 	tests := []struct {
 		name       string
 		params     []immediate.Parameter
-		aggregates []*spec.SignedAggregateAndProof
+		aggregates []*phase0.SignedAggregateAndProof
 		err        string
 	}{
 		{
@@ -281,7 +281,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 			},
-			aggregates: []*spec.SignedAggregateAndProof{},
+			aggregates: []*phase0.SignedAggregateAndProof{},
 			err:        "no aggregate attestations supplied",
 		},
 		{
@@ -293,7 +293,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewErroringAggregateAttestationsSubmitter()),
 			},
-			aggregates: []*spec.SignedAggregateAndProof{
+			aggregates: []*phase0.SignedAggregateAndProof{
 				{},
 			},
 			err: "failed to submit aggregate attestation: error",
@@ -307,7 +307,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 			},
-			aggregates: []*spec.SignedAggregateAndProof{
+			aggregates: []*phase0.SignedAggregateAndProof{
 				{},
 			},
 		},

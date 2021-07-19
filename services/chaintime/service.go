@@ -16,7 +16,7 @@ package chaintime
 import (
 	"time"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // Service provides a number of functions for calculating chain-related times.
@@ -24,15 +24,15 @@ type Service interface {
 	// GenesisTime provides the time of the chain's genesis.
 	GenesisTime() time.Time
 	// StartOfSlot provides the time at which a given slot starts.
-	StartOfSlot(slot spec.Slot) time.Time
+	StartOfSlot(slot phase0.Slot) time.Time
 	// StartOfEpoch provides the time at which a given epoch starts.
-	StartOfEpoch(epoch spec.Epoch) time.Time
+	StartOfEpoch(epoch phase0.Epoch) time.Time
 	// CurrentSlot provides the current slot.
-	CurrentSlot() spec.Slot
+	CurrentSlot() phase0.Slot
 	// CurrentEpoch provides the current epoch.
-	CurrentEpoch() spec.Epoch
+	CurrentEpoch() phase0.Epoch
 	// SlotToEpoch provides the epoch of the given slot.
-	SlotToEpoch(slot spec.Slot) spec.Epoch
+	SlotToEpoch(slot phase0.Slot) phase0.Epoch
 	// FirstSlotOfEpoch provides the first slot of the given epoch.
-	FirstSlotOfEpoch(epoch spec.Epoch) spec.Slot
+	FirstSlotOfEpoch(epoch phase0.Epoch) phase0.Slot
 }

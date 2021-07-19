@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/rs/zerolog"
@@ -48,7 +48,7 @@ func TestScore(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		aggregate *spec.Attestation
+		aggregate *phase0.Attestation
 		score     float64
 	}{
 		{
@@ -57,9 +57,9 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "Empty",
-			aggregate: &spec.Attestation{
+			aggregate: &phase0.Attestation{
 				AggregationBits: populatedBitlist(100, 0),
-				Data: &spec.AttestationData{
+				Data: &phase0.AttestationData{
 					Slot: 5,
 				},
 			},
@@ -67,9 +67,9 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "Full",
-			aggregate: &spec.Attestation{
+			aggregate: &phase0.Attestation{
 				AggregationBits: populatedBitlist(100, 100),
-				Data: &spec.AttestationData{
+				Data: &phase0.AttestationData{
 					Slot: 5,
 				},
 			},

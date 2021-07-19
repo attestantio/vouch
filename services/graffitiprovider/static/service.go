@@ -16,7 +16,7 @@ package static
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -51,6 +51,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // Graffiti provides graffiti.
-func (s *Service) Graffiti(ctx context.Context, slot spec.Slot, validatorIndex spec.ValidatorIndex) ([]byte, error) {
+func (s *Service) Graffiti(ctx context.Context, slot phase0.Slot, validatorIndex phase0.ValidatorIndex) ([]byte, error) {
 	return s.graffiti, nil
 }

@@ -16,7 +16,7 @@ package standard
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -24,25 +24,25 @@ import (
 // SignBeaconBlockProposal signs a beacon block proposal.
 func (s *Service) SignBeaconBlockProposal(ctx context.Context,
 	account e2wtypes.Account,
-	slot spec.Slot,
-	proposerIndex spec.ValidatorIndex,
-	parentRoot spec.Root,
-	stateRoot spec.Root,
-	bodyRoot spec.Root,
+	slot phase0.Slot,
+	proposerIndex phase0.ValidatorIndex,
+	parentRoot phase0.Root,
+	stateRoot phase0.Root,
+	bodyRoot phase0.Root,
 ) (
-	spec.BLSSignature,
+	phase0.BLSSignature,
 	error,
 ) {
 
 	// Fetch the domain.
 	domain, err := s.domainProvider.Domain(ctx,
 		s.beaconProposerDomainType,
-		spec.Epoch(slot/s.slotsPerEpoch))
+		phase0.Epoch(slot/s.slotsPerEpoch))
 	if err != nil {
-		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for beacon proposal")
+		return phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for beacon proposal")
 	}
 
-	var sig spec.BLSSignature
+	var sig phase0.BLSSignature
 	if protectingSigner, isProtectingSigner := account.(e2wtypes.AccountProtectingSigner); isProtectingSigner {
 		signature, err := protectingSigner.SignBeaconProposal(ctx,
 			uint64(slot),
@@ -52,11 +52,11 @@ func (s *Service) SignBeaconBlockProposal(ctx context.Context,
 			bodyRoot[:],
 			domain[:])
 		if err != nil {
-			return spec.BLSSignature{}, errors.Wrap(err, "failed to sign beacon block proposal")
+			return phase0.BLSSignature{}, errors.Wrap(err, "failed to sign beacon block proposal")
 		}
 		copy(sig[:], signature.Marshal())
 	} else {
-		header := &spec.BeaconBlockHeader{
+		header := &phase0.BeaconBlockHeader{
 			Slot:          slot,
 			ProposerIndex: proposerIndex,
 			ParentRoot:    parentRoot,
@@ -65,11 +65,11 @@ func (s *Service) SignBeaconBlockProposal(ctx context.Context,
 		}
 		root, err := header.HashTreeRoot()
 		if err != nil {
-			return spec.BLSSignature{}, errors.Wrap(err, "failed to generate hash tree root")
+			return phase0.BLSSignature{}, errors.Wrap(err, "failed to generate hash tree root")
 		}
 		sig, err = s.sign(ctx, account, root, domain)
 		if err != nil {
-			return spec.BLSSignature{}, err
+			return phase0.BLSSignature{}, err
 		}
 	}
 

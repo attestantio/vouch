@@ -18,7 +18,7 @@ import (
 	"encoding/json"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -49,7 +49,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // SubmitBeaconBlock submits a block.
-func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaconBlock) error {
+func (s *Service) SubmitBeaconBlock(ctx context.Context, block *phase0.SignedBeaconBlock) error {
 	if block == nil {
 		return errors.New("no beacon block supplied")
 	}
@@ -65,7 +65,7 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.SignedBeaco
 }
 
 // SubmitAttestations submits multiple attestations.
-func (s *Service) SubmitAttestations(ctx context.Context, attestations []*spec.Attestation) error {
+func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error {
 	if len(attestations) == 0 {
 		return errors.New("no attestations supplied")
 	}
@@ -105,7 +105,7 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 }
 
 // SubmitAggregateAttestations submits aggregate attestations.
-func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []*spec.SignedAggregateAndProof) error {
+func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []*phase0.SignedAggregateAndProof) error {
 	if len(aggregates) == 0 {
 		return errors.New("no aggregate attestations supplied")
 	}

@@ -20,7 +20,7 @@ import (
 	"time"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // HandleHeadEvent handles the "head" events from the beacon node.
@@ -30,7 +30,7 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	}
 
 	ctx := context.Background()
-	var zeroRoot spec.Root
+	var zeroRoot phase0.Root
 
 	data := event.Data.(*api.HeadEvent)
 	log := log.With().Uint64("slot", uint64(data.Slot)).Logger()
@@ -126,7 +126,7 @@ func (s *Service) handleCurrentDependentRootChanged(ctx context.Context) {
 	s.refreshAttesterDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch()+1)
 }
 
-func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch spec.Epoch) {
+func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {
 	// First thing we do is cancel all scheduled beacon bock proposal jobs.
 	s.scheduler.CancelJobs(ctx, "Beacon block proposal")
 
@@ -145,8 +145,8 @@ func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch spec.
 	s.scheduleProposals(ctx, epoch, validatorIndices, true /* notCurrentSlot */)
 }
 
-func (s *Service) refreshAttesterDutiesForEpoch(ctx context.Context, epoch spec.Epoch) {
-	cancelledJobs := make(map[spec.Slot]bool)
+func (s *Service) refreshAttesterDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {
+	cancelledJobs := make(map[phase0.Slot]bool)
 	// First thing we do is cancel all scheduled attestations jobs.
 	for slot := s.chainTimeService.FirstSlotOfEpoch(epoch); slot < s.chainTimeService.FirstSlotOfEpoch(epoch+1); slot++ {
 		if err := s.scheduler.CancelJob(ctx, fmt.Sprintf("Attestations for slot %d", slot)); err == nil {

@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
@@ -154,7 +154,7 @@ func TestAccountPathsToVerificationRegexes(t *testing.T) {
 func TestAccounts(t *testing.T) {
 	tests := []struct {
 		name     string
-		accounts map[spec.BLSPubKey]e2wtypes.Account
+		accounts map[phase0.BLSPubKey]e2wtypes.Account
 		expected int
 	}{
 		{

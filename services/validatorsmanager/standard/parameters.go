@@ -17,7 +17,7 @@ import (
 	"context"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/pkg/errors"
@@ -29,7 +29,7 @@ type parameters struct {
 	monitor            metrics.ValidatorsManagerMonitor
 	clientMonitor      metrics.ClientMonitor
 	validatorsProvider eth2client.ValidatorsProvider
-	farFutureEpoch     spec.Epoch
+	farFutureEpoch     phase0.Epoch
 }
 
 // Parameter is the interface for service parameters.
@@ -72,7 +72,7 @@ func WithValidatorsProvider(provider eth2client.ValidatorsProvider) Parameter {
 }
 
 // WithFarFutureEpoch sets the far future epoch.
-func WithFarFutureEpoch(farFutureEpoch spec.Epoch) Parameter {
+func WithFarFutureEpoch(farFutureEpoch phase0.Epoch) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.farFutureEpoch = farFutureEpoch
 	})

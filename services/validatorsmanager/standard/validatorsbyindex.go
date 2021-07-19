@@ -16,12 +16,12 @@ package standard
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // ValidatorsByIndex fetches the requested validators from local store given their indices.
-func (s *Service) ValidatorsByIndex(ctx context.Context, indices []spec.ValidatorIndex) map[spec.ValidatorIndex]*spec.Validator {
-	res := make(map[spec.ValidatorIndex]*spec.Validator)
+func (s *Service) ValidatorsByIndex(ctx context.Context, indices []phase0.ValidatorIndex) map[phase0.ValidatorIndex]*phase0.Validator {
+	res := make(map[phase0.ValidatorIndex]*phase0.Validator)
 	s.validatorsMutex.RLock()
 	for _, index := range indices {
 		if validator, exists := s.validatorsByIndex[index]; exists {

@@ -17,7 +17,7 @@ import (
 	"encoding/hex"
 	"strings"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // HexToBytes converts a hex string to a byte array.
@@ -32,54 +32,54 @@ func HexToBytes(input string) []byte {
 
 // HexToPubKey converts a hex string to a spec public key.
 // This should only be used for pre-defined test strings; it will panic if the input is invalid.
-func HexToPubKey(input string) spec.BLSPubKey {
+func HexToPubKey(input string) phase0.BLSPubKey {
 	data := HexToBytes(input)
-	var res spec.BLSPubKey
+	var res phase0.BLSPubKey
 	copy(res[:], data)
 	return res
 }
 
 // HexToSignature converts a hex string to a spec signature.
 // This should only be used for pre-defined test strings; it will panic if the input is invalid.
-func HexToSignature(input string) spec.BLSSignature {
+func HexToSignature(input string) phase0.BLSSignature {
 	data := HexToBytes(input)
-	var res spec.BLSSignature
+	var res phase0.BLSSignature
 	copy(res[:], data)
 	return res
 }
 
 // HexToDomainType converts a hex string to a spec domain type.
 // This should only be used for pre-defined test strings; it will panic if the input is invalid.
-func HexToDomainType(input string) spec.DomainType {
+func HexToDomainType(input string) phase0.DomainType {
 	data := HexToBytes(input)
-	var res spec.DomainType
+	var res phase0.DomainType
 	copy(res[:], data)
 	return res
 }
 
 // HexToDomain converts a hex string to a spec domain.
 // This should only be used for pre-defined test strings; it will panic if the input is invalid.
-func HexToDomain(input string) spec.Domain {
+func HexToDomain(input string) phase0.Domain {
 	data := HexToBytes(input)
-	var res spec.Domain
+	var res phase0.Domain
 	copy(res[:], data)
 	return res
 }
 
 // HexToVersion converts a hex string to a spec version.
 // This should only be used for pre-defined test strings; it will panic if the input is invalid.
-func HexToVersion(input string) spec.Version {
+func HexToVersion(input string) phase0.Version {
 	data := HexToBytes(input)
-	var res spec.Version
+	var res phase0.Version
 	copy(res[:], data)
 	return res
 }
 
 // HexToRoot converts a hex string to a spec root.
 // This should only be used for pre-defined test strings; it will panic if the input is invalid.
-func HexToRoot(input string) spec.Root {
+func HexToRoot(input string) phase0.Root {
 	data := HexToBytes(input)
-	var res spec.Root
+	var res phase0.Root
 	copy(res[:], data)
 	return res
 }

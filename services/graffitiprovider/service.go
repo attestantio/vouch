@@ -17,11 +17,11 @@ package graffitiprovider
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // Service is the graffiti provider service.
 type Service interface {
 	// Graffiti returns the graffiti for a given slot and validator.
-	Graffiti(ctx context.Context, slot spec.Slot, validatorIndex spec.ValidatorIndex) ([]byte, error)
+	Graffiti(ctx context.Context, slot phase0.Slot, validatorIndex phase0.ValidatorIndex) ([]byte, error)
 }

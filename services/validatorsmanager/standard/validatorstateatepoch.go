@@ -17,12 +17,12 @@ import (
 	"context"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 )
 
 // ValidatorStateAtEpoch returns the validator's state at the given epoch.
-func (s *Service) ValidatorStateAtEpoch(ctx context.Context, index spec.ValidatorIndex, epoch spec.Epoch) (api.ValidatorState, error) {
+func (s *Service) ValidatorStateAtEpoch(ctx context.Context, index phase0.ValidatorIndex, epoch phase0.Epoch) (api.ValidatorState, error) {
 	s.validatorsMutex.RLock()
 	validator, exists := s.validatorsByIndex[index]
 	s.validatorsMutex.RUnlock()

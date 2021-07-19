@@ -16,7 +16,7 @@ package mock
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
@@ -31,84 +31,84 @@ func New() *Service {
 // SignAggregateAndProof signs an aggregate attestation for given slot and root.
 func (s *Service) SignAggregateAndProof(ctx context.Context,
 	account e2wtypes.Account,
-	slot spec.Slot,
-	root spec.Root,
+	slot phase0.Slot,
+	root phase0.Root,
 ) (
-	spec.BLSSignature,
+	phase0.BLSSignature,
 	error,
 ) {
-	return spec.BLSSignature{}, nil
+	return phase0.BLSSignature{}, nil
 }
 
 // SignBeaconAttestation signs a beacon attestation.
 func (s *Service) SignBeaconAttestation(ctx context.Context,
 	account e2wtypes.Account,
-	slot spec.Slot,
-	committeeIndex spec.CommitteeIndex,
-	blockRoot spec.Root,
-	sourceEpoch spec.Epoch,
-	sourceRoot spec.Root,
-	targetEpoch spec.Epoch,
-	targetRoot spec.Root,
+	slot phase0.Slot,
+	committeeIndex phase0.CommitteeIndex,
+	blockRoot phase0.Root,
+	sourceEpoch phase0.Epoch,
+	sourceRoot phase0.Root,
+	targetEpoch phase0.Epoch,
+	targetRoot phase0.Root,
 ) (
-	spec.BLSSignature,
+	phase0.BLSSignature,
 	error,
 ) {
-	return spec.BLSSignature{}, nil
+	return phase0.BLSSignature{}, nil
 }
 
 // SignBeaconAttestations signs multiple beacon attestations.
 func (s *Service) SignBeaconAttestations(ctx context.Context,
 	accounts []e2wtypes.Account,
-	slot spec.Slot,
-	committeeIndices []spec.CommitteeIndex,
-	blockRoot spec.Root,
-	sourceEpoch spec.Epoch,
-	sourceRoot spec.Root,
-	targetEpoch spec.Epoch,
-	targetRoot spec.Root,
+	slot phase0.Slot,
+	committeeIndices []phase0.CommitteeIndex,
+	blockRoot phase0.Root,
+	sourceEpoch phase0.Epoch,
+	sourceRoot phase0.Root,
+	targetEpoch phase0.Epoch,
+	targetRoot phase0.Root,
 ) (
-	[]spec.BLSSignature,
+	[]phase0.BLSSignature,
 	error,
 ) {
-	return []spec.BLSSignature{}, nil
+	return []phase0.BLSSignature{}, nil
 }
 
 // SignBeaconBlockProposal signs a beacon block proposal.
 func (s *Service) SignBeaconBlockProposal(ctx context.Context,
 	account e2wtypes.Account,
-	slot spec.Slot,
-	proposerIndex spec.ValidatorIndex,
-	parentRoot spec.Root,
-	stateRoot spec.Root,
-	bodyRoot spec.Root,
+	slot phase0.Slot,
+	proposerIndex phase0.ValidatorIndex,
+	parentRoot phase0.Root,
+	stateRoot phase0.Root,
+	bodyRoot phase0.Root,
 ) (
-	spec.BLSSignature,
+	phase0.BLSSignature,
 	error,
 ) {
-	return spec.BLSSignature{}, nil
+	return phase0.BLSSignature{}, nil
 }
 
 // SignRANDAOReveal returns a RANDAO signature.
 // This signs an epoch with the "RANDAO" domain.
 func (s *Service) SignRANDAOReveal(ctx context.Context,
 	account e2wtypes.Account,
-	slot spec.Slot,
+	slot phase0.Slot,
 ) (
-	spec.BLSSignature,
+	phase0.BLSSignature,
 	error,
 ) {
-	return spec.BLSSignature{}, nil
+	return phase0.BLSSignature{}, nil
 }
 
 // SignSlotSelection returns a slot selection signature.
 // This signs a slot with the "selection proof" domain.
 func (s *Service) SignSlotSelection(ctx context.Context,
 	account e2wtypes.Account,
-	slot spec.Slot,
+	slot phase0.Slot,
 ) (
-	spec.BLSSignature,
+	phase0.BLSSignature,
 	error,
 ) {
-	return spec.BLSSignature{}, nil
+	return phase0.BLSSignature{}, nil
 }

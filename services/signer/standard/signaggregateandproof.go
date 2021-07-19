@@ -16,7 +16,7 @@ package standard
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -24,23 +24,23 @@ import (
 // SignAggregateAndProof signs an aggregate and proof item.
 func (s *Service) SignAggregateAndProof(ctx context.Context,
 	account e2wtypes.Account,
-	slot spec.Slot,
-	aggregateAndProofRoot spec.Root,
+	slot phase0.Slot,
+	aggregateAndProofRoot phase0.Root,
 ) (
-	spec.BLSSignature,
+	phase0.BLSSignature,
 	error,
 ) {
 	// Fetch the domain.
 	domain, err := s.domainProvider.Domain(ctx,
 		s.aggregateAndProofDomainType,
-		spec.Epoch(slot/s.slotsPerEpoch))
+		phase0.Epoch(slot/s.slotsPerEpoch))
 	if err != nil {
-		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for beacon aggregate and proof")
+		return phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for beacon aggregate and proof")
 	}
 
 	sig, err := s.sign(ctx, account, aggregateAndProofRoot, domain)
 	if err != nil {
-		return spec.BLSSignature{}, errors.Wrap(err, "failed to aggregate and proof")
+		return phase0.BLSSignature{}, errors.Wrap(err, "failed to aggregate and proof")
 	}
 
 	return sig, nil

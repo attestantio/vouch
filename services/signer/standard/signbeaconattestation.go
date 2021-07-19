@@ -16,7 +16,7 @@ package standard
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -24,25 +24,25 @@ import (
 // SignBeaconAttestation signs a beacon attestation item.
 func (s *Service) SignBeaconAttestation(ctx context.Context,
 	account e2wtypes.Account,
-	slot spec.Slot,
-	committeeIndex spec.CommitteeIndex,
-	blockRoot spec.Root,
-	sourceEpoch spec.Epoch,
-	sourceRoot spec.Root,
-	targetEpoch spec.Epoch,
-	targetRoot spec.Root,
+	slot phase0.Slot,
+	committeeIndex phase0.CommitteeIndex,
+	blockRoot phase0.Root,
+	sourceEpoch phase0.Epoch,
+	sourceRoot phase0.Root,
+	targetEpoch phase0.Epoch,
+	targetRoot phase0.Root,
 ) (
-	spec.BLSSignature,
+	phase0.BLSSignature,
 	error,
 ) {
 	domain, err := s.domainProvider.Domain(ctx,
 		s.beaconAttesterDomainType,
-		spec.Epoch(slot/s.slotsPerEpoch))
+		phase0.Epoch(slot/s.slotsPerEpoch))
 	if err != nil {
-		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
+		return phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
 	}
 
-	var sig spec.BLSSignature
+	var sig phase0.BLSSignature
 	if protectingSigner, isProtectingSigner := account.(e2wtypes.AccountProtectingSigner); isProtectingSigner {
 		signature, err := protectingSigner.SignBeaconAttestation(ctx,
 			uint64(slot),
@@ -54,30 +54,30 @@ func (s *Service) SignBeaconAttestation(ctx context.Context,
 			targetRoot[:],
 			domain[:])
 		if err != nil {
-			return spec.BLSSignature{}, errors.Wrap(err, "failed to sign beacon attestation")
+			return phase0.BLSSignature{}, errors.Wrap(err, "failed to sign beacon attestation")
 		}
 		copy(sig[:], signature.Marshal())
 	} else {
-		attestation := &spec.AttestationData{
+		attestation := &phase0.AttestationData{
 			Slot:            slot,
 			Index:           committeeIndex,
 			BeaconBlockRoot: blockRoot,
-			Source: &spec.Checkpoint{
+			Source: &phase0.Checkpoint{
 				Epoch: sourceEpoch,
 				Root:  sourceRoot,
 			},
-			Target: &spec.Checkpoint{
+			Target: &phase0.Checkpoint{
 				Epoch: targetEpoch,
 				Root:  targetRoot,
 			},
 		}
 		root, err := attestation.HashTreeRoot()
 		if err != nil {
-			return spec.BLSSignature{}, errors.Wrap(err, "failed to generate hash tree root")
+			return phase0.BLSSignature{}, errors.Wrap(err, "failed to generate hash tree root")
 		}
 		sig, err = s.sign(ctx, account, root, domain)
 		if err != nil {
-			return spec.BLSSignature{}, err
+			return phase0.BLSSignature{}, err
 		}
 	}
 

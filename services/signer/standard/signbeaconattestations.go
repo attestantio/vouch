@@ -16,7 +16,7 @@ package standard
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -25,15 +25,15 @@ import (
 // SignBeaconAttestations signs multiple beacon attestations.
 func (s *Service) SignBeaconAttestations(ctx context.Context,
 	accounts []e2wtypes.Account,
-	slot spec.Slot,
-	committeeIndices []spec.CommitteeIndex,
-	blockRoot spec.Root,
-	sourceEpoch spec.Epoch,
-	sourceRoot spec.Root,
-	targetEpoch spec.Epoch,
-	targetRoot spec.Root,
+	slot phase0.Slot,
+	committeeIndices []phase0.CommitteeIndex,
+	blockRoot phase0.Root,
+	sourceEpoch phase0.Epoch,
+	sourceRoot phase0.Root,
+	targetEpoch phase0.Epoch,
+	targetRoot phase0.Root,
 ) (
-	[]spec.BLSSignature,
+	[]phase0.BLSSignature,
 	error,
 ) {
 	span, ctx := opentracing.StartSpanFromContext(ctx, "signer.SignBeaconAttestations")
@@ -45,7 +45,7 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 
 	signatureDomain, err := s.domainProvider.Domain(ctx,
 		s.beaconAttesterDomainType,
-		spec.Epoch(slot/s.slotsPerEpoch))
+		phase0.Epoch(slot/s.slotsPerEpoch))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
 	}
@@ -71,7 +71,7 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 		}
 	}
 
-	sigs := make([]spec.BLSSignature, len(accounts))
+	sigs := make([]phase0.BLSSignature, len(accounts))
 	if len(signingAccounts) > 0 {
 		signatures, err := s.signBeaconAttestations(ctx, signingAccounts, slot, accountCommitteeIndices, blockRoot, sourceEpoch, sourceRoot, targetEpoch, targetRoot, signatureDomain)
 		if err != nil {
@@ -96,17 +96,17 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 
 func (s *Service) signBeaconAttestations(ctx context.Context,
 	accounts []e2wtypes.Account,
-	slot spec.Slot,
+	slot phase0.Slot,
 	committeeIndices []uint64,
-	blockRoot spec.Root,
-	sourceEpoch spec.Epoch,
-	sourceRoot spec.Root,
-	targetEpoch spec.Epoch,
-	targetRoot spec.Root,
-	signatureDomain spec.Domain,
-) ([]spec.BLSSignature, error) {
+	blockRoot phase0.Root,
+	sourceEpoch phase0.Epoch,
+	sourceRoot phase0.Root,
+	targetEpoch phase0.Epoch,
+	targetRoot phase0.Root,
+	signatureDomain phase0.Domain,
+) ([]phase0.BLSSignature, error) {
 	var err error
-	sigs := make([]spec.BLSSignature, len(accounts))
+	sigs := make([]phase0.BLSSignature, len(accounts))
 
 	if len(accounts) == 0 {
 		return sigs, nil
@@ -137,7 +137,7 @@ func (s *Service) signBeaconAttestations(ctx context.Context,
 			sigs[i], err = s.SignBeaconAttestation(ctx,
 				accounts[i],
 				slot,
-				spec.CommitteeIndex(committeeIndices[i]),
+				phase0.CommitteeIndex(committeeIndices[i]),
 				blockRoot,
 				sourceEpoch,
 				sourceRoot,

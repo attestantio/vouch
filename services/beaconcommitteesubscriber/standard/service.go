@@ -20,7 +20,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
 	"github.com/attestantio/vouch/services/beaconcommitteesubscriber"
@@ -73,19 +73,19 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 // Subscribe subscribes to beacon committees for a given epoch.
 // This returns data about the subnets to which we are subscribing.
 func (s *Service) Subscribe(ctx context.Context,
-	epoch spec.Epoch,
-	accounts map[spec.ValidatorIndex]e2wtypes.Account,
-) (map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
+	epoch phase0.Epoch,
+	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
+) (map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
 	if len(accounts) == 0 {
 		// Nothing to do.
-		return map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription{}, nil
+		return map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription{}, nil
 	}
 
 	started := time.Now()
 	log := log.With().Uint64("epoch", uint64(epoch)).Logger()
 	log.Trace().Msg("Subscribing")
 
-	validatorIndices := make([]spec.ValidatorIndex, 0, len(accounts))
+	validatorIndices := make([]phase0.ValidatorIndex, 0, len(accounts))
 	for index := range accounts {
 		validatorIndices = append(validatorIndices, index)
 	}
@@ -154,17 +154,17 @@ func (s *Service) Subscribe(ctx context.Context,
 // calculateSubscriptionInfo calculates our beacon block attesation subnet requirements given a set of duties.
 // It returns a map of slot => committee => subscription information.
 func (s *Service) calculateSubscriptionInfo(ctx context.Context,
-	epoch spec.Epoch,
-	accounts map[spec.ValidatorIndex]e2wtypes.Account,
+	epoch phase0.Epoch,
+	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 	duties []*attester.Duty,
-) (map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
+) (map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
 
 	// Map is slot => committee => info.
-	subscriptionInfo := make(map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription)
+	subscriptionInfo := make(map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription)
 	subscriptionInfoMutex := deadlock.RWMutex{}
 
 	//	// Map is validator ID => account.
-	//	accountMap := make(map[spec.ValidatorIndex]accountmanager.ValidatingAccount, len(accounts))
+	//	accountMap := make(map[phase0.ValidatorIndex]accountmanager.ValidatingAccount, len(accounts))
 	//	for _, account := range accounts {
 	//		index, err := account.Index(ctx)
 	//		if err != nil {
@@ -215,7 +215,7 @@ func (s *Service) calculateSubscriptionInfo(ctx context.Context,
 					}
 					// Obtain composite public key if available, otherwise standard public key.
 					account := accounts[duty.ValidatorIndices()[i]]
-					var pubKey spec.BLSPubKey
+					var pubKey phase0.BLSPubKey
 					if provider, isProvider := account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
 						copy(pubKey[:], provider.CompositePublicKey().Marshal())
 					} else {
@@ -223,7 +223,7 @@ func (s *Service) calculateSubscriptionInfo(ctx context.Context,
 					}
 					subscriptionInfoMutex.Lock()
 					if _, exists := subscriptionInfo[duty.Slot()]; !exists {
-						subscriptionInfo[duty.Slot()] = make(map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription)
+						subscriptionInfo[duty.Slot()] = make(map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription)
 					}
 					subscriptionInfo[duty.Slot()][duty.CommitteeIndices()[i]] = &beaconcommitteesubscriber.Subscription{
 						Duty: &api.AttesterDuty{

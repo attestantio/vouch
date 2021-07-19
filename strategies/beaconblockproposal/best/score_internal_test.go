@@ -17,7 +17,7 @@ import (
 	"context"
 	"testing"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/testutil"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/stretchr/testify/assert"
@@ -42,8 +42,8 @@ func specificAggregationBits(set []uint64, total uint64) bitfield.Bitlist {
 func TestScore(t *testing.T) {
 	tests := []struct {
 		name       string
-		block      *spec.BeaconBlock
-		parentSlot spec.Slot
+		block      *phase0.BeaconBlock
+		parentSlot phase0.Slot
 		score      float64
 		err        string
 	}{
@@ -54,19 +54,19 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name:       "Empty",
-			block:      &spec.BeaconBlock{},
+			block:      &phase0.BeaconBlock{},
 			parentSlot: 1,
 			score:      0,
 		},
 		{
 			name: "SingleAttestation",
-			block: &spec.BeaconBlock{
+			block: &phase0.BeaconBlock{
 				Slot: 12345,
-				Body: &spec.BeaconBlockBody{
-					Attestations: []*spec.Attestation{
+				Body: &phase0.BeaconBlockBody{
+					Attestations: []*phase0.Attestation{
 						{
 							AggregationBits: aggregationBits(1, 128),
-							Data: &spec.AttestationData{
+							Data: &phase0.AttestationData{
 								Slot: 12344,
 							},
 						},
@@ -78,13 +78,13 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "SingleAttestationParentRootDistance2",
-			block: &spec.BeaconBlock{
+			block: &phase0.BeaconBlock{
 				Slot: 12345,
-				Body: &spec.BeaconBlockBody{
-					Attestations: []*spec.Attestation{
+				Body: &phase0.BeaconBlockBody{
+					Attestations: []*phase0.Attestation{
 						{
 							AggregationBits: aggregationBits(1, 128),
-							Data: &spec.AttestationData{
+							Data: &phase0.AttestationData{
 								Slot: 12344,
 							},
 						},
@@ -96,13 +96,13 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "SingleAttestationDistance2",
-			block: &spec.BeaconBlock{
+			block: &phase0.BeaconBlock{
 				Slot: 12345,
-				Body: &spec.BeaconBlockBody{
-					Attestations: []*spec.Attestation{
+				Body: &phase0.BeaconBlockBody{
+					Attestations: []*phase0.Attestation{
 						{
 							AggregationBits: aggregationBits(1, 128),
-							Data: &spec.AttestationData{
+							Data: &phase0.AttestationData{
 								Slot: 12343,
 							},
 						},
@@ -114,19 +114,19 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "TwoAttestations",
-			block: &spec.BeaconBlock{
+			block: &phase0.BeaconBlock{
 				Slot: 12345,
-				Body: &spec.BeaconBlockBody{
-					Attestations: []*spec.Attestation{
+				Body: &phase0.BeaconBlockBody{
+					Attestations: []*phase0.Attestation{
 						{
 							AggregationBits: aggregationBits(2, 128),
-							Data: &spec.AttestationData{
+							Data: &phase0.AttestationData{
 								Slot: 12344,
 							},
 						},
 						{
 							AggregationBits: aggregationBits(1, 128),
-							Data: &spec.AttestationData{
+							Data: &phase0.AttestationData{
 								Slot: 12341,
 							},
 						},
@@ -138,23 +138,23 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "AttesterSlashing",
-			block: &spec.BeaconBlock{
+			block: &phase0.BeaconBlock{
 				Slot: 12345,
-				Body: &spec.BeaconBlockBody{
-					Attestations: []*spec.Attestation{
+				Body: &phase0.BeaconBlockBody{
+					Attestations: []*phase0.Attestation{
 						{
 							AggregationBits: aggregationBits(50, 128),
-							Data: &spec.AttestationData{
+							Data: &phase0.AttestationData{
 								Slot: 12344,
 							},
 						},
 					},
-					AttesterSlashings: []*spec.AttesterSlashing{
+					AttesterSlashings: []*phase0.AttesterSlashing{
 						{
-							Attestation1: &spec.IndexedAttestation{
+							Attestation1: &phase0.IndexedAttestation{
 								AttestingIndices: []uint64{1, 2, 3},
 							},
-							Attestation2: &spec.IndexedAttestation{
+							Attestation2: &phase0.IndexedAttestation{
 								AttestingIndices: []uint64{2, 3, 4},
 							},
 						},
@@ -166,19 +166,19 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "DuplicateAttestations",
-			block: &spec.BeaconBlock{
+			block: &phase0.BeaconBlock{
 				Slot: 12345,
-				Body: &spec.BeaconBlockBody{
-					Attestations: []*spec.Attestation{
+				Body: &phase0.BeaconBlockBody{
+					Attestations: []*phase0.Attestation{
 						{
 							AggregationBits: specificAggregationBits([]uint64{1, 2, 3}, 128),
-							Data: &spec.AttestationData{
+							Data: &phase0.AttestationData{
 								Slot: 12344,
 							},
 						},
 						{
 							AggregationBits: specificAggregationBits([]uint64{2, 3, 4}, 128),
-							Data: &spec.AttestationData{
+							Data: &phase0.AttestationData{
 								Slot: 12344,
 							},
 						},
@@ -190,31 +190,31 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "Full",
-			block: &spec.BeaconBlock{
+			block: &phase0.BeaconBlock{
 				Slot: 12345,
-				Body: &spec.BeaconBlockBody{
-					Attestations: []*spec.Attestation{
+				Body: &phase0.BeaconBlockBody{
+					Attestations: []*phase0.Attestation{
 						{
 							AggregationBits: aggregationBits(50, 128),
-							Data: &spec.AttestationData{
+							Data: &phase0.AttestationData{
 								Slot: 12344,
 							},
 						},
 					},
-					AttesterSlashings: []*spec.AttesterSlashing{
+					AttesterSlashings: []*phase0.AttesterSlashing{
 						{
-							Attestation1: &spec.IndexedAttestation{
+							Attestation1: &phase0.IndexedAttestation{
 								AttestingIndices: []uint64{1, 2, 3},
 							},
-							Attestation2: &spec.IndexedAttestation{
+							Attestation2: &phase0.IndexedAttestation{
 								AttestingIndices: []uint64{2, 3, 4},
 							},
 						},
 					},
-					ProposerSlashings: []*spec.ProposerSlashing{
+					ProposerSlashings: []*phase0.ProposerSlashing{
 						{
-							SignedHeader1: &spec.SignedBeaconBlockHeader{
-								Message: &spec.BeaconBlockHeader{
+							SignedHeader1: &phase0.SignedBeaconBlockHeader{
+								Message: &phase0.BeaconBlockHeader{
 									Slot:          10,
 									ProposerIndex: 1,
 									ParentRoot:    testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
@@ -223,8 +223,8 @@ func TestScore(t *testing.T) {
 								},
 								Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 							},
-							SignedHeader2: &spec.SignedBeaconBlockHeader{
-								Message: &spec.BeaconBlockHeader{
+							SignedHeader2: &phase0.SignedBeaconBlockHeader{
+								Message: &phase0.BeaconBlockHeader{
 									Slot:          10,
 									ProposerIndex: 1,
 									ParentRoot:    testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),
@@ -242,31 +242,31 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "FullParentRootDistance2",
-			block: &spec.BeaconBlock{
+			block: &phase0.BeaconBlock{
 				Slot: 12345,
-				Body: &spec.BeaconBlockBody{
-					Attestations: []*spec.Attestation{
+				Body: &phase0.BeaconBlockBody{
+					Attestations: []*phase0.Attestation{
 						{
 							AggregationBits: aggregationBits(50, 128),
-							Data: &spec.AttestationData{
+							Data: &phase0.AttestationData{
 								Slot: 12344,
 							},
 						},
 					},
-					AttesterSlashings: []*spec.AttesterSlashing{
+					AttesterSlashings: []*phase0.AttesterSlashing{
 						{
-							Attestation1: &spec.IndexedAttestation{
+							Attestation1: &phase0.IndexedAttestation{
 								AttestingIndices: []uint64{1, 2, 3},
 							},
-							Attestation2: &spec.IndexedAttestation{
+							Attestation2: &phase0.IndexedAttestation{
 								AttestingIndices: []uint64{2, 3, 4},
 							},
 						},
 					},
-					ProposerSlashings: []*spec.ProposerSlashing{
+					ProposerSlashings: []*phase0.ProposerSlashing{
 						{
-							SignedHeader1: &spec.SignedBeaconBlockHeader{
-								Message: &spec.BeaconBlockHeader{
+							SignedHeader1: &phase0.SignedBeaconBlockHeader{
+								Message: &phase0.BeaconBlockHeader{
 									Slot:          10,
 									ProposerIndex: 1,
 									ParentRoot:    testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
@@ -275,8 +275,8 @@ func TestScore(t *testing.T) {
 								},
 								Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 							},
-							SignedHeader2: &spec.SignedBeaconBlockHeader{
-								Message: &spec.BeaconBlockHeader{
+							SignedHeader2: &phase0.SignedBeaconBlockHeader{
+								Message: &phase0.BeaconBlockHeader{
 									Slot:          10,
 									ProposerIndex: 1,
 									ParentRoot:    testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),
@@ -294,31 +294,31 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "FullParentRootDistance4",
-			block: &spec.BeaconBlock{
+			block: &phase0.BeaconBlock{
 				Slot: 12345,
-				Body: &spec.BeaconBlockBody{
-					Attestations: []*spec.Attestation{
+				Body: &phase0.BeaconBlockBody{
+					Attestations: []*phase0.Attestation{
 						{
 							AggregationBits: aggregationBits(50, 128),
-							Data: &spec.AttestationData{
+							Data: &phase0.AttestationData{
 								Slot: 12344,
 							},
 						},
 					},
-					AttesterSlashings: []*spec.AttesterSlashing{
+					AttesterSlashings: []*phase0.AttesterSlashing{
 						{
-							Attestation1: &spec.IndexedAttestation{
+							Attestation1: &phase0.IndexedAttestation{
 								AttestingIndices: []uint64{1, 2, 3},
 							},
-							Attestation2: &spec.IndexedAttestation{
+							Attestation2: &phase0.IndexedAttestation{
 								AttestingIndices: []uint64{2, 3, 4},
 							},
 						},
 					},
-					ProposerSlashings: []*spec.ProposerSlashing{
+					ProposerSlashings: []*phase0.ProposerSlashing{
 						{
-							SignedHeader1: &spec.SignedBeaconBlockHeader{
-								Message: &spec.BeaconBlockHeader{
+							SignedHeader1: &phase0.SignedBeaconBlockHeader{
+								Message: &phase0.BeaconBlockHeader{
 									Slot:          10,
 									ProposerIndex: 1,
 									ParentRoot:    testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
@@ -327,8 +327,8 @@ func TestScore(t *testing.T) {
 								},
 								Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 							},
-							SignedHeader2: &spec.SignedBeaconBlockHeader{
-								Message: &spec.BeaconBlockHeader{
+							SignedHeader2: &phase0.SignedBeaconBlockHeader{
+								Message: &phase0.BeaconBlockHeader{
 									Slot:          10,
 									ProposerIndex: 1,
 									ParentRoot:    testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),

@@ -17,7 +17,7 @@ import (
 	"context"
 	"testing"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/validatorsmanager/standard"
@@ -27,7 +27,7 @@ import (
 )
 
 func TestService(t *testing.T) {
-	farFutureEpoch := spec.Epoch(0xffffffffffffffff)
+	farFutureEpoch := phase0.Epoch(0xffffffffffffffff)
 	validatorsProvider := mock.NewValidatorsProvider()
 
 	tests := []struct {

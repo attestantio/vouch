@@ -17,7 +17,7 @@ import (
 	"context"
 	"encoding/binary"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -26,28 +26,28 @@ import (
 // This signs a slot with the "selection proof" domain.
 func (s *Service) SignSlotSelection(ctx context.Context,
 	account e2wtypes.Account,
-	slot spec.Slot,
+	slot phase0.Slot,
 ) (
-	spec.BLSSignature,
+	phase0.BLSSignature,
 	error,
 ) {
-	var messageRoot spec.Root
+	var messageRoot phase0.Root
 	binary.LittleEndian.PutUint64(messageRoot[:], uint64(slot))
 
 	// Calculate the domain.
 	domain, err := s.domainProvider.Domain(ctx,
 		s.selectionProofDomainType,
-		spec.Epoch(slot/s.slotsPerEpoch))
+		phase0.Epoch(slot/s.slotsPerEpoch))
 	if err != nil {
-		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for selection proof")
+		return phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for selection proof")
 	}
 
-	var slotBytes spec.Root
+	var slotBytes phase0.Root
 	binary.LittleEndian.PutUint64(slotBytes[:], uint64(slot))
 
 	sig, err := s.sign(ctx, account, slotBytes, domain)
 	if err != nil {
-		return spec.BLSSignature{}, errors.Wrap(err, "failed to sign RANDO reveal")
+		return phase0.BLSSignature{}, errors.Wrap(err, "failed to sign RANDO reveal")
 	}
 
 	return sig, nil

@@ -18,7 +18,7 @@ import (
 	"fmt"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // scoreAttestationData generates a score for attestation data.
@@ -26,13 +26,13 @@ import (
 func (s *Service) scoreAttestationData(ctx context.Context,
 	provider eth2client.AttestationDataProvider,
 	name string,
-	attestationData *spec.AttestationData,
+	attestationData *phase0.AttestationData,
 ) float64 {
 	if attestationData == nil {
 		return 0
 	}
 
-	var slot spec.Slot
+	var slot phase0.Slot
 	if headerProvider, isProvider := provider.(eth2client.BeaconBlockHeadersProvider); isProvider {
 		block, err := headerProvider.BeaconBlockHeader(ctx, fmt.Sprintf("%#x", attestationData.BeaconBlockRoot))
 		if err != nil {

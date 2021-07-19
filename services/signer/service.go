@@ -17,7 +17,7 @@ package signer
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
@@ -29,10 +29,10 @@ type AggregateAndProofSigner interface {
 	// SignAggregateAndProof signs an aggregate attestation for given slot and root.
 	SignAggregateAndProof(ctx context.Context,
 		account e2wtypes.Account,
-		slot spec.Slot,
-		root spec.Root,
+		slot phase0.Slot,
+		root phase0.Root,
 	) (
-		spec.BLSSignature,
+		phase0.BLSSignature,
 		error,
 	)
 }
@@ -42,15 +42,15 @@ type BeaconAttestationSigner interface {
 	// SignBeaconAttestation signs a beacon attestation.
 	SignBeaconAttestation(ctx context.Context,
 		account e2wtypes.Account,
-		slot spec.Slot,
-		committeeIndex spec.CommitteeIndex,
-		blockRoot spec.Root,
-		sourceEpoch spec.Epoch,
-		sourceRoot spec.Root,
-		targetEpoch spec.Epoch,
-		targetRoot spec.Root,
+		slot phase0.Slot,
+		committeeIndex phase0.CommitteeIndex,
+		blockRoot phase0.Root,
+		sourceEpoch phase0.Epoch,
+		sourceRoot phase0.Root,
+		targetEpoch phase0.Epoch,
+		targetRoot phase0.Root,
 	) (
-		spec.BLSSignature,
+		phase0.BLSSignature,
 		error,
 	)
 }
@@ -60,15 +60,15 @@ type BeaconAttestationsSigner interface {
 	// SignBeaconAttestation signs multiple beacon attestations.
 	SignBeaconAttestations(ctx context.Context,
 		accounts []e2wtypes.Account,
-		slot spec.Slot,
-		committeeIndices []spec.CommitteeIndex,
-		blockRoot spec.Root,
-		sourceEpoch spec.Epoch,
-		sourceRoot spec.Root,
-		targetEpoch spec.Epoch,
-		targetRoot spec.Root,
+		slot phase0.Slot,
+		committeeIndices []phase0.CommitteeIndex,
+		blockRoot phase0.Root,
+		sourceEpoch phase0.Epoch,
+		sourceRoot phase0.Root,
+		targetEpoch phase0.Epoch,
+		targetRoot phase0.Root,
 	) (
-		[]spec.BLSSignature,
+		[]phase0.BLSSignature,
 		error,
 	)
 }
@@ -78,13 +78,13 @@ type BeaconBlockSigner interface {
 	// SignBeaconBlockProposal signs a beacon block proposal.
 	SignBeaconBlockProposal(ctx context.Context,
 		account e2wtypes.Account,
-		slot spec.Slot,
-		proposerIndex spec.ValidatorIndex,
-		parentRoot spec.Root,
-		stateRoot spec.Root,
-		bodyRoot spec.Root,
+		slot phase0.Slot,
+		proposerIndex phase0.ValidatorIndex,
+		parentRoot phase0.Root,
+		stateRoot phase0.Root,
+		bodyRoot phase0.Root,
 	) (
-		spec.BLSSignature,
+		phase0.BLSSignature,
 		error,
 	)
 }
@@ -95,9 +95,9 @@ type RANDAORevealSigner interface {
 	// This signs an epoch with the "RANDAO" domain.
 	SignRANDAOReveal(ctx context.Context,
 		account e2wtypes.Account,
-		slot spec.Slot,
+		slot phase0.Slot,
 	) (
-		spec.BLSSignature,
+		phase0.BLSSignature,
 		error,
 	)
 }
@@ -108,9 +108,9 @@ type SlotSelectionSigner interface {
 	// This signs a slot with the "selection proof" domain.
 	SignSlotSelection(ctx context.Context,
 		account e2wtypes.Account,
-		slot spec.Slot,
+		slot phase0.Slot,
 	) (
-		spec.BLSSignature,
+		phase0.BLSSignature,
 		error,
 	)
 }

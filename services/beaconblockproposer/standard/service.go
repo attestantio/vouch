@@ -19,7 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/chaintime"
@@ -90,7 +90,7 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 	// Fetch the validating account.
 	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx,
 		dutyEpoch,
-		[]spec.ValidatorIndex{duty.ValidatorIndex()},
+		[]phase0.ValidatorIndex{duty.ValidatorIndex()},
 	)
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain proposing validator account")
@@ -125,7 +125,7 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	log := log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Proposing")
 
-	var zeroSig spec.BLSSignature
+	var zeroSig phase0.BLSSignature
 	if duty.RANDAOReveal() == zeroSig {
 		log.Error().Msg("Missing RANDAO reveal")
 		s.monitor.BeaconBlockProposalCompleted(started, "failed")
@@ -183,7 +183,7 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed proposal")
 
-	signedBlock := &spec.SignedBeaconBlock{
+	signedBlock := &phase0.SignedBeaconBlock{
 		Message:   proposal,
 		Signature: sig,
 	}

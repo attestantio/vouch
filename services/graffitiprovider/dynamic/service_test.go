@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/graffitiprovider/dynamic"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -183,7 +183,7 @@ func TestReplacement(t *testing.T) {
 			require.NoError(t, err)
 			for validatorIndex := uint64(0); validatorIndex < 16; validatorIndex++ {
 				for slot := uint64(0); slot < 16; slot++ {
-					graffiti, err := svc.Graffiti(ctx, spec.Slot(slot), spec.ValidatorIndex(validatorIndex))
+					graffiti, err := svc.Graffiti(ctx, phase0.Slot(slot), phase0.ValidatorIndex(validatorIndex))
 					require.NoError(t, err)
 					delete(expectedGraffitis, string(graffiti))
 				}
@@ -299,7 +299,7 @@ func TestMultiline(t *testing.T) {
 			require.NoError(t, err)
 			for validatorIndex := uint64(0); validatorIndex < 16; validatorIndex++ {
 				for slot := uint64(0); slot < 16; slot++ {
-					graffiti, err := svc.Graffiti(ctx, spec.Slot(slot), spec.ValidatorIndex(validatorIndex))
+					graffiti, err := svc.Graffiti(ctx, phase0.Slot(slot), phase0.ValidatorIndex(validatorIndex))
 					require.NoError(t, err)
 					require.Contains(t, test.expectedGraffitis, string(graffiti))
 					delete(obtainedGraffitis, string(graffiti))

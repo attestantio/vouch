@@ -19,14 +19,14 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 )
 
 // RefreshValidatorsFromBeaconNode refreshes the local store from the beacon node.
 // This is an expensive operation, and should not be called in the validating path.
-func (s *Service) RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys []spec.BLSPubKey) error {
-	var validators map[spec.ValidatorIndex]*api.Validator
+func (s *Service) RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys []phase0.BLSPubKey) error {
+	var validators map[phase0.ValidatorIndex]*api.Validator
 	var err error
 	started := time.Now()
 	// Use ValidatorsWithoutBalance by preference (check relative timings to see if this has improved.)
@@ -61,9 +61,9 @@ func (s *Service) RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys [
 		return nil
 	}
 
-	validatorsByIndex := make(map[spec.ValidatorIndex]*spec.Validator)
-	validatorsByPubKey := make(map[spec.BLSPubKey]*spec.Validator)
-	validatorPubKeyToIndex := make(map[spec.BLSPubKey]spec.ValidatorIndex)
+	validatorsByIndex := make(map[phase0.ValidatorIndex]*phase0.Validator)
+	validatorsByPubKey := make(map[phase0.BLSPubKey]*phase0.Validator)
+	validatorPubKeyToIndex := make(map[phase0.BLSPubKey]phase0.ValidatorIndex)
 	for _, validator := range validators {
 		validatorsByIndex[validator.Index] = validator.Validator
 		validatorsByPubKey[validator.Validator.PublicKey] = validator.Validator

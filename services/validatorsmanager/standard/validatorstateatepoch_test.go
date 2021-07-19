@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/validatorsmanager/standard"
@@ -33,11 +33,11 @@ func TestValidatorStateAtEpoch(t *testing.T) {
 		standard.WithLogLevel(zerolog.Disabled),
 		standard.WithMonitor(nullmetrics.New(context.Background())),
 		standard.WithClientMonitor(nullmetrics.New(context.Background())),
-		standard.WithFarFutureEpoch(spec.Epoch(0xffffffffffffffff)),
+		standard.WithFarFutureEpoch(phase0.Epoch(0xffffffffffffffff)),
 		standard.WithValidatorsProvider(mock.NewValidatorsProvider()),
 	)
 	require.NoError(t, err)
-	require.NoError(t, s.RefreshValidatorsFromBeaconNode(ctx, []spec.BLSPubKey{
+	require.NoError(t, s.RefreshValidatorsFromBeaconNode(ctx, []phase0.BLSPubKey{
 		testutil.HexToPubKey("0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c"),
 		testutil.HexToPubKey("0xb89bebc699769726a318c8e9971bd3171297c61aea4a6578a7a4f94b547dcba5bac16a89108b6b6a1fe3695d1a874a0b"),
 		testutil.HexToPubKey("0xa3a32b0f8b4ddb83f1a0a853d81dd725dfe577d4f4c3db8ece52ce2b026eca84815c1a7e8e92a4de3d755733bf7e4a9b"),
@@ -74,8 +74,8 @@ func TestValidatorStateAtEpoch(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		validatorIndex spec.ValidatorIndex
-		epoch          spec.Epoch
+		validatorIndex phase0.ValidatorIndex
+		epoch          phase0.Epoch
 		state          api.ValidatorState
 		err            string
 	}{

@@ -17,7 +17,7 @@ import (
 	"context"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -28,12 +28,12 @@ import (
 type Service struct {
 	monitor                     metrics.SignerMonitor
 	clientMonitor               metrics.ClientMonitor
-	slotsPerEpoch               spec.Slot
-	beaconProposerDomainType    spec.DomainType
-	beaconAttesterDomainType    spec.DomainType
-	randaoDomainType            spec.DomainType
-	selectionProofDomainType    spec.DomainType
-	aggregateAndProofDomainType spec.DomainType
+	slotsPerEpoch               phase0.Slot
+	beaconProposerDomainType    phase0.DomainType
+	beaconAttesterDomainType    phase0.DomainType
+	randaoDomainType            phase0.DomainType
+	selectionProofDomainType    phase0.DomainType
+	aggregateAndProofDomainType phase0.DomainType
 	domainProvider              eth2client.DomainProvider
 }
 
@@ -81,7 +81,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	s := &Service{
 		monitor:                     parameters.monitor,
 		clientMonitor:               parameters.clientMonitor,
-		slotsPerEpoch:               spec.Slot(slotsPerEpoch),
+		slotsPerEpoch:               phase0.Slot(slotsPerEpoch),
 		beaconAttesterDomainType:    beaconAttesterDomainType,
 		beaconProposerDomainType:    beaconProposerDomainType,
 		randaoDomainType:            randaoDomainType,

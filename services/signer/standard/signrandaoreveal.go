@@ -17,7 +17,7 @@ import (
 	"context"
 	"encoding/binary"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -26,13 +26,13 @@ import (
 // This signs an epoch with the "RANDAO reveal" domain.
 func (s *Service) SignRANDAOReveal(ctx context.Context,
 	account e2wtypes.Account,
-	slot spec.Slot,
+	slot phase0.Slot,
 ) (
-	spec.BLSSignature,
+	phase0.BLSSignature,
 	error,
 ) {
-	var messageRoot spec.Root
-	epoch := spec.Epoch(slot / s.slotsPerEpoch)
+	var messageRoot phase0.Root
+	epoch := phase0.Epoch(slot / s.slotsPerEpoch)
 	binary.LittleEndian.PutUint64(messageRoot[:], uint64(epoch))
 
 	// Obtain the RANDAO reveal signature domain.
@@ -40,15 +40,15 @@ func (s *Service) SignRANDAOReveal(ctx context.Context,
 		s.randaoDomainType,
 		epoch)
 	if err != nil {
-		return spec.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for RANDAO reveal")
+		return phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for RANDAO reveal")
 	}
 
-	var epochBytes spec.Root
+	var epochBytes phase0.Root
 	binary.LittleEndian.PutUint64(epochBytes[:], uint64(epoch))
 
 	sig, err := s.sign(ctx, account, epochBytes, domain)
 	if err != nil {
-		return spec.BLSSignature{}, errors.Wrap(err, "failed to sign RANDO reveal")
+		return phase0.BLSSignature{}, errors.Wrap(err, "failed to sign RANDO reveal")
 	}
 
 	return sig, nil

@@ -16,7 +16,7 @@ package mock
 import (
 	"context"
 
-	spec "github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconcommitteesubscriber"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -30,8 +30,8 @@ func New() beaconcommitteesubscriber.Service {
 
 // Subscribe is a mock.
 func (s *service) Subscribe(ctx context.Context,
-	epoch spec.Epoch,
-	accounts map[spec.ValidatorIndex]e2wtypes.Account,
-) (map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
-	return make(map[spec.Slot]map[spec.CommitteeIndex]*beaconcommitteesubscriber.Subscription), nil
+	epoch phase0.Epoch,
+	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
+) (map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
+	return make(map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription), nil
 }
