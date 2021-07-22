@@ -56,6 +56,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		timeout:                      parameters.timeout,
 		clientMonitor:                parameters.clientMonitor,
 	}
+	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
 	return s, nil
 }

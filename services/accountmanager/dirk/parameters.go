@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -29,6 +29,7 @@ type parameters struct {
 	logLevel               zerolog.Level
 	monitor                metrics.AccountManagerMonitor
 	clientMonitor          metrics.ClientMonitor
+	processConcurrency     int64
 	endpoints              []string
 	accountPaths           []string
 	clientCert             []byte
@@ -69,6 +70,13 @@ func WithMonitor(monitor metrics.AccountManagerMonitor) Parameter {
 func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.clientMonitor = clientMonitor
+	})
+}
+
+// WithProcessConcurrency sets the concurrency for the service.
+func WithProcessConcurrency(concurrency int64) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.processConcurrency = concurrency
 	})
 }
 
@@ -153,6 +161,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.clientMonitor == nil {
 		return nil, errors.New("no client monitor specified")
+	}
+	if parameters.processConcurrency <= 0 {
+		return nil, errors.New("process concurrency must be > 0")
 	}
 	if len(parameters.endpoints) == 0 {
 		return nil, errors.New("no endpoints specified")
