@@ -62,6 +62,7 @@ import (
 	firstattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/first"
 	bestbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	firstbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/first"
+	"github.com/attestantio/vouch/util"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/opentracing/opentracing-go"
@@ -342,7 +343,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	log.Trace().Msg("Starting attester")
 	attester, err := standardattester.New(ctx,
 		standardattester.WithLogLevel(logLevel(viper.GetString("attester.log-level"))),
-		standardattester.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
+		standardattester.WithProcessConcurrency(util.ProcessConcurrency("attester")),
 		standardattester.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
 		standardattester.WithAttestationDataProvider(attestationDataProvider),
 		standardattester.WithAttestationsSubmitter(submitterStrategy.(submitter.AttestationsSubmitter)),
@@ -380,7 +381,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	log.Trace().Msg("Starting beacon committee subscriber service")
 	beaconCommitteeSubscriber, err := standardbeaconcommitteesubscriber.New(ctx,
 		standardbeaconcommitteesubscriber.WithLogLevel(logLevel(viper.GetString("beaconcommiteesubscriber.log-level"))),
-		standardbeaconcommitteesubscriber.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
+		standardbeaconcommitteesubscriber.WithProcessConcurrency(util.ProcessConcurrency("beaconcommitteesubscriber")),
 		standardbeaconcommitteesubscriber.WithMonitor(monitor.(metrics.BeaconCommitteeSubscriptionMonitor)),
 		standardbeaconcommitteesubscriber.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),
 		standardbeaconcommitteesubscriber.WithAttestationAggregator(attestationAggregator),
@@ -612,6 +613,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 			dirkaccountmanager.WithLogLevel(logLevel(viper.GetString("accountmanager.dirk.log-level"))),
 			dirkaccountmanager.WithMonitor(monitor.(metrics.AccountManagerMonitor)),
 			dirkaccountmanager.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			dirkaccountmanager.WithProcessConcurrency(util.ProcessConcurrency("accountmanager.dirk")),
 			dirkaccountmanager.WithValidatorsManager(validatorsManager),
 			dirkaccountmanager.WithEndpoints(viper.GetStringSlice("accountmanager.dirk.endpoints")),
 			dirkaccountmanager.WithAccountPaths(viper.GetStringSlice("accountmanager.dirk.accounts")),
@@ -683,7 +685,7 @@ func selectAttestationDataProvider(ctx context.Context,
 		}
 		attestationDataProvider, err = bestattestationdatastrategy.New(ctx,
 			bestattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			bestattestationdatastrategy.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
+			bestattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.best")),
 			bestattestationdatastrategy.WithLogLevel(logLevel(viper.GetString("strategies.attestationdata.log-level"))),
 			bestattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
 		)
@@ -744,7 +746,7 @@ func selectAggregateAttestationProvider(ctx context.Context,
 		}
 		aggregateAttestationProvider, err = bestaggregateattestationstrategy.New(ctx,
 			bestaggregateattestationstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			bestaggregateattestationstrategy.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
+			bestaggregateattestationstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.aggregateattestation.best")),
 			bestaggregateattestationstrategy.WithLogLevel(logLevel(viper.GetString("strategies.aggregateattestation.log-level"))),
 			bestaggregateattestationstrategy.WithAggregateAttestationProviders(aggregateAttestationProviders),
 		)
@@ -804,7 +806,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 		}
 		beaconBlockProposalProvider, err = bestbeaconblockproposalstrategy.New(ctx,
 			bestbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			bestbeaconblockproposalstrategy.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
+			bestbeaconblockproposalstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.beaconblockproposal.best")),
 			bestbeaconblockproposalstrategy.WithLogLevel(logLevel(viper.GetString("strategies.beaconblockproposal.log-level"))),
 			bestbeaconblockproposalstrategy.WithBeaconBlockProposalProviders(beaconBlockProposalProviders),
 			bestbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
@@ -860,7 +862,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 		}
 		submitter, err = multinodesubmitter.New(ctx,
 			multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			multinodesubmitter.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
+			multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
 			multinodesubmitter.WithLogLevel(logLevel(viper.GetString("submitter.log-level"))),
 			multinodesubmitter.WithBeaconBlockSubmitters(beaconBlockSubmitters),
 			multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),

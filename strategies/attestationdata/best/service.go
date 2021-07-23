@@ -54,6 +54,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		processConcurrency:       parameters.processConcurrency,
 		attestationDataProviders: parameters.attestationDataProviders,
 	}
+	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
 	return s, nil
 }

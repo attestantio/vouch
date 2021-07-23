@@ -1,5 +1,7 @@
 1.1.0:
-  - added metrics to track strategy operation results
+  - fetch wallet accounts from Dirk in parallel
+  - fetch process-concurrency configuration value from most specific point in hierarchy
+  - add metrics to track strategy operation results
   - provide release metric in `vouch_release`
   - provide ready metric in `vouch_ready`
   - handle chain reorganisations, updating duties as appropriate

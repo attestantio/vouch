@@ -57,6 +57,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		aggregateAttestationsSubmitters:       parameters.aggregateAttestationsSubmitters,
 		beaconCommitteeSubscriptionSubmitters: parameters.beaconCommitteeSubscriptionsSubmitters,
 	}
+	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
 	return s, nil
 }

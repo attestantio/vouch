@@ -66,6 +66,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		attestationAggregator:  parameters.attestationAggregator,
 		submitter:              parameters.beaconCommitteeSubmitter,
 	}
+	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
 	return s, nil
 }

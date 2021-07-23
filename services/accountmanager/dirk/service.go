@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
@@ -29,13 +30,13 @@ import (
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/validatorsmanager"
-	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
 	"github.com/wealdtech/go-bytesutil"
 	dirk "github.com/wealdtech/go-eth2-wallet-dirk"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/credentials"
 )
 
@@ -44,6 +45,7 @@ type Service struct {
 	mutex                sync.RWMutex
 	monitor              metrics.AccountManagerMonitor
 	clientMonitor        metrics.ClientMonitor
+	processConcurrency   int64
 	endpoints            []*dirk.Endpoint
 	accountPaths         []string
 	credentials          credentials.TransportCredentials
@@ -107,6 +109,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	s := &Service{
 		monitor:              parameters.monitor,
 		clientMonitor:        parameters.clientMonitor,
+		processConcurrency:   parameters.processConcurrency,
 		endpoints:            endpoints,
 		accountPaths:         parameters.accountPaths,
 		credentials:          credentials,
@@ -116,6 +119,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		currentEpochProvider: parameters.currentEpochProvider,
 		wallets:              make(map[string]e2wtypes.Wallet),
 	}
+	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
 	if err := s.refreshAccounts(ctx); err != nil {
 		return nil, errors.Wrap(err, "failed to fetch initial accounts")
@@ -162,23 +166,33 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 	}
 
 	verificationRegexes := accountPathsToVerificationRegexes(s.accountPaths)
-	// Fetch accounts for each wallet.
+	// Fetch accounts for each wallet in parallel.
+	started := time.Now()
 	accounts := make(map[phase0.BLSPubKey]e2wtypes.Account)
-	_, err := util.Scatter(len(wallets), func(offset int, entries int, mu *sync.RWMutex) (interface{}, error) {
-		for i := offset; i < offset+entries; i++ {
+	var accountsMu sync.Mutex
+	sem := semaphore.NewWeighted(s.processConcurrency)
+	var wg sync.WaitGroup
+	for i := range wallets {
+		wg.Add(1)
+		go func(ctx context.Context, sem *semaphore.Weighted, wg *sync.WaitGroup, i int, mu *sync.Mutex) {
+			defer wg.Done()
+			if err := sem.Acquire(ctx, 1); err != nil {
+				log.Error().Err(err).Msg("Failed to acquire semaphore")
+				return
+			}
+			defer sem.Release(1)
+			log := log.With().Str("wallet", wallets[i].Name()).Logger()
+			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained semaphore")
 			walletAccounts := s.fetchAccountsForWallet(ctx, wallets[i], verificationRegexes)
-			mu.Lock()
+			log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(walletAccounts)).Msg("Obtained accounts")
+			accountsMu.Lock()
 			for k, v := range walletAccounts {
 				accounts[k] = v
 			}
-			mu.Unlock()
-		}
-		return nil, nil
-	})
-	if err != nil {
-		log.Error().Err(err).Str("result", "failed").Msg("Failed to obtain accounts")
+			accountsMu.Unlock()
+			log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(walletAccounts)).Msg("Imported accounts")
+		}(ctx, sem, &wg, i, &accountsMu)
 	}
-
 	log.Trace().Int("accounts", len(accounts)).Msg("Obtained accounts")
 
 	if len(accounts) == 0 && len(s.accounts) != 0 {
