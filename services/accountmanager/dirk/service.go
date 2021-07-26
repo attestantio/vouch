@@ -193,6 +193,7 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 			log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(walletAccounts)).Msg("Imported accounts")
 		}(ctx, sem, &wg, i, &accountsMu)
 	}
+	wg.Wait()
 	log.Trace().Int("accounts", len(accounts)).Msg("Obtained accounts")
 
 	if len(accounts) == 0 && len(s.accounts) != 0 {
