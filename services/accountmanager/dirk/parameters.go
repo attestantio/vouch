@@ -156,17 +156,14 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
-	if parameters.processConcurrency == 0 {
-		return nil, errors.New("no process concurrency specified")
-	}
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")
 	}
 	if parameters.clientMonitor == nil {
 		return nil, errors.New("no client monitor specified")
 	}
-	if parameters.processConcurrency <= 0 {
-		return nil, errors.New("process concurrency must be > 0")
+	if parameters.processConcurrency < 1 {
+		return nil, errors.New("no process concurrency specified")
 	}
 	if len(parameters.endpoints) == 0 {
 		return nil, errors.New("no endpoints specified")

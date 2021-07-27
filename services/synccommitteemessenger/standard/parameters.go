@@ -150,7 +150,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
-	if parameters.processConcurrency == 0 {
+	if parameters.processConcurrency < 1 {
 		return nil, errors.New("no process concurrency specified")
 	}
 	if parameters.monitor == nil {
