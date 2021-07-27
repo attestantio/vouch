@@ -34,6 +34,7 @@ require (
 	github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.2
 	github.com/wealdtech/go-eth2-wallet-types/v2 v2.8.4
 	github.com/wealdtech/go-majordomo v1.0.1
+	go.uber.org/atomic v1.7.0 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/grpc v1.38.0
 	gotest.tools v2.2.0+incompatible

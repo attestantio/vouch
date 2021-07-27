@@ -32,6 +32,12 @@ graffiti:
   static:
     value: My graffiti
 
+# scheduler handles the scheduling of Vouch's operations.
+scheduler:
+  # style can be 'basic' (default) or 'advanced'.  The advanced scheduler should be more robust, however it is
+  # newer and as such more likely to encounter issues.
+  style: basic
+
 # submitter submits data to beacon nodes.  If not present the nodes in beacon-node-address above will be used.
 submitter:
   # style can currently only be 'all'

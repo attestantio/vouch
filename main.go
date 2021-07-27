@@ -48,6 +48,8 @@ import (
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	prometheusmetrics "github.com/attestantio/vouch/services/metrics/prometheus"
+	"github.com/attestantio/vouch/services/scheduler"
+	advancedscheduler "github.com/attestantio/vouch/services/scheduler/advanced"
 	basicscheduler "github.com/attestantio/vouch/services/scheduler/basic"
 	"github.com/attestantio/vouch/services/signer"
 	standardsigner "github.com/attestantio/vouch/services/signer/standard"
@@ -273,13 +275,10 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		return errors.Wrap(err, "failed to start chain time service")
 	}
 
-	log.Trace().Msg("Starting scheduler")
-	scheduler, err := basicscheduler.New(ctx,
-		basicscheduler.WithLogLevel(logLevel(viper.GetString("scheduler.log-level"))),
-		basicscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
-	)
+	log.Trace().Msg("Selecting scheduler")
+	scheduler, err := selectScheduler(ctx, monitor)
 	if err != nil {
-		return errors.Wrap(err, "failed to start scheduler service")
+		return errors.Wrap(err, "failed to select scheduler")
 	}
 
 	log.Trace().Msg("Starting validators manager")
@@ -531,6 +530,29 @@ func startMonitor(ctx context.Context) (metrics.Service, error) {
 		monitor = nullmetrics.New(ctx)
 	}
 	return monitor, nil
+}
+
+func selectScheduler(ctx context.Context, monitor metrics.Service) (scheduler.Service, error) {
+	var scheduler scheduler.Service
+	var err error
+	switch viper.GetString("scheduler.style") {
+	case "advanced":
+		log.Info().Msg("Starting advanced scheduler")
+		scheduler, err = advancedscheduler.New(ctx,
+			advancedscheduler.WithLogLevel(logLevel(viper.GetString("scheduler.log-level"))),
+			advancedscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
+		)
+	default:
+		log.Info().Msg("Starting basic scheduler")
+		scheduler, err = basicscheduler.New(ctx,
+			basicscheduler.WithLogLevel(logLevel(viper.GetString("scheduler.log-level"))),
+			basicscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
+		)
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start scheduler service")
+	}
+	return scheduler, nil
 }
 
 func startGraffitiProvider(ctx context.Context, majordomo majordomo.Service) (graffitiprovider.Service, error) {
