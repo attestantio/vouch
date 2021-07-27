@@ -34,6 +34,12 @@ var ErrNoSuchJob = errors.New("no such job")
 // ErrJobAlreadyExists is returned when the scheduler is asked to create a job that already exists.
 var ErrJobAlreadyExists = errors.New("job already exists")
 
+// ErrJobRunning is returned when the scheduler is asked to interact with a job that is running.
+var ErrJobRunning = errors.New("job running")
+
+// ErrJobFinalised is returned when the scheduler is asked to interact with a job that is finalised.
+var ErrJobFinalised = errors.New("job finalised")
+
 // ErrNoJobName is returned when an attempt is made to to control a job without a name.
 var ErrNoJobName = errors.New("no job name")
 
