@@ -5,7 +5,7 @@ go 1.14
 require (
 	cloud.google.com/go v0.81.0 // indirect
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
-	github.com/attestantio/go-eth2-client v0.6.28
+	github.com/attestantio/go-eth2-client v0.7.0-beta.2
 	github.com/aws/aws-sdk-go v1.38.30
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0
@@ -40,5 +40,3 @@ require (
 	google.golang.org/grpc v1.38.0
 	gotest.tools v2.2.0+incompatible
 )
-
-replace github.com/attestantio/go-eth2-client => ../go-eth2-client
