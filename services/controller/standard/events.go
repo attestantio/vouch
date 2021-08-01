@@ -131,13 +131,10 @@ func (s *Service) handleCurrentDependentRootChanged(ctx context.Context) {
 
 	// We need to refresh the proposer duties for this epoch.
 	go s.refreshProposerDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
-	// We need to refresh the sync committee duties for this epoch if we are
+	// We need to refresh the sync committee duties for the next period if we are
 	// at the appropriate boundary.
 	if uint64(s.chainTimeService.CurrentEpoch())%s.epochsPerSyncCommitteePeriod == 0 {
-		// TODO is this correct?
-		// Check if this is the correct sync committee period (should it be the next one?)
-		// Check if this should only be recalculated on the sync committee period boundary.
-		go s.refreshSyncCommitteeDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
+		go s.refreshSyncCommitteeDutiesForEpochPeriod(ctx, s.chainTimeService.CurrentEpoch()+phase0.Epoch(s.epochsPerSyncCommitteePeriod))
 	}
 	// We need to refresh the attester duties for the next epoch.
 	go s.refreshAttesterDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch()+1)
@@ -199,26 +196,40 @@ func (s *Service) refreshAttesterDutiesForEpoch(ctx context.Context, epoch phase
 	s.subscriptionInfosMutex.Unlock()
 }
 
-// TODO this should refresh for the entire period.
-func (s *Service) refreshSyncCommitteeDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {
+// refreshSyncCommitteeDutiesForEpochPeriod refreshes sync committee duties for all epochs in the
+// given sync period.
+func (s *Service) refreshSyncCommitteeDutiesForEpochPeriod(ctx context.Context, epoch phase0.Epoch) {
 	if !s.handlingAltair {
 		// Not handling Altair, nothing to do.
 		return
 	}
 
+	// Work out start and end epoch for the period.
+	period := uint64(epoch) / s.epochsPerSyncCommitteePeriod
+	firstEpoch := s.firstEpochOfSyncPeriod(period)
+	firstSlot := s.chainTimeService.FirstSlotOfEpoch(firstEpoch)
+	lastEpoch := s.firstEpochOfSyncPeriod(period+1) - 1
+	lastSlot := s.chainTimeService.FirstSlotOfEpoch(lastEpoch+1) - 1
+
 	// First thing we do is cancel all scheduled sync committee message jobs.
-	firstSlot := s.chainTimeService.FirstSlotOfEpoch(epoch)
-	syncCommitteePeriod := uint64(s.chainTimeService.SlotToEpoch(firstSlot)) / s.epochsPerSyncCommitteePeriod
-	lastSlot := s.chainTimeService.FirstSlotOfEpoch(phase0.Epoch((syncCommitteePeriod+1)*s.epochsPerSyncCommitteePeriod)) - 1
 	for slot := firstSlot; slot <= lastSlot; slot++ {
-		if err := s.scheduler.CancelJob(ctx, fmt.Sprintf("Sync committee messages for slot %d", slot)); err != nil {
-			log.Debug().Err(err).Msg("Failed to cancel sync committee message job")
+		prepareJobName := fmt.Sprintf("Prepare sync committee messages for slot %d", slot)
+		if err := s.scheduler.CancelJob(ctx, prepareJobName); err != nil {
+			log.Debug().Str("job_name", prepareJobName).Err(err).Msg("Failed to cancel prepare sync committee message job")
+		}
+		messageJobName := fmt.Sprintf("Sync committee messages for slot %d", slot)
+		if err := s.scheduler.CancelJob(ctx, messageJobName); err != nil {
+			log.Debug().Str("job_name", messageJobName).Err(err).Msg("Failed to cancel sync committee message job")
+		}
+		aggregateJobName := fmt.Sprintf("Sync committee aggregation for slot %d", slot)
+		if err := s.scheduler.CancelJob(ctx, aggregateJobName); err != nil {
+			log.Debug().Str("job_name", aggregateJobName).Err(err).Msg("Failed to cancel sync committee aggregate job")
 		}
 	}
 
-	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, epoch)
+	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, firstEpoch)
 	if err != nil {
-		log.Error().Err(err).Uint64("epoch", uint64(epoch)).Msg("Failed to obtain active validators for epoch")
+		log.Error().Err(err).Uint64("epoch", uint64(firstEpoch)).Msg("Failed to obtain active validators for epoch")
 		return
 	}
 

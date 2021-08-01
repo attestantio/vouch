@@ -464,6 +464,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardcontroller.WithLogLevel(logLevel(viper.GetString("controller.log-level"))),
 		standardcontroller.WithMonitor(monitor.(metrics.ControllerMonitor)),
 		standardcontroller.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
+		standardcontroller.WithForkScheduleProvider(eth2Client.(eth2client.ForkScheduleProvider)),
 		standardcontroller.WithChainTimeService(chainTime),
 		standardcontroller.WithProposerDutiesProvider(eth2Client.(eth2client.ProposerDutiesProvider)),
 		standardcontroller.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),

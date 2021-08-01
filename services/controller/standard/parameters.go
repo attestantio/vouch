@@ -37,6 +37,7 @@ type parameters struct {
 	logLevel                     zerolog.Level
 	monitor                      metrics.ControllerMonitor
 	specProvider                 eth2client.SpecProvider
+	forkScheduleProvider         eth2client.ForkScheduleProvider
 	chainTimeService             chaintime.Service
 	proposerDutiesProvider       eth2client.ProposerDutiesProvider
 	attesterDutiesProvider       eth2client.AttesterDutiesProvider
@@ -86,6 +87,13 @@ func WithMonitor(monitor metrics.ControllerMonitor) Parameter {
 func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.specProvider = provider
+	})
+}
+
+// WithForkScheduleProvider sets the fork schedule provider.
+func WithForkScheduleProvider(provider eth2client.ForkScheduleProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.forkScheduleProvider = provider
 	})
 }
 
@@ -231,6 +239,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.specProvider == nil {
 		return nil, errors.New("no spec provider specified")
+	}
+	if parameters.forkScheduleProvider == nil {
+		return nil, errors.New("no fork schedule provider specified")
 	}
 	if parameters.chainTimeService == nil {
 		return nil, errors.New("no chain time service specified")

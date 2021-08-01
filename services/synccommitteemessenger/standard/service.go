@@ -188,7 +188,7 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 				log.Error().Err(err).Msg("Failed to sign sync committee message")
 				return
 			}
-			log.Trace().Str("signature", fmt.Sprintf("%#x", sig)).Msg("Signed sync committee message")
+			log.Trace().Uint64("slot", uint64(duty.Slot())).Uint64("validator_index", uint64(validatorIndices[i])).Str("signature", fmt.Sprintf("%#x", sig)).Msg("Signed sync committee message")
 
 			msg := &altair.SyncCommitteeMessage{
 				Slot:            duty.Slot(),
@@ -201,39 +201,10 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 			msgsMu.Unlock()
 		}(ctx, sem, &wg, i)
 	}
-
-	//	msgs := make([]*altair.SyncCommitteeMessage, 0, len(duty.ContributionIndices()))
-	//	validatorIndices := make([]phase0.ValidatorIndex, 0, len(duty.ContributionIndices()))
-	//	for validatorIndex := range duty.ContributionIndices() {
-	//		validatorIndices = append(validatorIndices, validatorIndex)
-	//	}
-	//	_, err = util.Scatter(len(duty.ContributionIndices()), func(offset int, entries int, mu *sync.RWMutex) (interface{}, error) {
-	//		for i := offset; i < offset+entries; i++ {
-	//			sig, err := s.contribute(ctx, duty.Account(validatorIndices[i]), s.chainTimeService.SlotToEpoch(duty.Slot()), *beaconBlockRoot)
-	//			if err != nil {
-	//				log.Error().Err(err).Msg("Failed to sign sync committee message")
-	//				continue
-	//			}
-	//			log.Trace().Str("signature", fmt.Sprintf("%#x", sig)).Msg("Signed sync committee message")
-	//
-	//			msg := &altair.SyncCommitteeMessage{
-	//				Slot:            duty.Slot(),
-	//				BeaconBlockRoot: *beaconBlockRoot,
-	//				ValidatorIndex:  validatorIndices[i],
-	//				Signature:       sig,
-	//			}
-	//			mu.Lock()
-	//			msgs = append(msgs, msg)
-	//			mu.Unlock()
-	//		}
-	//		return nil, nil
-	//	})
-	//	if err != nil {
-	//		s.monitor.SyncCommitteeMessagesCompleted(started, len(msgs), "failed")
-	//		log.Error().Err(err).Str("result", "failed").Msg("Failed to obtain committee messages")
-	//	}
+	wg.Wait()
 
 	if err := s.syncCommitteeMessagesSubmitter.SubmitSyncCommitteeMessages(ctx, msgs); err != nil {
+		log.Trace().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to submit sync committee messages")
 		s.monitor.SyncCommitteeMessagesCompleted(started, len(msgs), "failed")
 		return nil, errors.Wrap(err, "failed to submit sync committee messages")
 	}

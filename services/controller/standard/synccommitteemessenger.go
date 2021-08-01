@@ -24,7 +24,7 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
-// scheduleSyncCommitteeMessages schedules sync committee messages for the given epoch and validator indices.
+// scheduleSyncCommitteeMessages schedules sync committee messages for the given period and validator indices.
 func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 	epoch phase0.Epoch,
 	validatorIndices []phase0.ValidatorIndex,
@@ -33,11 +33,21 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 		// Nothing to do.
 		return
 	}
+	if s.chainTimeService.CurrentEpoch() < s.altairForkEpoch {
+		// Not yet at the Altair epoch; don't schedule anything.
+		return
+	}
+
+	period := uint64(epoch) / s.epochsPerSyncCommitteePeriod
+	firstEpoch := s.firstEpochOfSyncPeriod(period)
+	firstSlot := s.chainTimeService.FirstSlotOfEpoch(firstEpoch)
+	lastEpoch := s.firstEpochOfSyncPeriod(period+1) - 1
+	lastSlot := s.chainTimeService.FirstSlotOfEpoch(lastEpoch+1) - 1
 
 	started := time.Now()
-	log.Trace().Uint64("epoch", uint64(epoch)).Msg("Scheduling sync committee messages")
+	log.Trace().Uint64("period", period).Uint64("first_epoch", uint64(firstEpoch)).Uint64("last_epoch", uint64(lastEpoch)).Msg("Scheduling sync committee messages")
 
-	resp, err := s.syncCommitteeDutiesProvider.SyncCommitteeDuties(ctx, epoch, validatorIndices)
+	resp, err := s.syncCommitteeDutiesProvider.SyncCommitteeDuties(ctx, firstEpoch, validatorIndices)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to fetch sync committee message duties")
 		return
@@ -49,28 +59,24 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 	for _, duty := range resp {
 		messageIndices[duty.ValidatorIndex] = duty.ValidatorSyncCommitteeIndices
 	}
-	// log.Trace().Dur("elapsed", time.Since(started)).Str("duties", duty.String()).Msg("Generated sync committee message indices")
 
 	// Obtain the accounts for the validator indices.
-	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, validatorIndices)
+	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, firstEpoch, validatorIndices)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain validating accounts for epoch")
 		return
 	}
 
 	// Now we have the messages we can subscribe to the relevant subnets.
-
-	syncCommitteePeriodFirstSlot := s.chainTimeService.FirstSlotOfEpoch(phase0.Epoch((uint64(epoch) / s.epochsPerSyncCommitteePeriod) * s.epochsPerSyncCommitteePeriod))
-	syncCommitteePeriodLastSlot := syncCommitteePeriodFirstSlot + phase0.Slot(s.slotsPerEpoch*s.epochsPerSyncCommitteePeriod) - 1
-	if syncCommitteePeriodFirstSlot < s.chainTimeService.CurrentSlot() {
-		syncCommitteePeriodFirstSlot = s.chainTimeService.CurrentSlot()
+	if firstSlot < s.chainTimeService.CurrentSlot() {
+		firstSlot = s.chainTimeService.CurrentSlot()
 	}
 	log.Trace().
-		Uint64("first_slot", uint64(syncCommitteePeriodFirstSlot)).
-		Uint64("last_slot", uint64(syncCommitteePeriodLastSlot)).
+		Uint64("first_slot", uint64(firstSlot)).
+		Uint64("last_slot", uint64(lastSlot)).
 		Msg("Setting sync committee duties for period")
 
-	for slot := syncCommitteePeriodFirstSlot; slot <= syncCommitteePeriodLastSlot; slot++ {
+	for slot := firstSlot; slot <= lastSlot; slot++ {
 		go func(duty *synccommitteemessenger.Duty, accounts map[phase0.ValidatorIndex]e2wtypes.Account) {
 			for _, validatorIndex := range duty.ValidatorIndices() {
 				account, exists := accounts[validatorIndex]
@@ -106,8 +112,7 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Scheduled sync committee messages")
 
-	// TODO Obi-wan?
-	if err := s.syncCommitteesSubscriber.Subscribe(ctx, s.chainTimeService.SlotToEpoch(syncCommitteePeriodLastSlot), resp); err != nil {
+	if err := s.syncCommitteesSubscriber.Subscribe(ctx, firstEpoch, resp); err != nil {
 		log.Error().Err(err).Msg("Failed to submit sync committee subscribers")
 		return
 	}
@@ -172,4 +177,13 @@ func (s *Service) messageSyncCommittee(ctx context.Context, data interface{}) {
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Messaged")
+}
+
+// firstEpochOfSyncPeriod calculates the first epoch of the given sync period.
+func (s *Service) firstEpochOfSyncPeriod(period uint64) phase0.Epoch {
+	epoch := phase0.Epoch(period * s.epochsPerSyncCommitteePeriod)
+	if epoch < s.altairForkEpoch {
+		epoch = s.altairForkEpoch
+	}
+	return epoch
 }

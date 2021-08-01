@@ -693,6 +693,30 @@ func (m *SpecProvider) Spec(ctx context.Context) (map[string]interface{}, error)
 	}, nil
 }
 
+// ForkScheduleProvider is a mock for eth2client.ForkScheduleProvider.
+type ForkScheduleProvider struct{}
+
+// NewForkScheduleProvider returns a mock fork schedule provider.
+func NewForkScheduleProvider() eth2client.ForkScheduleProvider {
+	return &ForkScheduleProvider{}
+}
+
+// ForkSchedule is a mock.
+func (m *ForkScheduleProvider) ForkSchedule(ctx context.Context) ([]*phase0.Fork, error) {
+	return []*phase0.Fork{
+		{
+			PreviousVersion: phase0.Version{0x00, 0x01, 0x02, 0x03},
+			CurrentVersion:  phase0.Version{0x00, 0x01, 0x02, 0x03},
+			Epoch:           0,
+		},
+		{
+			PreviousVersion: phase0.Version{0x00, 0x01, 0x02, 0x03},
+			CurrentVersion:  phase0.Version{0x01, 0x02, 0x03, 0x04},
+			Epoch:           10,
+		},
+	}, nil
+}
+
 // DomainProvider is a mock for eth2client.DomainProvider.
 type DomainProvider struct{}
 

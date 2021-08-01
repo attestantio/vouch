@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,6 +14,7 @@
 package standard
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -67,7 +68,8 @@ type Service struct {
 	reorgs                       bool
 
 	// Hard fork control
-	handlingAltair bool
+	handlingAltair  bool
+	altairForkEpoch phase0.Epoch
 
 	// Tracking for reorgs.
 	lastBlockRoot             phase0.Root
@@ -126,6 +128,20 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	// Handling altair if we have the service and spec to do so.
 	handlingAltair := parameters.syncCommitteeAggregator != nil && epochsPerSyncCommitteePeriod != 0
+	if !handlingAltair {
+		log.Trace().Msg("Not handling Altair")
+	}
+	// Fetch the altair fork epoch from the fork schedule.
+	var altairForkEpoch phase0.Epoch
+	if handlingAltair {
+		altairForkEpoch, err = fetchAltairForkEpoch(ctx, parameters.forkScheduleProvider)
+		if err != nil {
+			// Not handling altair after all.
+			handlingAltair = false
+		} else {
+			log.Trace().Uint64("epoch", uint64(altairForkEpoch)).Msg("Obtained Altair fork epoch")
+		}
+	}
 
 	s := &Service{
 		monitor:                      parameters.monitor,
@@ -150,6 +166,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		reorgs:                       parameters.reorgs,
 		subscriptionInfos:            make(map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
 		handlingAltair:               handlingAltair,
+		altairForkEpoch:              altairForkEpoch,
 	}
 
 	// Subscribe to head events.  This allows us to go early for attestations if a block arrives, as well as
@@ -181,7 +198,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	go s.scheduleAttestations(ctx, epoch, validatorIndices, true /* notCurrentSlot */)
 	if handlingAltair {
 		go s.scheduleSyncCommitteeMessages(ctx, epoch, validatorIndices)
-		nextSyncCommitteePeriodStartEpoch := phase0.Epoch((uint64(epoch)/s.epochsPerSyncCommitteePeriod + 1) * s.epochsPerSyncCommitteePeriod)
+		nextSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch)/s.epochsPerSyncCommitteePeriod + 1)
 		go s.scheduleSyncCommitteeMessages(ctx, nextSyncCommitteePeriodStartEpoch, validatorIndices)
 	}
 	go s.scheduleAttestations(ctx, epoch+1, nextEpochValidatorIndices, true /* notCurrentSlot */)
@@ -312,9 +329,15 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	go s.scheduleProposals(ctx, currentEpoch, validatorIndices, false /* notCurrentSlot */)
 	go s.scheduleAttestations(ctx, currentEpoch+1, nextEpochValidatorIndices, false /* notCurrentSlot */)
 	if s.handlingAltair {
-		// Only update if we are on an EPOCHS_PER_SYNC_COMMITTEE_PERIOD boundary.
+		// Handle the Altair hard fork transition epoch.
+		if currentEpoch == s.altairForkEpoch {
+			log.Trace().Msg("At Altair fork epoch")
+			go s.handleAltairForkEpoch(ctx)
+		}
+
+		// Update the _next_ period if we are on an EPOCHS_PER_SYNC_COMMITTEE_PERIOD boundary.
 		if uint64(currentEpoch)%s.epochsPerSyncCommitteePeriod == 0 {
-			go s.scheduleSyncCommitteeMessages(ctx, currentEpoch, validatorIndices)
+			go s.scheduleSyncCommitteeMessages(ctx, currentEpoch+phase0.Epoch(s.epochsPerSyncCommitteePeriod), validatorIndices)
 		}
 	}
 	go func() {
@@ -351,4 +374,45 @@ func (s *Service) accountsAndIndicesForEpoch(ctx context.Context,
 	}
 
 	return accounts, validatorIndices, nil
+}
+
+func fetchAltairForkEpoch(ctx context.Context, forkScheduleProvider eth2client.ForkScheduleProvider) (phase0.Epoch, error) {
+	forkSchedule, err := forkScheduleProvider.ForkSchedule(ctx)
+	if err != nil {
+		return 0, err
+	}
+	for i := range forkSchedule {
+		if bytes.Equal(forkSchedule[i].CurrentVersion[:], forkSchedule[i].PreviousVersion[:]) {
+			// This is the genesis fork; ignore it.
+			continue
+		}
+		return forkSchedule[i].Epoch, nil
+	}
+	return 0, errors.New("no altair fork obtained")
+}
+
+// handleAltairForkEpoch handles changes that need to take place at the Altair hard fork boundary.
+func (s *Service) handleAltairForkEpoch(ctx context.Context) {
+	if !s.handlingAltair {
+		return
+	}
+
+	go func() {
+		_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, s.altairForkEpoch)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to obtain active validator indices for the Altair fork epoch")
+			return
+		}
+		go s.scheduleSyncCommitteeMessages(ctx, s.altairForkEpoch, validatorIndices)
+	}()
+
+	go func() {
+		nextPeriodEpoch := phase0.Epoch((uint64(s.altairForkEpoch)/s.epochsPerSyncCommitteePeriod + 1) * s.epochsPerSyncCommitteePeriod)
+		_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, nextPeriodEpoch)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to obtain active validator indices for the period following the Altair fork epoch")
+			return
+		}
+		go s.scheduleSyncCommitteeMessages(ctx, nextPeriodEpoch, validatorIndices)
+	}()
 }

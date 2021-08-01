@@ -169,7 +169,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 
 	for _, validatorIndex := range duty.ValidatorIndices {
 		for subcommitteeIndex := range duty.SelectionProofs[validatorIndex] {
-			log.Warn().Uint64("validator_index", uint64(validatorIndex)).Uint64("subcommittee_index", subcommitteeIndex).Str("beacon_block_root", fmt.Sprintf("%#x", *beaconBlockRoot)).Msg("jgm Aggregating")
+			log.Trace().Uint64("validator_index", uint64(validatorIndex)).Uint64("subcommittee_index", subcommitteeIndex).Str("beacon_block_root", fmt.Sprintf("%#x", *beaconBlockRoot)).Msg("Aggregating")
 			contribution, err := s.syncCommitteeContributionProvider.SyncCommitteeContribution(ctx, duty.Slot, subcommitteeIndex, *beaconBlockRoot)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain sync committee contribution")
