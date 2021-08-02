@@ -207,9 +207,13 @@ func (s *Service) refreshSyncCommitteeDutiesForEpochPeriod(ctx context.Context, 
 	// Work out start and end epoch for the period.
 	period := uint64(epoch) / s.epochsPerSyncCommitteePeriod
 	firstEpoch := s.firstEpochOfSyncPeriod(period)
-	firstSlot := s.chainTimeService.FirstSlotOfEpoch(firstEpoch)
+	// If we are in the sync committee that starts at slot x we need to generate a message during slot x-1
+	// for it to be included in slot x, hence -1.
+	firstSlot := s.chainTimeService.FirstSlotOfEpoch(firstEpoch) - 1
 	lastEpoch := s.firstEpochOfSyncPeriod(period+1) - 1
-	lastSlot := s.chainTimeService.FirstSlotOfEpoch(lastEpoch+1) - 1
+	// If we are in the sync committee that ends at slot x we do not generate a message during slot x-1
+	// as it will never be included, hence -1.
+	lastSlot := s.chainTimeService.FirstSlotOfEpoch(lastEpoch+1) - 2
 
 	// First thing we do is cancel all scheduled sync committee message jobs.
 	for slot := firstSlot; slot <= lastSlot; slot++ {

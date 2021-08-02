@@ -40,9 +40,13 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 
 	period := uint64(epoch) / s.epochsPerSyncCommitteePeriod
 	firstEpoch := s.firstEpochOfSyncPeriod(period)
-	firstSlot := s.chainTimeService.FirstSlotOfEpoch(firstEpoch)
+	// If we are in the sync committee that starts at slot x we need to generate a message during slot x-1
+	// for it to be included in slot x, hence -1.
+	firstSlot := s.chainTimeService.FirstSlotOfEpoch(firstEpoch) - 1
 	lastEpoch := s.firstEpochOfSyncPeriod(period+1) - 1
-	lastSlot := s.chainTimeService.FirstSlotOfEpoch(lastEpoch+1) - 1
+	// If we are in the sync committee that ends at slot x we do not generate a message during slot x-1
+	// as it will never be included, hence -1.
+	lastSlot := s.chainTimeService.FirstSlotOfEpoch(lastEpoch+1) - 2
 
 	started := time.Now()
 	log.Trace().Uint64("period", period).Uint64("first_epoch", uint64(firstEpoch)).Uint64("last_epoch", uint64(lastEpoch)).Msg("Scheduling sync committee messages")
