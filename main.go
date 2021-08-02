@@ -670,6 +670,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 		accountManager, err = walletaccountmanager.New(ctx,
 			walletaccountmanager.WithLogLevel(logLevel(viper.GetString("accountmanager.wallet.log-level"))),
 			walletaccountmanager.WithMonitor(monitor.(metrics.AccountManagerMonitor)),
+			walletaccountmanager.WithProcessConcurrency(util.ProcessConcurrency("accountmanager.wallet")),
 			walletaccountmanager.WithValidatorsManager(validatorsManager),
 			walletaccountmanager.WithAccountPaths(viper.GetStringSlice("accountmanager.wallet.accounts")),
 			walletaccountmanager.WithPassphrases(passphrases),

@@ -25,6 +25,7 @@ import (
 type parameters struct {
 	logLevel               zerolog.Level
 	monitor                metrics.AccountManagerMonitor
+	processConcurrency     int64
 	locations              []string
 	accountPaths           []string
 	passphrases            [][]byte
@@ -57,6 +58,13 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 func WithMonitor(monitor metrics.AccountManagerMonitor) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
+	})
+}
+
+// WithProcessConcurrency sets the concurrency for the service.
+func WithProcessConcurrency(concurrency int64) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.processConcurrency = concurrency
 	})
 }
 
@@ -129,6 +137,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")
+	}
+	if parameters.processConcurrency == 0 {
+		return nil, errors.New("no process concurrency specified")
 	}
 	if parameters.accountPaths == nil {
 		return nil, errors.New("no account paths specified")

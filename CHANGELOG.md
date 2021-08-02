@@ -1,4 +1,5 @@
 1.1.0:
+  - decrypt local accounts in parallel to reduce startup time
   - add 'advanced' scheduler, designed to be more robust with higher parallel job load
   - fetch wallet accounts from Dirk in parallel
   - fetch process-concurrency configuration value from most specific point in hierarchy
