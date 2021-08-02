@@ -33,12 +33,14 @@ import (
 	e2wallet "github.com/wealdtech/go-eth2-wallet"
 	filesystem "github.com/wealdtech/go-eth2-wallet-store-filesystem"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"golang.org/x/sync/semaphore"
 )
 
 // Service is the manager for wallet accounts.
 type Service struct {
 	mutex                sync.RWMutex
 	monitor              metrics.AccountManagerMonitor
+	processConcurrency   int64
 	stores               []e2wtypes.Store
 	accountPaths         []string
 	passphrases          [][]byte
@@ -90,6 +92,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	s := &Service{
 		monitor:              parameters.monitor,
+		processConcurrency:   parameters.processConcurrency,
 		stores:               stores,
 		accountPaths:         parameters.accountPaths,
 		passphrases:          parameters.passphrases,
@@ -288,44 +291,59 @@ func accountPathsToVerificationRegexes(paths []string) []*regexp.Regexp {
 }
 
 func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wallet, accounts map[phase0.BLSPubKey]e2wtypes.Account, verificationRegexes []*regexp.Regexp) {
+	var mu sync.Mutex
+	sem := semaphore.NewWeighted(s.processConcurrency)
+	var wg sync.WaitGroup
 	for account := range wallet.Accounts(ctx) {
-		// Ensure the name matches one of our account paths.
-		name := fmt.Sprintf("%s/%s", wallet.Name(), account.Name())
-		verified := false
-		for _, verificationRegex := range verificationRegexes {
-			if verificationRegex.Match([]byte(name)) {
-				verified = true
-				break
+		wg.Add(1)
+		go func(ctx context.Context, sem *semaphore.Weighted, wg *sync.WaitGroup, wallet e2wtypes.Wallet, account e2wtypes.Account, accounts map[phase0.BLSPubKey]e2wtypes.Account, mu *sync.Mutex) {
+			defer wg.Done()
+			if err := sem.Acquire(ctx, 1); err != nil {
+				log.Error().Err(err).Msg("Failed to acquire semaphore")
+				return
 			}
-		}
-		if !verified {
-			log.Debug().Str("account", name).Msg("Received unwanted account from server; ignoring")
-			continue
-		}
-
-		var pubKey []byte
-		if provider, isProvider := account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
-			pubKey = provider.CompositePublicKey().Marshal()
-		} else {
-			pubKey = account.PublicKey().Marshal()
-		}
-
-		// Ensure we can unlock the account with a known passphrase.
-		unlocked := false
-		if unlocker, isUnlocker := account.(e2wtypes.AccountLocker); isUnlocker {
-			for _, passphrase := range s.passphrases {
-				if err := unlocker.Unlock(ctx, passphrase); err == nil {
-					unlocked = true
+			defer sem.Release(1)
+			// Ensure the name matches one of our account paths.
+			name := fmt.Sprintf("%s/%s", wallet.Name(), account.Name())
+			verified := false
+			for _, verificationRegex := range verificationRegexes {
+				if verificationRegex.Match([]byte(name)) {
+					verified = true
 					break
 				}
 			}
-		}
-		if !unlocked {
-			log.Warn().Str("account", name).Msg("Failed to unlock account with any passphrase")
-			continue
-		}
+			if !verified {
+				log.Debug().Str("account", name).Msg("Received unwanted account from server; ignoring")
+				return
+			}
 
-		// Set up account as unknown to beacon chain.
-		accounts[bytesutil.ToBytes48(pubKey)] = account
+			var pubKey []byte
+			if provider, isProvider := account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
+				pubKey = provider.CompositePublicKey().Marshal()
+			} else {
+				pubKey = account.PublicKey().Marshal()
+			}
+
+			// Ensure we can unlock the account with a known passphrase.
+			unlocked := false
+			if unlocker, isUnlocker := account.(e2wtypes.AccountLocker); isUnlocker {
+				for _, passphrase := range s.passphrases {
+					if err := unlocker.Unlock(ctx, passphrase); err == nil {
+						unlocked = true
+						break
+					}
+				}
+			}
+			if !unlocked {
+				log.Warn().Str("account", name).Msg("Failed to unlock account with any passphrase")
+				return
+			}
+
+			// Set up account as unknown to beacon chain.
+			mu.Lock()
+			accounts[bytesutil.ToBytes48(pubKey)] = account
+			mu.Unlock()
+		}(ctx, sem, &wg, wallet, account, accounts, &mu)
 	}
+	wg.Wait()
 }
