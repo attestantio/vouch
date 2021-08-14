@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -11,12 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package first is a strategy that obtains attestation from multiple
-// nodes and selects the first one returned.
-package first
+// Package best is a strategy that obtains sync committee contributions
+// from multiple nodes and selects the best one.
+package best
 
 import (
 	"context"
+	"runtime"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -27,10 +28,11 @@ import (
 )
 
 type parameters struct {
-	logLevel                      zerolog.Level
-	clientMonitor                 metrics.ClientMonitor
-	aggregateAttestationProviders map[string]eth2client.AggregateAttestationProvider
-	timeout                       time.Duration
+	logLevel                           zerolog.Level
+	clientMonitor                      metrics.ClientMonitor
+	processConcurrency                 int64
+	syncCommitteeContributionProviders map[string]eth2client.SyncCommitteeContributionProvider
+	timeout                            time.Duration
 }
 
 // Parameter is the interface for service parameters.
@@ -58,10 +60,17 @@ func WithClientMonitor(monitor metrics.ClientMonitor) Parameter {
 	})
 }
 
-// WithAggregateAttestationProviders sets the aggregate attestation providers.
-func WithAggregateAttestationProviders(providers map[string]eth2client.AggregateAttestationProvider) Parameter {
+// WithProcessConcurrency sets the concurrency for the service.
+func WithProcessConcurrency(concurrency int64) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.aggregateAttestationProviders = providers
+		p.processConcurrency = concurrency
+	})
+}
+
+// WithSyncCommitteeContributionProviders sets the sync committee contribution providers.
+func WithSyncCommitteeContributionProviders(providers map[string]eth2client.SyncCommitteeContributionProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.syncCommitteeContributionProviders = providers
 	})
 }
 
@@ -75,9 +84,10 @@ func WithTimeout(timeout time.Duration) Parameter {
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel:      zerolog.GlobalLevel(),
-		timeout:       2 * time.Second,
-		clientMonitor: nullmetrics.New(context.Background()),
+		logLevel:           zerolog.GlobalLevel(),
+		timeout:            2 * time.Second,
+		clientMonitor:      nullmetrics.New(context.Background()),
+		processConcurrency: int64(runtime.GOMAXPROCS(-1)),
 	}
 	for _, p := range params {
 		if params != nil {
@@ -91,8 +101,11 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.clientMonitor == nil {
 		return nil, errors.New("no client monitor specified")
 	}
-	if len(parameters.aggregateAttestationProviders) == 0 {
-		return nil, errors.New("no aggregate attestation providers specified")
+	if parameters.processConcurrency == 0 {
+		return nil, errors.New("no process concurrency specified")
+	}
+	if len(parameters.syncCommitteeContributionProviders) == 0 {
+		return nil, errors.New("no sync committee contribution providers specified")
 	}
 
 	return &parameters, nil

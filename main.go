@@ -70,6 +70,8 @@ import (
 	firstattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/first"
 	bestbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	firstbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/first"
+	bestsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/best"
+	firstsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/first"
 	"github.com/attestantio/vouch/util"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	homedir "github.com/mitchellh/go-homedir"
@@ -89,7 +91,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.1.0"
+var ReleaseVersion = "1.2.0-pre"
 
 func main() {
 	os.Exit(main2())
@@ -424,6 +426,12 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 			return errors.Wrap(err, "failed to start beacon committee subscriber service")
 		}
 
+		log.Trace().Msg("Selecting sync committee contribution provider")
+		syncCommitteeContributionProvider, err := selectSyncCommitteeContributionProvider(ctx, monitor, eth2Client)
+		if err != nil {
+			return errors.Wrap(err, "failed to select sync committee contribution provider")
+		}
+
 		log.Trace().Msg("Starting sync committee aggregator")
 		syncCommitteeAggregator, err = standardsynccommitteeaggregator.New(ctx,
 			standardsynccommitteeaggregator.WithLogLevel(logLevel(viper.GetString("synccommitteeaggregator.log-level"))),
@@ -432,7 +440,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 			standardsynccommitteeaggregator.WithBeaconBlockRootProvider(eth2Client.(eth2client.BeaconBlockRootProvider)),
 			standardsynccommitteeaggregator.WithContributionAndProofSigner(signerSvc.(signer.ContributionAndProofSigner)),
 			standardsynccommitteeaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-			standardsynccommitteeaggregator.WithSyncCommitteeContributionProvider(eth2Client.(eth2client.SyncCommitteeContributionProvider)),
+			standardsynccommitteeaggregator.WithSyncCommitteeContributionProvider(syncCommitteeContributionProvider),
 			standardsynccommitteeaggregator.WithSyncCommitteeContributionsSubmitter(submitterStrategy.(submitter.SyncCommitteeContributionsSubmitter)),
 		)
 		if err != nil {
@@ -930,6 +938,58 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 	}
 
 	return beaconBlockProposalProvider, nil
+}
+
+func selectSyncCommitteeContributionProvider(ctx context.Context,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+) (eth2client.SyncCommitteeContributionProvider, error) {
+	var syncCommitteeContributionProvider eth2client.SyncCommitteeContributionProvider
+	var err error
+	switch viper.GetString("strategies.synccommitteecontribution.style") {
+	case "best":
+		log.Info().Msg("Starting best sync committee contribution strategy")
+		syncCommitteeContributionProviders := make(map[string]eth2client.SyncCommitteeContributionProvider)
+		for _, address := range viper.GetStringSlice("strategies.synccommitteecontribution.beacon-node-addresses") {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for sync committee contribution strategy", address))
+			}
+			syncCommitteeContributionProviders[address] = client.(eth2client.SyncCommitteeContributionProvider)
+		}
+		syncCommitteeContributionProvider, err = bestsynccommitteecontributionstrategy.New(ctx,
+			bestsynccommitteecontributionstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			bestsynccommitteecontributionstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.synccommitteecontribution.best")),
+			bestsynccommitteecontributionstrategy.WithLogLevel(logLevel(viper.GetString("strategies.synccommitteecontribution.log-level"))),
+			bestsynccommitteecontributionstrategy.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start best sync committee contribution strategy")
+		}
+	case "first":
+		log.Info().Msg("Starting first sync committee contribution strategy")
+		syncCommitteeContributionProviders := make(map[string]eth2client.SyncCommitteeContributionProvider)
+		for _, address := range viper.GetStringSlice("strategies.synccommitteecontribution.beacon-node-addresses") {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for sync committee contribution strategy", address))
+			}
+			syncCommitteeContributionProviders[address] = client.(eth2client.SyncCommitteeContributionProvider)
+		}
+		syncCommitteeContributionProvider, err = firstsynccommitteecontributionstrategy.New(ctx,
+			firstsynccommitteecontributionstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			firstsynccommitteecontributionstrategy.WithLogLevel(logLevel(viper.GetString("strategies.synccommitteecontribution.log-level"))),
+			firstsynccommitteecontributionstrategy.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start first sync committee contribution strategy")
+		}
+	default:
+		log.Info().Msg("Starting simple sync committee contribution strategy")
+		syncCommitteeContributionProvider = eth2Client.(eth2client.SyncCommitteeContributionProvider)
+	}
+
+	return syncCommitteeContributionProvider, nil
 }
 
 func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (submitter.Service, error) {

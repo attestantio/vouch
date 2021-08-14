@@ -22,6 +22,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/util"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -33,6 +34,7 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 	bestProvider := ""
 
 	started := time.Now()
+	log := util.LogWithID(ctx, log, "strategy_id")
 	sem := semaphore.NewWeighted(s.processConcurrency)
 	var wg sync.WaitGroup
 	for name, provider := range s.beaconBlockProposalProviders {

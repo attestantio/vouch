@@ -1381,3 +1381,82 @@ func (m *ValidatorsWithoutBalanceProvider) ValidatorsWithoutBalance(ctx context.
 	}
 	return res, nil
 }
+
+// SyncCommitteeContributionProvider is a mock for eth2client.SyncCommitteeContributionProvider.
+type SyncCommitteeContributionProvider struct{}
+
+// NewSyncCommitteeContributionProvider returns a mock attestation data provider.
+func NewSyncCommitteeContributionProvider() eth2client.SyncCommitteeContributionProvider {
+	return &SyncCommitteeContributionProvider{}
+}
+
+// SyncCommitteeContribution is a mock.
+func (m *SyncCommitteeContributionProvider) SyncCommitteeContribution(ctx context.Context, slot phase0.Slot, subcommitteeIndex uint64, beaconBlockRoot phase0.Root) (*altair.SyncCommitteeContribution, error) {
+	aggregationBits := bitfield.NewBitvector128()
+	aggregationBits.SetBitAt(1, true)
+	aggregationBits.SetBitAt(3, true)
+	aggregationBits.SetBitAt(8, true)
+	aggregationBits.SetBitAt(12, true)
+	aggregationBits.SetBitAt(65, true)
+	aggregationBits.SetBitAt(77, true)
+	return &altair.SyncCommitteeContribution{
+		Slot:              slot,
+		BeaconBlockRoot:   beaconBlockRoot,
+		SubcommitteeIndex: subcommitteeIndex,
+		AggregationBits:   aggregationBits,
+		Signature: phase0.BLSSignature([96]byte{
+			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+			0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+			0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+			0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+			0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
+			0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+		}),
+	}, nil
+}
+
+// ErroringSyncCommitteeContributionProvider is a mock for eth2client.SyncCommitteeContributionProvider.
+type ErroringSyncCommitteeContributionProvider struct{}
+
+// NewErroringSyncCommitteeContributionProvider returns a mock attestation data provider.
+func NewErroringSyncCommitteeContributionProvider() eth2client.SyncCommitteeContributionProvider {
+	return &ErroringSyncCommitteeContributionProvider{}
+}
+
+// SyncCommitteeContribution is a mock.
+func (m *ErroringSyncCommitteeContributionProvider) SyncCommitteeContribution(ctx context.Context, slot phase0.Slot, subcommitteeIndex uint64, beaconBlockRoot phase0.Root) (*altair.SyncCommitteeContribution, error) {
+	return nil, errors.New("mock error")
+}
+
+// NilSyncCommitteeContributionProvider is a mock for eth2client.SyncCommitteeContributionProvider.
+type NilSyncCommitteeContributionProvider struct{}
+
+// NewNilSyncCommitteeContributionProvider returns a mock attestation data provider.
+func NewNilSyncCommitteeContributionProvider() eth2client.SyncCommitteeContributionProvider {
+	return &NilSyncCommitteeContributionProvider{}
+}
+
+// SyncCommitteeContribution is a mock.
+func (m *NilSyncCommitteeContributionProvider) SyncCommitteeContribution(ctx context.Context, slot phase0.Slot, subcommitteeIndex uint64, beaconBlockRoot phase0.Root) (*altair.SyncCommitteeContribution, error) {
+	return nil, nil
+}
+
+// SleepySyncCommitteeContributionProvider is a mock for eth2client.SyncCommitteeContributionProvider.
+type SleepySyncCommitteeContributionProvider struct {
+	wait time.Duration
+	next eth2client.SyncCommitteeContributionProvider
+}
+
+// NewSleepySyncCommitteeContributionProvider returns a mock attestation data provider.
+func NewSleepySyncCommitteeContributionProvider(wait time.Duration, next eth2client.SyncCommitteeContributionProvider) eth2client.SyncCommitteeContributionProvider {
+	return &SleepySyncCommitteeContributionProvider{
+		wait: wait,
+		next: next,
+	}
+}
+
+// SyncCommitteeContribution is a mock.
+func (m *SleepySyncCommitteeContributionProvider) SyncCommitteeContribution(ctx context.Context, slot phase0.Slot, subcommitteeIndex uint64, beaconBlockRoot phase0.Root) (*altair.SyncCommitteeContribution, error) {
+	time.Sleep(m.wait)
+	return m.next.SyncCommitteeContribution(ctx, slot, subcommitteeIndex, beaconBlockRoot)
+}

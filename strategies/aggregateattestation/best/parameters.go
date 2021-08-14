@@ -74,7 +74,7 @@ func WithAggregateAttestationProviders(providers map[string]eth2client.Aggregate
 	})
 }
 
-// WithTimeout sets the timeout for beacon block proposal requests.
+// WithTimeout sets the timeout for requests.
 func WithTimeout(timeout time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.timeout = timeout

@@ -1,24 +1,21 @@
 module github.com/attestantio/vouch
 
-go 1.14
+go 1.16
 
 require (
 	cloud.google.com/go v0.81.0 // indirect
-	github.com/OneOfOne/xxhash v1.2.5 // indirect
-	github.com/attestantio/go-eth2-client v0.7.0-beta.2
+	github.com/attestantio/go-eth2-client v0.7.0
 	github.com/aws/aws-sdk-go v1.38.30
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/nbutton23/zxcvbn-go v0.0.0-20210217022336-fa2cb2858354 // indirect
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.9.0
 	github.com/prometheus/procfs v0.6.0 // indirect
-	github.com/prysmaticlabs/go-bitfield v0.0.0-20210607200045-4da71aaf6c2d
-	github.com/rs/zerolog v1.21.0
+	github.com/prysmaticlabs/go-bitfield v0.0.0-20210809151128-385d8c5e3fb7
+	github.com/rs/zerolog v1.23.0
 	github.com/sasha-s/go-deadlock v0.2.0
-	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/afero v1.5.1 // indirect
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.7.1
@@ -35,7 +32,7 @@ require (
 	github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.2
 	github.com/wealdtech/go-eth2-wallet-types/v2 v2.8.4
 	github.com/wealdtech/go-majordomo v1.0.1
-	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/atomic v1.7.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/grpc v1.38.0
 	gotest.tools v2.2.0+incompatible
