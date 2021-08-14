@@ -79,6 +79,15 @@ strategies:
     beacon-node-addresses:
       - localhost:5051
       - localhost:5052
+  # The synccommitteecontribution strategy obtains sync committee contributions from multiple sources.
+  synccommitteecontribution:
+    # style can be 'best', which obtains contributions from all nodes and selects the best, or 'first', which uses the first returned
+    style: best
+    # beacon-node-addresses are the addresses of beacon nodes to use for this strategy.
+    beacon-node-addresses:
+      - localhost:4000
+      - localhost:5051
+      - localhost:5052
 ```
 
 ## Logging
@@ -110,6 +119,7 @@ Modules levels are used for each module, overriding the global log level.  The a
   - **scheduler** starting internal jobs such as proposing a block at the appropriate time
   - **signer** carries out signing activities
   - **strategies.beaconblockproposer** decisions on how to obtain information from multiple beacon nodes
+  - **strategies.synccommitteecontribution** decisions on how to obtain information from multiple beacon nodes
   - **submitter** decisions on how to submit information to multiple beacon nodes
   - **validatorsmanager** obtaining validator state from beacon nodes and providing it to other modules
 
