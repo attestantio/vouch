@@ -73,11 +73,11 @@ jobs:
        sha256sum vouch >vouch-${RELEASE_VERSION}-linux-amd64.sha256
        tar zcf vouch-${RELEASE_VERSION}-linux-amd64.tar.gz vouch
 
-    - name: Create linux ARM64 tgz file
-      run: |
-       mv vouch-linux-arm64 vouch
-       sha256sum vouch >vouch-${RELEASE_VERSION}-linux-arm64.sha256
-       tar zcf vouch-${RELEASE_VERSION}-linux-arm64.tar.gz vouch
+       # - name: Create linux ARM64 tgz file
+       #   run: |
+       #    mv vouch-linux-arm64 vouch
+       #    sha256sum vouch >vouch-${RELEASE_VERSION}-linux-arm64.sha256
+       #    tar zcf vouch-${RELEASE_VERSION}-linux-arm64.tar.gz vouch
 
     - name: Create release
       id: create_release
@@ -134,24 +134,24 @@ jobs:
         asset_name: vouch-${{ env.RELEASE_VERSION }}-linux-amd64.tar.gz
         asset_content_type: application/gzip
 
-    - name: Upload linux ARM64 checksum file
-      id: upload-release-asset-linux-arm64-checksum
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./vouch-${{ env.RELEASE_VERSION }}-linux-arm64.sha256
-        asset_name: vouch-${{ env.RELEASE_VERSION }}-linux-arm64.sha256
-        asset_content_type: text/plain
+          # - name: Upload linux ARM64 checksum file
+          #   id: upload-release-asset-linux-arm64-checksum
+          #   uses: actions/upload-release-asset@v1
+          #   env:
+          #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          #   with:
+          #     upload_url: ${{ steps.create_release.outputs.upload_url }}
+          #     asset_path: ./vouch-${{ env.RELEASE_VERSION }}-linux-arm64.sha256
+          #     asset_name: vouch-${{ env.RELEASE_VERSION }}-linux-arm64.sha256
+          #     asset_content_type: text/plain
 
-    - name: Upload linux ARM64 tgz file
-      id: upload-release-asset-linux-arm64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./vouch-${{ env.RELEASE_VERSION }}-linux-arm64.tar.gz
-        asset_name: vouch-${{ env.RELEASE_VERSION }}-linux-arm64.tar.gz
-        asset_content_type: application/gzip
+          # - name: Upload linux ARM64 tgz file
+          #   id: upload-release-asset-linux-arm64
+          #   uses: actions/upload-release-asset@v1
+          #   env:
+          #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          #   with:
+          #     upload_url: ${{ steps.create_release.outputs.upload_url }}
+          #     asset_path: ./vouch-${{ env.RELEASE_VERSION }}-linux-arm64.tar.gz
+          #     asset_name: vouch-${{ env.RELEASE_VERSION }}-linux-arm64.tar.gz
+          #     asset_content_type: application/gzip
