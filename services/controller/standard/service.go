@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,6 +14,7 @@
 package standard
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -29,6 +30,9 @@ import (
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/scheduler"
+	"github.com/attestantio/vouch/services/synccommitteeaggregator"
+	"github.com/attestantio/vouch/services/synccommitteemessenger"
+	"github.com/attestantio/vouch/services/synccommitteesubscriber"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -39,24 +43,33 @@ import (
 // It runs purely against clock events, setting up jobs for the validator's processes of block proposal, attestation
 // creation and attestation aggregation.
 type Service struct {
-	monitor                    metrics.ControllerMonitor
-	slotDuration               time.Duration
-	slotsPerEpoch              uint64
-	chainTimeService           chaintime.Service
-	proposerDutiesProvider     eth2client.ProposerDutiesProvider
-	attesterDutiesProvider     eth2client.AttesterDutiesProvider
-	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
-	scheduler                  scheduler.Service
-	attester                   attester.Service
-	beaconBlockProposer        beaconblockproposer.Service
-	attestationAggregator      attestationaggregator.Service
-	beaconCommitteeSubscriber  beaconcommitteesubscriber.Service
-	activeValidators           int
-	subscriptionInfos          map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription
-	subscriptionInfosMutex     sync.Mutex
-	accountsRefresher          accountmanager.Refresher
-	maxAttestationDelay        time.Duration
-	reorgs                     bool
+	monitor                      metrics.ControllerMonitor
+	slotDuration                 time.Duration
+	slotsPerEpoch                uint64
+	epochsPerSyncCommitteePeriod uint64
+	chainTimeService             chaintime.Service
+	proposerDutiesProvider       eth2client.ProposerDutiesProvider
+	attesterDutiesProvider       eth2client.AttesterDutiesProvider
+	syncCommitteeDutiesProvider  eth2client.SyncCommitteeDutiesProvider
+	validatingAccountsProvider   accountmanager.ValidatingAccountsProvider
+	scheduler                    scheduler.Service
+	attester                     attester.Service
+	syncCommitteeMessenger       synccommitteemessenger.Service
+	syncCommitteeAggregator      synccommitteeaggregator.Service
+	syncCommitteesSubscriber     synccommitteesubscriber.Service
+	beaconBlockProposer          beaconblockproposer.Service
+	attestationAggregator        attestationaggregator.Service
+	beaconCommitteeSubscriber    beaconcommitteesubscriber.Service
+	activeValidators             int
+	subscriptionInfos            map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription
+	subscriptionInfosMutex       sync.Mutex
+	accountsRefresher            accountmanager.Refresher
+	maxSyncCommitteeMessageDelay time.Duration
+	reorgs                       bool
+
+	// Hard fork control
+	handlingAltair  bool
+	altairForkEpoch phase0.Epoch
 
 	// Tracking for reorgs.
 	lastBlockRoot             phase0.Root
@@ -81,33 +94,79 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
-	slotDuration, err := parameters.slotDurationProvider.SlotDuration(ctx)
+	spec, err := parameters.specProvider.Spec(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain slot duration")
+		return nil, errors.Wrap(err, "failed to obtain spec")
 	}
 
-	slotsPerEpoch, err := parameters.slotsPerEpochProvider.SlotsPerEpoch(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain slots per epoch")
+	tmp, exists := spec["SECONDS_PER_SLOT"]
+	if !exists {
+		return nil, errors.New("SECONDS_PER_SLOT not found in spec")
+	}
+	slotDuration, ok := tmp.(time.Duration)
+	if !ok {
+		return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
+	}
+
+	tmp, exists = spec["SLOTS_PER_EPOCH"]
+	if !exists {
+		return nil, errors.New("SLOTS_PER_EPOCH not found in spec")
+	}
+	slotsPerEpoch, ok := tmp.(uint64)
+	if !ok {
+		return nil, errors.New("SLOTS_PER_EPOCH of unexpected type")
+	}
+
+	var epochsPerSyncCommitteePeriod uint64
+	if tmp, exists := spec["EPOCHS_PER_SYNC_COMMITTEE_PERIOD"]; exists {
+		tmp2, ok := tmp.(uint64)
+		if !ok {
+			return nil, errors.New("EPOCHS_PER_SYNC_COMMITTEE_PERIOD of unexpected type")
+		}
+		epochsPerSyncCommitteePeriod = tmp2
+	}
+
+	// Handling altair if we have the service and spec to do so.
+	handlingAltair := parameters.syncCommitteeAggregator != nil && epochsPerSyncCommitteePeriod != 0
+	if !handlingAltair {
+		log.Trace().Msg("Not handling Altair")
+	}
+	// Fetch the altair fork epoch from the fork schedule.
+	var altairForkEpoch phase0.Epoch
+	if handlingAltair {
+		altairForkEpoch, err = fetchAltairForkEpoch(ctx, parameters.forkScheduleProvider)
+		if err != nil {
+			// Not handling altair after all.
+			handlingAltair = false
+		} else {
+			log.Trace().Uint64("epoch", uint64(altairForkEpoch)).Msg("Obtained Altair fork epoch")
+		}
 	}
 
 	s := &Service{
-		monitor:                    parameters.monitor,
-		slotDuration:               slotDuration,
-		slotsPerEpoch:              slotsPerEpoch,
-		chainTimeService:           parameters.chainTimeService,
-		proposerDutiesProvider:     parameters.proposerDutiesProvider,
-		attesterDutiesProvider:     parameters.attesterDutiesProvider,
-		validatingAccountsProvider: parameters.validatingAccountsProvider,
-		scheduler:                  parameters.scheduler,
-		attester:                   parameters.attester,
-		beaconBlockProposer:        parameters.beaconBlockProposer,
-		attestationAggregator:      parameters.attestationAggregator,
-		beaconCommitteeSubscriber:  parameters.beaconCommitteeSubscriber,
-		accountsRefresher:          parameters.accountsRefresher,
-		maxAttestationDelay:        parameters.maxAttestationDelay,
-		reorgs:                     parameters.reorgs,
-		subscriptionInfos:          make(map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
+		monitor:                      parameters.monitor,
+		slotDuration:                 slotDuration,
+		slotsPerEpoch:                slotsPerEpoch,
+		epochsPerSyncCommitteePeriod: epochsPerSyncCommitteePeriod,
+		chainTimeService:             parameters.chainTimeService,
+		proposerDutiesProvider:       parameters.proposerDutiesProvider,
+		attesterDutiesProvider:       parameters.attesterDutiesProvider,
+		syncCommitteeDutiesProvider:  parameters.syncCommitteeDutiesProvider,
+		syncCommitteesSubscriber:     parameters.syncCommitteesSubscriber,
+		validatingAccountsProvider:   parameters.validatingAccountsProvider,
+		scheduler:                    parameters.scheduler,
+		attester:                     parameters.attester,
+		syncCommitteeMessenger:       parameters.syncCommitteeMessenger,
+		syncCommitteeAggregator:      parameters.syncCommitteeAggregator,
+		beaconBlockProposer:          parameters.beaconBlockProposer,
+		attestationAggregator:        parameters.attestationAggregator,
+		beaconCommitteeSubscriber:    parameters.beaconCommitteeSubscriber,
+		accountsRefresher:            parameters.accountsRefresher,
+		maxSyncCommitteeMessageDelay: parameters.maxSyncCommitteeMessageDelay,
+		reorgs:                       parameters.reorgs,
+		subscriptionInfos:            make(map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
+		handlingAltair:               handlingAltair,
+		altairForkEpoch:              altairForkEpoch,
 	}
 
 	// Subscribe to head events.  This allows us to go early for attestations if a block arrives, as well as
@@ -137,6 +196,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 	go s.scheduleProposals(ctx, epoch, validatorIndices, true /* notCurrentSlot */)
 	go s.scheduleAttestations(ctx, epoch, validatorIndices, true /* notCurrentSlot */)
+	if handlingAltair {
+		go s.scheduleSyncCommitteeMessages(ctx, epoch, validatorIndices)
+		nextSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch)/s.epochsPerSyncCommitteePeriod + 1)
+		go s.scheduleSyncCommitteeMessages(ctx, nextSyncCommitteePeriodStartEpoch, validatorIndices)
+	}
 	go s.scheduleAttestations(ctx, epoch+1, nextEpochValidatorIndices, true /* notCurrentSlot */)
 	// Update beacon committee subscriptions this and the next epoch.
 	go func() {
@@ -264,6 +328,18 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 
 	go s.scheduleProposals(ctx, currentEpoch, validatorIndices, false /* notCurrentSlot */)
 	go s.scheduleAttestations(ctx, currentEpoch+1, nextEpochValidatorIndices, false /* notCurrentSlot */)
+	if s.handlingAltair {
+		// Handle the Altair hard fork transition epoch.
+		if currentEpoch == s.altairForkEpoch {
+			log.Trace().Msg("At Altair fork epoch")
+			go s.handleAltairForkEpoch(ctx)
+		}
+
+		// Update the _next_ period if we are on an EPOCHS_PER_SYNC_COMMITTEE_PERIOD boundary.
+		if uint64(currentEpoch)%s.epochsPerSyncCommitteePeriod == 0 {
+			go s.scheduleSyncCommitteeMessages(ctx, currentEpoch+phase0.Epoch(s.epochsPerSyncCommitteePeriod), validatorIndices)
+		}
+	}
 	go func() {
 		// Update beacon committee subscriptions for the next epoch.
 		subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, currentEpoch+1, nextEpochAccounts)
@@ -298,4 +374,45 @@ func (s *Service) accountsAndIndicesForEpoch(ctx context.Context,
 	}
 
 	return accounts, validatorIndices, nil
+}
+
+func fetchAltairForkEpoch(ctx context.Context, forkScheduleProvider eth2client.ForkScheduleProvider) (phase0.Epoch, error) {
+	forkSchedule, err := forkScheduleProvider.ForkSchedule(ctx)
+	if err != nil {
+		return 0, err
+	}
+	for i := range forkSchedule {
+		if bytes.Equal(forkSchedule[i].CurrentVersion[:], forkSchedule[i].PreviousVersion[:]) {
+			// This is the genesis fork; ignore it.
+			continue
+		}
+		return forkSchedule[i].Epoch, nil
+	}
+	return 0, errors.New("no altair fork obtained")
+}
+
+// handleAltairForkEpoch handles changes that need to take place at the Altair hard fork boundary.
+func (s *Service) handleAltairForkEpoch(ctx context.Context) {
+	if !s.handlingAltair {
+		return
+	}
+
+	go func() {
+		_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, s.altairForkEpoch)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to obtain active validator indices for the Altair fork epoch")
+			return
+		}
+		go s.scheduleSyncCommitteeMessages(ctx, s.altairForkEpoch, validatorIndices)
+	}()
+
+	go func() {
+		nextPeriodEpoch := phase0.Epoch((uint64(s.altairForkEpoch)/s.epochsPerSyncCommitteePeriod + 1) * s.epochsPerSyncCommitteePeriod)
+		_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, nextPeriodEpoch)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to obtain active validator indices for the period following the Altair fork epoch")
+			return
+		}
+		go s.scheduleSyncCommitteeMessages(ctx, nextPeriodEpoch, validatorIndices)
+	}()
 }

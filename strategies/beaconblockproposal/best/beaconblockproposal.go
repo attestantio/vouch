@@ -20,18 +20,21 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/util"
 	"golang.org/x/sync/semaphore"
 )
 
 // BeaconBlockProposal provides the best beacon block proposal from a number of beacon nodes.
-func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*phase0.BeaconBlock, error) {
+func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*spec.VersionedBeaconBlock, error) {
 	var mu sync.Mutex
 	bestScore := float64(0)
-	var bestProposal *phase0.BeaconBlock
+	var bestProposal *spec.VersionedBeaconBlock
 	bestProvider := ""
 
 	started := time.Now()
+	log := util.LogWithID(ctx, log, "strategy_id")
 	sem := semaphore.NewWeighted(s.processConcurrency)
 	var wg sync.WaitGroup
 	for name, provider := range s.beaconBlockProposalProviders {
@@ -63,17 +66,34 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 
 			// Obtain the slot of the block to which the proposal refers.
 			// We use this to allow the scorer to score blocks with earlier parents lower.
+			parentRoot, err := proposal.ParentRoot()
+			if err != nil {
+				log.Error().Str("version", proposal.Version.String()).Msg("Failed to obtain parent root")
+				return
+			}
 			var parentSlot phase0.Slot
-			parentBlock, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, fmt.Sprintf("%#x", proposal.ParentRoot[:]))
+			parentBlock, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, fmt.Sprintf("%#x", parentRoot[:]))
 			switch {
 			case err != nil:
 				log.Warn().Err(err).Msg("Failed to obtain parent block")
-				parentSlot = proposal.Slot - 1
+				slot, err := proposal.Slot()
+				if err != nil {
+					log.Error().Str("version", proposal.Version.String()).Err(err).Msg("Failed to obtain proposal slot")
+				}
+				parentSlot = slot - 1
 			case parentBlock == nil:
-				log.Warn().Err(err).Msg("Failed to obtain parent block")
-				parentSlot = proposal.Slot - 1
+				log.Warn().Msg("Empty parent block")
+				slot, err := proposal.Slot()
+				if err != nil {
+					log.Error().Str("version", proposal.Version.String()).Err(err).Msg("Failed to obtain proposal slot")
+				}
+				parentSlot = slot - 1
 			default:
-				parentSlot = parentBlock.Message.Slot
+				slot, err := parentBlock.Slot()
+				if err != nil {
+					log.Error().Str("version", proposal.Version.String()).Err(err).Msg("Failed to obtain proposal slot for parent block")
+				}
+				parentSlot = slot - 1
 			}
 
 			mu.Lock()

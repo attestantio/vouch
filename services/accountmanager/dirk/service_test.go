@@ -108,7 +108,7 @@ func TestService(t *testing.T) {
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
 				dirk.WithCurrentEpochProvider(chainTime),
 			},
-			err: "problem with parameters: process concurrency must be > 0",
+			err: "problem with parameters: no process concurrency specified",
 		},
 		{
 			name: "EndpointsNil",

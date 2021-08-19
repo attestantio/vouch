@@ -19,6 +19,8 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
@@ -156,25 +158,46 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained proposal")
 
-	if proposal.Slot != duty.Slot() {
-		log.Error().Uint64("proposal_slot", uint64(proposal.Slot)).Msg("Proposal data for incorrect slot; not proceeding")
+	proposalSlot, err := proposal.Slot()
+	if err != nil {
+		log.Error().Str("version", proposal.Version.String()).Err(err).Msg("Unknown proposal version")
 		s.monitor.BeaconBlockProposalCompleted(started, "failed")
 		return
 	}
 
-	bodyRoot, err := proposal.Body.HashTreeRoot()
+	if proposalSlot != duty.Slot() {
+		log.Error().Uint64("proposal_slot", uint64(proposalSlot)).Msg("Proposal data for incorrect slot; not proceeding")
+		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		return
+	}
+
+	bodyRoot, err := proposal.BodyRoot()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to calculate hash tree root of block")
 		s.monitor.BeaconBlockProposalCompleted(started, "failed")
 		return
 	}
 
+	parentRoot, err := proposal.ParentRoot()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to obtain parent root of block")
+		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		return
+	}
+
+	stateRoot, err := proposal.StateRoot()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to obtain state root of block")
+		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		return
+	}
+
 	sig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
 		duty.Account(),
-		proposal.Slot,
+		proposalSlot,
 		duty.ValidatorIndex(),
-		proposal.ParentRoot,
-		proposal.StateRoot,
+		parentRoot,
+		stateRoot,
 		bodyRoot)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign beacon block proposal")
@@ -183,9 +206,24 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed proposal")
 
-	signedBlock := &phase0.SignedBeaconBlock{
-		Message:   proposal,
-		Signature: sig,
+	signedBlock := &spec.VersionedSignedBeaconBlock{
+		Version: proposal.Version,
+	}
+	switch signedBlock.Version {
+	case spec.DataVersionPhase0:
+		signedBlock.Phase0 = &phase0.SignedBeaconBlock{
+			Message:   proposal.Phase0,
+			Signature: sig,
+		}
+	case spec.DataVersionAltair:
+		signedBlock.Altair = &altair.SignedBeaconBlock{
+			Message:   proposal.Altair,
+			Signature: sig,
+		}
+	default:
+		log.Error().Str("version", proposal.Version.String()).Msg("Unknown proposal version")
+		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		return
 	}
 
 	// Submit the block.

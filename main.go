@@ -56,6 +56,12 @@ import (
 	"github.com/attestantio/vouch/services/submitter"
 	immediatesubmitter "github.com/attestantio/vouch/services/submitter/immediate"
 	multinodesubmitter "github.com/attestantio/vouch/services/submitter/multinode"
+	"github.com/attestantio/vouch/services/synccommitteeaggregator"
+	standardsynccommitteeaggregator "github.com/attestantio/vouch/services/synccommitteeaggregator/standard"
+	"github.com/attestantio/vouch/services/synccommitteemessenger"
+	standardsynccommitteemessenger "github.com/attestantio/vouch/services/synccommitteemessenger/standard"
+	"github.com/attestantio/vouch/services/synccommitteesubscriber"
+	standardsynccommitteesubscriber "github.com/attestantio/vouch/services/synccommitteesubscriber/standard"
 	"github.com/attestantio/vouch/services/validatorsmanager"
 	standardvalidatorsmanager "github.com/attestantio/vouch/services/validatorsmanager/standard"
 	bestaggregateattestationstrategy "github.com/attestantio/vouch/strategies/aggregateattestation/best"
@@ -64,6 +70,8 @@ import (
 	firstattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/first"
 	bestbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	firstbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/first"
+	bestsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/best"
+	firstsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/first"
 	"github.com/attestantio/vouch/util"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	homedir "github.com/mitchellh/go-homedir"
@@ -83,7 +91,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.1.0"
+var ReleaseVersion = "1.2.0-rc.1"
 
 func main() {
 	os.Exit(main2())
@@ -191,7 +199,7 @@ func fetchConfig() error {
 	viper.AutomaticEnv()
 
 	// Defaults.
-	viper.SetDefault("process-concurrency", 16)
+	viper.SetDefault("process-concurrency", int64(runtime.GOMAXPROCS(-1)))
 	viper.SetDefault("eth2client.timeout", 2*time.Minute)
 	viper.SetDefault("controller.max-attestation-delay", 4*time.Second)
 
@@ -390,24 +398,98 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		return errors.Wrap(err, "failed to start beacon committee subscriber service")
 	}
 
+	// Decide if the ETH2 client is capable of Altair.
+	altairCapable := false
+	spec, err := eth2Client.(eth2client.SpecProvider).Spec(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain spec")
+	}
+	if _, exists := spec["INACTIVITY_PENALTY_QUOTIENT_ALTAIR"]; exists {
+		altairCapable = true
+		log.Info().Msg("Client is Altair-capable")
+	} else {
+		log.Info().Msg("Client is not Altair-capable")
+	}
+
+	// The following items are for Altair.  These are optional.
+	var syncCommitteeSubscriber synccommitteesubscriber.Service
+	var syncCommitteeMessenger synccommitteemessenger.Service
+	var syncCommitteeAggregator synccommitteeaggregator.Service
+	if altairCapable {
+		log.Trace().Msg("Starting sync committee subscriber service")
+		syncCommitteeSubscriber, err = standardsynccommitteesubscriber.New(ctx,
+			standardsynccommitteesubscriber.WithLogLevel(logLevel(viper.GetString("synccommiteesubscriber.log-level"))),
+			standardsynccommitteesubscriber.WithMonitor(monitor.(metrics.SyncCommitteeSubscriptionMonitor)),
+			standardsynccommitteesubscriber.WithSyncCommitteeSubmitter(submitterStrategy.(submitter.SyncCommitteeSubscriptionsSubmitter)),
+		)
+		if err != nil {
+			return errors.Wrap(err, "failed to start beacon committee subscriber service")
+		}
+
+		log.Trace().Msg("Selecting sync committee contribution provider")
+		syncCommitteeContributionProvider, err := selectSyncCommitteeContributionProvider(ctx, monitor, eth2Client)
+		if err != nil {
+			return errors.Wrap(err, "failed to select sync committee contribution provider")
+		}
+
+		log.Trace().Msg("Starting sync committee aggregator")
+		syncCommitteeAggregator, err = standardsynccommitteeaggregator.New(ctx,
+			standardsynccommitteeaggregator.WithLogLevel(logLevel(viper.GetString("synccommitteeaggregator.log-level"))),
+			standardsynccommitteeaggregator.WithMonitor(monitor.(metrics.SyncCommitteeAggregationMonitor)),
+			standardsynccommitteeaggregator.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
+			standardsynccommitteeaggregator.WithBeaconBlockRootProvider(eth2Client.(eth2client.BeaconBlockRootProvider)),
+			standardsynccommitteeaggregator.WithContributionAndProofSigner(signerSvc.(signer.ContributionAndProofSigner)),
+			standardsynccommitteeaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+			standardsynccommitteeaggregator.WithSyncCommitteeContributionProvider(syncCommitteeContributionProvider),
+			standardsynccommitteeaggregator.WithSyncCommitteeContributionsSubmitter(submitterStrategy.(submitter.SyncCommitteeContributionsSubmitter)),
+		)
+		if err != nil {
+			return errors.Wrap(err, "failed to start sync committee aggregator service")
+		}
+
+		log.Trace().Msg("Starting sync committee messenger")
+		syncCommitteeMessenger, err = standardsynccommitteemessenger.New(ctx,
+			standardsynccommitteemessenger.WithLogLevel(logLevel(viper.GetString("synccommitteemessenger.log-level"))),
+			standardsynccommitteemessenger.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
+			standardsynccommitteemessenger.WithMonitor(monitor.(metrics.SyncCommitteeMessageMonitor)),
+			standardsynccommitteemessenger.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
+			standardsynccommitteemessenger.WithChainTimeService(chainTime),
+			standardsynccommitteemessenger.WithSyncCommitteeAggregator(syncCommitteeAggregator),
+			standardsynccommitteemessenger.WithBeaconBlockRootProvider(eth2Client.(eth2client.BeaconBlockRootProvider)),
+			standardsynccommitteemessenger.WithSyncCommitteeMessagesSubmitter(submitterStrategy.(submitter.SyncCommitteeMessagesSubmitter)),
+			standardsynccommitteemessenger.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+			standardsynccommitteemessenger.WithSyncCommitteeRootSigner(signerSvc.(signer.SyncCommitteeRootSigner)),
+			standardsynccommitteemessenger.WithSyncCommitteeSelectionSigner(signerSvc.(signer.SyncCommitteeSelectionSigner)),
+			standardsynccommitteemessenger.WithSyncCommitteeSubscriptionsSubmitter(submitterStrategy.(submitter.SyncCommitteeSubscriptionsSubmitter)),
+		)
+		if err != nil {
+			return errors.Wrap(err, "failed to start sync committee messenger service")
+		}
+	}
+
 	log.Trace().Msg("Starting controller")
 	_, err = standardcontroller.New(ctx,
 		standardcontroller.WithLogLevel(logLevel(viper.GetString("controller.log-level"))),
 		standardcontroller.WithMonitor(monitor.(metrics.ControllerMonitor)),
-		standardcontroller.WithSlotDurationProvider(eth2Client.(eth2client.SlotDurationProvider)),
-		standardcontroller.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
+		standardcontroller.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
+		standardcontroller.WithForkScheduleProvider(eth2Client.(eth2client.ForkScheduleProvider)),
 		standardcontroller.WithChainTimeService(chainTime),
 		standardcontroller.WithProposerDutiesProvider(eth2Client.(eth2client.ProposerDutiesProvider)),
 		standardcontroller.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),
+		standardcontroller.WithSyncCommitteeDutiesProvider(eth2Client.(eth2client.SyncCommitteeDutiesProvider)),
 		standardcontroller.WithEventsProvider(eth2Client.(eth2client.EventsProvider)),
 		standardcontroller.WithScheduler(scheduler),
 		standardcontroller.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardcontroller.WithAttester(attester),
+		standardcontroller.WithSyncCommitteeMessenger(syncCommitteeMessenger),
+		standardcontroller.WithSyncCommitteeAggregator(syncCommitteeAggregator),
 		standardcontroller.WithBeaconBlockProposer(beaconBlockProposer),
 		standardcontroller.WithAttestationAggregator(attestationAggregator),
 		standardcontroller.WithBeaconCommitteeSubscriber(beaconCommitteeSubscriber),
+		standardcontroller.WithSyncCommitteeSubscriber(syncCommitteeSubscriber),
 		standardcontroller.WithAccountsRefresher(accountManager.(accountmanager.Refresher)),
 		standardcontroller.WithMaxAttestationDelay(viper.GetDuration("controller.max-attestation-delay")),
+		standardcontroller.WithMaxSyncCommitteeMessageDelay(viper.GetDuration("controller.max-sync-committee-message-delay")),
 		standardcontroller.WithReorgs(viper.GetBool("controller.reorgs")),
 	)
 	if err != nil {
@@ -597,12 +679,7 @@ func startSigner(ctx context.Context, monitor metrics.Service, eth2Client eth2cl
 		standardsigner.WithLogLevel(logLevel(viper.GetString("signer.log-level"))),
 		standardsigner.WithMonitor(monitor.(metrics.SignerMonitor)),
 		standardsigner.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-		standardsigner.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
-		standardsigner.WithBeaconProposerDomainTypeProvider(eth2Client.(eth2client.BeaconProposerDomainProvider)),
-		standardsigner.WithBeaconAttesterDomainTypeProvider(eth2Client.(eth2client.BeaconAttesterDomainProvider)),
-		standardsigner.WithRANDAODomainTypeProvider(eth2Client.(eth2client.RANDAODomainProvider)),
-		standardsigner.WithSelectionProofDomainTypeProvider(eth2Client.(eth2client.SelectionProofDomainProvider)),
-		standardsigner.WithAggregateAndProofDomainTypeProvider(eth2Client.(eth2client.AggregateAndProofDomainProvider)),
+		standardsigner.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardsigner.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
 	)
 
@@ -863,6 +940,58 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 	return beaconBlockProposalProvider, nil
 }
 
+func selectSyncCommitteeContributionProvider(ctx context.Context,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+) (eth2client.SyncCommitteeContributionProvider, error) {
+	var syncCommitteeContributionProvider eth2client.SyncCommitteeContributionProvider
+	var err error
+	switch viper.GetString("strategies.synccommitteecontribution.style") {
+	case "best":
+		log.Info().Msg("Starting best sync committee contribution strategy")
+		syncCommitteeContributionProviders := make(map[string]eth2client.SyncCommitteeContributionProvider)
+		for _, address := range viper.GetStringSlice("strategies.synccommitteecontribution.beacon-node-addresses") {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for sync committee contribution strategy", address))
+			}
+			syncCommitteeContributionProviders[address] = client.(eth2client.SyncCommitteeContributionProvider)
+		}
+		syncCommitteeContributionProvider, err = bestsynccommitteecontributionstrategy.New(ctx,
+			bestsynccommitteecontributionstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			bestsynccommitteecontributionstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.synccommitteecontribution.best")),
+			bestsynccommitteecontributionstrategy.WithLogLevel(logLevel(viper.GetString("strategies.synccommitteecontribution.log-level"))),
+			bestsynccommitteecontributionstrategy.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start best sync committee contribution strategy")
+		}
+	case "first":
+		log.Info().Msg("Starting first sync committee contribution strategy")
+		syncCommitteeContributionProviders := make(map[string]eth2client.SyncCommitteeContributionProvider)
+		for _, address := range viper.GetStringSlice("strategies.synccommitteecontribution.beacon-node-addresses") {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for sync committee contribution strategy", address))
+			}
+			syncCommitteeContributionProviders[address] = client.(eth2client.SyncCommitteeContributionProvider)
+		}
+		syncCommitteeContributionProvider, err = firstsynccommitteecontributionstrategy.New(ctx,
+			firstsynccommitteecontributionstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			firstsynccommitteecontributionstrategy.WithLogLevel(logLevel(viper.GetString("strategies.synccommitteecontribution.log-level"))),
+			firstsynccommitteecontributionstrategy.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start first sync committee contribution strategy")
+		}
+	default:
+		log.Info().Msg("Starting simple sync committee contribution strategy")
+		syncCommitteeContributionProvider = eth2Client.(eth2client.SyncCommitteeContributionProvider)
+	}
+
+	return syncCommitteeContributionProvider, nil
+}
+
 func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (submitter.Service, error) {
 	var submitter submitter.Service
 	var err error
@@ -873,6 +1002,9 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 		attestationsSubmitters := make(map[string]eth2client.AttestationsSubmitter)
 		aggregateAttestationSubmitters := make(map[string]eth2client.AggregateAttestationsSubmitter)
 		beaconCommitteeSubscriptionsSubmitters := make(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter)
+		syncCommitteeMessagesSubmitters := make(map[string]eth2client.SyncCommitteeMessagesSubmitter)
+		syncCommitteeContributionsSubmitters := make(map[string]eth2client.SyncCommitteeContributionsSubmitter)
+		syncCommitteeSubscriptionsSubmitters := make(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter)
 		for _, address := range viper.GetStringSlice("submitter.beacon-node-addresses") {
 			client, err := fetchClient(ctx, address)
 			if err != nil {
@@ -882,6 +1014,9 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			attestationsSubmitters[address] = client.(eth2client.AttestationsSubmitter)
 			aggregateAttestationSubmitters[address] = client.(eth2client.AggregateAttestationsSubmitter)
 			beaconCommitteeSubscriptionsSubmitters[address] = client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)
+			syncCommitteeMessagesSubmitters[address] = client.(eth2client.SyncCommitteeMessagesSubmitter)
+			syncCommitteeContributionsSubmitters[address] = client.(eth2client.SyncCommitteeContributionsSubmitter)
+			syncCommitteeSubscriptionsSubmitters[address] = client.(eth2client.SyncCommitteeSubscriptionsSubmitter)
 		}
 		submitter, err = multinodesubmitter.New(ctx,
 			multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
@@ -889,6 +1024,9 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			multinodesubmitter.WithLogLevel(logLevel(viper.GetString("submitter.log-level"))),
 			multinodesubmitter.WithBeaconBlockSubmitters(beaconBlockSubmitters),
 			multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),
+			multinodesubmitter.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
+			multinodesubmitter.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
+			multinodesubmitter.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 			multinodesubmitter.WithAggregateAttestationsSubmitters(aggregateAttestationSubmitters),
 			multinodesubmitter.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 		)
@@ -899,6 +1037,9 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			immediatesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			immediatesubmitter.WithBeaconBlockSubmitter(eth2Client.(eth2client.BeaconBlockSubmitter)),
 			immediatesubmitter.WithAttestationsSubmitter(eth2Client.(eth2client.AttestationsSubmitter)),
+			immediatesubmitter.WithSyncCommitteeMessagesSubmitter(eth2Client.(eth2client.SyncCommitteeMessagesSubmitter)),
+			immediatesubmitter.WithSyncCommitteeContributionsSubmitter(eth2Client.(eth2client.SyncCommitteeContributionsSubmitter)),
+			immediatesubmitter.WithSyncCommitteeSubscriptionsSubmitter(eth2Client.(eth2client.SyncCommitteeSubscriptionsSubmitter)),
 			immediatesubmitter.WithBeaconCommitteeSubscriptionsSubmitter(eth2Client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)),
 			immediatesubmitter.WithAggregateAttestationsSubmitter(eth2Client.(eth2client.AggregateAttestationsSubmitter)),
 		)

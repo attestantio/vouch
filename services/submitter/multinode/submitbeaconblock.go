@@ -19,18 +19,23 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/semaphore"
 )
 
 // SubmitBeaconBlock submits a beacon block.
-func (s *Service) SubmitBeaconBlock(ctx context.Context, block *phase0.SignedBeaconBlock) error {
+func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error {
 	if block == nil {
 		return errors.New("no beacon block supplied")
 	}
 
-	log := log.With().Uint64("slot", uint64(block.Message.Slot)).Logger()
+	blockSlot, err := block.Slot()
+	if err != nil {
+		return err
+	}
+
+	log := log.With().Uint64("slot", uint64(blockSlot)).Logger()
 	sem := semaphore.NewWeighted(s.processConcurrency)
 	var wg sync.WaitGroup
 	for name, submitter := range s.beaconBlockSubmitters {

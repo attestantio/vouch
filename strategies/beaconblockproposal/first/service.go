@@ -18,6 +18,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
@@ -58,14 +59,14 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // BeaconBlockProposal provides the first beacon block proposal from a number of beacon nodes.
-func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*phase0.BeaconBlock, error) {
+func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*spec.VersionedBeaconBlock, error) {
 	// We create a cancelable context with a timeout.  As soon as the first provider has responded we
 	// cancel the context to cancel the other requests.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 
-	proposalCh := make(chan *phase0.BeaconBlock, 1)
+	proposalCh := make(chan *spec.VersionedBeaconBlock, 1)
 	for name, provider := range s.beaconBlockProposalProviders {
-		go func(ctx context.Context, name string, provider eth2client.BeaconBlockProposalProvider, ch chan *phase0.BeaconBlock) {
+		go func(ctx context.Context, name string, provider eth2client.BeaconBlockProposalProvider, ch chan *spec.VersionedBeaconBlock) {
 			log := log.With().Str("provider", name).Uint64("slot", uint64(slot)).Logger()
 
 			started := time.Now()

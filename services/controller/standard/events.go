@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -105,6 +105,11 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 		log.Trace().Msg("Kicking off attestations for slot early due to receiving relevant block")
 		s.scheduler.RunJobIfExists(ctx, jobName)
 	}
+	jobName = fmt.Sprintf("Sync committee contributions for slot %d", data.Slot)
+	if s.scheduler.JobExists(ctx, jobName) {
+		log.Trace().Msg("Kicking off sync committee contributions for slot early due to receiving relevant block")
+		s.scheduler.RunJobIfExists(ctx, jobName)
+	}
 
 	// Remove old subscriptions if present.
 	delete(s.subscriptionInfos, s.chainTimeService.SlotToEpoch(data.Slot)-2)
@@ -113,17 +118,26 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 // handlePreviousDependentRootChanged handles the situation where the previous
 // dependent root changed.
 func (s *Service) handlePreviousDependentRootChanged(ctx context.Context) {
+	// Refreshes run in parallel.
+
 	// We need to refresh the attester duties for this epoch.
-	s.refreshAttesterDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
+	go s.refreshAttesterDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
 }
 
 // handlePreviousDependentRootChanged handles the situation where the current
 // dependent root changed.
 func (s *Service) handleCurrentDependentRootChanged(ctx context.Context) {
+	// Refreshes run in parallel.
+
 	// We need to refresh the proposer duties for this epoch.
-	s.refreshProposerDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
+	go s.refreshProposerDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
+	// We need to refresh the sync committee duties for the next period if we are
+	// at the appropriate boundary.
+	if uint64(s.chainTimeService.CurrentEpoch())%s.epochsPerSyncCommitteePeriod == 0 {
+		go s.refreshSyncCommitteeDutiesForEpochPeriod(ctx, s.chainTimeService.CurrentEpoch()+phase0.Epoch(s.epochsPerSyncCommitteePeriod))
+	}
 	// We need to refresh the attester duties for the next epoch.
-	s.refreshAttesterDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch()+1)
+	go s.refreshAttesterDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch()+1)
 }
 
 func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {
@@ -180,4 +194,55 @@ func (s *Service) refreshAttesterDutiesForEpoch(ctx context.Context, epoch phase
 	s.subscriptionInfosMutex.Lock()
 	s.subscriptionInfos[epoch] = subscriptionInfo
 	s.subscriptionInfosMutex.Unlock()
+}
+
+// refreshSyncCommitteeDutiesForEpochPeriod refreshes sync committee duties for all epochs in the
+// given sync period.
+func (s *Service) refreshSyncCommitteeDutiesForEpochPeriod(ctx context.Context, epoch phase0.Epoch) {
+	if !s.handlingAltair {
+		// Not handling Altair, nothing to do.
+		return
+	}
+
+	// Work out start and end epoch for the period.
+	period := uint64(epoch) / s.epochsPerSyncCommitteePeriod
+	firstEpoch := s.firstEpochOfSyncPeriod(period)
+	// If we are in the sync committee that starts at slot x we need to generate a message during slot x-1
+	// for it to be included in slot x, hence -1.
+	firstSlot := s.chainTimeService.FirstSlotOfEpoch(firstEpoch) - 1
+	lastEpoch := s.firstEpochOfSyncPeriod(period+1) - 1
+	// If we are in the sync committee that ends at slot x we do not generate a message during slot x-1
+	// as it will never be included, hence -1.
+	lastSlot := s.chainTimeService.FirstSlotOfEpoch(lastEpoch+1) - 2
+
+	// First thing we do is cancel all scheduled sync committee message jobs.
+	for slot := firstSlot; slot <= lastSlot; slot++ {
+		prepareJobName := fmt.Sprintf("Prepare sync committee messages for slot %d", slot)
+		if err := s.scheduler.CancelJob(ctx, prepareJobName); err != nil {
+			log.Debug().Str("job_name", prepareJobName).Err(err).Msg("Failed to cancel prepare sync committee message job")
+		}
+		messageJobName := fmt.Sprintf("Sync committee messages for slot %d", slot)
+		if err := s.scheduler.CancelJob(ctx, messageJobName); err != nil {
+			log.Debug().Str("job_name", messageJobName).Err(err).Msg("Failed to cancel sync committee message job")
+		}
+		aggregateJobName := fmt.Sprintf("Sync committee aggregation for slot %d", slot)
+		if err := s.scheduler.CancelJob(ctx, aggregateJobName); err != nil {
+			log.Debug().Str("job_name", aggregateJobName).Err(err).Msg("Failed to cancel sync committee aggregate job")
+		}
+	}
+
+	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, firstEpoch)
+	if err != nil {
+		log.Error().Err(err).Uint64("epoch", uint64(firstEpoch)).Msg("Failed to obtain active validators for epoch")
+		return
+	}
+
+	// Expect at least one validator.
+	if len(validatorIndices) == 0 {
+		log.Warn().Msg("No active validators; not validating")
+		return
+	}
+
+	// Reschedule sync committee messages.
+	go s.scheduleSyncCommitteeMessages(ctx, epoch, validatorIndices)
 }

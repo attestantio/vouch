@@ -24,16 +24,11 @@ import (
 )
 
 type parameters struct {
-	logLevel                            zerolog.Level
-	monitor                             metrics.SignerMonitor
-	clientMonitor                       metrics.ClientMonitor
-	slotsPerEpochProvider               eth2client.SlotsPerEpochProvider
-	beaconProposerDomainTypeProvider    eth2client.BeaconProposerDomainProvider
-	beaconAttesterDomainTypeProvider    eth2client.BeaconAttesterDomainProvider
-	randaoDomainTypeProvider            eth2client.RANDAODomainProvider
-	selectionProofDomainTypeProvider    eth2client.SelectionProofDomainProvider
-	aggregateAndProofDomainTypeProvider eth2client.AggregateAndProofDomainProvider
-	domainProvider                      eth2client.DomainProvider
+	logLevel       zerolog.Level
+	monitor        metrics.SignerMonitor
+	clientMonitor  metrics.ClientMonitor
+	specProvider   eth2client.SpecProvider
+	domainProvider eth2client.DomainProvider
 }
 
 // Parameter is the interface for service parameters.
@@ -68,45 +63,10 @@ func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
 	})
 }
 
-// WithSlotsPerEpochProvider sets the slots per epoch provider.
-func WithSlotsPerEpochProvider(provider eth2client.SlotsPerEpochProvider) Parameter {
+// WithSpecProvider sets the spec provider.
+func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.slotsPerEpochProvider = provider
-	})
-}
-
-// WithBeaconProposerDomainTypeProvider sets the beacon proposer domain provider.
-func WithBeaconProposerDomainTypeProvider(provider eth2client.BeaconProposerDomainProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.beaconProposerDomainTypeProvider = provider
-	})
-}
-
-// WithBeaconAttesterDomainTypeProvider sets the beacon attester domain provider.
-func WithBeaconAttesterDomainTypeProvider(provider eth2client.BeaconAttesterDomainProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.beaconAttesterDomainTypeProvider = provider
-	})
-}
-
-// WithRANDAODomainTypeProvider sets the RANDAO domain provider.
-func WithRANDAODomainTypeProvider(provider eth2client.RANDAODomainProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.randaoDomainTypeProvider = provider
-	})
-}
-
-// WithSelectionProofDomainTypeProvider sets the RANDAO domain provider.
-func WithSelectionProofDomainTypeProvider(provider eth2client.SelectionProofDomainProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.selectionProofDomainTypeProvider = provider
-	})
-}
-
-// WithAggregateAndProofDomainTypeProvider sets the aggregate and proof domain provider.
-func WithAggregateAndProofDomainTypeProvider(provider eth2client.AggregateAndProofDomainProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.aggregateAndProofDomainTypeProvider = provider
+		p.specProvider = provider
 	})
 }
 
@@ -136,23 +96,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.clientMonitor == nil {
 		return nil, errors.New("no client monitor specified")
 	}
-	if parameters.slotsPerEpochProvider == nil {
-		return nil, errors.New("no slots per epoch provider specified")
-	}
-	if parameters.beaconProposerDomainTypeProvider == nil {
-		return nil, errors.New("no beacon proposer domain type provider specified")
-	}
-	if parameters.beaconAttesterDomainTypeProvider == nil {
-		return nil, errors.New("no beacon attester domain type provider specified")
-	}
-	if parameters.randaoDomainTypeProvider == nil {
-		return nil, errors.New("no RANDAO domain type provider specified")
-	}
-	if parameters.selectionProofDomainTypeProvider == nil {
-		return nil, errors.New("no selection proof domain type provider specified")
-	}
-	if parameters.aggregateAndProofDomainTypeProvider == nil {
-		return nil, errors.New("no aggregate and proof domain type provider specified")
+	if parameters.specProvider == nil {
+		return nil, errors.New("no spec provider specified")
 	}
 	if parameters.domainProvider == nil {
 		return nil, errors.New("no domain provider specified")

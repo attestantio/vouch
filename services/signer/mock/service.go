@@ -16,6 +16,7 @@ package mock
 import (
 	"context"
 
+	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -106,6 +107,43 @@ func (s *Service) SignRANDAOReveal(ctx context.Context,
 func (s *Service) SignSlotSelection(ctx context.Context,
 	account e2wtypes.Account,
 	slot phase0.Slot,
+) (
+	phase0.BLSSignature,
+	error,
+) {
+	return phase0.BLSSignature{}, nil
+}
+
+// SignContributionAndProof signs a sync committee contribution for given slot and root.
+func (s *Service) SignContributionAndProof(ctx context.Context,
+	account e2wtypes.Account,
+	contributionAndProof *altair.ContributionAndProof,
+) (
+	phase0.BLSSignature,
+	error,
+) {
+	return phase0.BLSSignature{}, nil
+}
+
+// SignSyncCommitteeRoot returns a root signature.
+// This signs a beacon block root with the "sync committee" domain.
+func (s *Service) SignSyncCommitteeRoot(ctx context.Context,
+	account e2wtypes.Account,
+	epoch phase0.Epoch,
+	root phase0.Root,
+) (
+	phase0.BLSSignature,
+	error,
+) {
+	return phase0.BLSSignature{}, nil
+}
+
+// SignSyncCommitteeSelection returns a sync committee selection signature.
+// This signs a slot and subcommittee with the "sync committee selection proof" domain.
+func (s *Service) SignSyncCommitteeSelection(ctx context.Context,
+	account e2wtypes.Account,
+	slot phase0.Slot,
+	subcommitteeIndex uint64,
 ) (
 	phase0.BLSSignature,
 	error,

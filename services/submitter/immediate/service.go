@@ -20,6 +20,8 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
@@ -34,6 +36,9 @@ type Service struct {
 	beaconBlockSubmitter                  eth2client.BeaconBlockSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
+	syncCommitteeMessagesSubmitter        eth2client.SyncCommitteeMessagesSubmitter
+	syncCommitteeSubscriptionsSubmitter   eth2client.SyncCommitteeSubscriptionsSubmitter
+	syncCommitteeContributionsSubmitter   eth2client.SyncCommitteeContributionsSubmitter
 }
 
 // module-wide log.
@@ -58,13 +63,16 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		beaconBlockSubmitter:                  parameters.beaconBlockSubmitter,
 		beaconCommitteeSubscriptionsSubmitter: parameters.beaconCommitteeSubscriptionsSubmitter,
 		aggregateAttestationsSubmitter:        parameters.aggregateAttestationsSubmitter,
+		syncCommitteeMessagesSubmitter:        parameters.syncCommitteeMessagesSubmitter,
+		syncCommitteeSubscriptionsSubmitter:   parameters.syncCommitteeSubscriptionsSubmitter,
+		syncCommitteeContributionsSubmitter:   parameters.syncCommitteeContributionsSubmitter,
 	}
 
 	return s, nil
 }
 
 // SubmitBeaconBlock submits a block.
-func (s *Service) SubmitBeaconBlock(ctx context.Context, block *phase0.SignedBeaconBlock) error {
+func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error {
 	if block == nil {
 		return errors.New("no beacon block supplied")
 	}
@@ -182,6 +190,87 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []
 		data, err := json.Marshal(aggregates)
 		if err == nil {
 			e.Str("attestation", string(data)).Msg("Submitted aggregate attestations")
+		}
+	}
+
+	return nil
+}
+
+// SubmitSyncCommitteeMessages submits sync committee messages.
+func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
+	if len(messages) == 0 {
+		return errors.New("no sync committee messages supplied")
+	}
+
+	started := time.Now()
+	err := s.syncCommitteeMessagesSubmitter.SubmitSyncCommitteeMessages(ctx, messages)
+	if service, isService := s.aggregateAttestationsSubmitter.(eth2client.Service); isService {
+		s.clientMonitor.ClientOperation(service.Address(), "submit sync committee messages", err == nil, time.Since(started))
+	} else {
+		s.clientMonitor.ClientOperation("<unknown>", "submit sync committee messages", err == nil, time.Since(started))
+	}
+	if err != nil {
+		return errors.Wrap(err, "failed to submit sync committee messages")
+	}
+
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(messages)
+		if err == nil {
+			e.Str("messages", string(data)).Msg("Submitted sync committee messages")
+		}
+	}
+
+	return nil
+}
+
+// SubmitSyncCommitteeSubscriptions submits a batch of beacon committee subscriptions.
+func (s *Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+	if len(subscriptions) == 0 {
+		return errors.New("no sync committee subscriptions supplied")
+	}
+
+	started := time.Now()
+	err := s.syncCommitteeSubscriptionsSubmitter.SubmitSyncCommitteeSubscriptions(ctx, subscriptions)
+	if service, isService := s.syncCommitteeSubscriptionsSubmitter.(eth2client.Service); isService {
+		s.clientMonitor.ClientOperation(service.Address(), "submit sync committee subscription", err == nil, time.Since(started))
+	} else {
+		s.clientMonitor.ClientOperation("<unknown>", "submit sync committee subscription", err == nil, time.Since(started))
+	}
+	if err != nil {
+		return errors.Wrap(err, "failed to submit sync committee subscriptions")
+	}
+
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(subscriptions)
+		if err == nil {
+			e.Str("subscriptions", string(data)).Int("subscribing", len(subscriptions)).Msg("Submitted subscriptions")
+		}
+	}
+
+	return nil
+}
+
+// SubmitSyncCommitteeContributions submits sync committee contributions.
+func (s *Service) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
+	if len(contributionAndProofs) == 0 {
+		return errors.New("no sync committee contribution and proofs supplied")
+	}
+
+	started := time.Now()
+	err := s.syncCommitteeContributionsSubmitter.SubmitSyncCommitteeContributions(ctx, contributionAndProofs)
+	if service, isService := s.syncCommitteeContributionsSubmitter.(eth2client.Service); isService {
+		s.clientMonitor.ClientOperation(service.Address(), "submit sync committee contribution and proofs", err == nil, time.Since(started))
+	} else {
+		s.clientMonitor.ClientOperation("<unknown>", "submit sync committee contribution and proofs", err == nil, time.Since(started))
+	}
+	if err != nil {
+		return errors.Wrap(err, "failed to submit sync committee contribution and proofs")
+	}
+
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(contributionAndProofs)
+		if err == nil {
+			e.Str("contributionAndProofs", string(data)).Msg("Submitted contribution and proofs")
 		}
 	}
 

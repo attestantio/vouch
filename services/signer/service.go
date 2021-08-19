@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -17,6 +17,7 @@ package signer
 import (
 	"context"
 
+	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -109,6 +110,46 @@ type SlotSelectionSigner interface {
 	SignSlotSelection(ctx context.Context,
 		account e2wtypes.Account,
 		slot phase0.Slot,
+	) (
+		phase0.BLSSignature,
+		error,
+	)
+}
+
+// SyncCommitteeRootSigner provides methods to sign a sync committee root.
+type SyncCommitteeRootSigner interface {
+	// SignSyncCommittee returns a root signature.
+	// This signs a beacon block root with the "sync committee" domain.
+	SignSyncCommitteeRoot(ctx context.Context,
+		account e2wtypes.Account,
+		epoch phase0.Epoch,
+		root phase0.Root,
+	) (
+		phase0.BLSSignature,
+		error,
+	)
+}
+
+// SyncCommitteeSelectionSigner provides methods to sign sync committee selections.
+type SyncCommitteeSelectionSigner interface {
+	// SignSyncCommitteeSelection returns a sync committee selection signature.
+	// This signs a slot and subcommittee with the "sync committee selection proof" domain.
+	SignSyncCommitteeSelection(ctx context.Context,
+		account e2wtypes.Account,
+		slot phase0.Slot,
+		subcommitteeIndex uint64,
+	) (
+		phase0.BLSSignature,
+		error,
+	)
+}
+
+// ContributionAndProofSigner provides methods to sign contribution and proofs.
+type ContributionAndProofSigner interface {
+	// SignContributionAndProof signs a sync committee contribution for given slot and root.
+	SignContributionAndProof(ctx context.Context,
+		account e2wtypes.Account,
+		contributionAndProof *altair.ContributionAndProof,
 	) (
 		phase0.BLSSignature,
 		error,

@@ -14,6 +14,7 @@
 package standard
 
 import (
+	"context"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -25,28 +26,36 @@ import (
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/scheduler"
+	"github.com/attestantio/vouch/services/synccommitteeaggregator"
+	"github.com/attestantio/vouch/services/synccommitteemessenger"
+	"github.com/attestantio/vouch/services/synccommitteesubscriber"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 type parameters struct {
-	logLevel                   zerolog.Level
-	monitor                    metrics.ControllerMonitor
-	slotDurationProvider       eth2client.SlotDurationProvider
-	slotsPerEpochProvider      eth2client.SlotsPerEpochProvider
-	chainTimeService           chaintime.Service
-	proposerDutiesProvider     eth2client.ProposerDutiesProvider
-	attesterDutiesProvider     eth2client.AttesterDutiesProvider
-	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
-	scheduler                  scheduler.Service
-	eventsProvider             eth2client.EventsProvider
-	attester                   attester.Service
-	beaconBlockProposer        beaconblockproposer.Service
-	attestationAggregator      attestationaggregator.Service
-	beaconCommitteeSubscriber  beaconcommitteesubscriber.Service
-	accountsRefresher          accountmanager.Refresher
-	maxAttestationDelay        time.Duration
-	reorgs                     bool
+	logLevel                     zerolog.Level
+	monitor                      metrics.ControllerMonitor
+	specProvider                 eth2client.SpecProvider
+	forkScheduleProvider         eth2client.ForkScheduleProvider
+	chainTimeService             chaintime.Service
+	proposerDutiesProvider       eth2client.ProposerDutiesProvider
+	attesterDutiesProvider       eth2client.AttesterDutiesProvider
+	syncCommitteeDutiesProvider  eth2client.SyncCommitteeDutiesProvider
+	syncCommitteesSubscriber     synccommitteesubscriber.Service
+	validatingAccountsProvider   accountmanager.ValidatingAccountsProvider
+	scheduler                    scheduler.Service
+	eventsProvider               eth2client.EventsProvider
+	attester                     attester.Service
+	syncCommitteeMessenger       synccommitteemessenger.Service
+	syncCommitteeAggregator      synccommitteeaggregator.Service
+	beaconBlockProposer          beaconblockproposer.Service
+	attestationAggregator        attestationaggregator.Service
+	beaconCommitteeSubscriber    beaconcommitteesubscriber.Service
+	accountsRefresher            accountmanager.Refresher
+	maxAttestationDelay          time.Duration
+	maxSyncCommitteeMessageDelay time.Duration
+	reorgs                       bool
 }
 
 // Parameter is the interface for service parameters.
@@ -74,17 +83,17 @@ func WithMonitor(monitor metrics.ControllerMonitor) Parameter {
 	})
 }
 
-// WithSlotDurationProvider sets the slot duration provider.
-func WithSlotDurationProvider(provider eth2client.SlotDurationProvider) Parameter {
+// WithSpecProvider sets the spec provider.
+func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.slotDurationProvider = provider
+		p.specProvider = provider
 	})
 }
 
-// WithSlotsPerEpochProvider sets the slots per epoch provider.
-func WithSlotsPerEpochProvider(provider eth2client.SlotsPerEpochProvider) Parameter {
+// WithForkScheduleProvider sets the fork schedule provider.
+func WithForkScheduleProvider(provider eth2client.ForkScheduleProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.slotsPerEpochProvider = provider
+		p.forkScheduleProvider = provider
 	})
 }
 
@@ -106,6 +115,20 @@ func WithProposerDutiesProvider(provider eth2client.ProposerDutiesProvider) Para
 func WithAttesterDutiesProvider(provider eth2client.AttesterDutiesProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.attesterDutiesProvider = provider
+	})
+}
+
+// WithSyncCommitteeDutiesProvider sets the sync committee duties provider.
+func WithSyncCommitteeDutiesProvider(provider eth2client.SyncCommitteeDutiesProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.syncCommitteeDutiesProvider = provider
+	})
+}
+
+// WithSyncCommitteeSubscriber sets the sync committee subscriber.
+func WithSyncCommitteeSubscriber(subscriber synccommitteesubscriber.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.syncCommitteesSubscriber = subscriber
 	})
 }
 
@@ -134,6 +157,20 @@ func WithScheduler(scheduler scheduler.Service) Parameter {
 func WithAttester(attester attester.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.attester = attester
+	})
+}
+
+// WithSyncCommitteeMessenger sets the sync committee messenger.
+func WithSyncCommitteeMessenger(messenger synccommitteemessenger.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.syncCommitteeMessenger = messenger
+	})
+}
+
+// WithSyncCommitteeAggregator sets the sync committee aggregator.
+func WithSyncCommitteeAggregator(aggregator synccommitteeaggregator.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.syncCommitteeAggregator = aggregator
 	})
 }
 
@@ -172,6 +209,13 @@ func WithMaxAttestationDelay(delay time.Duration) Parameter {
 	})
 }
 
+// WithMaxSyncCommitteeMessageDelay sets the maximum delay before generating sync committee messages.
+func WithMaxSyncCommitteeMessageDelay(delay time.Duration) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.maxSyncCommitteeMessageDelay = delay
+	})
+}
+
 // WithReorgs sets or unsets reorgs.
 func WithReorgs(reorgs bool) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -182,8 +226,7 @@ func WithReorgs(reorgs bool) Parameter {
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel:            zerolog.GlobalLevel(),
-		maxAttestationDelay: 4 * time.Second,
+		logLevel: zerolog.GlobalLevel(),
 	}
 	for _, p := range params {
 		if params != nil {
@@ -194,11 +237,11 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")
 	}
-	if parameters.slotDurationProvider == nil {
-		return nil, errors.New("no slot duration provider specified")
+	if parameters.specProvider == nil {
+		return nil, errors.New("no spec provider specified")
 	}
-	if parameters.slotsPerEpochProvider == nil {
-		return nil, errors.New("no slots per epoch provider specified")
+	if parameters.forkScheduleProvider == nil {
+		return nil, errors.New("no fork schedule provider specified")
 	}
 	if parameters.chainTimeService == nil {
 		return nil, errors.New("no chain time service specified")
@@ -233,9 +276,41 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.accountsRefresher == nil {
 		return nil, errors.New("no accounts refresher specified")
 	}
+	var spec map[string]interface{}
+	var err error
 	if parameters.maxAttestationDelay == 0 {
-		return nil, errors.New("no maximum attestation delay specified")
+		spec, err = parameters.specProvider.Spec(context.Background())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to obtain spec")
+		}
+		tmp, exists := spec["SECONDS_PER_SLOT"]
+		if !exists {
+			return nil, errors.New("SECONDS_PER_SLOT not found in spec")
+		}
+		slotDuration, ok := tmp.(time.Duration)
+		if !ok {
+			return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
+		}
+		parameters.maxAttestationDelay = slotDuration / 3
 	}
+	if parameters.maxSyncCommitteeMessageDelay == 0 {
+		if spec == nil {
+			spec, err = parameters.specProvider.Spec(context.Background())
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to obtain spec")
+			}
+		}
+		tmp, exists := spec["SECONDS_PER_SLOT"]
+		if !exists {
+			return nil, errors.New("SECONDS_PER_SLOT not found in spec")
+		}
+		slotDuration, ok := tmp.(time.Duration)
+		if !ok {
+			return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
+		}
+		parameters.maxSyncCommitteeMessageDelay = slotDuration / 3
+	}
+	// Sync committee duties provider/messenger/aggregator/subscriber are optional so no checks here.
 
 	return &parameters, nil
 }

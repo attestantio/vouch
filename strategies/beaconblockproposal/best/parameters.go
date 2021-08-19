@@ -17,7 +17,6 @@ package best
 
 import (
 	"context"
-	"runtime"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -54,7 +53,7 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 	})
 }
 
-// WithTimeout sets the timeout for beacon block proposal requests.
+// WithTimeout sets the timeout for requests.
 func WithTimeout(timeout time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.timeout = timeout
@@ -92,10 +91,9 @@ func WithSignedBeaconBlockProvider(provider eth2client.SignedBeaconBlockProvider
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel:           zerolog.GlobalLevel(),
-		timeout:            2 * time.Second,
-		clientMonitor:      nullmetrics.New(context.Background()),
-		processConcurrency: int64(runtime.GOMAXPROCS(-1)),
+		logLevel:      zerolog.GlobalLevel(),
+		timeout:       2 * time.Second,
+		clientMonitor: nullmetrics.New(context.Background()),
 	}
 	for _, p := range params {
 		if params != nil {

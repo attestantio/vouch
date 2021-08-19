@@ -43,10 +43,20 @@ type Service struct {
 	attestationAggregationProcessRequests *prometheus.CounterVec
 	attestationAggregationCoverageRatio   prometheus.Histogram
 
+	syncCommitteeMessageProcessTimer    prometheus.Histogram
+	syncCommitteeMessageProcessRequests *prometheus.CounterVec
+
+	syncCommitteeAggregationProcessTimer    prometheus.Histogram
+	syncCommitteeAggregationProcessRequests *prometheus.CounterVec
+
 	beaconCommitteeSubscriptionProcessTimer    prometheus.Histogram
 	beaconCommitteeSubscriptionProcessRequests *prometheus.CounterVec
 	beaconCommitteeSubscribers                 prometheus.Gauge
 	beaconCommitteeAggregators                 prometheus.Gauge
+
+	syncCommitteeSubscriptionProcessTimer    prometheus.Histogram
+	syncCommitteeSubscriptionProcessRequests *prometheus.CounterVec
+	syncCommitteeSubscribers                 prometheus.Gauge
 
 	accountManagerAccounts *prometheus.GaugeVec
 
@@ -89,8 +99,17 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if err := s.setupAttestationAggregationMetrics(); err != nil {
 		return nil, errors.Wrap(err, "failed to set up attestation aggregation metrics")
 	}
+	if err := s.setupSyncCommitteeMessageMetrics(); err != nil {
+		return nil, errors.Wrap(err, "failed to set up sync committee message metrics")
+	}
+	if err := s.setupSyncCommitteeAggregationMetrics(); err != nil {
+		return nil, errors.Wrap(err, "failed to set up sync committee aggregation metrics")
+	}
 	if err := s.setupBeaconCommitteeSubscriptionMetrics(); err != nil {
 		return nil, errors.Wrap(err, "failed to set up beacon committee subscription metrics")
+	}
+	if err := s.setupSyncCommitteeSubscriptionMetrics(); err != nil {
+		return nil, errors.Wrap(err, "failed to set up sync committee subscription metrics")
 	}
 	if err := s.setupAccountManagerMetrics(); err != nil {
 		return nil, errors.Wrap(err, "failed to set up account manager metrics")

@@ -19,6 +19,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 )
 
@@ -31,7 +32,7 @@ type attestationDataResponse struct {
 // AttestationData provides the best attestation data from a number of beacon nodes.
 func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committeeIndex phase0.CommitteeIndex) (*phase0.AttestationData, error) {
 	started := time.Now()
-	log := log.With().Uint64("slot", uint64(slot)).Logger()
+	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(slot)).Logger()
 
 	// We create a cancelable context with a timeout.  If the context times out we take the best to date.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)

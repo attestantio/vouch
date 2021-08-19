@@ -33,6 +33,9 @@ type parameters struct {
 	attestationsSubmitters                 map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters        map[string]eth2client.AggregateAttestationsSubmitter
 	beaconCommitteeSubscriptionsSubmitters map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter
+	syncCommitteeMessagesSubmitter         map[string]eth2client.SyncCommitteeMessagesSubmitter
+	syncCommitteeSubscriptionsSubmitters   map[string]eth2client.SyncCommitteeSubscriptionsSubmitter
+	syncCommitteeContributionsSubmitters   map[string]eth2client.SyncCommitteeContributionsSubmitter
 }
 
 // Parameter is the interface for service parameters.
@@ -95,6 +98,27 @@ func WithBeaconCommitteeSubscriptionsSubmitters(submitters map[string]eth2client
 	})
 }
 
+// WithSyncCommitteeMessagesSubmitters sets the sync committee messages submitters.
+func WithSyncCommitteeMessagesSubmitters(submitters map[string]eth2client.SyncCommitteeMessagesSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.syncCommitteeMessagesSubmitter = submitters
+	})
+}
+
+// WithSyncCommitteeSubscriptionsSubmitters sets the sync committee subscriptions submitters.
+func WithSyncCommitteeSubscriptionsSubmitters(submitters map[string]eth2client.SyncCommitteeSubscriptionsSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.syncCommitteeSubscriptionsSubmitters = submitters
+	})
+}
+
+// WithSyncCommitteeContributionsSubmitters sets the sync committee contributions submitters.
+func WithSyncCommitteeContributionsSubmitters(submitters map[string]eth2client.SyncCommitteeContributionsSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.syncCommitteeContributionsSubmitters = submitters
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -124,6 +148,15 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if len(parameters.beaconCommitteeSubscriptionsSubmitters) == 0 {
 		return nil, errors.New("no beacon committee subscription submitters specified")
+	}
+	if len(parameters.syncCommitteeMessagesSubmitter) == 0 {
+		return nil, errors.New("no sync committee messages submitters specified")
+	}
+	if len(parameters.syncCommitteeSubscriptionsSubmitters) == 0 {
+		return nil, errors.New("no sync committee subscription submitters specified")
+	}
+	if len(parameters.syncCommitteeContributionsSubmitters) == 0 {
+		return nil, errors.New("no sync committee subscription contributions specified")
 	}
 
 	return &parameters, nil
