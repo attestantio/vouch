@@ -50,11 +50,12 @@ jobs:
 
     - name: Fetch xgo
       run: |
-       go get github.com/suburbandad/xgo
+       go get github.com/wealdtech/xgo
 
     - name: Cross-compile linux
       run: |
-       xgo -v -x -ldflags="-X github.com/attestantio/vouch/cmd.ReleaseVersion=${RELEASE_VERSION}" --targets="linux/amd64,linux/arm64" github.com/attestantio/vouch
+        # xgo -v -x -ldflags="-X github.com/attestantio/vouch/cmd.ReleaseVersion=${RELEASE_VERSION}" --targets="linux/amd64,linux/arm64" github.com/attestantio/vouch
+        xgo -v -x -ldflags="-X github.com/attestantio/vouch/cmd.ReleaseVersion=${RELEASE_VERSION}" --targets="linux/amd64" github.com/attestantio/vouch
 
     - name: Cross-compile windows
       run: |
