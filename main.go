@@ -621,13 +621,13 @@ func selectScheduler(ctx context.Context, monitor metrics.Service) (scheduler.Se
 	case "advanced":
 		log.Info().Msg("Starting advanced scheduler")
 		scheduler, err = advancedscheduler.New(ctx,
-			advancedscheduler.WithLogLevel(util.LogLevel("scheduler")),
+			advancedscheduler.WithLogLevel(util.LogLevel("scheduler.advanced")),
 			advancedscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
 		)
 	default:
 		log.Info().Msg("Starting basic scheduler")
 		scheduler, err = basicscheduler.New(ctx,
-			basicscheduler.WithLogLevel(util.LogLevel("scheduler")),
+			basicscheduler.WithLogLevel(util.LogLevel("scheduler.basic")),
 			basicscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
 		)
 	}
@@ -786,7 +786,7 @@ func selectAttestationDataProvider(ctx context.Context,
 		attestationDataProvider, err = bestattestationdatastrategy.New(ctx,
 			bestattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.best")),
-			bestattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata")),
+			bestattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.best")),
 			bestattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
 		)
 		if err != nil {
@@ -804,7 +804,7 @@ func selectAttestationDataProvider(ctx context.Context,
 		}
 		attestationDataProvider, err = firstattestationdatastrategy.New(ctx,
 			firstattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			firstattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata")),
+			firstattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.first")),
 			firstattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
 		)
 		if err != nil {
@@ -847,7 +847,7 @@ func selectAggregateAttestationProvider(ctx context.Context,
 		aggregateAttestationProvider, err = bestaggregateattestationstrategy.New(ctx,
 			bestaggregateattestationstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestaggregateattestationstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.aggregateattestation.best")),
-			bestaggregateattestationstrategy.WithLogLevel(util.LogLevel("strategies.aggregateattestation")),
+			bestaggregateattestationstrategy.WithLogLevel(util.LogLevel("strategies.aggregateattestation.best")),
 			bestaggregateattestationstrategy.WithAggregateAttestationProviders(aggregateAttestationProviders),
 		)
 		if err != nil {
@@ -869,7 +869,7 @@ func selectAggregateAttestationProvider(ctx context.Context,
 		}
 		aggregateAttestationProvider, err = firstaggregateattestationstrategy.New(ctx,
 			firstaggregateattestationstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			firstaggregateattestationstrategy.WithLogLevel(util.LogLevel("strategies.aggregateattestation")),
+			firstaggregateattestationstrategy.WithLogLevel(util.LogLevel("strategies.aggregateattestation.first")),
 			firstaggregateattestationstrategy.WithAggregateAttestationProviders(aggregateAttestationProviders),
 		)
 		if err != nil {
@@ -907,7 +907,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 		beaconBlockProposalProvider, err = bestbeaconblockproposalstrategy.New(ctx,
 			bestbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestbeaconblockproposalstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.beaconblockproposal.best")),
-			bestbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal")),
+			bestbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.best")),
 			bestbeaconblockproposalstrategy.WithBeaconBlockProposalProviders(beaconBlockProposalProviders),
 			bestbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
 		)
@@ -926,7 +926,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 		}
 		beaconBlockProposalProvider, err = firstbeaconblockproposalstrategy.New(ctx,
 			firstbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			firstbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal")),
+			firstbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.first")),
 			firstbeaconblockproposalstrategy.WithBeaconBlockProposalProviders(beaconBlockProposalProviders),
 		)
 		if err != nil {
@@ -960,7 +960,7 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 		syncCommitteeContributionProvider, err = bestsynccommitteecontributionstrategy.New(ctx,
 			bestsynccommitteecontributionstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestsynccommitteecontributionstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.synccommitteecontribution.best")),
-			bestsynccommitteecontributionstrategy.WithLogLevel(util.LogLevel("strategies.synccommitteecontribution")),
+			bestsynccommitteecontributionstrategy.WithLogLevel(util.LogLevel("strategies.synccommitteecontribution.best")),
 			bestsynccommitteecontributionstrategy.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
 		)
 		if err != nil {
@@ -978,7 +978,7 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 		}
 		syncCommitteeContributionProvider, err = firstsynccommitteecontributionstrategy.New(ctx,
 			firstsynccommitteecontributionstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			firstsynccommitteecontributionstrategy.WithLogLevel(util.LogLevel("strategies.synccommitteecontribution")),
+			firstsynccommitteecontributionstrategy.WithLogLevel(util.LogLevel("strategies.synccommitteecontribution.first")),
 			firstsynccommitteecontributionstrategy.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
 		)
 		if err != nil {
@@ -1021,7 +1021,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 		submitter, err = multinodesubmitter.New(ctx,
 			multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
-			multinodesubmitter.WithLogLevel(util.LogLevel("submitter")),
+			multinodesubmitter.WithLogLevel(util.LogLevel("submitter.multinode")),
 			multinodesubmitter.WithBeaconBlockSubmitters(beaconBlockSubmitters),
 			multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),
 			multinodesubmitter.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
@@ -1033,7 +1033,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 	default:
 		log.Info().Msg("Starting standard submitter strategy")
 		submitter, err = immediatesubmitter.New(ctx,
-			immediatesubmitter.WithLogLevel(util.LogLevel("submitter")),
+			immediatesubmitter.WithLogLevel(util.LogLevel("submitter.immediate")),
 			immediatesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			immediatesubmitter.WithBeaconBlockSubmitter(eth2Client.(eth2client.BeaconBlockSubmitter)),
 			immediatesubmitter.WithAttestationsSubmitter(eth2Client.(eth2client.AttestationsSubmitter)),
