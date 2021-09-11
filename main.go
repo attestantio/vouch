@@ -274,7 +274,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 
 	log.Trace().Msg("Starting chain time service")
 	chainTime, err := standardchaintime.New(ctx,
-		standardchaintime.WithLogLevel(logLevel(viper.GetString("chaintime.log-level"))),
+		standardchaintime.WithLogLevel(util.LogLevel("chaintime")),
 		standardchaintime.WithGenesisTimeProvider(eth2Client.(eth2client.GenesisTimeProvider)),
 		standardchaintime.WithSlotDurationProvider(eth2Client.(eth2client.SlotDurationProvider)),
 		standardchaintime.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
@@ -327,7 +327,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 
 	log.Trace().Msg("Starting beacon block proposer")
 	beaconBlockProposer, err := standardbeaconblockproposer.New(ctx,
-		standardbeaconblockproposer.WithLogLevel(logLevel(viper.GetString("beaconblockproposer.log-level"))),
+		standardbeaconblockproposer.WithLogLevel(util.LogLevel("beaconblockproposer")),
 		standardbeaconblockproposer.WithChainTimeService(chainTime),
 		standardbeaconblockproposer.WithProposalDataProvider(beaconBlockProposalProvider),
 		standardbeaconblockproposer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
@@ -349,7 +349,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 
 	log.Trace().Msg("Starting attester")
 	attester, err := standardattester.New(ctx,
-		standardattester.WithLogLevel(logLevel(viper.GetString("attester.log-level"))),
+		standardattester.WithLogLevel(util.LogLevel("attester")),
 		standardattester.WithProcessConcurrency(util.ProcessConcurrency("attester")),
 		standardattester.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
 		standardattester.WithAttestationDataProvider(attestationDataProvider),
@@ -370,7 +370,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 
 	log.Trace().Msg("Starting beacon attestation aggregator")
 	attestationAggregator, err := standardattestationaggregator.New(ctx,
-		standardattestationaggregator.WithLogLevel(logLevel(viper.GetString("attestationaggregator.log-level"))),
+		standardattestationaggregator.WithLogLevel(util.LogLevel("attestationaggregator")),
 		standardattestationaggregator.WithTargetAggregatorsPerCommitteeProvider(eth2Client.(eth2client.TargetAggregatorsPerCommitteeProvider)),
 		standardattestationaggregator.WithAggregateAttestationProvider(aggregateAttestationProvider),
 		standardattestationaggregator.WithPrysmAggregateAttestationProvider(prysmAggregateAttestationProvider),
@@ -387,7 +387,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 
 	log.Trace().Msg("Starting beacon committee subscriber service")
 	beaconCommitteeSubscriber, err := standardbeaconcommitteesubscriber.New(ctx,
-		standardbeaconcommitteesubscriber.WithLogLevel(logLevel(viper.GetString("beaconcommiteesubscriber.log-level"))),
+		standardbeaconcommitteesubscriber.WithLogLevel(util.LogLevel("beaconcommiteesubscriber")),
 		standardbeaconcommitteesubscriber.WithProcessConcurrency(util.ProcessConcurrency("beaconcommitteesubscriber")),
 		standardbeaconcommitteesubscriber.WithMonitor(monitor.(metrics.BeaconCommitteeSubscriptionMonitor)),
 		standardbeaconcommitteesubscriber.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),
@@ -418,7 +418,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	if altairCapable {
 		log.Trace().Msg("Starting sync committee subscriber service")
 		syncCommitteeSubscriber, err = standardsynccommitteesubscriber.New(ctx,
-			standardsynccommitteesubscriber.WithLogLevel(logLevel(viper.GetString("synccommiteesubscriber.log-level"))),
+			standardsynccommitteesubscriber.WithLogLevel(util.LogLevel("synccommiteesubscriber")),
 			standardsynccommitteesubscriber.WithMonitor(monitor.(metrics.SyncCommitteeSubscriptionMonitor)),
 			standardsynccommitteesubscriber.WithSyncCommitteeSubmitter(submitterStrategy.(submitter.SyncCommitteeSubscriptionsSubmitter)),
 		)
@@ -434,7 +434,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 
 		log.Trace().Msg("Starting sync committee aggregator")
 		syncCommitteeAggregator, err = standardsynccommitteeaggregator.New(ctx,
-			standardsynccommitteeaggregator.WithLogLevel(logLevel(viper.GetString("synccommitteeaggregator.log-level"))),
+			standardsynccommitteeaggregator.WithLogLevel(util.LogLevel("synccommitteeaggregator")),
 			standardsynccommitteeaggregator.WithMonitor(monitor.(metrics.SyncCommitteeAggregationMonitor)),
 			standardsynccommitteeaggregator.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 			standardsynccommitteeaggregator.WithBeaconBlockRootProvider(eth2Client.(eth2client.BeaconBlockRootProvider)),
@@ -449,7 +449,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 
 		log.Trace().Msg("Starting sync committee messenger")
 		syncCommitteeMessenger, err = standardsynccommitteemessenger.New(ctx,
-			standardsynccommitteemessenger.WithLogLevel(logLevel(viper.GetString("synccommitteemessenger.log-level"))),
+			standardsynccommitteemessenger.WithLogLevel(util.LogLevel("synccommitteemessenger")),
 			standardsynccommitteemessenger.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
 			standardsynccommitteemessenger.WithMonitor(monitor.(metrics.SyncCommitteeMessageMonitor)),
 			standardsynccommitteemessenger.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
@@ -469,7 +469,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 
 	log.Trace().Msg("Starting controller")
 	_, err = standardcontroller.New(ctx,
-		standardcontroller.WithLogLevel(logLevel(viper.GetString("controller.log-level"))),
+		standardcontroller.WithLogLevel(util.LogLevel("controller")),
 		standardcontroller.WithMonitor(monitor.(metrics.ControllerMonitor)),
 		standardcontroller.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardcontroller.WithForkScheduleProvider(eth2Client.(eth2client.ForkScheduleProvider)),
@@ -533,14 +533,14 @@ func resolvePath(path string) string {
 
 func initMajordomo(ctx context.Context) (majordomo.Service, error) {
 	majordomo, err := standardmajordomo.New(ctx,
-		standardmajordomo.WithLogLevel(logLevel(viper.GetString("majordomo.log-level"))),
+		standardmajordomo.WithLogLevel(util.LogLevel("majordomo")),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create majordomo service")
 	}
 
 	directConfidant, err := directconfidant.New(ctx,
-		directconfidant.WithLogLevel(logLevel(viper.GetString("majordomo.confidants.direct.log-level"))),
+		directconfidant.WithLogLevel(util.LogLevel("majordomo.confidants.direct")),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create direct confidant")
@@ -550,7 +550,7 @@ func initMajordomo(ctx context.Context) (majordomo.Service, error) {
 	}
 
 	fileConfidant, err := fileconfidant.New(ctx,
-		fileconfidant.WithLogLevel(logLevel(viper.GetString("majordomo.confidants.file.log-level"))),
+		fileconfidant.WithLogLevel(util.LogLevel("majordomo.confidants.file")),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create file confidant")
@@ -565,7 +565,7 @@ func initMajordomo(ctx context.Context) (majordomo.Service, error) {
 			asmCredentials = credentials.NewStaticCredentials(viper.GetString("majordomo.asm.id"), viper.GetString("majordomo.asm.secret"), "")
 		}
 		asmConfidant, err := asmconfidant.New(ctx,
-			asmconfidant.WithLogLevel(logLevel(viper.GetString("majordomo.confidants.asm.log-level"))),
+			asmconfidant.WithLogLevel(util.LogLevel("majordomo.confidants.asm")),
 			asmconfidant.WithCredentials(asmCredentials),
 			asmconfidant.WithRegion(viper.GetString("majordomo.asm.region")),
 		)
@@ -579,7 +579,7 @@ func initMajordomo(ctx context.Context) (majordomo.Service, error) {
 
 	if viper.GetString("majordomo.gsm.credentials") != "" {
 		gsmConfidant, err := gsmconfidant.New(ctx,
-			gsmconfidant.WithLogLevel(logLevel(viper.GetString("majordomo.confidants.gsm.log-level"))),
+			gsmconfidant.WithLogLevel(util.LogLevel("majordomo.confidants.gsm")),
 			gsmconfidant.WithCredentialsPath(resolvePath(viper.GetString("majordomo.gsm.credentials"))),
 			gsmconfidant.WithProject(viper.GetString("majordomo.gsm.project")),
 		)
@@ -600,7 +600,7 @@ func startMonitor(ctx context.Context) (metrics.Service, error) {
 	if viper.Get("metrics.prometheus") != nil {
 		var err error
 		monitor, err = prometheusmetrics.New(ctx,
-			prometheusmetrics.WithLogLevel(logLevel(viper.GetString("metrics.prometheus.log-level"))),
+			prometheusmetrics.WithLogLevel(util.LogLevel("metrics.prometheus")),
 			prometheusmetrics.WithAddress(viper.GetString("metrics.prometheus.listen-address")),
 		)
 		if err != nil {
@@ -621,13 +621,13 @@ func selectScheduler(ctx context.Context, monitor metrics.Service) (scheduler.Se
 	case "advanced":
 		log.Info().Msg("Starting advanced scheduler")
 		scheduler, err = advancedscheduler.New(ctx,
-			advancedscheduler.WithLogLevel(logLevel(viper.GetString("scheduler.log-level"))),
+			advancedscheduler.WithLogLevel(util.LogLevel("scheduler")),
 			advancedscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
 		)
 	default:
 		log.Info().Msg("Starting basic scheduler")
 		scheduler, err = basicscheduler.New(ctx,
-			basicscheduler.WithLogLevel(logLevel(viper.GetString("scheduler.log-level"))),
+			basicscheduler.WithLogLevel(util.LogLevel("scheduler")),
 			basicscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
 		)
 	}
@@ -643,13 +643,13 @@ func startGraffitiProvider(ctx context.Context, majordomo majordomo.Service) (gr
 		log.Info().Msg("Starting dynamic graffiti provider")
 		return dynamicgraffitiprovider.New(ctx,
 			dynamicgraffitiprovider.WithMajordomo(majordomo),
-			dynamicgraffitiprovider.WithLogLevel(logLevel(viper.GetString("graffiti.dynamic.log-level"))),
+			dynamicgraffitiprovider.WithLogLevel(util.LogLevel("graffiti.dynamic")),
 			dynamicgraffitiprovider.WithLocation(viper.GetString("graffiti.dynamic.location")),
 		)
 	default:
 		log.Info().Msg("Starting static graffiti provider")
 		return staticgraffitiprovider.New(ctx,
-			staticgraffitiprovider.WithLogLevel(logLevel(viper.GetString("graffiti.static.log-level"))),
+			staticgraffitiprovider.WithLogLevel(util.LogLevel("graffiti.static")),
 			staticgraffitiprovider.WithGraffiti([]byte(viper.GetString("graffiti.static.value"))),
 		)
 	}
@@ -661,7 +661,7 @@ func startValidatorsManager(ctx context.Context, monitor metrics.Service, eth2Cl
 		return nil, errors.Wrap(err, "failed to obtain far future epoch")
 	}
 	validatorsManager, err := standardvalidatorsmanager.New(ctx,
-		standardvalidatorsmanager.WithLogLevel(logLevel(viper.GetString("validatorsmanager.log-level"))),
+		standardvalidatorsmanager.WithLogLevel(util.LogLevel("validatorsmanager")),
 		standardvalidatorsmanager.WithMonitor(monitor.(metrics.ValidatorsManagerMonitor)),
 		standardvalidatorsmanager.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 		standardvalidatorsmanager.WithValidatorsProvider(eth2Client.(eth2client.ValidatorsProvider)),
@@ -676,7 +676,7 @@ func startValidatorsManager(ctx context.Context, monitor metrics.Service, eth2Cl
 
 func startSigner(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (signer.Service, error) {
 	signer, err := standardsigner.New(ctx,
-		standardsigner.WithLogLevel(logLevel(viper.GetString("signer.log-level"))),
+		standardsigner.WithLogLevel(util.LogLevel("signer")),
 		standardsigner.WithMonitor(monitor.(metrics.SignerMonitor)),
 		standardsigner.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 		standardsigner.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
@@ -709,7 +709,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 			}
 		}
 		accountManager, err = dirkaccountmanager.New(ctx,
-			dirkaccountmanager.WithLogLevel(logLevel(viper.GetString("accountmanager.dirk.log-level"))),
+			dirkaccountmanager.WithLogLevel(util.LogLevel("accountmanager.dirk")),
 			dirkaccountmanager.WithMonitor(monitor.(metrics.AccountManagerMonitor)),
 			dirkaccountmanager.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			dirkaccountmanager.WithProcessConcurrency(util.ProcessConcurrency("accountmanager.dirk")),
@@ -745,7 +745,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 			return nil, errors.New("no passphrases for wallet supplied")
 		}
 		accountManager, err = walletaccountmanager.New(ctx,
-			walletaccountmanager.WithLogLevel(logLevel(viper.GetString("accountmanager.wallet.log-level"))),
+			walletaccountmanager.WithLogLevel(util.LogLevel("accountmanager.wallet")),
 			walletaccountmanager.WithMonitor(monitor.(metrics.AccountManagerMonitor)),
 			walletaccountmanager.WithProcessConcurrency(util.ProcessConcurrency("accountmanager.wallet")),
 			walletaccountmanager.WithValidatorsManager(validatorsManager),
@@ -786,7 +786,7 @@ func selectAttestationDataProvider(ctx context.Context,
 		attestationDataProvider, err = bestattestationdatastrategy.New(ctx,
 			bestattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.best")),
-			bestattestationdatastrategy.WithLogLevel(logLevel(viper.GetString("strategies.attestationdata.log-level"))),
+			bestattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata")),
 			bestattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
 		)
 		if err != nil {
@@ -804,7 +804,7 @@ func selectAttestationDataProvider(ctx context.Context,
 		}
 		attestationDataProvider, err = firstattestationdatastrategy.New(ctx,
 			firstattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			firstattestationdatastrategy.WithLogLevel(logLevel(viper.GetString("strategies.attestationdata.log-level"))),
+			firstattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata")),
 			firstattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
 		)
 		if err != nil {
@@ -847,7 +847,7 @@ func selectAggregateAttestationProvider(ctx context.Context,
 		aggregateAttestationProvider, err = bestaggregateattestationstrategy.New(ctx,
 			bestaggregateattestationstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestaggregateattestationstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.aggregateattestation.best")),
-			bestaggregateattestationstrategy.WithLogLevel(logLevel(viper.GetString("strategies.aggregateattestation.log-level"))),
+			bestaggregateattestationstrategy.WithLogLevel(util.LogLevel("strategies.aggregateattestation")),
 			bestaggregateattestationstrategy.WithAggregateAttestationProviders(aggregateAttestationProviders),
 		)
 		if err != nil {
@@ -869,7 +869,7 @@ func selectAggregateAttestationProvider(ctx context.Context,
 		}
 		aggregateAttestationProvider, err = firstaggregateattestationstrategy.New(ctx,
 			firstaggregateattestationstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			firstaggregateattestationstrategy.WithLogLevel(logLevel(viper.GetString("strategies.aggregateattestation.log-level"))),
+			firstaggregateattestationstrategy.WithLogLevel(util.LogLevel("strategies.aggregateattestation")),
 			firstaggregateattestationstrategy.WithAggregateAttestationProviders(aggregateAttestationProviders),
 		)
 		if err != nil {
@@ -907,7 +907,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 		beaconBlockProposalProvider, err = bestbeaconblockproposalstrategy.New(ctx,
 			bestbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestbeaconblockproposalstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.beaconblockproposal.best")),
-			bestbeaconblockproposalstrategy.WithLogLevel(logLevel(viper.GetString("strategies.beaconblockproposal.log-level"))),
+			bestbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal")),
 			bestbeaconblockproposalstrategy.WithBeaconBlockProposalProviders(beaconBlockProposalProviders),
 			bestbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
 		)
@@ -926,7 +926,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 		}
 		beaconBlockProposalProvider, err = firstbeaconblockproposalstrategy.New(ctx,
 			firstbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			firstbeaconblockproposalstrategy.WithLogLevel(logLevel(viper.GetString("strategies.beaconblockproposal.log-level"))),
+			firstbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal")),
 			firstbeaconblockproposalstrategy.WithBeaconBlockProposalProviders(beaconBlockProposalProviders),
 		)
 		if err != nil {
@@ -960,7 +960,7 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 		syncCommitteeContributionProvider, err = bestsynccommitteecontributionstrategy.New(ctx,
 			bestsynccommitteecontributionstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestsynccommitteecontributionstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.synccommitteecontribution.best")),
-			bestsynccommitteecontributionstrategy.WithLogLevel(logLevel(viper.GetString("strategies.synccommitteecontribution.log-level"))),
+			bestsynccommitteecontributionstrategy.WithLogLevel(util.LogLevel("strategies.synccommitteecontribution")),
 			bestsynccommitteecontributionstrategy.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
 		)
 		if err != nil {
@@ -978,7 +978,7 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 		}
 		syncCommitteeContributionProvider, err = firstsynccommitteecontributionstrategy.New(ctx,
 			firstsynccommitteecontributionstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			firstsynccommitteecontributionstrategy.WithLogLevel(logLevel(viper.GetString("strategies.synccommitteecontribution.log-level"))),
+			firstsynccommitteecontributionstrategy.WithLogLevel(util.LogLevel("strategies.synccommitteecontribution")),
 			firstsynccommitteecontributionstrategy.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
 		)
 		if err != nil {
@@ -1021,7 +1021,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 		submitter, err = multinodesubmitter.New(ctx,
 			multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
-			multinodesubmitter.WithLogLevel(logLevel(viper.GetString("submitter.log-level"))),
+			multinodesubmitter.WithLogLevel(util.LogLevel("submitter")),
 			multinodesubmitter.WithBeaconBlockSubmitters(beaconBlockSubmitters),
 			multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),
 			multinodesubmitter.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
@@ -1033,7 +1033,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 	default:
 		log.Info().Msg("Starting standard submitter strategy")
 		submitter, err = immediatesubmitter.New(ctx,
-			immediatesubmitter.WithLogLevel(logLevel(viper.GetString("submitter.log-level"))),
+			immediatesubmitter.WithLogLevel(util.LogLevel("submitter")),
 			immediatesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			immediatesubmitter.WithBeaconBlockSubmitter(eth2Client.(eth2client.BeaconBlockSubmitter)),
 			immediatesubmitter.WithAttestationsSubmitter(eth2Client.(eth2client.AttestationsSubmitter)),

@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,8 +15,8 @@ package main
 
 import (
 	"os"
-	"strings"
 
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -42,30 +42,7 @@ func initLogging() error {
 	}
 
 	// Set the local logger from the global logger.
-	log = zerologger.Logger.With().Logger().Level(logLevel(viper.GetString("log-level")))
+	log = zerologger.Logger.With().Logger().Level(util.LogLevel(""))
 
 	return nil
-}
-
-// logLevel converts a string to a log level.
-// It returns the user-supplied level by default.
-func logLevel(input string) zerolog.Level {
-	switch strings.ToLower(input) {
-	case "none":
-		return zerolog.Disabled
-	case "trace":
-		return zerolog.TraceLevel
-	case "debug":
-		return zerolog.DebugLevel
-	case "warn", "warning":
-		return zerolog.WarnLevel
-	case "info", "information":
-		return zerolog.InfoLevel
-	case "err", "error":
-		return zerolog.ErrorLevel
-	case "fatal":
-		return zerolog.FatalLevel
-	default:
-		return log.GetLevel()
-	}
 }
