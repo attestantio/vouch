@@ -14,6 +14,8 @@ A sample configuration file in YAML with is shown below:
 # log-file is the location for Vouch log output.  If this is not provided logs will be written to the console.
 log-file: /home/me/vouch.log
 # log-level is the global log level for Vouch logging.
+# Overrides can be set at any sub-level, giving fine-grained control over the specific
+# information logged.
 log-level: Debug
 
 # beacon-node-address is the address of the beacon node.  Can be prysm, lighthouse, teku
