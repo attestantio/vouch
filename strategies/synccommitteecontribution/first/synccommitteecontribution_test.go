@@ -39,6 +39,7 @@ func TestSyncCommitteeContribution(t *testing.T) {
 			name: "Good",
 			params: []first.Parameter{
 				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(2 * time.Second),
 				first.WithSyncCommitteeContributionProviders(map[string]eth2client.SyncCommitteeContributionProvider{
 					"good": mock.NewSyncCommitteeContributionProvider(),
 				}),

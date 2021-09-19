@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,6 +16,7 @@ package best_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/mock"
@@ -35,6 +36,7 @@ func TestService(t *testing.T) {
 			name: "ClientMonitorMissing",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
+				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(nil),
 				best.WithProcessConcurrency(1),
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
@@ -48,6 +50,21 @@ func TestService(t *testing.T) {
 		},
 		{
 			name: "TimeoutMissing",
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.Disabled),
+				best.WithClientMonitor(null.New(context.Background())),
+				best.WithProcessConcurrency(1),
+				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
+					"one":   mock.NewBeaconBlockProposalProvider(),
+					"two":   mock.NewBeaconBlockProposalProvider(),
+					"three": mock.NewBeaconBlockProposalProvider(),
+				}),
+				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
+			},
+			err: "problem with parameters: no timeout specified",
+		},
+		{
+			name: "TimeoutZero",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithClientMonitor(null.New(context.Background())),
@@ -66,6 +83,7 @@ func TestService(t *testing.T) {
 			name: "ProcessConcurrencyBad",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
+				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(null.New(context.Background())),
 				best.WithProcessConcurrency(0),
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
@@ -81,6 +99,7 @@ func TestService(t *testing.T) {
 			name: "BeaconBlockProposalProvidersMissing",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
+				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(null.New(context.Background())),
 				best.WithProcessConcurrency(1),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
@@ -91,6 +110,7 @@ func TestService(t *testing.T) {
 			name: "BeaconBlockProposalProvidersEmpty",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
+				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(null.New(context.Background())),
 				best.WithProcessConcurrency(1),
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{}),
@@ -102,6 +122,7 @@ func TestService(t *testing.T) {
 			name: "SignedBeaconBlockProviderMissing",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
+				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(null.New(context.Background())),
 				best.WithProcessConcurrency(1),
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
@@ -116,6 +137,7 @@ func TestService(t *testing.T) {
 			name: "Good",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
+				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(null.New(context.Background())),
 				best.WithProcessConcurrency(1),
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{

@@ -200,6 +200,7 @@ func fetchConfig() error {
 
 	// Defaults.
 	viper.SetDefault("process-concurrency", int64(runtime.GOMAXPROCS(-1)))
+	viper.SetDefault("strategies.timeout", 2*time.Second)
 	viper.SetDefault("eth2client.timeout", 2*time.Minute)
 	viper.SetDefault("controller.max-attestation-delay", 4*time.Second)
 
@@ -374,7 +375,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardattestationaggregator.WithTargetAggregatorsPerCommitteeProvider(eth2Client.(eth2client.TargetAggregatorsPerCommitteeProvider)),
 		standardattestationaggregator.WithAggregateAttestationProvider(aggregateAttestationProvider),
 		standardattestationaggregator.WithPrysmAggregateAttestationProvider(prysmAggregateAttestationProvider),
-		standardattestationaggregator.WithAggregateAttestationsSubmitter(eth2Client.(eth2client.AggregateAttestationsSubmitter)),
+		standardattestationaggregator.WithAggregateAttestationsSubmitter(submitterStrategy.(submitter.AggregateAttestationsSubmitter)),
 		standardattestationaggregator.WithMonitor(monitor.(metrics.AttestationAggregationMonitor)),
 		standardattestationaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardattestationaggregator.WithSlotSelectionSigner(signerSvc.(signer.SlotSelectionSigner)),
@@ -788,6 +789,7 @@ func selectAttestationDataProvider(ctx context.Context,
 			bestattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.best")),
 			bestattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.best")),
 			bestattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
+			bestattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.best")),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start best attestation data strategy")
@@ -806,6 +808,7 @@ func selectAttestationDataProvider(ctx context.Context,
 			firstattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.first")),
 			firstattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
+			firstattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.first")),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start first attestation data strategy")
@@ -849,6 +852,7 @@ func selectAggregateAttestationProvider(ctx context.Context,
 			bestaggregateattestationstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.aggregateattestation.best")),
 			bestaggregateattestationstrategy.WithLogLevel(util.LogLevel("strategies.aggregateattestation.best")),
 			bestaggregateattestationstrategy.WithAggregateAttestationProviders(aggregateAttestationProviders),
+			bestaggregateattestationstrategy.WithTimeout(util.Timeout("strategies.aggregateattestation.best")),
 		)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "failed to start best aggregate attestation strategy")
@@ -871,6 +875,7 @@ func selectAggregateAttestationProvider(ctx context.Context,
 			firstaggregateattestationstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstaggregateattestationstrategy.WithLogLevel(util.LogLevel("strategies.aggregateattestation.first")),
 			firstaggregateattestationstrategy.WithAggregateAttestationProviders(aggregateAttestationProviders),
+			firstaggregateattestationstrategy.WithTimeout(util.Timeout("strategies.aggregateattestation.first")),
 		)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "failed to start first aggregate attestation strategy")
@@ -910,6 +915,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 			bestbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.best")),
 			bestbeaconblockproposalstrategy.WithBeaconBlockProposalProviders(beaconBlockProposalProviders),
 			bestbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
+			bestbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.best")),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start best beacon block proposal strategy")
@@ -928,6 +934,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 			firstbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.first")),
 			firstbeaconblockproposalstrategy.WithBeaconBlockProposalProviders(beaconBlockProposalProviders),
+			firstbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.first")),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start first beacon block proposal strategy")
@@ -962,6 +969,7 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 			bestsynccommitteecontributionstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.synccommitteecontribution.best")),
 			bestsynccommitteecontributionstrategy.WithLogLevel(util.LogLevel("strategies.synccommitteecontribution.best")),
 			bestsynccommitteecontributionstrategy.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
+			bestsynccommitteecontributionstrategy.WithTimeout(util.Timeout("strategies.synccommitteecontribution.best")),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start best sync committee contribution strategy")
@@ -980,6 +988,7 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 			firstsynccommitteecontributionstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstsynccommitteecontributionstrategy.WithLogLevel(util.LogLevel("strategies.synccommitteecontribution.first")),
 			firstsynccommitteecontributionstrategy.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
+			firstsynccommitteecontributionstrategy.WithTimeout(util.Timeout("strategies.synccommitteecontribution.first")),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start first sync committee contribution strategy")

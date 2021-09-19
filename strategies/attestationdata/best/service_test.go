@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -36,6 +36,14 @@ func TestService(t *testing.T) {
 		err    string
 	}{
 		{
+			name: "TimeoutMissing",
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithAttestationDataProviders(attestationDataProviders),
+			},
+			err: "problem with parameters: no timeout specified",
+		},
+		{
 			name: "TimeoutZero",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
@@ -48,6 +56,7 @@ func TestService(t *testing.T) {
 			name: "ClientMonitorMissing",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(nil),
 				best.WithAttestationDataProviders(attestationDataProviders),
 			},
@@ -57,6 +66,7 @@ func TestService(t *testing.T) {
 			name: "AttestationDataProvidersNil",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(2 * time.Second),
 				best.WithAttestationDataProviders(nil),
 			},
 			err: "problem with parameters: no attestation data providers specified",
@@ -65,6 +75,7 @@ func TestService(t *testing.T) {
 			name: "AttestationDataProvidersEmpty",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(2 * time.Second),
 				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{}),
 			},
 			err: "problem with parameters: no attestation data providers specified",
@@ -73,7 +84,7 @@ func TestService(t *testing.T) {
 			name: "Good",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(10 * time.Second),
+				best.WithTimeout(2 * time.Second),
 				best.WithAttestationDataProviders(attestationDataProviders),
 			},
 		},
@@ -98,6 +109,7 @@ func TestInterfaces(t *testing.T) {
 
 	s, err := best.New(context.Background(),
 		best.WithLogLevel(zerolog.Disabled),
+		best.WithTimeout(2*time.Second),
 		best.WithAttestationDataProviders(attestationDataProviders),
 	)
 	require.NoError(t, err)

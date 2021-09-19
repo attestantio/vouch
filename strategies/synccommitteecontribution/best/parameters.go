@@ -85,7 +85,6 @@ func WithTimeout(timeout time.Duration) Parameter {
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel:           zerolog.GlobalLevel(),
-		timeout:            2 * time.Second,
 		clientMonitor:      nullmetrics.New(context.Background()),
 		processConcurrency: int64(runtime.GOMAXPROCS(-1)),
 	}

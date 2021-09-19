@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -36,6 +36,14 @@ func TestService(t *testing.T) {
 		err    string
 	}{
 		{
+			name: "TimeoutMissing",
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithAggregateAttestationProviders(aggregateAttestationProviders),
+			},
+			err: "problem with parameters: no timeout specified",
+		},
+		{
 			name: "TimeoutZero",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
@@ -48,6 +56,7 @@ func TestService(t *testing.T) {
 			name: "ClientMonitorMissing",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(nil),
 				best.WithAggregateAttestationProviders(aggregateAttestationProviders),
 			},
@@ -57,6 +66,7 @@ func TestService(t *testing.T) {
 			name: "AggregateAttestationProvidersNil",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(2 * time.Second),
 				best.WithAggregateAttestationProviders(nil),
 			},
 			err: "problem with parameters: no aggregate attestation providers specified",
@@ -65,6 +75,7 @@ func TestService(t *testing.T) {
 			name: "ProcessConcurrencyZero",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(2 * time.Second),
 				best.WithAggregateAttestationProviders(aggregateAttestationProviders),
 				best.WithProcessConcurrency(0),
 			},
@@ -74,6 +85,7 @@ func TestService(t *testing.T) {
 			name: "AggregateAttestationProvidersEmpty",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(2 * time.Second),
 				best.WithAggregateAttestationProviders(map[string]eth2client.AggregateAttestationProvider{}),
 			},
 			err: "problem with parameters: no aggregate attestation providers specified",
@@ -82,7 +94,7 @@ func TestService(t *testing.T) {
 			name: "Good",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(10 * time.Second),
+				best.WithTimeout(2 * time.Second),
 				best.WithAggregateAttestationProviders(aggregateAttestationProviders),
 			},
 		},
@@ -107,6 +119,7 @@ func TestInterfaces(t *testing.T) {
 
 	s, err := best.New(context.Background(),
 		best.WithLogLevel(zerolog.Disabled),
+		best.WithTimeout(2*time.Second),
 		best.WithAggregateAttestationProviders(aggregateAttestationProviders),
 	)
 	require.NoError(t, err)

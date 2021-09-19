@@ -80,8 +80,9 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 			// Anyone not responded by now is considered errored.
 			errored = len(s.aggregateAttestationProviders) - responded
 			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Msg("Timed out waiting for responses")
-		case <-errCh:
+		case err := <-errCh:
 			errored++
+			log.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Responded with error")
 		case resp := <-respCh:
 			responded++
 			if bestAggregateAttestation == nil || resp.score > bestScore {

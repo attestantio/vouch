@@ -16,6 +16,7 @@ package best
 import (
 	"context"
 	"testing"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/altair"
@@ -40,6 +41,7 @@ func TestScore(t *testing.T) {
 
 	s, err := New(ctx,
 		WithLogLevel(zerolog.Disabled),
+		WithTimeout(2*time.Second),
 		WithSyncCommitteeContributionProviders(map[string]eth2client.SyncCommitteeContributionProvider{
 			"good": mock.NewSyncCommitteeContributionProvider(),
 		}),

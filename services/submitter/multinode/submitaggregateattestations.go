@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -52,7 +52,7 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []
 			_, address := s.serviceInfo(ctx, submitter)
 			started := time.Now()
 			err := submitter.SubmitAggregateAttestations(ctx, aggregates)
-			s.clientMonitor.ClientOperation(address, "submit aggregate attestation", err == nil, time.Since(started))
+			s.clientMonitor.ClientOperation(address, "submit aggregate attestations", err == nil, time.Since(started))
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to submit aggregate attestations")
 				return

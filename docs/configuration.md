@@ -61,6 +61,8 @@ strategies:
       - localhost:4000
       - localhost:5051
       - localhost:5052
+    # timeout is the time that the strategy will wait for beacon nodes to respond before selecting the best from those available.
+    timeout: 1s
   # The attestationdata strategy obtains attestation data from multiple sources.
   attestationdata:
     # style can be 'best', which obtains attestation data from all nodes and selects the best, or 'first', which uses the first returned
