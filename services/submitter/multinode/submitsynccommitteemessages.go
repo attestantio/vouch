@@ -52,9 +52,9 @@ func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*a
 			_, address := s.serviceInfo(ctx, submitter)
 			started := time.Now()
 			err := submitter.SubmitSyncCommitteeMessages(ctx, messages)
-			s.clientMonitor.ClientOperation(address, "submit messages", err == nil, time.Since(started))
+			s.clientMonitor.ClientOperation(address, "submit sync committee messages", err == nil, time.Since(started))
 			if err != nil {
-				log.Warn().Err(err).Msg("Failed to submit messages")
+				log.Warn().Err(err).Msg("Failed to submit sync committee messages")
 			} else {
 				data, err := json.Marshal(messages)
 				if err != nil {

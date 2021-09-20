@@ -36,6 +36,14 @@ func TestService(t *testing.T) {
 		err    string
 	}{
 		{
+			name: "TimeoutMissing",
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
+			},
+			err: "problem with parameters: no timeout specified",
+		},
+		{
 			name: "TimeoutZero",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
@@ -48,6 +56,7 @@ func TestService(t *testing.T) {
 			name: "ClientMonitorMissing",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(nil),
 				best.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
 			},
@@ -57,6 +66,7 @@ func TestService(t *testing.T) {
 			name: "SyncCommitteeContributionProvidersNil",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(2 * time.Second),
 				best.WithSyncCommitteeContributionProviders(nil),
 			},
 			err: "problem with parameters: no sync committee contribution providers specified",
@@ -65,6 +75,7 @@ func TestService(t *testing.T) {
 			name: "ProcessConcurrencyZero",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(2 * time.Second),
 				best.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
 				best.WithProcessConcurrency(0),
 			},
@@ -74,6 +85,7 @@ func TestService(t *testing.T) {
 			name: "SyncCommitteeContributionProvidersEmpty",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(2 * time.Second),
 				best.WithSyncCommitteeContributionProviders(map[string]eth2client.SyncCommitteeContributionProvider{}),
 			},
 			err: "problem with parameters: no sync committee contribution providers specified",
@@ -82,7 +94,7 @@ func TestService(t *testing.T) {
 			name: "Good",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(10 * time.Second),
+				best.WithTimeout(2 * time.Second),
 				best.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
 			},
 		},
@@ -107,6 +119,7 @@ func TestInterfaces(t *testing.T) {
 
 	s, err := best.New(context.Background(),
 		best.WithLogLevel(zerolog.Disabled),
+		best.WithTimeout(2*time.Second),
 		best.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
 	)
 	require.NoError(t, err)

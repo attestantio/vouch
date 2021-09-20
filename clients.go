@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,7 +21,6 @@ import (
 	autoclient "github.com/attestantio/go-eth2-client/auto"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 )
 
 var clients map[string]eth2client.Service
@@ -41,7 +40,7 @@ func fetchClient(ctx context.Context, address string) (eth2client.Service, error
 		var err error
 		client, err = autoclient.New(ctx,
 			autoclient.WithLogLevel(util.LogLevel("eth2client")),
-			autoclient.WithTimeout(viper.GetDuration("eth2client.timeout")),
+			autoclient.WithTimeout(util.Timeout("eth2client")),
 			autoclient.WithAddress(address))
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate client")

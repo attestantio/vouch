@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,6 +16,7 @@ package best_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -31,6 +32,7 @@ func TestBeaconBlockProposal(t *testing.T) {
 
 	service, err := best.New(ctx,
 		best.WithLogLevel(zerolog.Disabled),
+		best.WithTimeout(2*time.Second),
 		best.WithClientMonitor(null.New(context.Background())),
 		best.WithProcessConcurrency(6),
 		best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{

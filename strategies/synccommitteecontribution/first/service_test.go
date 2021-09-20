@@ -36,6 +36,14 @@ func TestService(t *testing.T) {
 		err    string
 	}{
 		{
+			name: "TimeoutMissing",
+			params: []first.Parameter{
+				first.WithLogLevel(zerolog.TraceLevel),
+				first.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
+			},
+			err: "problem with parameters: no timeout specified",
+		},
+		{
 			name: "TimeoutZero",
 			params: []first.Parameter{
 				first.WithLogLevel(zerolog.TraceLevel),
@@ -48,6 +56,7 @@ func TestService(t *testing.T) {
 			name: "ClientMonitorMissing",
 			params: []first.Parameter{
 				first.WithLogLevel(zerolog.TraceLevel),
+				first.WithTimeout(2 * time.Second),
 				first.WithClientMonitor(nil),
 				first.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
 			},
@@ -57,6 +66,7 @@ func TestService(t *testing.T) {
 			name: "SyncCommitteeContributionProvidersNil",
 			params: []first.Parameter{
 				first.WithLogLevel(zerolog.TraceLevel),
+				first.WithTimeout(2 * time.Second),
 				first.WithSyncCommitteeContributionProviders(nil),
 			},
 			err: "problem with parameters: no sync committee contribution providers specified",
@@ -65,6 +75,7 @@ func TestService(t *testing.T) {
 			name: "SyncCommitteeContributionProvidersEmpty",
 			params: []first.Parameter{
 				first.WithLogLevel(zerolog.TraceLevel),
+				first.WithTimeout(2 * time.Second),
 				first.WithSyncCommitteeContributionProviders(map[string]eth2client.SyncCommitteeContributionProvider{}),
 			},
 			err: "problem with parameters: no sync committee contribution providers specified",
@@ -73,7 +84,7 @@ func TestService(t *testing.T) {
 			name: "Good",
 			params: []first.Parameter{
 				first.WithLogLevel(zerolog.TraceLevel),
-				first.WithTimeout(10 * time.Second),
+				first.WithTimeout(2 * time.Second),
 				first.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
 			},
 		},
@@ -98,6 +109,7 @@ func TestInterfaces(t *testing.T) {
 
 	s, err := first.New(context.Background(),
 		first.WithLogLevel(zerolog.Disabled),
+		first.WithTimeout(2*time.Second),
 		first.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
 	)
 	require.NoError(t, err)

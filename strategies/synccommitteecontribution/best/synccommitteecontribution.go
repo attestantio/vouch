@@ -83,7 +83,7 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 			log.Debug().Dur("elapsed", time.Since(started)).Msg("Timed out waiting for responses")
 		case err := <-errCh:
 			errored++
-			log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Error")
+			log.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Responded with error")
 		case resp := <-respCh:
 			responded++
 			if bestSyncCommitteeContribution == nil || resp.score > bestScore {
