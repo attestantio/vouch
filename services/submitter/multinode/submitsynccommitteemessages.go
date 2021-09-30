@@ -16,6 +16,7 @@ package multinode
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"time"
 
@@ -54,7 +55,7 @@ func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*a
 			err := submitter.SubmitSyncCommitteeMessages(ctx, messages)
 			s.clientMonitor.ClientOperation(address, "submit sync committee messages", err == nil, time.Since(started))
 			if err != nil {
-				log.Warn().Err(err).Msg("Failed to submit sync committee messages")
+				s.handleSubmitSyncCommitteeMessagesError(ctx, submitter, err)
 			} else {
 				data, err := json.Marshal(messages)
 				if err != nil {
@@ -68,4 +69,84 @@ func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*a
 	wg.Wait()
 
 	return nil
+}
+
+type lhErrorResponse struct {
+	Code     int                       `json:"code"`
+	Message  string                    `json:"string"`
+	Failures []*lhErrorResponseFailure `json:"failures"`
+}
+
+type lhErrorResponseFailure struct {
+	Index   int    `json:"index"`
+	Message string `json:"message"`
+}
+
+type tekuErrorResponse struct {
+	Code     string                      `json:"code"`
+	Message  string                      `json:"string"`
+	Failures []*tekuErrorResponseFailure `json:"failures"`
+}
+
+type tekuErrorResponseFailure struct {
+	Index   string `json:"index"`
+	Message string `json:"message"`
+}
+
+func (s *Service) handleSubmitSyncCommitteeMessagesError(ctx context.Context,
+	submitter eth2client.SyncCommitteeMessagesSubmitter,
+	err error,
+) {
+	// Fetch the JSON response from the error.
+	errorStr := err.Error()
+	jsonIndex := strings.Index(errorStr, "{")
+	if jsonIndex == -1 {
+		log.Warn().Err(err).Msg("Failed to submit sync committee messages")
+		return
+	}
+
+	serverType, provider := s.serviceInfo(ctx, submitter)
+	allowedFailures := 0
+	switch serverType {
+	case "lighthouse":
+		resp := lhErrorResponse{}
+		if err := json.Unmarshal([]byte(errorStr[jsonIndex:]), &resp); err != nil {
+			log.Warn().Err(err).Msg("Failed to submit sync committee messages")
+			return
+		}
+		for i := 0; i < len(resp.Failures); i++ {
+			switch {
+			case strings.HasPrefix(resp.Failures[i].Message, "Verification: PriorSyncCommitteeMessageKnown"):
+				log.Trace().Str("provider", provider).Int("index", resp.Failures[i].Index).Msg("Message already received for that slot; ignoring")
+				allowedFailures++
+			default:
+				log.Trace().Str("provider", provider).Int("index", resp.Failures[i].Index).Str("msg", resp.Failures[i].Message).Msg("Real lighthouse error")
+			}
+		}
+		if len(resp.Failures) == allowedFailures {
+			log.Trace().Str("provider", provider).Msg("Errors from node are allowable; continuing")
+			return
+		}
+	case "teku":
+		resp := tekuErrorResponse{}
+		if err := json.Unmarshal([]byte(errorStr[jsonIndex:]), &resp); err != nil {
+			log.Trace().Err(err).Msg("Failed to submit sync committee messages")
+			return
+		}
+		for i := 0; i < len(resp.Failures); i++ {
+			switch {
+			case resp.Failures[i].Message == "Ignoring sync committee message as a duplicate was processed during validation":
+				log.Trace().Str("provider", provider).Str("index", resp.Failures[i].Index).Msg("Message already received for that slot; ignoring")
+				allowedFailures++
+			default:
+				log.Trace().Str("provider", provider).Str("index", resp.Failures[i].Index).Str("msg", resp.Failures[i].Message).Msg("Real teku error")
+			}
+		}
+		if len(resp.Failures) == allowedFailures {
+			log.Trace().Str("provider", provider).Msg("Errors from Lighthouse node are allowable; continuing")
+			return
+		}
+	}
+
+	log.Warn().Str("server", serverType).Err(err).Msg("Failed to submit sync committee messages")
 }

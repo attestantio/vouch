@@ -1,3 +1,6 @@
+1.2.0 release candidate 2:
+  - remove spurious warning for duplicate submission of sync committee messages
+
 1.2.0 release candidate 1:
   - decrypt local accounts in parallel to reduce startup time
   - add individual strategy timeouts for finer control of strategies
