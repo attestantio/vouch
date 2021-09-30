@@ -64,20 +64,20 @@ jobs:
     - name: Create windows zip file
       run: |
        mv vouch-windows-4.0-amd64.exe vouch.exe
-       sha256sum vouch.exe >vouch-${RELEASE_VERSION}-windows.sha256
        zip --junk-paths vouch-${RELEASE_VERSION}-windows-exe.zip vouch.exe
+       sha256sum vouch-${RELEASE_VERSION}-windows-exe.zip >vouch-${RELEASE_VERSION}-windows.sha256
 
     - name: Create linux AMD64 tgz file
       run: |
        mv vouch-linux-amd64 vouch
-       sha256sum vouch >vouch-${RELEASE_VERSION}-linux-amd64.sha256
        tar zcf vouch-${RELEASE_VERSION}-linux-amd64.tar.gz vouch
+       sha256sum vouch-${RELEASE_VERSION}-linux-amd64.tar.gz >vouch-${RELEASE_VERSION}-linux-amd64.sha256
 
        # - name: Create linux ARM64 tgz file
        #   run: |
        #    mv vouch-linux-arm64 vouch
-       #    sha256sum vouch >vouch-${RELEASE_VERSION}-linux-arm64.sha256
        #    tar zcf vouch-${RELEASE_VERSION}-linux-arm64.tar.gz vouch
+       #    sha256sum vouch-${RELEASE_VERSION}-linux-arm64.tar.gz >vouch-${RELEASE_VERSION}-linux-arm64.sha256
 
     - name: Create release
       id: create_release
