@@ -16,6 +16,7 @@ package multinode
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"time"
 
@@ -54,7 +55,7 @@ func (s *Service) SubmitSyncCommitteeContributions(ctx context.Context, contribu
 			err := submitter.SubmitSyncCommitteeContributions(ctx, contributionAndProofs)
 			s.clientMonitor.ClientOperation(address, "submit contribution and proofs", err == nil, time.Since(started))
 			if err != nil {
-				log.Warn().Err(err).Msg("Failed to submit contribution and proofs")
+				s.handleSubmitSyncCommitteeContributionsError(ctx, submitter, err)
 			} else {
 				data, err := json.Marshal(contributionAndProofs)
 				if err != nil {
@@ -68,4 +69,43 @@ func (s *Service) SubmitSyncCommitteeContributions(ctx context.Context, contribu
 	wg.Wait()
 
 	return nil
+}
+
+func (s *Service) handleSubmitSyncCommitteeContributionsError(ctx context.Context,
+	submitter eth2client.SyncCommitteeContributionsSubmitter,
+	err error,
+) {
+	// Fetch the JSON response from the error.
+	errorStr := err.Error()
+	jsonIndex := strings.Index(errorStr, "{")
+	if jsonIndex == -1 {
+		log.Warn().Err(err).Msg("Failed to submit sync committee contribution and proofs")
+		return
+	}
+
+	serverType, provider := s.serviceInfo(ctx, submitter)
+	allowedFailures := 0
+	switch serverType {
+	case "lighthouse":
+		resp := lhErrorResponse{}
+		if err := json.Unmarshal([]byte(errorStr[jsonIndex:]), &resp); err != nil {
+			log.Warn().Err(err).Msg("Failed to submit sync committee contribution and proofs")
+			return
+		}
+		for i := 0; i < len(resp.Failures); i++ {
+			switch {
+			case strings.HasPrefix(resp.Failures[i].Message, "Verification: AggregatorAlreadyKnown"):
+				log.Trace().Str("provider", provider).Int("index", resp.Failures[i].Index).Msg("Contribution and proof already received for that slot; ignoring")
+				allowedFailures++
+			default:
+				log.Trace().Str("provider", provider).Int("index", resp.Failures[i].Index).Str("msg", resp.Failures[i].Message).Msg("Real lighthouse error")
+			}
+		}
+		if len(resp.Failures) == allowedFailures {
+			log.Trace().Str("provider", provider).Msg("Errors from node are allowable; continuing")
+			return
+		}
+	default:
+		log.Warn().Str("server", serverType).Err(err).Msg("Failed to submit sync committee contribution and proof")
+	}
 }

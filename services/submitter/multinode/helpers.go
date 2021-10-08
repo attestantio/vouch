@@ -37,6 +37,8 @@ func (s *Service) serviceInfo(ctx context.Context, submitter interface{}) (strin
 				serviceName = "prysm"
 			case strings.Contains(strings.ToLower(nodeVersion), "teku"):
 				serviceName = "teku"
+			case strings.Contains(strings.ToLower(nodeVersion), "nimbus"):
+				serviceName = "nimbus"
 			}
 		}
 	}
