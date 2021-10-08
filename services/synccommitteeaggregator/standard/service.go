@@ -167,6 +167,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Str("beacon_block_root", fmt.Sprintf("%#x", *beaconBlockRoot)).Msg("Obtained beacon block root")
 
+	signedContributionAndProofs := make([]*altair.SignedContributionAndProof, 0)
 	for _, validatorIndex := range duty.ValidatorIndices {
 		for subcommitteeIndex := range duty.SelectionProofs[validatorIndex] {
 			log.Trace().Uint64("validator_index", uint64(validatorIndex)).Uint64("subcommittee_index", subcommitteeIndex).Str("beacon_block_root", fmt.Sprintf("%#x", *beaconBlockRoot)).Msg("Aggregating")
@@ -198,14 +199,16 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 				Signature: sig,
 			}
 
-			if err := s.syncCommitteeContributionsSubmitter.SubmitSyncCommitteeContributions(ctx, []*altair.SignedContributionAndProof{signedContributionAndProof}); err != nil {
-				log.Warn().Err(err).Msg("Failed to submit signed contribution and proof")
-				s.monitor.SyncCommitteeAggregationsCompleted(started, len(duty.ValidatorIndices), "failed")
-				return
-			}
-
-			log.Trace().Msg("Submitted signed contribution and proof")
-			s.monitor.SyncCommitteeAggregationsCompleted(started, len(duty.ValidatorIndices), "succeeded")
+			signedContributionAndProofs = append(signedContributionAndProofs, signedContributionAndProof)
 		}
 	}
+
+	if err := s.syncCommitteeContributionsSubmitter.SubmitSyncCommitteeContributions(ctx, signedContributionAndProofs); err != nil {
+		log.Warn().Err(err).Msg("Failed to submit signed contribution and proofs")
+		s.monitor.SyncCommitteeAggregationsCompleted(started, len(signedContributionAndProofs), "failed")
+		return
+	}
+
+	log.Trace().Msg("Submitted signed contribution and proofs")
+	s.monitor.SyncCommitteeAggregationsCompleted(started, len(signedContributionAndProofs), "succeeded")
 }
