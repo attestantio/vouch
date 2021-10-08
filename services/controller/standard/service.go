@@ -197,9 +197,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	go s.scheduleProposals(ctx, epoch, validatorIndices, true /* notCurrentSlot */)
 	go s.scheduleAttestations(ctx, epoch, validatorIndices, true /* notCurrentSlot */)
 	if handlingAltair {
-		go s.scheduleSyncCommitteeMessages(ctx, epoch, validatorIndices)
+		thisSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch) / s.epochsPerSyncCommitteePeriod)
+		go s.scheduleSyncCommitteeMessages(ctx, thisSyncCommitteePeriodStartEpoch, validatorIndices, true /* notCurrentSlot */)
 		nextSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch)/s.epochsPerSyncCommitteePeriod + 1)
-		go s.scheduleSyncCommitteeMessages(ctx, nextSyncCommitteePeriodStartEpoch, validatorIndices)
+		go s.scheduleSyncCommitteeMessages(ctx, nextSyncCommitteePeriodStartEpoch, validatorIndices, true /* notCurrentSlot */)
 	}
 	go s.scheduleAttestations(ctx, epoch+1, nextEpochValidatorIndices, true /* notCurrentSlot */)
 	// Update beacon committee subscriptions this and the next epoch.
@@ -337,7 +338,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 
 		// Update the _next_ period if we are on an EPOCHS_PER_SYNC_COMMITTEE_PERIOD boundary.
 		if uint64(currentEpoch)%s.epochsPerSyncCommitteePeriod == 0 {
-			go s.scheduleSyncCommitteeMessages(ctx, currentEpoch+phase0.Epoch(s.epochsPerSyncCommitteePeriod), validatorIndices)
+			go s.scheduleSyncCommitteeMessages(ctx, currentEpoch+phase0.Epoch(s.epochsPerSyncCommitteePeriod), validatorIndices, false /* notCurrentSlot */)
 		}
 	}
 	go func() {
@@ -403,7 +404,7 @@ func (s *Service) handleAltairForkEpoch(ctx context.Context) {
 			log.Error().Err(err).Msg("Failed to obtain active validator indices for the Altair fork epoch")
 			return
 		}
-		go s.scheduleSyncCommitteeMessages(ctx, s.altairForkEpoch, validatorIndices)
+		go s.scheduleSyncCommitteeMessages(ctx, s.altairForkEpoch, validatorIndices, false /* notCurrentSlot */)
 	}()
 
 	go func() {
@@ -413,6 +414,6 @@ func (s *Service) handleAltairForkEpoch(ctx context.Context) {
 			log.Error().Err(err).Msg("Failed to obtain active validator indices for the period following the Altair fork epoch")
 			return
 		}
-		go s.scheduleSyncCommitteeMessages(ctx, nextPeriodEpoch, validatorIndices)
+		go s.scheduleSyncCommitteeMessages(ctx, nextPeriodEpoch, validatorIndices, false /* notCurrentSlot */)
 	}()
 }

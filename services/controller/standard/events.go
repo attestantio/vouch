@@ -244,5 +244,5 @@ func (s *Service) refreshSyncCommitteeDutiesForEpochPeriod(ctx context.Context, 
 	}
 
 	// Reschedule sync committee messages.
-	go s.scheduleSyncCommitteeMessages(ctx, epoch, validatorIndices)
+	go s.scheduleSyncCommitteeMessages(ctx, epoch, validatorIndices, false /* notCurrentSlot */)
 }

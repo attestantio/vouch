@@ -28,6 +28,7 @@ import (
 func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 	epoch phase0.Epoch,
 	validatorIndices []phase0.ValidatorIndex,
+	notCurrentSlot bool,
 ) {
 	if len(validatorIndices) == 0 {
 		// Nothing to do.
@@ -40,9 +41,15 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 
 	period := uint64(epoch) / s.epochsPerSyncCommitteePeriod
 	firstEpoch := s.firstEpochOfSyncPeriod(period)
+	if firstEpoch < s.chainTimeService.CurrentEpoch() {
+		firstEpoch = s.chainTimeService.CurrentEpoch()
+	}
 	// If we are in the sync committee that starts at slot x we need to generate a message during slot x-1
 	// for it to be included in slot x, hence -1.
 	firstSlot := s.chainTimeService.FirstSlotOfEpoch(firstEpoch) - 1
+	if firstSlot < s.chainTimeService.CurrentSlot() {
+		firstSlot = s.chainTimeService.CurrentSlot()
+	}
 	lastEpoch := s.firstEpochOfSyncPeriod(period+1) - 1
 	// If we are in the sync committee that ends at slot x we do not generate a message during slot x-1
 	// as it will never be included, hence -1.
@@ -51,16 +58,16 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 	started := time.Now()
 	log.Trace().Uint64("period", period).Uint64("first_epoch", uint64(firstEpoch)).Uint64("last_epoch", uint64(lastEpoch)).Msg("Scheduling sync committee messages")
 
-	resp, err := s.syncCommitteeDutiesProvider.SyncCommitteeDuties(ctx, firstEpoch, validatorIndices)
+	duties, err := s.syncCommitteeDutiesProvider.SyncCommitteeDuties(ctx, firstEpoch, validatorIndices)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to fetch sync committee message duties")
 		return
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(resp)).Msg("Fetched sync committee message duties")
+	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(duties)).Msg("Fetched sync committee message duties")
 
 	// We combine the duties for the epoch.
-	messageIndices := make(map[phase0.ValidatorIndex][]phase0.CommitteeIndex, len(resp))
-	for _, duty := range resp {
+	messageIndices := make(map[phase0.ValidatorIndex][]phase0.CommitteeIndex, len(duties))
+	for _, duty := range duties {
 		messageIndices[duty.ValidatorIndex] = duty.ValidatorSyncCommitteeIndices
 	}
 
@@ -72,15 +79,15 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 	}
 
 	// Now we have the messages we can subscribe to the relevant subnets.
-	if firstSlot < s.chainTimeService.CurrentSlot() {
-		firstSlot = s.chainTimeService.CurrentSlot()
-	}
 	log.Trace().
 		Uint64("first_slot", uint64(firstSlot)).
 		Uint64("last_slot", uint64(lastSlot)).
 		Msg("Setting sync committee duties for period")
 
 	for slot := firstSlot; slot <= lastSlot; slot++ {
+		if slot == s.chainTimeService.CurrentSlot() && notCurrentSlot {
+			continue
+		}
 		go func(duty *synccommitteemessenger.Duty, accounts map[phase0.ValidatorIndex]e2wtypes.Account) {
 			for _, validatorIndex := range duty.ValidatorIndices() {
 				account, exists := accounts[validatorIndex]
@@ -92,7 +99,8 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 				}
 			}
 
-			prepareJobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(-1 * time.Minute)
+			// Schedule for 1.5 slots ahead of time.
+			prepareJobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(-s.slotDuration * 6 / 4)
 			if err := s.scheduler.ScheduleJob(ctx,
 				fmt.Sprintf("Prepare sync committee messages for slot %d", duty.Slot()),
 				prepareJobTime,
@@ -102,21 +110,11 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 				log.Error().Err(err).Msg("Failed to schedule prepare sync committee messages")
 				return
 			}
-			jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxSyncCommitteeMessageDelay)
-			if err := s.scheduler.ScheduleJob(ctx,
-				fmt.Sprintf("Sync committee messages for slot %d", duty.Slot()),
-				jobTime,
-				s.messageSyncCommittee,
-				duty,
-			); err != nil {
-				// Don't return here; we want to try to set up as many sync committee message jobs as possible.
-				log.Error().Err(err).Msg("Failed to schedule sync committee messages")
-			}
 		}(synccommitteemessenger.NewDuty(slot, messageIndices), accounts)
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Scheduled sync committee messages")
 
-	if err := s.syncCommitteesSubscriber.Subscribe(ctx, firstEpoch, resp); err != nil {
+	if err := s.syncCommitteesSubscriber.Subscribe(ctx, lastEpoch+1, duties); err != nil {
 		log.Error().Err(err).Msg("Failed to submit sync committee subscribers")
 		return
 	}
@@ -134,6 +132,36 @@ func (s *Service) prepareMessageSyncCommittee(ctx context.Context, data interfac
 
 	if err := s.syncCommitteeMessenger.Prepare(ctx, duty); err != nil {
 		log.Error().Uint64("sync_committee_slot", uint64(duty.Slot())).Err(err).Msg("Failed to prepare sync committee message")
+		return
+	}
+
+	// At this point we can schedule the message job.
+	jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxSyncCommitteeMessageDelay)
+	if err := s.scheduler.ScheduleJob(ctx,
+		fmt.Sprintf("Sync committee messages for slot %d", duty.Slot()),
+		jobTime,
+		s.messageSyncCommittee,
+		duty,
+	); err != nil {
+		log.Error().Err(err).Msg("Failed to schedule sync committee messages")
+		return
+	}
+
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Prepared")
+}
+
+func (s *Service) messageSyncCommittee(ctx context.Context, data interface{}) {
+	started := time.Now()
+	duty, ok := data.(*synccommitteemessenger.Duty)
+	if !ok {
+		log.Error().Msg("Passed invalid data")
+		return
+	}
+	log := log.With().Uint64("slot", uint64(s.chainTimeService.CurrentSlot())).Logger()
+
+	_, err := s.syncCommitteeMessenger.Message(ctx, duty)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to submit sync committee message")
 		return
 	}
 
@@ -164,22 +192,6 @@ func (s *Service) prepareMessageSyncCommittee(ctx context.Context, data interfac
 		}
 	}
 
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Prepared")
-}
-func (s *Service) messageSyncCommittee(ctx context.Context, data interface{}) {
-	started := time.Now()
-	duty, ok := data.(*synccommitteemessenger.Duty)
-	if !ok {
-		log.Error().Msg("Passed invalid data")
-		return
-	}
-	log := log.With().Uint64("slot", uint64(s.chainTimeService.CurrentSlot())).Logger()
-
-	_, err := s.syncCommitteeMessenger.Message(ctx, duty)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to submit sync committee message")
-		return
-	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Messaged")
 }
 
