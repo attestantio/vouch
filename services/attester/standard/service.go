@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -158,9 +158,14 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 		started,
 	)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to attest")
 		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
+		return nil, err
 	}
+
+	if len(attestations) < len(duty.ValidatorIndices()) {
+		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices())-len(attestations), "failed")
+	}
+	s.monitor.AttestationsCompleted(started, len(attestations), "succeeded")
 
 	return attestations, nil
 }
@@ -197,7 +202,6 @@ func (s *Service) attest(
 		data.Target.Root,
 	)
 	if err != nil {
-		s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "failed")
 		return nil, errors.Wrap(err, "failed to sign beacon attestations")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed")
@@ -238,12 +242,11 @@ func (s *Service) attest(
 	}
 
 	// Submit the attestations.
+	submissionStarted := time.Now()
 	if err := s.attestationsSubmitter.SubmitAttestations(ctx, attestations); err != nil {
-		s.monitor.AttestationsCompleted(started, len(attestations), "failed")
 		return nil, errors.Wrap(err, "failed to submit attestations")
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted attestations")
-	s.monitor.AttestationsCompleted(started, len(duty.ValidatorIndices()), "succeeded")
+	log.Trace().Dur("elapsed", time.Since(started)).Dur("submission_elapsed", time.Since(submissionStarted)).Msg("Submitted attestations")
 
 	return attestations, nil
 }
