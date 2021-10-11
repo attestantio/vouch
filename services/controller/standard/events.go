@@ -160,6 +160,12 @@ func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch phase
 }
 
 func (s *Service) refreshAttesterDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {
+	// If the epoch duties are yet to be scheduled then we don't have anything to do.
+	if s.scheduler.JobExists(ctx, fmt.Sprintf("Prepare for epoch %d", epoch)) {
+		log.Trace().Msg("Refresh not necessary as epoch not yet prepared")
+		return
+	}
+
 	cancelledJobs := make(map[phase0.Slot]bool)
 	// First thing we do is cancel all scheduled attestations jobs.
 	for slot := s.chainTimeService.FirstSlotOfEpoch(epoch); slot < s.chainTimeService.FirstSlotOfEpoch(epoch+1); slot++ {
