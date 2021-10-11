@@ -271,8 +271,9 @@ github.com/hashicorp/mdns v1.0.0/go.mod h1:tL+uN++7HEJ6SQLQ2/p+z2pH24WQKWjBPkE0m
 github.com/hashicorp/memberlist v0.1.3/go.mod h1:ajVTdAv/9Im8oMAAj5G31PhhMCZJV2pPBoIllUwCN7I=
 github.com/hashicorp/serf v0.8.2/go.mod h1:6hOLApaqBFA1NXqRQAsxw9QxuDEvNxSQRwA/JwenrHc=
 github.com/herumi/bls-eth-go-binary v0.0.0-20210520070601-31246bfa8ac4/go.mod h1:luAnRm3OsMQeokhGzpYmc0ZKwawY7o87PUEP11Z7r7U=
-github.com/herumi/bls-eth-go-binary v0.0.0-20210902234237-7763804ee078 h1:7V5qCWTKJ0T/9KjYo2dBFaIDEb2dvy3onu9nqOIIFDc=
 github.com/herumi/bls-eth-go-binary v0.0.0-20210902234237-7763804ee078/go.mod h1:luAnRm3OsMQeokhGzpYmc0ZKwawY7o87PUEP11Z7r7U=
+github.com/herumi/bls-eth-go-binary v0.0.0-20210917013441-d37c07cfda4e h1:wCMygKUQhmcQAjlk2Gquzq6dLmyMv2kF+llRspoRgrk=
+github.com/herumi/bls-eth-go-binary v0.0.0-20210917013441-d37c07cfda4e/go.mod h1:luAnRm3OsMQeokhGzpYmc0ZKwawY7o87PUEP11Z7r7U=
 github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/ianlancetaylor/demangle v0.0.0-20200824232613-28f6c0f3b639/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
@@ -342,8 +343,9 @@ github.com/mitchellh/iochan v1.0.0/go.mod h1:JwYml1nuB7xOzsp52dPpHFffvOCDupsG0Qu
 github.com/mitchellh/mapstructure v0.0.0-20160808181253-ca63d7c062ee/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=
 github.com/mitchellh/mapstructure v1.1.2/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=
 github.com/mitchellh/mapstructure v1.3.2/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
-github.com/mitchellh/mapstructure v1.4.1 h1:CpVNEelQCZBooIPDn+AR3NpivK/TIKU8bDxdASFVQag=
 github.com/mitchellh/mapstructure v1.4.1/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
+github.com/mitchellh/mapstructure v1.4.2 h1:6h7AQ0yhTcIsmFmnAwQls75jp2Gzs4iB8W7pjMO+rqo=
+github.com/mitchellh/mapstructure v1.4.2/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/reflect2 v0.0.0-20180701023420-4b7aa43c6742/go.mod h1:bx2lNnkwVCuqBIxFjflWJWanXIb3RllmbCylyMrvgv0=
@@ -465,8 +467,9 @@ github.com/wealdtech/go-ecodec v1.1.1/go.mod h1:PSdBFEB6cltdT7V4E1jbboufMZTZXcQO
 github.com/wealdtech/go-ecodec v1.1.2 h1:CcNBnFV6b8IoDtu8wj6cfrmuBRBw00VYqsvpT4+I44w=
 github.com/wealdtech/go-ecodec v1.1.2/go.mod h1:0Rgn8mEr0GX4fDyuU3aUL+xp4n17Wviscasp6rWCh10=
 github.com/wealdtech/go-eth2-types/v2 v2.5.5/go.mod h1:QY9t7nwxc26C9/iZHh1wzc+hZbGGn7ipgjMYPhKnN/0=
-github.com/wealdtech/go-eth2-types/v2 v2.5.6 h1:Lf68vvyJbCMX8g9WysEqQBEOUn+44IUI7w3uoQtG6NQ=
 github.com/wealdtech/go-eth2-types/v2 v2.5.6/go.mod h1:SX7+QxnhXGxeW8tESzJ/BSIXvoflBHUi21chqRsZ9wE=
+github.com/wealdtech/go-eth2-types/v2 v2.6.0 h1:djgMv1A40bstgkg6L1ZA7eowR/Gbmj1ZWnBdrK39lhY=
+github.com/wealdtech/go-eth2-types/v2 v2.6.0/go.mod h1:psOez/ZRBzZSDl5hiNDwRf5ZqQujNE6h5FxAz09Koxg=
 github.com/wealdtech/go-eth2-util v1.6.5 h1:FAdcuwYagSkdDEUvYc3h/lHDvS6/lYGQLrFX11/AoNA=
 github.com/wealdtech/go-eth2-util v1.6.5/go.mod h1:L0OLqIfgfYSPQAzGm1E9T3AwzCWfXu0woLGzm6vwlp4=
 github.com/wealdtech/go-eth2-wallet v1.14.6 h1:5DHO2MdRCVYWaJ3SxgP+DZtH269oU8Y/830o6SewgO4=
@@ -490,8 +493,9 @@ github.com/wealdtech/go-eth2-wallet-store-s3 v1.9.5/go.mod h1:llrwQoCkaHlk7nELxG
 github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.3 h1:+kgJtBHYQQQ4gAmUHxKeAVXzGGFmcOwCjC1JiY7j7Wo=
 github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.3/go.mod h1:V4NUofSBIyzoqc5cNZaGciaDm2WFAgSQikRslOyh5Tg=
 github.com/wealdtech/go-eth2-wallet-types/v2 v2.8.4/go.mod h1:+5Hy4MMmX1x/5gSU2C+ucHYv6W3WVYELGzaeGipIcQs=
-github.com/wealdtech/go-eth2-wallet-types/v2 v2.8.5 h1:R6RCZFqwrYYZJq6MVlJP0ekNdWdEG+guunJP9YQuiuQ=
 github.com/wealdtech/go-eth2-wallet-types/v2 v2.8.5/go.mod h1:pEQC6Y6K+g4yVrdt4TtlRjUDCzkseOm6yxB4jLCsAkc=
+github.com/wealdtech/go-eth2-wallet-types/v2 v2.9.0 h1:XqWgsONVqsPvciuEXxM/QU4hYouBVk0+5/pGqDMGUHQ=
+github.com/wealdtech/go-eth2-wallet-types/v2 v2.9.0/go.mod h1:7Ad2xp27vOQRQWQsIeHBdU/YiyEt6klBeh5gwnNnlwE=
 github.com/wealdtech/go-indexer v1.0.0 h1:/S4rfWQbSOnnYmwnvuTVatDibZ8o1s9bmTCHO16XINg=
 github.com/wealdtech/go-indexer v1.0.0/go.mod h1:u1cjsbsOXsm5jzJDyLmZY7GsrdX8KYXKBXkZcAmk3Zg=
 github.com/wealdtech/go-majordomo v1.0.1 h1:wo4e0hZmCquhz/l8T/PHLr6hF9+hPY65BM1uRdFXtc8=

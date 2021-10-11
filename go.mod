@@ -17,14 +17,14 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/uber/jaeger-client-go v2.29.1+incompatible
 	github.com/wealdtech/go-bytesutil v1.1.1
-	github.com/wealdtech/go-eth2-types/v2 v2.5.6
+	github.com/wealdtech/go-eth2-types/v2 v2.6.0
 	github.com/wealdtech/go-eth2-wallet v1.14.6
 	github.com/wealdtech/go-eth2-wallet-dirk v1.1.7
 	github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.1.6
 	github.com/wealdtech/go-eth2-wallet-hd/v2 v2.5.5
 	github.com/wealdtech/go-eth2-wallet-store-filesystem v1.16.15
 	github.com/wealdtech/go-eth2-wallet-store-scratch v1.6.3
-	github.com/wealdtech/go-eth2-wallet-types/v2 v2.8.5
+	github.com/wealdtech/go-eth2-wallet-types/v2 v2.9.0
 	github.com/wealdtech/go-majordomo v1.0.1
 	go.uber.org/atomic v1.9.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c

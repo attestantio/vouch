@@ -309,15 +309,9 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 		cancel()
 		return
 	}
-	nextEpochAccounts, nextEpochValidatorIndices, err := s.accountsAndIndicesForEpoch(ctx, currentEpoch+1)
-	if err != nil {
-		log.Error().Err(err).Uint64("epoch", uint64(currentEpoch)).Msg("Failed to obtain active validators for next epoch")
-		cancel()
-		return
-	}
 
 	// Expect at least one validator.
-	if len(validatorIndices) == 0 && len(nextEpochValidatorIndices) == 0 {
+	if len(validatorIndices) == 0 {
 		log.Warn().Msg("No active validators; not validating")
 		cancel()
 		return
@@ -328,7 +322,6 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	cancel()
 
 	go s.scheduleProposals(ctx, currentEpoch, validatorIndices, false /* notCurrentSlot */)
-	go s.scheduleAttestations(ctx, currentEpoch+1, nextEpochValidatorIndices, false /* notCurrentSlot */)
 	if s.handlingAltair {
 		// Handle the Altair hard fork transition epoch.
 		if currentEpoch == s.altairForkEpoch {
@@ -341,19 +334,53 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 			go s.scheduleSyncCommitteeMessages(ctx, currentEpoch+phase0.Epoch(s.epochsPerSyncCommitteePeriod), validatorIndices, false /* notCurrentSlot */)
 		}
 	}
+
+	// Next epoch's attestations and beacon committee subscriptions are now available, but wait until
+	// half-way through the epoch to set them up (and half-way through that slot).
+	// This allows us to set them up at a time when the beacon node should be less busy.
+	if err := s.scheduler.ScheduleJob(ctx,
+		fmt.Sprintf("Prepare for epoch %d", currentEpoch+1),
+		s.chainTimeService.StartOfSlot(s.chainTimeService.FirstSlotOfEpoch(currentEpoch)+phase0.Slot(s.slotsPerEpoch/2)).Add(s.slotDuration/2),
+		s.prepareForEpoch,
+		&prepareForEpochData{
+			epoch: currentEpoch + 1,
+		},
+	); err != nil {
+		log.Error().Err(err).Uint64("epoch", uint64(currentEpoch)).Msg("Failed to schedule preparation for following epoch")
+		return
+	}
+
+	epochTickerData.atGenesis = false
+}
+
+type prepareForEpochData struct {
+	epoch phase0.Epoch
+}
+
+func (s *Service) prepareForEpoch(ctx context.Context, data interface{}) {
+	prepareForEpochData := data.(*prepareForEpochData)
+	accounts, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, prepareForEpochData.epoch)
+	if err != nil {
+		log.Error().Err(err).Uint64("epoch", uint64(prepareForEpochData.epoch)).Msg("Failed to obtain active validators for epoch")
+		return
+	}
+	// Expect at least one validator.
+	if len(validatorIndices) == 0 {
+		log.Warn().Msg("No active validators; not validating")
+		return
+	}
+
+	go s.scheduleAttestations(ctx, prepareForEpochData.epoch, validatorIndices, false /* notCurrentSlot */)
 	go func() {
-		// Update beacon committee subscriptions for the next epoch.
-		subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, currentEpoch+1, nextEpochAccounts)
+		subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, prepareForEpochData.epoch, accounts)
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to subscribe to beacon committees")
 			return
 		}
 		s.subscriptionInfosMutex.Lock()
-		s.subscriptionInfos[currentEpoch+1] = subscriptionInfo
+		s.subscriptionInfos[prepareForEpochData.epoch] = subscriptionInfo
 		s.subscriptionInfosMutex.Unlock()
 	}()
-
-	epochTickerData.atGenesis = false
 }
 
 // accountsAndIndicesForEpoch obtains the accounts and validator indices for the specified epoch.

@@ -1,4 +1,5 @@
 1.2.0 release candidate 2:
+  - fetch attestation duties for next epoch approximately half way through current epoch
   - remove spurious warning for duplicate submission of sync committee messages
 
 1.2.0 release candidate 1:
