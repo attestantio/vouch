@@ -1,8 +1,6 @@
-1.2.0 release candidate 2:
+1.2.0:
   - fetch attestation duties for next epoch approximately half way through current epoch
   - remove spurious warning for duplicate submission of sync committee messages
-
-1.2.0 release candidate 1:
   - decrypt local accounts in parallel to reduce startup time
   - add individual strategy timeouts for finer control of strategies
   - add 'advanced' scheduler, designed to be more robust with higher parallel job load
