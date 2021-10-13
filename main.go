@@ -364,7 +364,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	}
 
 	log.Trace().Msg("Selecting aggregate attestation provider")
-	aggregateAttestationProvider, prysmAggregateAttestationProvider, err := selectAggregateAttestationProvider(ctx, monitor, eth2Client)
+	aggregateAttestationProvider, err := selectAggregateAttestationProvider(ctx, monitor, eth2Client)
 	if err != nil {
 		return errors.Wrap(err, "failed to select aggregate attestation provider")
 	}
@@ -374,7 +374,6 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardattestationaggregator.WithLogLevel(util.LogLevel("attestationaggregator")),
 		standardattestationaggregator.WithTargetAggregatorsPerCommitteeProvider(eth2Client.(eth2client.TargetAggregatorsPerCommitteeProvider)),
 		standardattestationaggregator.WithAggregateAttestationProvider(aggregateAttestationProvider),
-		standardattestationaggregator.WithPrysmAggregateAttestationProvider(prysmAggregateAttestationProvider),
 		standardattestationaggregator.WithAggregateAttestationsSubmitter(submitterStrategy.(submitter.AggregateAttestationsSubmitter)),
 		standardattestationaggregator.WithMonitor(monitor.(metrics.AttestationAggregationMonitor)),
 		standardattestationaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
@@ -826,11 +825,9 @@ func selectAggregateAttestationProvider(ctx context.Context,
 	eth2Client eth2client.Service,
 ) (
 	eth2client.AggregateAttestationProvider,
-	eth2client.PrysmAggregateAttestationProvider,
 	error,
 ) {
 	var aggregateAttestationProvider eth2client.AggregateAttestationProvider
-	var prysmAggregateAttestationProvider eth2client.PrysmAggregateAttestationProvider
 	var err error
 	switch viper.GetString("strategies.aggregateattestation.style") {
 	case "best":
@@ -839,11 +836,7 @@ func selectAggregateAttestationProvider(ctx context.Context,
 		for _, address := range viper.GetStringSlice("strategies.aggregateattestation.beacon-node-addresses") {
 			client, err := fetchClient(ctx, address)
 			if err != nil {
-				return nil, nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for aggregate attestation strategy", address))
-			}
-			if _, isProvider := client.(eth2client.PrysmAggregateAttestationProvider); isProvider {
-				log.Warn().Str("provider", address).Msg("Cannot use prysm in aggregate attestation strategy; ignoring provider")
-				continue
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for aggregate attestation strategy", address))
 			}
 			aggregateAttestationProviders[address] = client.(eth2client.AggregateAttestationProvider)
 		}
@@ -855,7 +848,7 @@ func selectAggregateAttestationProvider(ctx context.Context,
 			bestaggregateattestationstrategy.WithTimeout(util.Timeout("strategies.aggregateattestation.best")),
 		)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to start best aggregate attestation strategy")
+			return nil, errors.Wrap(err, "failed to start best aggregate attestation strategy")
 		}
 	case "first":
 		log.Info().Msg("Starting first aggregate attestation strategy")
@@ -863,11 +856,7 @@ func selectAggregateAttestationProvider(ctx context.Context,
 		for _, address := range viper.GetStringSlice("strategies.aggregateattestation.beacon-node-addresses") {
 			client, err := fetchClient(ctx, address)
 			if err != nil {
-				return nil, nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for aggregate attestation strategy", address))
-			}
-			if _, isProvider := client.(eth2client.PrysmAggregateAttestationProvider); isProvider {
-				log.Warn().Str("provider", address).Msg("Cannot use prysm in aggregate attestation strategy; ignoring provider")
-				continue
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for aggregate attestation strategy", address))
 			}
 			aggregateAttestationProviders[address] = client.(eth2client.AggregateAttestationProvider)
 		}
@@ -878,18 +867,14 @@ func selectAggregateAttestationProvider(ctx context.Context,
 			firstaggregateattestationstrategy.WithTimeout(util.Timeout("strategies.aggregateattestation.first")),
 		)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to start first aggregate attestation strategy")
+			return nil, errors.Wrap(err, "failed to start first aggregate attestation strategy")
 		}
 	default:
 		log.Info().Msg("Starting simple aggregate attestation strategy")
-		if _, isProvider := eth2Client.(eth2client.AggregateAttestationProvider); isProvider {
-			aggregateAttestationProvider = eth2Client.(eth2client.AggregateAttestationProvider)
-		} else {
-			prysmAggregateAttestationProvider = eth2Client.(eth2client.PrysmAggregateAttestationProvider)
-		}
+		aggregateAttestationProvider = eth2Client.(eth2client.AggregateAttestationProvider)
 	}
 
-	return aggregateAttestationProvider, prysmAggregateAttestationProvider, nil
+	return aggregateAttestationProvider, nil
 }
 
 func selectBeaconBlockProposalProvider(ctx context.Context,
