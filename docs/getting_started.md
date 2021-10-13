@@ -20,7 +20,7 @@ accountmanager:
       - secret
 ```
 
-`beacon-node-address` should be changed to access a suitable beacon node (Prysm, Lighthouse or Teku).
+`beacon-node-address` should be changed to access a suitable beacon node.
 
 `secret` should be changed to be the passphrase you used to secure the accounts.
 

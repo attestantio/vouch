@@ -30,20 +30,18 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
-	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // Service is an attestation aggregator.
 type Service struct {
-	monitor                           metrics.AttestationAggregationMonitor
-	targetAggregatorsPerCommittee     uint64
-	slotsPerEpoch                     uint64
-	validatingAccountsProvider        accountmanager.ValidatingAccountsProvider
-	aggregateAttestationProvider      eth2client.AggregateAttestationProvider
-	prysmAggregateAttestationProvider eth2client.PrysmAggregateAttestationProvider
-	aggregateAttestationsSubmitter    submitter.AggregateAttestationsSubmitter
-	slotSelectionSigner               signer.SlotSelectionSigner
-	aggregateAndProofSigner           signer.AggregateAndProofSigner
+	monitor                        metrics.AttestationAggregationMonitor
+	targetAggregatorsPerCommittee  uint64
+	slotsPerEpoch                  uint64
+	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
+	aggregateAttestationProvider   eth2client.AggregateAttestationProvider
+	aggregateAttestationsSubmitter submitter.AggregateAttestationsSubmitter
+	slotSelectionSigner            signer.SlotSelectionSigner
+	aggregateAndProofSigner        signer.AggregateAndProofSigner
 }
 
 // module-wide log.
@@ -72,15 +70,14 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		monitor:                           parameters.monitor,
-		targetAggregatorsPerCommittee:     targetAggregatorsPerCommittee,
-		slotsPerEpoch:                     slotsPerEpoch,
-		validatingAccountsProvider:        parameters.validatingAccountsProvider,
-		aggregateAttestationProvider:      parameters.aggregateAttestationProvider,
-		prysmAggregateAttestationProvider: parameters.prysmAggregateAttestationProvider,
-		aggregateAttestationsSubmitter:    parameters.aggregateAttestationsSubmitter,
-		slotSelectionSigner:               parameters.slotSelectionSigner,
-		aggregateAndProofSigner:           parameters.aggregateAndProofSigner,
+		monitor:                        parameters.monitor,
+		targetAggregatorsPerCommittee:  targetAggregatorsPerCommittee,
+		slotsPerEpoch:                  slotsPerEpoch,
+		validatingAccountsProvider:     parameters.validatingAccountsProvider,
+		aggregateAttestationProvider:   parameters.aggregateAttestationProvider,
+		aggregateAttestationsSubmitter: parameters.aggregateAttestationsSubmitter,
+		slotSelectionSigner:            parameters.slotSelectionSigner,
+		aggregateAndProofSigner:        parameters.aggregateAndProofSigner,
 	}
 
 	return s, nil
@@ -100,19 +97,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	log.Trace().Msg("Aggregating")
 
 	// Obtain the aggregate attestation.
-	var aggregateAttestation *phase0.Attestation
-	var err error
-	if s.aggregateAttestationProvider != nil {
-		aggregateAttestation, err = s.aggregateAttestationProvider.AggregateAttestation(ctx, duty.Slot, duty.AttestationDataRoot)
-	} else {
-		var validatorPubKey phase0.BLSPubKey
-		if provider, isProvider := duty.Account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
-			copy(validatorPubKey[:], provider.CompositePublicKey().Marshal())
-		} else {
-			copy(validatorPubKey[:], duty.Account.PublicKey().Marshal())
-		}
-		aggregateAttestation, err = s.prysmAggregateAttestationProvider.PrysmAggregateAttestation(ctx, duty.Attestation, validatorPubKey, duty.SlotSignature)
-	}
+	aggregateAttestation, err := s.aggregateAttestationProvider.AggregateAttestation(ctx, duty.Slot, duty.AttestationDataRoot)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain aggregate attestation")
 		s.monitor.AttestationAggregationCompleted(started, "failed")

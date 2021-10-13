@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -17,7 +17,6 @@ import (
 	"context"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // Duty contains information about an attestation aggregation duty.
@@ -30,12 +29,6 @@ type Duty struct {
 	ValidatorIndex phase0.ValidatorIndex
 	// SlotSignature is the signature of the slot by the validator carrying out the aggregation; reuqired for submitting the aggregate.
 	SlotSignature phase0.BLSSignature
-	// Attestation is the attestation from the validator that is part of the related to the aggregate.
-	// Required for Prysm non-spec GRPC method.
-	Attestation *phase0.Attestation
-	// Account is the account carrying out the aggregation.
-	// Required for Prysm non-spec GRPC method.
-	Account e2wtypes.Account
 }
 
 // IsAggregatorProvider provides information about if a validator is an aggregator.

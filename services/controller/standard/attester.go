@@ -184,8 +184,6 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 				AttestationDataRoot: attestationDataRoot,
 				ValidatorIndex:      info.Duty.ValidatorIndex,
 				SlotSignature:       info.Signature,
-				Account:             accounts[info.Duty.ValidatorIndex],
-				Attestation:         attestation,
 			}
 			if err := s.scheduler.ScheduleJob(ctx,
 				fmt.Sprintf("Beacon block attestation aggregation for slot %d committee %d", attestation.Data.Slot, attestation.Data.Index),
