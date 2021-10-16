@@ -618,17 +618,17 @@ func selectScheduler(ctx context.Context, monitor metrics.Service) (scheduler.Se
 	var scheduler scheduler.Service
 	var err error
 	switch viper.GetString("scheduler.style") {
-	case "advanced":
-		log.Info().Msg("Starting advanced scheduler")
-		scheduler, err = advancedscheduler.New(ctx,
-			advancedscheduler.WithLogLevel(util.LogLevel("scheduler.advanced")),
-			advancedscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
-		)
-	default:
+	case "basic":
 		log.Info().Msg("Starting basic scheduler")
 		scheduler, err = basicscheduler.New(ctx,
 			basicscheduler.WithLogLevel(util.LogLevel("scheduler.basic")),
 			basicscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
+		)
+	default:
+		log.Info().Msg("Starting advanced scheduler")
+		scheduler, err = advancedscheduler.New(ctx,
+			advancedscheduler.WithLogLevel(util.LogLevel("scheduler.advanced")),
+			advancedscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
 		)
 	}
 	if err != nil {

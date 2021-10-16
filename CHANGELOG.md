@@ -4,6 +4,7 @@
   - decrypt local accounts in parallel to reduce startup time
   - add individual strategy timeouts for finer control of strategies
   - add 'advanced' scheduler, designed to be more robust with higher parallel job load
+  - make advanced scheduler the default
   - fetch wallet accounts from Dirk in parallel
   - fetch process-concurrency configuration value from most specific point in hierarchy
   - add metrics to track strategy operation results
