@@ -64,6 +64,10 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(duties)).Msg("Fetched sync committee message duties")
+	if len(duties) == 0 {
+		// No duties; nothing to do.
+		return
+	}
 
 	// We combine the duties for the epoch.
 	messageIndices := make(map[phase0.ValidatorIndex][]phase0.CommitteeIndex, len(duties))
