@@ -1,6 +1,7 @@
 1.2.1:
   - make advanced scheduler the default
   - do not process empty sync committee messages
+  - avoid deadlock in advanced scheduler
 
 1.2.0:
   - fetch attestation duties for next epoch approximately half way through current epoch

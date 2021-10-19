@@ -36,6 +36,7 @@ type job struct {
 	stateLock deadlock.Mutex
 	active    atomic.Bool
 	finalised atomic.Bool
+	periodic  bool
 	cancelCh  chan struct{}
 	runCh     chan struct{}
 }
@@ -105,20 +106,31 @@ func (s *Service) ScheduleJob(ctx context.Context, name string, runtime time.Tim
 			s.monitor.JobCancelled()
 		case <-job.cancelCh:
 			log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Cancel triggered; job not running")
+			s.jobsMutex.Lock()
+			delete(s.jobs, name)
+			s.jobsMutex.Unlock()
 			finaliseJob(job)
 			s.monitor.JobCancelled()
 		case <-job.runCh:
 			log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Run triggered; job running")
+			// If we receive this signal the job has already been deleted from the jobs list so no need to
+			// do so again here.
 			s.monitor.JobStartedOnSignal()
 			jobFunc(ctx, data)
 			log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Job complete")
 			finaliseJob(job)
 			job.active.Store(false)
 		case <-time.After(time.Until(runtime)):
+			// It is possible that the job is already active, so check that first before proceeding.
+			if job.active.Load() {
+				log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Already running; job not running")
+				break
+			}
+			s.jobsMutex.Lock()
+			delete(s.jobs, name)
+			s.jobsMutex.Unlock()
 			log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Timer triggered; job running")
-			job.stateLock.Lock()
 			job.active.Store(true)
-			job.stateLock.Unlock()
 			s.monitor.JobStartedOnTimer()
 			jobFunc(ctx, data)
 			log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Job complete")
@@ -155,6 +167,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeF
 	job := &job{
 		cancelCh: make(chan struct{}),
 		runCh:    make(chan struct{}),
+		periodic: true,
 	}
 	s.jobs[name] = job
 	s.jobsMutex.Unlock()
@@ -203,6 +216,10 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeF
 				log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Job complete")
 				job.active.Store(false)
 			case <-time.After(time.Until(runtime)):
+				if job.active.Load() {
+					log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Already running; job not running")
+					continue
+				}
 				job.active.Store(true)
 				log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Timer triggered; job running")
 				s.monitor.JobStartedOnTimer()
@@ -221,11 +238,16 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeF
 func (s *Service) RunJob(ctx context.Context, name string) error {
 	s.jobsMutex.Lock()
 	job, exists := s.jobs[name]
-	s.jobsMutex.Unlock()
 
 	if !exists {
+		s.jobsMutex.Unlock()
 		return scheduler.ErrNoSuchJob
 	}
+	if !job.periodic {
+		// Because this job only runs once we remove it from the jobs list immediately.
+		delete(s.jobs, name)
+	}
+	s.jobsMutex.Unlock()
 
 	return s.runJob(ctx, job)
 }
@@ -235,14 +257,19 @@ func (s *Service) RunJob(ctx context.Context, name string) error {
 func (s *Service) RunJobIfExists(ctx context.Context, name string) {
 	s.jobsMutex.Lock()
 	job, exists := s.jobs[name]
-	s.jobsMutex.Unlock()
 
 	if !exists {
+		s.jobsMutex.Unlock()
 		return
 	}
+	if !job.periodic {
+		// Because this job only runs once we remove it from the jobs list immediately.
+		delete(s.jobs, name)
+	}
+	s.jobsMutex.Unlock()
+
 	//nolint
 	s.runJob(ctx, job)
-
 }
 
 // JobExists returns true if a job exists.
