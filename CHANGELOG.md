@@ -1,3 +1,6 @@
+Development:
+  - fix crash when no metrics configuration is supplied
+
 1.2.1:
   - make advanced scheduler the default
   - do not process empty sync committee messages

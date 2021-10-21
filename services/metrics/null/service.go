@@ -89,3 +89,11 @@ func (s *Service) SyncCommitteeAggregationsCompleted(started time.Time, count in
 // SyncCommitteeMessagesCompleted is called when a sync committee message process has completed.
 func (s *Service) SyncCommitteeMessagesCompleted(started time.Time, count int, result string) {
 }
+
+// SyncCommitteeSubscriptionCompleted is called when a sync committee subscription process has completed.
+func (s *Service) SyncCommitteeSubscriptionCompleted(started time.Time, result string) {
+}
+
+// SyncCommitteeSubscribers sets the number of sync committees to which our validators are subscribed.
+func (s *Service) SyncCommitteeSubscribers(subscribers int) {
+}
