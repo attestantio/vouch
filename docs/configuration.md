@@ -36,9 +36,8 @@ graffiti:
 
 # scheduler handles the scheduling of Vouch's operations.
 scheduler:
-  # style can be 'basic' (default) or 'advanced'.  The advanced scheduler should be more robust, however it is
-  # newer and as such more likely to encounter issues.
-  style: basic
+  # style can be 'basic' (deprecated) or 'advanced' (default).  Do not use the basic scheduler unless instructed.
+  style: advanced
 
 # submitter submits data to beacon nodes.  If not present the nodes in beacon-node-address above will be used.
 submitter:
