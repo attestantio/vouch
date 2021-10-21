@@ -1,4 +1,4 @@
-Development:
+1.2.2:
   - fix crash when no metrics configuration is supplied
 
 1.2.1:
