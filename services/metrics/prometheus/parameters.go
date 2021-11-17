@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,12 +16,14 @@ package prometheus
 import (
 	"errors"
 
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/rs/zerolog"
 )
 
 type parameters struct {
-	logLevel zerolog.Level
-	address  string
+	logLevel  zerolog.Level
+	address   string
+	chainTime chaintime.Service
 }
 
 // Parameter is the interface for service parameters.
@@ -49,6 +51,13 @@ func WithAddress(address string) Parameter {
 	})
 }
 
+// WithChainTime sets the chaintime service.
+func WithChainTime(chainTime chaintime.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.chainTime = chainTime
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -62,6 +71,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 
 	if parameters.address == "" {
 		return nil, errors.New("no address specified")
+	}
+	if parameters.chainTime == nil {
+		return nil, errors.New("no chain time service specified")
 	}
 
 	return &parameters, nil
