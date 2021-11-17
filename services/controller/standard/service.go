@@ -43,29 +43,32 @@ import (
 // It runs purely against clock events, setting up jobs for the validator's processes of block proposal, attestation
 // creation and attestation aggregation.
 type Service struct {
-	monitor                      metrics.ControllerMonitor
-	slotDuration                 time.Duration
-	slotsPerEpoch                uint64
-	epochsPerSyncCommitteePeriod uint64
-	chainTimeService             chaintime.Service
-	proposerDutiesProvider       eth2client.ProposerDutiesProvider
-	attesterDutiesProvider       eth2client.AttesterDutiesProvider
-	syncCommitteeDutiesProvider  eth2client.SyncCommitteeDutiesProvider
-	validatingAccountsProvider   accountmanager.ValidatingAccountsProvider
-	scheduler                    scheduler.Service
-	attester                     attester.Service
-	syncCommitteeMessenger       synccommitteemessenger.Service
-	syncCommitteeAggregator      synccommitteeaggregator.Service
-	syncCommitteesSubscriber     synccommitteesubscriber.Service
-	beaconBlockProposer          beaconblockproposer.Service
-	attestationAggregator        attestationaggregator.Service
-	beaconCommitteeSubscriber    beaconcommitteesubscriber.Service
-	activeValidators             int
-	subscriptionInfos            map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription
-	subscriptionInfosMutex       sync.Mutex
-	accountsRefresher            accountmanager.Refresher
-	maxSyncCommitteeMessageDelay time.Duration
-	reorgs                       bool
+	monitor                       metrics.ControllerMonitor
+	slotDuration                  time.Duration
+	slotsPerEpoch                 uint64
+	epochsPerSyncCommitteePeriod  uint64
+	chainTimeService              chaintime.Service
+	proposerDutiesProvider        eth2client.ProposerDutiesProvider
+	attesterDutiesProvider        eth2client.AttesterDutiesProvider
+	syncCommitteeDutiesProvider   eth2client.SyncCommitteeDutiesProvider
+	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
+	scheduler                     scheduler.Service
+	attester                      attester.Service
+	syncCommitteeMessenger        synccommitteemessenger.Service
+	syncCommitteeAggregator       synccommitteeaggregator.Service
+	syncCommitteesSubscriber      synccommitteesubscriber.Service
+	beaconBlockProposer           beaconblockproposer.Service
+	attestationAggregator         attestationaggregator.Service
+	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
+	activeValidators              int
+	subscriptionInfos             map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription
+	subscriptionInfosMutex        sync.Mutex
+	accountsRefresher             accountmanager.Refresher
+	maxAttestationDelay           time.Duration
+	attestationAggregationDelay   time.Duration
+	maxSyncCommitteeMessageDelay  time.Duration
+	syncCommitteeAggregationDelay time.Duration
+	reorgs                        bool
 
 	// Hard fork control
 	handlingAltair  bool
@@ -144,29 +147,32 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		monitor:                      parameters.monitor,
-		slotDuration:                 slotDuration,
-		slotsPerEpoch:                slotsPerEpoch,
-		epochsPerSyncCommitteePeriod: epochsPerSyncCommitteePeriod,
-		chainTimeService:             parameters.chainTimeService,
-		proposerDutiesProvider:       parameters.proposerDutiesProvider,
-		attesterDutiesProvider:       parameters.attesterDutiesProvider,
-		syncCommitteeDutiesProvider:  parameters.syncCommitteeDutiesProvider,
-		syncCommitteesSubscriber:     parameters.syncCommitteesSubscriber,
-		validatingAccountsProvider:   parameters.validatingAccountsProvider,
-		scheduler:                    parameters.scheduler,
-		attester:                     parameters.attester,
-		syncCommitteeMessenger:       parameters.syncCommitteeMessenger,
-		syncCommitteeAggregator:      parameters.syncCommitteeAggregator,
-		beaconBlockProposer:          parameters.beaconBlockProposer,
-		attestationAggregator:        parameters.attestationAggregator,
-		beaconCommitteeSubscriber:    parameters.beaconCommitteeSubscriber,
-		accountsRefresher:            parameters.accountsRefresher,
-		maxSyncCommitteeMessageDelay: parameters.maxSyncCommitteeMessageDelay,
-		reorgs:                       parameters.reorgs,
-		subscriptionInfos:            make(map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
-		handlingAltair:               handlingAltair,
-		altairForkEpoch:              altairForkEpoch,
+		monitor:                       parameters.monitor,
+		slotDuration:                  slotDuration,
+		slotsPerEpoch:                 slotsPerEpoch,
+		epochsPerSyncCommitteePeriod:  epochsPerSyncCommitteePeriod,
+		chainTimeService:              parameters.chainTimeService,
+		proposerDutiesProvider:        parameters.proposerDutiesProvider,
+		attesterDutiesProvider:        parameters.attesterDutiesProvider,
+		syncCommitteeDutiesProvider:   parameters.syncCommitteeDutiesProvider,
+		syncCommitteesSubscriber:      parameters.syncCommitteesSubscriber,
+		validatingAccountsProvider:    parameters.validatingAccountsProvider,
+		scheduler:                     parameters.scheduler,
+		attester:                      parameters.attester,
+		syncCommitteeMessenger:        parameters.syncCommitteeMessenger,
+		syncCommitteeAggregator:       parameters.syncCommitteeAggregator,
+		beaconBlockProposer:           parameters.beaconBlockProposer,
+		attestationAggregator:         parameters.attestationAggregator,
+		beaconCommitteeSubscriber:     parameters.beaconCommitteeSubscriber,
+		accountsRefresher:             parameters.accountsRefresher,
+		maxAttestationDelay:           parameters.maxAttestationDelay,
+		attestationAggregationDelay:   parameters.attestationAggregationDelay,
+		maxSyncCommitteeMessageDelay:  parameters.maxSyncCommitteeMessageDelay,
+		syncCommitteeAggregationDelay: parameters.syncCommitteeAggregationDelay,
+		reorgs:                        parameters.reorgs,
+		subscriptionInfos:             make(map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
+		handlingAltair:                handlingAltair,
+		altairForkEpoch:               altairForkEpoch,
 	}
 
 	// Subscribe to head events.  This allows us to go early for attestations if a block arrives, as well as

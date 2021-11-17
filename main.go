@@ -91,7 +91,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.2.2"
+var ReleaseVersion = "1.3.0-pre.2"
 
 func main() {
 	os.Exit(main2())
@@ -203,6 +203,9 @@ func fetchConfig() error {
 	viper.SetDefault("strategies.timeout", 2*time.Second)
 	viper.SetDefault("eth2client.timeout", 2*time.Minute)
 	viper.SetDefault("controller.max-attestation-delay", 4*time.Second)
+	viper.SetDefault("controller.sync-committee-message-delay", 4*time.Second)
+	viper.SetDefault("controller.attestation-aggregation-delay", 8*time.Second)
+	viper.SetDefault("controller.sync-committee-aggregation-delay", 8*time.Second)
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
@@ -256,17 +259,6 @@ func initProfiling() error {
 }
 
 func startServices(ctx context.Context, majordomo majordomo.Service) error {
-	log.Trace().Msg("Starting metrics service")
-	monitor, err := startMonitor(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to start metrics service")
-	}
-	if err := registerMetrics(ctx, monitor); err != nil {
-		return errors.Wrap(err, "failed to register metrics")
-	}
-	setRelease(ctx, ReleaseVersion)
-	setReady(ctx, false)
-
 	log.Trace().Msg("Starting Ethereum 2 client service")
 	eth2Client, err := fetchClient(ctx, viper.GetString("beacon-node-address"))
 	if err != nil {
@@ -283,6 +275,17 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to start chain time service")
 	}
+
+	log.Trace().Msg("Starting metrics service")
+	monitor, err := startMonitor(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to start metrics service")
+	}
+	if err := registerMetrics(ctx, monitor); err != nil {
+		return errors.Wrap(err, "failed to register metrics")
+	}
+	setRelease(ctx, ReleaseVersion)
+	setReady(ctx, false)
 
 	log.Trace().Msg("Selecting scheduler")
 	scheduler, err := selectScheduler(ctx, monitor)
@@ -489,7 +492,9 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardcontroller.WithSyncCommitteeSubscriber(syncCommitteeSubscriber),
 		standardcontroller.WithAccountsRefresher(accountManager.(accountmanager.Refresher)),
 		standardcontroller.WithMaxAttestationDelay(viper.GetDuration("controller.max-attestation-delay")),
+		standardcontroller.WithAttestationAggregationDelay(viper.GetDuration("controller.attestation-aggregation-delay")),
 		standardcontroller.WithMaxSyncCommitteeMessageDelay(viper.GetDuration("controller.max-sync-committee-message-delay")),
+		standardcontroller.WithSyncCommitteeAggregationDelay(viper.GetDuration("controller.sync-committee-aggregation-delay")),
 		standardcontroller.WithReorgs(viper.GetBool("controller.reorgs")),
 	)
 	if err != nil {

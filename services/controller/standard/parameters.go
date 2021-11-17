@@ -34,28 +34,30 @@ import (
 )
 
 type parameters struct {
-	logLevel                     zerolog.Level
-	monitor                      metrics.ControllerMonitor
-	specProvider                 eth2client.SpecProvider
-	forkScheduleProvider         eth2client.ForkScheduleProvider
-	chainTimeService             chaintime.Service
-	proposerDutiesProvider       eth2client.ProposerDutiesProvider
-	attesterDutiesProvider       eth2client.AttesterDutiesProvider
-	syncCommitteeDutiesProvider  eth2client.SyncCommitteeDutiesProvider
-	syncCommitteesSubscriber     synccommitteesubscriber.Service
-	validatingAccountsProvider   accountmanager.ValidatingAccountsProvider
-	scheduler                    scheduler.Service
-	eventsProvider               eth2client.EventsProvider
-	attester                     attester.Service
-	syncCommitteeMessenger       synccommitteemessenger.Service
-	syncCommitteeAggregator      synccommitteeaggregator.Service
-	beaconBlockProposer          beaconblockproposer.Service
-	attestationAggregator        attestationaggregator.Service
-	beaconCommitteeSubscriber    beaconcommitteesubscriber.Service
-	accountsRefresher            accountmanager.Refresher
-	maxAttestationDelay          time.Duration
-	maxSyncCommitteeMessageDelay time.Duration
-	reorgs                       bool
+	logLevel                      zerolog.Level
+	monitor                       metrics.ControllerMonitor
+	specProvider                  eth2client.SpecProvider
+	forkScheduleProvider          eth2client.ForkScheduleProvider
+	chainTimeService              chaintime.Service
+	proposerDutiesProvider        eth2client.ProposerDutiesProvider
+	attesterDutiesProvider        eth2client.AttesterDutiesProvider
+	syncCommitteeDutiesProvider   eth2client.SyncCommitteeDutiesProvider
+	syncCommitteesSubscriber      synccommitteesubscriber.Service
+	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
+	scheduler                     scheduler.Service
+	eventsProvider                eth2client.EventsProvider
+	attester                      attester.Service
+	syncCommitteeMessenger        synccommitteemessenger.Service
+	syncCommitteeAggregator       synccommitteeaggregator.Service
+	beaconBlockProposer           beaconblockproposer.Service
+	attestationAggregator         attestationaggregator.Service
+	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
+	accountsRefresher             accountmanager.Refresher
+	maxAttestationDelay           time.Duration
+	attestationAggregationDelay   time.Duration
+	maxSyncCommitteeMessageDelay  time.Duration
+	syncCommitteeAggregationDelay time.Duration
+	reorgs                        bool
 }
 
 // Parameter is the interface for service parameters.
@@ -209,10 +211,24 @@ func WithMaxAttestationDelay(delay time.Duration) Parameter {
 	})
 }
 
+// WithAttestationAggregationDelay sets the delay before aggregating attestations.
+func WithAttestationAggregationDelay(delay time.Duration) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.attestationAggregationDelay = delay
+	})
+}
+
 // WithMaxSyncCommitteeMessageDelay sets the maximum delay before generating sync committee messages.
 func WithMaxSyncCommitteeMessageDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.maxSyncCommitteeMessageDelay = delay
+	})
+}
+
+// WithSyncCommitteeAggregationDelay sets the delay before aggregating sync committee messages.
+func WithSyncCommitteeAggregationDelay(delay time.Duration) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.syncCommitteeAggregationDelay = delay
 	})
 }
 
@@ -229,9 +245,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		logLevel: zerolog.GlobalLevel(),
 	}
 	for _, p := range params {
-		if params != nil {
-			p.apply(&parameters)
-		}
+		p.apply(&parameters)
 	}
 
 	if parameters.monitor == nil {
@@ -276,13 +290,11 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.accountsRefresher == nil {
 		return nil, errors.New("no accounts refresher specified")
 	}
-	var spec map[string]interface{}
-	var err error
+	spec, err := parameters.specProvider.Spec(context.Background())
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain spec")
+	}
 	if parameters.maxAttestationDelay == 0 {
-		spec, err = parameters.specProvider.Spec(context.Background())
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to obtain spec")
-		}
 		tmp, exists := spec["SECONDS_PER_SLOT"]
 		if !exists {
 			return nil, errors.New("SECONDS_PER_SLOT not found in spec")
@@ -293,13 +305,18 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 		parameters.maxAttestationDelay = slotDuration / 3
 	}
-	if parameters.maxSyncCommitteeMessageDelay == 0 {
-		if spec == nil {
-			spec, err = parameters.specProvider.Spec(context.Background())
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to obtain spec")
-			}
+	if parameters.attestationAggregationDelay == 0 {
+		tmp, exists := spec["SECONDS_PER_SLOT"]
+		if !exists {
+			return nil, errors.New("SECONDS_PER_SLOT not found in spec")
 		}
+		slotDuration, ok := tmp.(time.Duration)
+		if !ok {
+			return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
+		}
+		parameters.attestationAggregationDelay = slotDuration * 2 / 3
+	}
+	if parameters.maxSyncCommitteeMessageDelay == 0 {
 		tmp, exists := spec["SECONDS_PER_SLOT"]
 		if !exists {
 			return nil, errors.New("SECONDS_PER_SLOT not found in spec")
@@ -309,6 +326,17 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 			return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
 		}
 		parameters.maxSyncCommitteeMessageDelay = slotDuration / 3
+	}
+	if parameters.syncCommitteeAggregationDelay == 0 {
+		tmp, exists := spec["SECONDS_PER_SLOT"]
+		if !exists {
+			return nil, errors.New("SECONDS_PER_SLOT not found in spec")
+		}
+		slotDuration, ok := tmp.(time.Duration)
+		if !ok {
+			return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
+		}
+		parameters.syncCommitteeAggregationDelay = slotDuration * 2 / 3
 	}
 	// Sync committee duties provider/messenger/aggregator/subscriber are optional so no checks here.
 
