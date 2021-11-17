@@ -87,8 +87,8 @@ func (s *Service) ScheduleJob(ctx context.Context, name string, runtime time.Tim
 	}
 
 	job := &job{
-		cancelCh: make(chan struct{}),
-		runCh:    make(chan struct{}),
+		cancelCh: make(chan struct{}, 1),
+		runCh:    make(chan struct{}, 1),
 	}
 	s.jobs[name] = job
 	s.jobsMutex.Unlock()
@@ -106,9 +106,8 @@ func (s *Service) ScheduleJob(ctx context.Context, name string, runtime time.Tim
 			s.monitor.JobCancelled()
 		case <-job.cancelCh:
 			log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Cancel triggered; job not running")
-			s.jobsMutex.Lock()
-			delete(s.jobs, name)
-			s.jobsMutex.Unlock()
+			// If we receive this signal the job has already been deleted from the jobs list so no need to
+			// do so again here.
 			finaliseJob(job)
 			s.monitor.JobCancelled()
 		case <-job.runCh:
@@ -165,8 +164,8 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeF
 	}
 
 	job := &job{
-		cancelCh: make(chan struct{}),
-		runCh:    make(chan struct{}),
+		cancelCh: make(chan struct{}, 1),
+		runCh:    make(chan struct{}, 1),
 		periodic: true,
 	}
 	s.jobs[name] = job
