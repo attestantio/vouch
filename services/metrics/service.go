@@ -73,6 +73,9 @@ type SyncCommitteeMessageMonitor interface {
 type SyncCommitteeAggregationMonitor interface {
 	// SyncCommitteeAggregationsCompleted is called when a sync committee aggregation process has completed.
 	SyncCommitteeAggregationsCompleted(started time.Time, count int, result string)
+
+	// SyncCommitteeAggregationCoverage measures the contribution ratio of the sync committee aggregation.
+	SyncCommitteeAggregationCoverage(frac float64)
 }
 
 // BeaconCommitteeSubscriptionMonitor provides methods to monitor the outcome of beacon committee subscriptions.

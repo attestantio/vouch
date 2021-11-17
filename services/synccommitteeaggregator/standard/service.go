@@ -210,5 +210,10 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	}
 
 	log.Trace().Msg("Submitted signed contribution and proofs")
+	for i := range signedContributionAndProofs {
+		frac := float64(signedContributionAndProofs[i].Message.Contribution.AggregationBits.Count()) /
+			float64(signedContributionAndProofs[i].Message.Contribution.AggregationBits.Len())
+		s.monitor.SyncCommitteeAggregationCoverage(frac)
+	}
 	s.monitor.SyncCommitteeAggregationsCompleted(started, len(signedContributionAndProofs), "succeeded")
 }

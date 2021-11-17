@@ -48,6 +48,7 @@ type Service struct {
 
 	syncCommitteeAggregationProcessTimer    prometheus.Histogram
 	syncCommitteeAggregationProcessRequests *prometheus.CounterVec
+	syncCommitteeAggregationCoverageRatio   prometheus.Histogram
 
 	beaconCommitteeSubscriptionProcessTimer    prometheus.Histogram
 	beaconCommitteeSubscriptionProcessRequests *prometheus.CounterVec
