@@ -1,5 +1,6 @@
 development:
   - make scheduler channels asynchronous, to avoid potential deadlock
+  - add metrics for sync committee operations
 
 1.2.2:
   - fix crash when no metrics configuration is supplied

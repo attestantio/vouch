@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -41,14 +41,34 @@ func (s *Service) setupSyncCommitteeAggregationMetrics() error {
 		Name:      "requests_total",
 		Help:      "The number of sync committee aggregation processes.",
 	}, []string{"result"})
-	return prometheus.Register(s.syncCommitteeAggregationProcessRequests)
+	if err := prometheus.Register(s.syncCommitteeAggregationProcessRequests); err != nil {
+		return err
+	}
+
+	s.syncCommitteeAggregationCoverageRatio =
+		prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace: "vouch",
+			Subsystem: "sync_committee_aggregation",
+			Name:      "coverage_ratio",
+			Help:      "The ratio of included to possible messages in the aggregate.",
+			Buckets:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
+		})
+	return prometheus.Register(s.syncCommitteeAggregationCoverageRatio)
 }
 
 // SyncCommitteeAggregationsCompleted is called when a sync committee aggregation process has completed.
 func (s *Service) SyncCommitteeAggregationsCompleted(started time.Time, count int, result string) {
-	duration := time.Since(started).Seconds()
-	for i := 0; i < count; i++ {
-		s.syncCommitteeAggregationProcessTimer.Observe(duration)
+	// Only log times for successful completions.
+	if result == "succeeded" {
+		duration := time.Since(started).Seconds()
+		for i := 0; i < count; i++ {
+			s.syncCommitteeAggregationProcessTimer.Observe(duration)
+		}
 	}
 	s.syncCommitteeAggregationProcessRequests.WithLabelValues(result).Add(float64(count))
+}
+
+// SyncCommitteeAggregationCoverage measures the message ratio of the sync committee aggregation.
+func (s *Service) SyncCommitteeAggregationCoverage(frac float64) {
+	s.syncCommitteeAggregationCoverageRatio.Observe(frac)
 }

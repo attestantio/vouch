@@ -86,6 +86,10 @@ func (s *Service) StrategyOperation(strategy string, provider string, operation 
 func (s *Service) SyncCommitteeAggregationsCompleted(started time.Time, count int, result string) {
 }
 
+// SyncCommitteeAggregationCoverage measures the message ratio of the sync committee aggregation.
+func (s *Service) SyncCommitteeAggregationCoverage(frac float64) {
+}
+
 // SyncCommitteeMessagesCompleted is called when a sync committee message process has completed.
 func (s *Service) SyncCommitteeMessagesCompleted(started time.Time, count int, result string) {
 }
