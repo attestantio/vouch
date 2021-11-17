@@ -203,7 +203,7 @@ func fetchConfig() error {
 	viper.SetDefault("strategies.timeout", 2*time.Second)
 	viper.SetDefault("eth2client.timeout", 2*time.Minute)
 	viper.SetDefault("controller.max-attestation-delay", 4*time.Second)
-	viper.SetDefault("controller.sync-committee-message-delay", 4*time.Second)
+	viper.SetDefault("controller.max-sync-committee-message-delay", 4*time.Second)
 	viper.SetDefault("controller.attestation-aggregation-delay", 8*time.Second)
 	viper.SetDefault("controller.sync-committee-aggregation-delay", 8*time.Second)
 
@@ -277,7 +277,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	}
 
 	log.Trace().Msg("Starting metrics service")
-	monitor, err := startMonitor(ctx)
+	monitor, err := startMonitor(ctx, chainTime)
 	if err != nil {
 		return errors.Wrap(err, "failed to start metrics service")
 	}
@@ -599,7 +599,7 @@ func initMajordomo(ctx context.Context) (majordomo.Service, error) {
 	return majordomo, nil
 }
 
-func startMonitor(ctx context.Context) (metrics.Service, error) {
+func startMonitor(ctx context.Context, chainTime chaintime.Service) (metrics.Service, error) {
 	log.Trace().Msg("Starting metrics service")
 	var monitor metrics.Service
 	if viper.Get("metrics.prometheus") != nil {
@@ -607,6 +607,7 @@ func startMonitor(ctx context.Context) (metrics.Service, error) {
 		monitor, err = prometheusmetrics.New(ctx,
 			prometheusmetrics.WithLogLevel(util.LogLevel("metrics.prometheus")),
 			prometheusmetrics.WithAddress(viper.GetString("metrics.prometheus.listen-address")),
+			prometheusmetrics.WithChainTime(chainTime),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start prometheus metrics service")
