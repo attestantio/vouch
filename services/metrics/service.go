@@ -14,7 +14,11 @@
 // Package metrics tracks various metrics that measure the performance of vouch.
 package metrics
 
-import "time"
+import (
+	"time"
+
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+)
 
 // Service is the generic metrics service.
 type Service interface {
@@ -45,19 +49,19 @@ type ControllerMonitor interface {
 // BeaconBlockProposalMonitor provides methods to monitor the block proposal process.
 type BeaconBlockProposalMonitor interface {
 	// BeaconBlockProposalCompleted is called when a block proposal process has completed.
-	BeaconBlockProposalCompleted(started time.Time, result string)
+	BeaconBlockProposalCompleted(started time.Time, slot phase0.Slot, result string)
 }
 
 // AttestationMonitor provides methods to monitor the attestation process.
 type AttestationMonitor interface {
 	// AttestationsCompleted is called when an attestation process has completed.
-	AttestationsCompleted(started time.Time, count int, result string)
+	AttestationsCompleted(started time.Time, slot phase0.Slot, count int, result string)
 }
 
 // AttestationAggregationMonitor provides methods to monitor the attestation aggregation process.
 type AttestationAggregationMonitor interface {
 	// AttestationAggregationCompleted is called when an attestation aggregation process has completed.
-	AttestationAggregationCompleted(started time.Time, result string)
+	AttestationAggregationCompleted(started time.Time, slot phase0.Slot, result string)
 
 	// AttestationAggregationCoverage measures the attestation ratio of the attestation aggregation.
 	AttestationAggregationCoverage(frac float64)
@@ -66,13 +70,13 @@ type AttestationAggregationMonitor interface {
 // SyncCommitteeMessageMonitor provides methods to monitor the sync committee message process.
 type SyncCommitteeMessageMonitor interface {
 	// SyncCommitteeMessagesCompleted is called when a sync committee message process has completed.
-	SyncCommitteeMessagesCompleted(started time.Time, count int, result string)
+	SyncCommitteeMessagesCompleted(started time.Time, slot phase0.Slot, count int, result string)
 }
 
 // SyncCommitteeAggregationMonitor provides methods to monitor the sync committee aggregation process.
 type SyncCommitteeAggregationMonitor interface {
 	// SyncCommitteeAggregationsCompleted is called when a sync committee aggregation process has completed.
-	SyncCommitteeAggregationsCompleted(started time.Time, count int, result string)
+	SyncCommitteeAggregationsCompleted(started time.Time, slot phase0.Slot, count int, result string)
 
 	// SyncCommitteeAggregationCoverage measures the contribution ratio of the sync committee aggregation.
 	SyncCommitteeAggregationCoverage(frac float64)

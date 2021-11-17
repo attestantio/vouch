@@ -16,6 +16,7 @@ package prometheus
 import (
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -60,6 +61,16 @@ func (s *Service) setupAttestationAggregationMetrics() error {
 		return err
 	}
 
+	s.attestationAggregationProcessLatestSlot = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "vouch",
+		Subsystem: "attestationaggregation_process",
+		Name:      "latest_slot",
+		Help:      "The latest slot for which Vouch produced an aggregate attestation.",
+	})
+	if err := prometheus.Register(s.attestationAggregationProcessLatestSlot); err != nil {
+		return err
+	}
+
 	s.attestationAggregationProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
 		Subsystem: "attestationaggregation_process",
@@ -82,12 +93,13 @@ func (s *Service) setupAttestationAggregationMetrics() error {
 }
 
 // AttestationAggregationCompleted is called when an attestation aggregationprocess has completed.
-func (s *Service) AttestationAggregationCompleted(started time.Time, result string) {
+func (s *Service) AttestationAggregationCompleted(started time.Time, slot phase0.Slot, result string) {
 	// Only log times for successful completions.
 	if result == "succeeded" {
 		s.attestationAggregationProcessTimer.Observe(time.Since(started).Seconds())
 		secsSinceStartOfSlot := time.Since(s.chainTime.StartOfSlot(s.chainTime.CurrentSlot())).Seconds()
 		s.attestationAggregationMarkTimer.Observe(secsSinceStartOfSlot)
+		s.attestationAggregationProcessLatestSlot.Set(float64(slot))
 	}
 	s.attestationAggregationProcessRequests.WithLabelValues(result).Inc()
 }

@@ -16,6 +16,7 @@ package prometheus
 import (
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -60,6 +61,16 @@ func (s *Service) setupBeaconBlockProposalMetrics() error {
 		return err
 	}
 
+	s.beaconBlockProposalProcessLatestSlot = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "vouch",
+		Subsystem: "beaconblockproposal_process",
+		Name:      "latest_slot",
+		Help:      "The latest slot for which Vouch proposed.",
+	})
+	if err := prometheus.Register(s.beaconBlockProposalProcessLatestSlot); err != nil {
+		return err
+	}
+
 	s.beaconBlockProposalProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
 		Subsystem: "beaconblockproposal_process",
@@ -70,12 +81,13 @@ func (s *Service) setupBeaconBlockProposalMetrics() error {
 }
 
 // BeaconBlockProposalCompleted is called when a block proposal process has completed.
-func (s *Service) BeaconBlockProposalCompleted(started time.Time, result string) {
+func (s *Service) BeaconBlockProposalCompleted(started time.Time, slot phase0.Slot, result string) {
 	// Only log times for successful completions.
 	if result == "succeeded" {
 		s.beaconBlockProposalProcessTimer.Observe(time.Since(started).Seconds())
 		secsSinceStartOfSlot := time.Since(s.chainTime.StartOfSlot(s.chainTime.CurrentSlot())).Seconds()
 		s.beaconBlockProposalMarkTimer.Observe(secsSinceStartOfSlot)
+		s.beaconBlockProposalProcessLatestSlot.Set(float64(slot))
 	}
 	s.beaconBlockProposalProcessRequests.WithLabelValues(result).Inc()
 }

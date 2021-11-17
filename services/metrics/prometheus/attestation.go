@@ -16,6 +16,7 @@ package prometheus
 import (
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -60,6 +61,16 @@ func (s *Service) setupAttestationMetrics() error {
 		return err
 	}
 
+	s.attestationProcessLatestSlot = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "vouch",
+		Subsystem: "attestation_process",
+		Name:      "latest_slot",
+		Help:      "The latest slot for which Vouch attested.",
+	})
+	if err := prometheus.Register(s.attestationProcessLatestSlot); err != nil {
+		return err
+	}
+
 	s.attestationProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
 		Subsystem: "attestation_process",
@@ -70,7 +81,7 @@ func (s *Service) setupAttestationMetrics() error {
 }
 
 // AttestationsCompleted is called when an attestation process has completed.
-func (s *Service) AttestationsCompleted(started time.Time, count int, result string) {
+func (s *Service) AttestationsCompleted(started time.Time, slot phase0.Slot, count int, result string) {
 	// Only log times for successful completions.
 	if result == "succeeded" {
 		duration := time.Since(started).Seconds()
@@ -79,6 +90,7 @@ func (s *Service) AttestationsCompleted(started time.Time, count int, result str
 		}
 		secsSinceStartOfSlot := time.Since(s.chainTime.StartOfSlot(s.chainTime.CurrentSlot())).Seconds()
 		s.attestationMarkTimer.Observe(secsSinceStartOfSlot)
+		s.attestationProcessLatestSlot.Set(float64(slot))
 	}
 	s.attestationProcessRequests.WithLabelValues(result).Add(float64(count))
 }

@@ -17,6 +17,8 @@ package null
 import (
 	"context"
 	"time"
+
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // Service is a metrics service that drops metrics.
@@ -51,13 +53,15 @@ func (s *Service) NewEpoch() {}
 func (s *Service) BlockDelay(epochSlot uint, delay time.Duration) {}
 
 // BeaconBlockProposalCompleted is called when a block proposal process has completed.
-func (s *Service) BeaconBlockProposalCompleted(started time.Time, result string) {}
+func (s *Service) BeaconBlockProposalCompleted(started time.Time, slot phase0.Slot, result string) {}
 
 // AttestationsCompleted is called when an attestation process has completed.
-func (s *Service) AttestationsCompleted(started time.Time, count int, result string) {}
+func (s *Service) AttestationsCompleted(started time.Time, slot phase0.Slot, count int, result string) {
+}
 
 // AttestationAggregationCompleted is called when an attestation aggregation process has completed.
-func (s *Service) AttestationAggregationCompleted(started time.Time, result string) {}
+func (s *Service) AttestationAggregationCompleted(started time.Time, slot phase0.Slot, result string) {
+}
 
 // AttestationAggregationCoverage measures the attestation ratio of the attestation aggregation.
 func (s *Service) AttestationAggregationCoverage(frac float64) {}
@@ -83,7 +87,7 @@ func (s *Service) StrategyOperation(strategy string, provider string, operation 
 }
 
 // SyncCommitteeAggregationsCompleted is called when a sync committee aggregation process has completed.
-func (s *Service) SyncCommitteeAggregationsCompleted(started time.Time, count int, result string) {
+func (s *Service) SyncCommitteeAggregationsCompleted(started time.Time, slot phase0.Slot, count int, result string) {
 }
 
 // SyncCommitteeAggregationCoverage measures the message ratio of the sync committee aggregation.
@@ -91,7 +95,7 @@ func (s *Service) SyncCommitteeAggregationCoverage(frac float64) {
 }
 
 // SyncCommitteeMessagesCompleted is called when a sync committee message process has completed.
-func (s *Service) SyncCommitteeMessagesCompleted(started time.Time, count int, result string) {
+func (s *Service) SyncCommitteeMessagesCompleted(started time.Time, slot phase0.Slot, count int, result string) {
 }
 
 // SyncCommitteeSubscriptionCompleted is called when a sync committee subscription process has completed.

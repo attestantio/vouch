@@ -16,6 +16,7 @@ package prometheus
 import (
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -60,6 +61,16 @@ func (s *Service) setupSyncCommitteeAggregationMetrics() error {
 		return err
 	}
 
+	s.syncCommitteeAggregationProcessLatestSlot = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "vouch",
+		Subsystem: "sync_committee_aggregation_process",
+		Name:      "latest_slot",
+		Help:      "The latest slot for which Vouch created a sync committee aggregate.",
+	})
+	if err := prometheus.Register(s.syncCommitteeAggregationProcessLatestSlot); err != nil {
+		return err
+	}
+
 	s.syncCommitteeAggregationProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
 		Subsystem: "sync_committee_aggregation_process",
@@ -82,7 +93,7 @@ func (s *Service) setupSyncCommitteeAggregationMetrics() error {
 }
 
 // SyncCommitteeAggregationsCompleted is called when a sync committee aggregation process has completed.
-func (s *Service) SyncCommitteeAggregationsCompleted(started time.Time, count int, result string) {
+func (s *Service) SyncCommitteeAggregationsCompleted(started time.Time, slot phase0.Slot, count int, result string) {
 	// Only log times for successful completions.
 	if result == "succeeded" {
 		duration := time.Since(started).Seconds()
@@ -91,6 +102,7 @@ func (s *Service) SyncCommitteeAggregationsCompleted(started time.Time, count in
 		}
 		secsSinceStartOfSlot := time.Since(s.chainTime.StartOfSlot(s.chainTime.CurrentSlot())).Seconds()
 		s.syncCommitteeAggregationMarkTimer.Observe(secsSinceStartOfSlot)
+		s.syncCommitteeAggregationProcessLatestSlot.Set(float64(slot))
 	}
 	s.syncCommitteeAggregationProcessRequests.WithLabelValues(result).Add(float64(count))
 }
