@@ -42,7 +42,7 @@ func init() {
 	}
 }
 
-// hash is a simple worker function that carries out repeated hashging of its input to provide an output.
+// hash is a simple worker function that carries out repeated hashing of its input to provide an output.
 func hash(input [][]byte) [][]byte {
 	output := make([][]byte, len(input))
 	for i := range input {
