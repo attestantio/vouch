@@ -65,7 +65,13 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 // ScheduleJob schedules a one-off job for a given time.
 // Note that if the parent context is cancelled the job wil not run.
-func (s *Service) ScheduleJob(ctx context.Context, name string, runtime time.Time, jobFunc scheduler.JobFunc, data interface{}) error {
+func (s *Service) ScheduleJob(ctx context.Context,
+	class string,
+	name string,
+	runtime time.Time,
+	jobFunc scheduler.JobFunc,
+	data interface{},
+) error {
 	if name == "" {
 		return scheduler.ErrNoJobName
 	}
@@ -86,7 +92,7 @@ func (s *Service) ScheduleJob(ctx context.Context, name string, runtime time.Tim
 		cancelCh: cancelCh,
 		runCh:    runCh,
 	}
-	s.monitor.JobScheduled()
+	s.monitor.JobScheduled(class)
 
 	log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Scheduled job")
 	go func() {
@@ -96,18 +102,18 @@ func (s *Service) ScheduleJob(ctx context.Context, name string, runtime time.Tim
 			s.mutex.Lock()
 			s.removeJob(ctx, name)
 			s.mutex.Unlock()
-			s.monitor.JobCancelled()
+			s.monitor.JobCancelled(class)
 		case <-cancelCh:
 			log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Cancel triggered; job not running")
 			// The job will have been removed by the function that sent the cancel.
-			s.monitor.JobCancelled()
+			s.monitor.JobCancelled(class)
 		case <-runCh:
 			s.mutex.Lock()
 			if s.jobExists(ctx, name) {
 				s.removeJob(ctx, name)
 				s.mutex.Unlock()
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Run triggered; job running")
-				s.monitor.JobStartedOnSignal()
+				s.monitor.JobStartedOnSignal(class)
 				jobFunc(ctx, data)
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Job complete")
 			} else {
@@ -120,7 +126,7 @@ func (s *Service) ScheduleJob(ctx context.Context, name string, runtime time.Tim
 				s.removeJob(ctx, name)
 				s.mutex.Unlock()
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Timer triggered; job running")
-				s.monitor.JobStartedOnTimer()
+				s.monitor.JobStartedOnTimer(class)
 				jobFunc(ctx, data)
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Job complete")
 			} else {
@@ -137,7 +143,14 @@ func (s *Service) ScheduleJob(ctx context.Context, name string, runtime time.Tim
 // The loop starts by calling runtimeFunc, which sets the time for the first run.
 // Once the time as specified by runtimeFunc is met, jobFunc is called.
 // Once jobFunc returns, go back to the beginning of the loop.
-func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeFunc scheduler.RuntimeFunc, runtimeData interface{}, jobFunc scheduler.JobFunc, jobData interface{}) error {
+func (s *Service) SchedulePeriodicJob(ctx context.Context,
+	class string,
+	name string,
+	runtimeFunc scheduler.RuntimeFunc,
+	runtimeData interface{},
+	jobFunc scheduler.JobFunc,
+	jobData interface{},
+) error {
 	if name == "" {
 		return scheduler.ErrNoJobName
 	}
@@ -161,7 +174,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeF
 		cancelCh: cancelCh,
 		runCh:    runCh,
 	}
-	s.monitor.JobScheduled()
+	s.monitor.JobScheduled(class)
 
 	go func() {
 		for {
@@ -171,7 +184,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeF
 				s.mutex.Lock()
 				s.removeJob(ctx, name)
 				s.mutex.Unlock()
-				s.monitor.JobCancelled()
+				s.monitor.JobCancelled(class)
 				return
 			}
 			if err != nil {
@@ -179,7 +192,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeF
 				s.mutex.Lock()
 				s.removeJob(ctx, name)
 				s.mutex.Unlock()
-				s.monitor.JobCancelled()
+				s.monitor.JobCancelled(class)
 				return
 			}
 			log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Scheduled job")
@@ -189,19 +202,19 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeF
 				s.mutex.Lock()
 				s.removeJob(ctx, name)
 				s.mutex.Unlock()
-				s.monitor.JobCancelled()
+				s.monitor.JobCancelled(class)
 				return
 			case <-cancelCh:
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Cancel triggered; job not running")
 				// The job will have been removed by the function that sent the cancel.
-				s.monitor.JobCancelled()
+				s.monitor.JobCancelled(class)
 				return
 			case <-runCh:
 				s.mutex.Lock()
 				s.lockJob(ctx, name)
 				s.mutex.Unlock()
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Run triggered; job running")
-				s.monitor.JobStartedOnSignal()
+				s.monitor.JobStartedOnSignal(class)
 				jobFunc(ctx, jobData)
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Job complete")
 				s.unlockJob(ctx, name)
@@ -210,7 +223,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context, name string, runtimeF
 				s.lockJob(ctx, name)
 				s.mutex.Unlock()
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Timer triggered; job running")
-				s.monitor.JobStartedOnTimer()
+				s.monitor.JobStartedOnTimer(class)
 				jobFunc(ctx, jobData)
 				log.Trace().Str("job", name).Str("scheduled", fmt.Sprintf("%v", runtime)).Msg("Job complete")
 				s.unlockJob(ctx, name)

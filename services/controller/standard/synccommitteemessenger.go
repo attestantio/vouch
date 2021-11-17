@@ -106,6 +106,7 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 			// Schedule for 1.5 slots ahead of time.
 			prepareJobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(-s.slotDuration * 6 / 4)
 			if err := s.scheduler.ScheduleJob(ctx,
+				"Prepare for sync committee messages",
 				fmt.Sprintf("Prepare sync committee messages for slot %d", duty.Slot()),
 				prepareJobTime,
 				s.prepareMessageSyncCommittee,
@@ -142,6 +143,7 @@ func (s *Service) prepareMessageSyncCommittee(ctx context.Context, data interfac
 	// At this point we can schedule the message job.
 	jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxSyncCommitteeMessageDelay)
 	if err := s.scheduler.ScheduleJob(ctx,
+		"Generate sync committee messages",
 		fmt.Sprintf("Sync committee messages for slot %d", duty.Slot()),
 		jobTime,
 		s.messageSyncCommittee,
@@ -187,6 +189,7 @@ func (s *Service) messageSyncCommittee(ctx context.Context, data interface{}) {
 			Accounts:         duty.Accounts(),
 		}
 		if err := s.scheduler.ScheduleJob(ctx,
+			"Aggregate sync committee messages",
 			fmt.Sprintf("Sync committee aggregation for slot %d", duty.Slot()),
 			s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.syncCommitteeAggregationDelay),
 			s.syncCommitteeAggregator.Aggregate,

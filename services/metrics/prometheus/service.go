@@ -26,8 +26,8 @@ import (
 
 // Service is a metrics service exposing metrics via prometheus.
 type Service struct {
-	schedulerJobsScheduled prometheus.Counter
-	schedulerJobsCancelled prometheus.Counter
+	schedulerJobsScheduled *prometheus.CounterVec
+	schedulerJobsCancelled *prometheus.CounterVec
 	schedulerJobsStarted   *prometheus.CounterVec
 
 	epochsProcessed   prometheus.Counter

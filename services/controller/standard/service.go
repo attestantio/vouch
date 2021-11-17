@@ -278,6 +278,7 @@ func (s *Service) startEpochTicker(ctx context.Context, waitedForGenesis bool) e
 		atGenesis:      waitedForGenesis,
 	}
 	if err := s.scheduler.SchedulePeriodicJob(ctx,
+		"Handle new epoch",
 		"Epoch ticker",
 		runtimeFunc,
 		data,
@@ -345,6 +346,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	// half-way through the epoch to set them up (and half-way through that slot).
 	// This allows us to set them up at a time when the beacon node should be less busy.
 	if err := s.scheduler.ScheduleJob(ctx,
+		"Prepare for epoch",
 		fmt.Sprintf("Prepare for epoch %d", currentEpoch+1),
 		s.chainTimeService.StartOfSlot(s.chainTimeService.FirstSlotOfEpoch(currentEpoch)+phase0.Slot(s.slotsPerEpoch/2)).Add(s.slotDuration/2),
 		s.prepareForEpoch,

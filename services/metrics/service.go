@@ -25,13 +25,13 @@ type Service interface {
 // SchedulerMonitor provides methods to monitor the scheduler service.
 type SchedulerMonitor interface {
 	// JobScheduled is called when a job is scheduled.
-	JobScheduled()
+	JobScheduled(class string)
 	// JobCancelled is called when a scheduled job is cancelled.
-	JobCancelled()
+	JobCancelled(class string)
 	// JobStartedOnTimer is called when a scheduled job is started due to meeting its time.
-	JobStartedOnTimer()
+	JobStartedOnTimer(class string)
 	// JobStartedOnSignal is called when a scheduled job is started due to being manually signal.
-	JobStartedOnSignal()
+	JobStartedOnSignal(class string)
 }
 
 // ControllerMonitor provides methods to monitor the controller service.
