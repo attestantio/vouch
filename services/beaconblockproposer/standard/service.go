@@ -121,7 +121,7 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	duty, ok := data.(*beaconblockproposer.Duty)
 	if !ok {
 		log.Error().Msg("Passed invalid data structure")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		s.monitor.BeaconBlockProposalCompleted(started, 0, "failed")
 		return
 	}
 	log := log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
@@ -130,7 +130,7 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	var zeroSig phase0.BLSSignature
 	if duty.RANDAOReveal() == zeroSig {
 		log.Error().Msg("Missing RANDAO reveal")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
 		return
 	}
 
@@ -148,12 +148,12 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	proposal, err := s.proposalProvider.BeaconBlockProposal(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain proposal data")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
 		return
 	}
 	if proposal == nil {
 		log.Error().Msg("Provider did not return beacon block proposal")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained proposal")
@@ -161,34 +161,34 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	proposalSlot, err := proposal.Slot()
 	if err != nil {
 		log.Error().Str("version", proposal.Version.String()).Err(err).Msg("Unknown proposal version")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
 		return
 	}
 
 	if proposalSlot != duty.Slot() {
 		log.Error().Uint64("proposal_slot", uint64(proposalSlot)).Msg("Proposal data for incorrect slot; not proceeding")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
 		return
 	}
 
 	bodyRoot, err := proposal.BodyRoot()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to calculate hash tree root of block")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
 		return
 	}
 
 	parentRoot, err := proposal.ParentRoot()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain parent root of block")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
 		return
 	}
 
 	stateRoot, err := proposal.StateRoot()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain state root of block")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
 		return
 	}
 
@@ -201,7 +201,7 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 		bodyRoot)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign beacon block proposal")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed proposal")
@@ -222,16 +222,16 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 		}
 	default:
 		log.Error().Str("version", proposal.Version.String()).Msg("Unknown proposal version")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
 		return
 	}
 
 	// Submit the block.
 	if err := s.beaconBlockSubmitter.SubmitBeaconBlock(ctx, signedBlock); err != nil {
 		log.Error().Err(err).Msg("Failed to submit beacon block proposal")
-		s.monitor.BeaconBlockProposalCompleted(started, "failed")
+		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted proposal")
-	s.monitor.BeaconBlockProposalCompleted(started, "succeeded")
+	s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "succeeded")
 }

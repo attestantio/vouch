@@ -156,12 +156,12 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 		beaconBlockRoot, err = s.beaconBlockRootProvider.BeaconBlockRoot(ctx, "head")
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to obtain beacon block root")
-			s.monitor.SyncCommitteeAggregationsCompleted(started, len(duty.ValidatorIndices), "failed")
+			s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed")
 			return
 		}
 		if beaconBlockRoot == nil {
 			log.Warn().Msg("Returned empty beacon block root")
-			s.monitor.SyncCommitteeAggregationsCompleted(started, len(duty.ValidatorIndices), "failed")
+			s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed")
 			return
 		}
 	}
@@ -174,12 +174,12 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 			contribution, err := s.syncCommitteeContributionProvider.SyncCommitteeContribution(ctx, duty.Slot, subcommitteeIndex, *beaconBlockRoot)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain sync committee contribution")
-				s.monitor.SyncCommitteeAggregationsCompleted(started, len(duty.ValidatorIndices), "failed")
+				s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed")
 				return
 			}
 			if contribution == nil {
 				log.Warn().Msg("Returned empty contribution")
-				s.monitor.SyncCommitteeAggregationsCompleted(started, len(duty.ValidatorIndices), "failed")
+				s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed")
 				return
 			}
 			contributionAndProof := &altair.ContributionAndProof{
@@ -190,7 +190,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 			sig, err := s.contributionAndProofSigner.SignContributionAndProof(ctx, duty.Accounts[validatorIndex], contributionAndProof)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain signature of contribution and proof")
-				s.monitor.SyncCommitteeAggregationsCompleted(started, len(duty.ValidatorIndices), "failed")
+				s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed")
 				return
 			}
 
@@ -205,7 +205,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 
 	if err := s.syncCommitteeContributionsSubmitter.SubmitSyncCommitteeContributions(ctx, signedContributionAndProofs); err != nil {
 		log.Warn().Err(err).Msg("Failed to submit signed contribution and proofs")
-		s.monitor.SyncCommitteeAggregationsCompleted(started, len(signedContributionAndProofs), "failed")
+		s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(signedContributionAndProofs), "failed")
 		return
 	}
 
@@ -215,5 +215,5 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 			float64(signedContributionAndProofs[i].Message.Contribution.AggregationBits.Len())
 		s.monitor.SyncCommitteeAggregationCoverage(frac)
 	}
-	s.monitor.SyncCommitteeAggregationsCompleted(started, len(signedContributionAndProofs), "succeeded")
+	s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(signedContributionAndProofs), "succeeded")
 }

@@ -16,6 +16,7 @@ package prometheus
 import (
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -60,6 +61,16 @@ func (s *Service) setupSyncCommitteeMessageMetrics() error {
 		return err
 	}
 
+	s.syncCommitteeMessageProcessLatestSlot = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "vouch",
+		Subsystem: "sync_committee_message_process",
+		Name:      "latest_slot",
+		Help:      "The latest slot for which Vouch created a sync committee message.",
+	})
+	if err := prometheus.Register(s.syncCommitteeMessageProcessLatestSlot); err != nil {
+		return err
+	}
+
 	s.syncCommitteeMessageProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
 		Subsystem: "sync_committee_message_process",
@@ -70,7 +81,7 @@ func (s *Service) setupSyncCommitteeMessageMetrics() error {
 }
 
 // SyncCommitteeMessagesCompleted is called when a sync committee message process has completed.
-func (s *Service) SyncCommitteeMessagesCompleted(started time.Time, count int, result string) {
+func (s *Service) SyncCommitteeMessagesCompleted(started time.Time, slot phase0.Slot, count int, result string) {
 	// Only log times for successful completions.
 	if result == "succeeded" {
 		duration := time.Since(started).Seconds()
@@ -79,6 +90,7 @@ func (s *Service) SyncCommitteeMessagesCompleted(started time.Time, count int, r
 		}
 		secsSinceStartOfSlot := time.Since(s.chainTime.StartOfSlot(s.chainTime.CurrentSlot())).Seconds()
 		s.syncCommitteeMessageMarkTimer.Observe(secsSinceStartOfSlot)
+		s.syncCommitteeMessageProcessLatestSlot.Set(float64(slot))
 	}
 	s.syncCommitteeMessageProcessRequests.WithLabelValues(result).Add(float64(count))
 }

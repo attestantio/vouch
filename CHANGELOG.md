@@ -7,6 +7,7 @@ development:
   - submit attestations in batches, to speed up initial broadcast
   - add mark metrics, to provide timeliness information for validator operations
   - break down scheduler job start metrics by class
+  - add last slot metrics, to track the last slot handled for validator operations
 
 1.2.2:
   - fix crash when no metrics configuration is supplied

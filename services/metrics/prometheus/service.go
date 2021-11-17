@@ -36,27 +36,32 @@ type Service struct {
 	epochsProcessed   prometheus.Counter
 	blockReceiptDelay *prometheus.HistogramVec
 
-	beaconBlockProposalProcessTimer    prometheus.Histogram
-	beaconBlockProposalProcessRequests *prometheus.CounterVec
-	beaconBlockProposalMarkTimer       prometheus.Histogram
+	beaconBlockProposalProcessTimer      prometheus.Histogram
+	beaconBlockProposalProcessRequests   *prometheus.CounterVec
+	beaconBlockProposalMarkTimer         prometheus.Histogram
+	beaconBlockProposalProcessLatestSlot prometheus.Gauge
 
-	attestationProcessTimer    prometheus.Histogram
-	attestationProcessRequests *prometheus.CounterVec
-	attestationMarkTimer       prometheus.Histogram
+	attestationProcessTimer      prometheus.Histogram
+	attestationProcessRequests   *prometheus.CounterVec
+	attestationMarkTimer         prometheus.Histogram
+	attestationProcessLatestSlot prometheus.Gauge
 
-	attestationAggregationProcessTimer    prometheus.Histogram
-	attestationAggregationProcessRequests *prometheus.CounterVec
-	attestationAggregationCoverageRatio   prometheus.Histogram
-	attestationAggregationMarkTimer       prometheus.Histogram
+	attestationAggregationProcessTimer      prometheus.Histogram
+	attestationAggregationProcessRequests   *prometheus.CounterVec
+	attestationAggregationCoverageRatio     prometheus.Histogram
+	attestationAggregationMarkTimer         prometheus.Histogram
+	attestationAggregationProcessLatestSlot prometheus.Gauge
 
-	syncCommitteeMessageProcessTimer    prometheus.Histogram
-	syncCommitteeMessageProcessRequests *prometheus.CounterVec
-	syncCommitteeMessageMarkTimer       prometheus.Histogram
+	syncCommitteeMessageProcessTimer      prometheus.Histogram
+	syncCommitteeMessageProcessRequests   *prometheus.CounterVec
+	syncCommitteeMessageMarkTimer         prometheus.Histogram
+	syncCommitteeMessageProcessLatestSlot prometheus.Gauge
 
-	syncCommitteeAggregationProcessTimer    prometheus.Histogram
-	syncCommitteeAggregationProcessRequests *prometheus.CounterVec
-	syncCommitteeAggregationCoverageRatio   prometheus.Histogram
-	syncCommitteeAggregationMarkTimer       prometheus.Histogram
+	syncCommitteeAggregationProcessTimer      prometheus.Histogram
+	syncCommitteeAggregationProcessRequests   *prometheus.CounterVec
+	syncCommitteeAggregationCoverageRatio     prometheus.Histogram
+	syncCommitteeAggregationMarkTimer         prometheus.Histogram
+	syncCommitteeAggregationProcessLatestSlot prometheus.Gauge
 
 	beaconCommitteeSubscriptionProcessTimer    prometheus.Histogram
 	beaconCommitteeSubscriptionProcessRequests *prometheus.CounterVec
