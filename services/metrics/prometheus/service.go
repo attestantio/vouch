@@ -17,6 +17,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -26,6 +27,8 @@ import (
 
 // Service is a metrics service exposing metrics via prometheus.
 type Service struct {
+	chainTime chaintime.Service
+
 	schedulerJobsScheduled prometheus.Counter
 	schedulerJobsCancelled prometheus.Counter
 	schedulerJobsStarted   *prometheus.CounterVec
@@ -35,20 +38,25 @@ type Service struct {
 
 	beaconBlockProposalProcessTimer    prometheus.Histogram
 	beaconBlockProposalProcessRequests *prometheus.CounterVec
+	beaconBlockProposalMarkTimer       prometheus.Histogram
 
 	attestationProcessTimer    prometheus.Histogram
 	attestationProcessRequests *prometheus.CounterVec
+	attestationMarkTimer       prometheus.Histogram
 
 	attestationAggregationProcessTimer    prometheus.Histogram
 	attestationAggregationProcessRequests *prometheus.CounterVec
 	attestationAggregationCoverageRatio   prometheus.Histogram
+	attestationAggregationMarkTimer       prometheus.Histogram
 
 	syncCommitteeMessageProcessTimer    prometheus.Histogram
 	syncCommitteeMessageProcessRequests *prometheus.CounterVec
+	syncCommitteeMessageMarkTimer       prometheus.Histogram
 
 	syncCommitteeAggregationProcessTimer    prometheus.Histogram
 	syncCommitteeAggregationProcessRequests *prometheus.CounterVec
 	syncCommitteeAggregationCoverageRatio   prometheus.Histogram
+	syncCommitteeAggregationMarkTimer       prometheus.Histogram
 
 	beaconCommitteeSubscriptionProcessTimer    prometheus.Histogram
 	beaconCommitteeSubscriptionProcessRequests *prometheus.CounterVec
@@ -83,7 +91,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
-	s := &Service{}
+	s := &Service{
+		chainTime: parameters.chainTime,
+	}
 
 	if err := s.setupSchedulerMetrics(); err != nil {
 		return nil, errors.Wrap(err, "failed to set up scheduler metrics")

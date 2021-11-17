@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2021 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -66,7 +66,10 @@ func (s *Service) setupBeaconCommitteeSubscriptionMetrics() error {
 
 // BeaconCommitteeSubscriptionCompleted is called when an beacon committee subscription process has completed.
 func (s *Service) BeaconCommitteeSubscriptionCompleted(started time.Time, result string) {
-	s.beaconCommitteeSubscriptionProcessTimer.Observe(time.Since(started).Seconds())
+	// Only log times for successful completions.
+	if result == "succeeded" {
+		s.beaconCommitteeSubscriptionProcessTimer.Observe(time.Since(started).Seconds())
+	}
 	s.beaconCommitteeSubscriptionProcessRequests.WithLabelValues(result).Inc()
 }
 

@@ -209,6 +209,7 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 		return nil, errors.Wrap(err, "failed to submit sync committee messages")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted sync committee messages")
+	s.monitor.SyncCommitteeMessagesCompleted(started, len(msgs), "succeeded")
 
 	return msgs, nil
 }
