@@ -53,9 +53,8 @@ func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*a
 			_, address := s.serviceInfo(ctx, submitter)
 			started := time.Now()
 			err := submitter.SubmitSyncCommitteeMessages(ctx, messages)
-			s.clientMonitor.ClientOperation(address, "submit sync committee messages", err == nil, time.Since(started))
 			if err != nil {
-				s.handleSubmitSyncCommitteeMessagesError(ctx, submitter, err)
+				err = s.handleSubmitSyncCommitteeMessagesError(ctx, submitter, err)
 			} else {
 				data, err := json.Marshal(messages)
 				if err != nil {
@@ -64,6 +63,7 @@ func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*a
 					log.Trace().Str("data", string(data)).Msg("Submitted messages")
 				}
 			}
+			s.clientMonitor.ClientOperation(address, "submit sync committee messages", err == nil, time.Since(started))
 		}(ctx, sem, &wg, name, submitter)
 	}
 	wg.Wait()
@@ -96,13 +96,13 @@ type tekuErrorResponseFailure struct {
 func (s *Service) handleSubmitSyncCommitteeMessagesError(ctx context.Context,
 	submitter eth2client.SyncCommitteeMessagesSubmitter,
 	err error,
-) {
+) error {
 	// Fetch the JSON response from the error.
 	errorStr := err.Error()
 	jsonIndex := strings.Index(errorStr, "{")
 	if jsonIndex == -1 {
 		log.Warn().Err(err).Msg("Failed to submit sync committee messages")
-		return
+		return err
 	}
 
 	serverType, provider := s.serviceInfo(ctx, submitter)
@@ -110,9 +110,9 @@ func (s *Service) handleSubmitSyncCommitteeMessagesError(ctx context.Context,
 	switch serverType {
 	case "lighthouse":
 		resp := lhErrorResponse{}
-		if err := json.Unmarshal([]byte(errorStr[jsonIndex:]), &resp); err != nil {
+		if jsonErr := json.Unmarshal([]byte(errorStr[jsonIndex:]), &resp); jsonErr != nil {
 			log.Warn().Err(err).Msg("Failed to submit sync committee messages")
-			return
+			return err
 		}
 		for i := 0; i < len(resp.Failures); i++ {
 			switch {
@@ -125,13 +125,13 @@ func (s *Service) handleSubmitSyncCommitteeMessagesError(ctx context.Context,
 		}
 		if len(resp.Failures) == allowedFailures {
 			log.Trace().Str("provider", provider).Msg("Errors from node are allowable; continuing")
-			return
+			return nil
 		}
 	case "teku":
 		resp := tekuErrorResponse{}
-		if err := json.Unmarshal([]byte(errorStr[jsonIndex:]), &resp); err != nil {
+		if jsonErr := json.Unmarshal([]byte(errorStr[jsonIndex:]), &resp); jsonErr != nil {
 			log.Trace().Err(err).Msg("Failed to submit sync committee messages")
-			return
+			return err
 		}
 		for i := 0; i < len(resp.Failures); i++ {
 			switch {
@@ -144,9 +144,10 @@ func (s *Service) handleSubmitSyncCommitteeMessagesError(ctx context.Context,
 		}
 		if len(resp.Failures) == allowedFailures {
 			log.Trace().Str("provider", provider).Msg("Errors from Lighthouse node are allowable; continuing")
-			return
+			return nil
 		}
 	}
 
 	log.Warn().Str("server", serverType).Err(err).Msg("Failed to submit sync committee messages")
+	return err
 }
