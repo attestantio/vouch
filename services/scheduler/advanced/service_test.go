@@ -619,15 +619,20 @@ func TestCancelWhilstRunning(t *testing.T) {
 		return time.Now().Add(50 * time.Millisecond), nil
 	}
 
+	// Job takes 50 ms and runs every 50ms for a total of 100ms per tick.
 	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test periodic job", runtimeFunc, nil, runFunc, nil))
 	require.Len(t, s.ListJobs(ctx), 1)
+	require.Contains(t, s.ListJobs(ctx), "Test periodic job")
 	require.Equal(t, 0, run)
 	time.Sleep(time.Duration(60) * time.Millisecond)
 	require.Equal(t, 0, run)
+	// Cancel occurs during first run.
 	require.NoError(t, s.CancelJob(ctx, "Test periodic job"))
 	require.Len(t, s.ListJobs(ctx), 0)
-	time.Sleep(time.Duration(40) * time.Millisecond)
+	// Wait for first run to finish.
+	time.Sleep(time.Duration(60) * time.Millisecond)
 	assert.Equal(t, 1, run)
+	// Ensure second run never happens.
 	time.Sleep(time.Duration(120) * time.Millisecond)
 	assert.Equal(t, 1, run)
 }
