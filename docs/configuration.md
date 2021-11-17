@@ -133,3 +133,12 @@ Advanced options can change the performance of Vouch to be severely detrimental 
 
 ### controller.max-attestation-delay
 This is a duration parameter, that defaults to `4s`.  It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
+
+### controller.attestation-aggregation-delay
+This is a duration parameter, that defaults to `8s`.  It defines the time that Vouch will wait from the start of a slot before aggregating existing attestations.
+
+### controller.max-sync-committee-message-delay
+This is a duration parameter, that defaults to `4s`.  It defines the maximum time that Vouch will wait from the start of a slot for a block before generating sync committee messages on the basis that the slot is empty.
+
+### controller.sync-committee-aggregation-delay
+This is a duration parameter, that defaults to `8s`.  It defines the time that Vouch will wait from the start of a slot before aggregating existing sync committee messages.

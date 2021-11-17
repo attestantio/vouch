@@ -1,6 +1,9 @@
 development:
   - make scheduler channels asynchronous, to avoid potential deadlock
   - add metrics for sync committee operations
+  - add `controller.max-attestation-aggregation-delay` option
+  - add `controller.sync-committee-message-delay` option
+  - add `controller.sync-committee-aggregation-delay` option
 
 1.2.2:
   - fix crash when no metrics configuration is supplied

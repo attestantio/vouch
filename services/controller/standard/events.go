@@ -105,7 +105,7 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 		log.Trace().Msg("Kicking off attestations for slot early due to receiving relevant block")
 		s.scheduler.RunJobIfExists(ctx, jobName)
 	}
-	jobName = fmt.Sprintf("Sync committee contributions for slot %d", data.Slot)
+	jobName = fmt.Sprintf("Sync committee messages for slot %d", data.Slot)
 	if s.scheduler.JobExists(ctx, jobName) {
 		log.Trace().Msg("Kicking off sync committee contributions for slot early due to receiving relevant block")
 		s.scheduler.RunJobIfExists(ctx, jobName)

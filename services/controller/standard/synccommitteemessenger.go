@@ -188,7 +188,7 @@ func (s *Service) messageSyncCommittee(ctx context.Context, data interface{}) {
 		}
 		if err := s.scheduler.ScheduleJob(ctx,
 			fmt.Sprintf("Sync committee aggregation for slot %d", duty.Slot()),
-			s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.slotDuration*2/3),
+			s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.syncCommitteeAggregationDelay),
 			s.syncCommitteeAggregator.Aggregate,
 			aggregatorDuty,
 		); err != nil {

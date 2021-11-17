@@ -96,7 +96,7 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 		}
 		go func(duty *attester.Duty) {
 			// Adding 200 ms to ensure that head is up to date before we fetch attester duties.
-			jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxSyncCommitteeMessageDelay).Add(200 * time.Millisecond)
+			jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxAttestationDelay).Add(200 * time.Millisecond)
 			if err := s.scheduler.ScheduleJob(ctx,
 				fmt.Sprintf("Attestations for slot %d", duty.Slot()),
 				jobTime,
@@ -187,7 +187,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 			}
 			if err := s.scheduler.ScheduleJob(ctx,
 				fmt.Sprintf("Beacon block attestation aggregation for slot %d committee %d", attestation.Data.Slot, attestation.Data.Index),
-				s.chainTimeService.StartOfSlot(attestation.Data.Slot).Add(s.slotDuration*2/3),
+				s.chainTimeService.StartOfSlot(attestation.Data.Slot).Add(s.attestationAggregationDelay),
 				s.attestationAggregator.Aggregate,
 				aggregatorDuty,
 			); err != nil {
