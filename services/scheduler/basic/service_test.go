@@ -73,7 +73,7 @@ func TestJob(t *testing.T) {
 		run++
 	}
 
-	require.NoError(t, s.ScheduleJob(ctx, "Test job", time.Now().Add(100*time.Millisecond), runFunc, nil))
+	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(100*time.Millisecond), runFunc, nil))
 	require.Equal(t, 0, run)
 	time.Sleep(time.Duration(110) * time.Millisecond)
 	assert.Equal(t, 1, run)
@@ -90,7 +90,7 @@ func TestJobExists(t *testing.T) {
 		run++
 	}
 
-	require.NoError(t, s.ScheduleJob(ctx, "Test job", time.Now().Add(10*time.Second), runFunc, nil))
+	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(10*time.Second), runFunc, nil))
 
 	require.True(t, s.JobExists(ctx, "Test job"))
 	require.False(t, s.JobExists(ctx, "Unknown job"))
@@ -109,7 +109,7 @@ func TestCancelJob(t *testing.T) {
 		run++
 	}
 
-	require.NoError(t, s.ScheduleJob(ctx, "Test job", time.Now().Add(100*time.Millisecond), runFunc, nil))
+	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(100*time.Millisecond), runFunc, nil))
 	require.Equal(t, 0, run)
 	require.NoError(t, s.CancelJob(ctx, "Test job"))
 	time.Sleep(time.Duration(110) * time.Millisecond)
@@ -136,9 +136,9 @@ func TestCancelJobs(t *testing.T) {
 		run++
 	}
 
-	require.NoError(t, s.ScheduleJob(ctx, "Test job 1", time.Now().Add(100*time.Millisecond), runFunc, nil))
-	require.NoError(t, s.ScheduleJob(ctx, "Test job 2", time.Now().Add(100*time.Millisecond), runFunc, nil))
-	require.NoError(t, s.ScheduleJob(ctx, "No cancel job", time.Now().Add(100*time.Millisecond), runFunc, nil))
+	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job 1", time.Now().Add(100*time.Millisecond), runFunc, nil))
+	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job 2", time.Now().Add(100*time.Millisecond), runFunc, nil))
+	require.NoError(t, s.ScheduleJob(ctx, "Test", "No cancel job", time.Now().Add(100*time.Millisecond), runFunc, nil))
 	require.Equal(t, 0, run)
 	s.CancelJobs(ctx, "Test job")
 	time.Sleep(time.Duration(110) * time.Millisecond)
@@ -156,7 +156,7 @@ func TestCancelParentContext(t *testing.T) {
 		run++
 	}
 
-	require.NoError(t, s.ScheduleJob(ctx, "Test job", time.Now().Add(100*time.Millisecond), runFunc, nil))
+	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(100*time.Millisecond), runFunc, nil))
 	require.Equal(t, 0, run)
 	cancel()
 	time.Sleep(time.Duration(110) * time.Millisecond)
@@ -174,7 +174,7 @@ func TestRunJob(t *testing.T) {
 		run++
 	}
 
-	require.NoError(t, s.ScheduleJob(ctx, "Test job", time.Now().Add(time.Second), runFunc, nil))
+	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(time.Second), runFunc, nil))
 	require.Equal(t, 0, run)
 	require.NoError(t, s.RunJob(ctx, "Test job"))
 	time.Sleep(time.Duration(100) * time.Millisecond)
@@ -192,7 +192,7 @@ func TestRunJobIfExists(t *testing.T) {
 		run++
 	}
 
-	require.NoError(t, s.ScheduleJob(ctx, "Test job", time.Now().Add(time.Second), runFunc, nil))
+	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(time.Second), runFunc, nil))
 	require.Equal(t, 0, run)
 	s.RunJobIfExists(ctx, "Unknown job")
 	require.Equal(t, 0, run)
@@ -225,7 +225,7 @@ func TestPeriodicJob(t *testing.T) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test periodic job", runtimeFunc, nil, runFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test periodic job", runtimeFunc, nil, runFunc, nil))
 	require.Equal(t, 0, run)
 	time.Sleep(time.Duration(110) * time.Millisecond)
 	assert.Equal(t, 1, run)
@@ -251,7 +251,7 @@ func TestCancelPeriodicJob(t *testing.T) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test periodic job", runtimeFunc, nil, runFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test periodic job", runtimeFunc, nil, runFunc, nil))
 	require.Equal(t, 0, run)
 	require.NoError(t, s.CancelJob(ctx, "Test periodic job"))
 	time.Sleep(time.Duration(110) * time.Millisecond)
@@ -273,7 +273,7 @@ func TestCancelPeriodicParentContext(t *testing.T) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test job", runtimeFunc, nil, runFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test job", runtimeFunc, nil, runFunc, nil))
 	require.Equal(t, 0, run)
 	cancel()
 	time.Sleep(time.Duration(110) * time.Millisecond)
@@ -298,7 +298,7 @@ func TestLimitedPeriodicJob(t *testing.T) {
 		return time.Now().Add(10 * time.Millisecond), nil
 	}
 
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test job", runtimeFunc, nil, runFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test job", runtimeFunc, nil, runFunc, nil))
 	require.Equal(t, 0, run)
 	time.Sleep(time.Duration(50) * time.Millisecond)
 	assert.Equal(t, 3, run)
@@ -322,7 +322,7 @@ func TestBadPeriodicJob(t *testing.T) {
 		return time.Now().Add(10 * time.Millisecond), nil
 	}
 
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test job", runtimeFunc, nil, runFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test job", runtimeFunc, nil, runFunc, nil))
 	require.Equal(t, 0, run)
 	time.Sleep(time.Duration(50) * time.Millisecond)
 	assert.Equal(t, 3, run)
@@ -343,11 +343,11 @@ func TestDuplicateJobName(t *testing.T) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
-	require.NoError(t, s.ScheduleJob(ctx, "Test duplicate job", time.Now().Add(time.Second), runFunc, nil))
-	require.EqualError(t, s.ScheduleJob(ctx, "Test duplicate job", time.Now().Add(time.Second), runFunc, nil), scheduler.ErrJobAlreadyExists.Error())
+	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test duplicate job", time.Now().Add(time.Second), runFunc, nil))
+	require.EqualError(t, s.ScheduleJob(ctx, "Test", "Test duplicate job", time.Now().Add(time.Second), runFunc, nil), scheduler.ErrJobAlreadyExists.Error())
 
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test duplicate periodic job", runtimeFunc, nil, runFunc, nil))
-	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test duplicate periodic job", runtimeFunc, nil, runFunc, nil), scheduler.ErrJobAlreadyExists.Error())
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test duplicate periodic job", runtimeFunc, nil, runFunc, nil))
+	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test", "Test duplicate periodic job", runtimeFunc, nil, runFunc, nil), scheduler.ErrJobAlreadyExists.Error())
 }
 
 func TestBadJobs(t *testing.T) {
@@ -365,12 +365,12 @@ func TestBadJobs(t *testing.T) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
-	require.EqualError(t, s.ScheduleJob(ctx, "", time.Now(), runFunc, nil), scheduler.ErrNoJobName.Error())
-	require.EqualError(t, s.ScheduleJob(ctx, "Test bad job", time.Now(), nil, nil), scheduler.ErrNoJobFunc.Error())
+	require.EqualError(t, s.ScheduleJob(ctx, "Test", "", time.Now(), runFunc, nil), scheduler.ErrNoJobName.Error())
+	require.EqualError(t, s.ScheduleJob(ctx, "Test", "Test bad job", time.Now(), nil, nil), scheduler.ErrNoJobFunc.Error())
 
-	require.EqualError(t, s.SchedulePeriodicJob(ctx, "", runtimeFunc, nil, runFunc, nil), scheduler.ErrNoJobName.Error())
-	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test bad period job", nil, nil, runFunc, nil), scheduler.ErrNoRuntimeFunc.Error())
-	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test bad period job", runtimeFunc, nil, nil, nil), scheduler.ErrNoJobFunc.Error())
+	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test", "", runtimeFunc, nil, runFunc, nil), scheduler.ErrNoJobName.Error())
+	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test", "Test bad period job", nil, nil, runFunc, nil), scheduler.ErrNoRuntimeFunc.Error())
+	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test", "Test bad period job", runtimeFunc, nil, nil, nil), scheduler.ErrNoJobFunc.Error())
 }
 
 func TestManyJobs(t *testing.T) {
@@ -388,7 +388,7 @@ func TestManyJobs(t *testing.T) {
 
 	jobs := 2048
 	for i := 0; i < jobs; i++ {
-		require.NoError(t, s.ScheduleJob(ctx, fmt.Sprintf("Job instance %d", i), runTime, runFunc, nil))
+		require.NoError(t, s.ScheduleJob(ctx, "Test", fmt.Sprintf("Job instance %d", i), runTime, runFunc, nil))
 	}
 
 	// Kick off some jobs early.
@@ -420,13 +420,13 @@ func TestListJobs(t *testing.T) {
 	jobs := s.ListJobs(ctx)
 	require.Len(t, jobs, 0)
 
-	require.NoError(t, s.ScheduleJob(ctx, "Test job 1", time.Now().Add(time.Second), runFunc, nil))
+	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job 1", time.Now().Add(time.Second), runFunc, nil))
 
 	jobs = s.ListJobs(ctx)
 	require.Len(t, jobs, 1)
 	require.Contains(t, jobs, "Test job 1")
 
-	require.NoError(t, s.ScheduleJob(ctx, "Test job 2", time.Now().Add(time.Second), runFunc, nil))
+	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job 2", time.Now().Add(time.Second), runFunc, nil))
 
 	jobs = s.ListJobs(ctx)
 	require.Len(t, jobs, 2)
@@ -459,7 +459,7 @@ func TestLongRunningPeriodicJob(t *testing.T) {
 	}
 
 	// Schedule the job.
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test long running periodic job", runtimeFunc, nil, jobFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test long running periodic job", runtimeFunc, nil, jobFunc, nil))
 
 	// Sleep for 800 ms.  Expect two runs (150+200+150+200+150).
 	time.Sleep(800 * time.Millisecond)
