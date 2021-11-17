@@ -29,12 +29,12 @@ func New() scheduler.Service {
 }
 
 // ScheduleJob schedules a one-off job for a given time.
-func (s *service) ScheduleJob(ctx context.Context, name string, runtime time.Time, jobFunc scheduler.JobFunc, data interface{}) error {
+func (s *service) ScheduleJob(ctx context.Context, class string, name string, runtime time.Time, jobFunc scheduler.JobFunc, data interface{}) error {
 	return nil
 }
 
 // SchedulePeriodicJob schedules a job to run in a loop.
-func (s *service) SchedulePeriodicJob(ctx context.Context, name string, runtimeFunc scheduler.RuntimeFunc, runtimeData interface{}, jobFunc scheduler.JobFunc, jobData interface{}) error {
+func (s *service) SchedulePeriodicJob(ctx context.Context, class string, name string, runtimeFunc scheduler.RuntimeFunc, runtimeData interface{}, jobFunc scheduler.JobFunc, jobData interface{}) error {
 	return nil
 }
 

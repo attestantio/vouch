@@ -82,6 +82,7 @@ func (s *Service) scheduleProposals(ctx context.Context,
 				return
 			}
 			if err := s.scheduler.ScheduleJob(ctx,
+				"Propose",
 				fmt.Sprintf("Beacon block proposal for slot %d", duty.Slot()),
 				s.chainTimeService.StartOfSlot(duty.Slot()),
 				s.beaconBlockProposer.Propose,

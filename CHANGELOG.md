@@ -6,6 +6,7 @@ development:
   - add `controller.sync-committee-aggregation-delay` option
   - submit attestations in batches, to speed up initial broadcast
   - add mark metrics, to provide timeliness information for validator operations
+  - break down scheduler job start metrics by class
 
 1.2.2:
   - fix crash when no metrics configuration is supplied

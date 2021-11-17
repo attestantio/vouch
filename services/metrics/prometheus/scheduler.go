@@ -18,22 +18,22 @@ import (
 )
 
 func (s *Service) setupSchedulerMetrics() error {
-	s.schedulerJobsScheduled = prometheus.NewCounter(prometheus.CounterOpts{
+	s.schedulerJobsScheduled = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
 		Subsystem: "scheduler",
 		Name:      "jobs_scheduled_total",
-		Help:      "The total number of jobs scheduled.",
-	})
+		Help:      "The number of jobs scheduled.",
+	}, []string{"class"})
 	if err := prometheus.Register(s.schedulerJobsScheduled); err != nil {
 		return err
 	}
 
-	s.schedulerJobsCancelled = prometheus.NewCounter(prometheus.CounterOpts{
+	s.schedulerJobsCancelled = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
 		Subsystem: "scheduler",
 		Name:      "jobs_cancelled_total",
-		Help:      "The total number of scheduled jobs cancelled.",
-	})
+		Help:      "The number of scheduled jobs cancelled.",
+	}, []string{"class"})
 	if err := prometheus.Register(s.schedulerJobsCancelled); err != nil {
 		return err
 	}
@@ -42,27 +42,27 @@ func (s *Service) setupSchedulerMetrics() error {
 		Namespace: "vouch",
 		Subsystem: "scheduler",
 		Name:      "jobs_started_total",
-		Help:      "The total number of scheduled jobs started.",
-	}, []string{"trigger"})
+		Help:      "The number of scheduled jobs started.",
+	}, []string{"class", "trigger"})
 	return prometheus.Register(s.schedulerJobsStarted)
 }
 
 // JobScheduled is called when a job is scheduled.
-func (s *Service) JobScheduled() {
-	s.schedulerJobsScheduled.Inc()
+func (s *Service) JobScheduled(class string) {
+	s.schedulerJobsScheduled.WithLabelValues(class).Inc()
 }
 
 // JobCancelled is called when a scheduled job is cancelled.
-func (s *Service) JobCancelled() {
-	s.schedulerJobsCancelled.Inc()
+func (s *Service) JobCancelled(class string) {
+	s.schedulerJobsCancelled.WithLabelValues(class).Inc()
 }
 
 // JobStartedOnTimer is called when a scheduled job is started due to meeting its time.
-func (s *Service) JobStartedOnTimer() {
-	s.schedulerJobsStarted.WithLabelValues("timer").Inc()
+func (s *Service) JobStartedOnTimer(class string) {
+	s.schedulerJobsStarted.WithLabelValues(class, "timer").Inc()
 }
 
 // JobStartedOnSignal is called when a scheduled job is started due to being manually signalled.
-func (s *Service) JobStartedOnSignal() {
-	s.schedulerJobsStarted.WithLabelValues("signal").Inc()
+func (s *Service) JobStartedOnSignal(class string) {
+	s.schedulerJobsStarted.WithLabelValues(class, "signal").Inc()
 }

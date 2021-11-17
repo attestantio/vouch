@@ -33,16 +33,16 @@ func (s *Service) Presenter() string {
 }
 
 // JobScheduled is called when a job is scheduled.
-func (s *Service) JobScheduled() {}
+func (s *Service) JobScheduled(class string) {}
 
 // JobCancelled is called when a scheduled job is cancelled.
-func (s *Service) JobCancelled() {}
+func (s *Service) JobCancelled(class string) {}
 
 // JobStartedOnTimer is called when a scheduled job is started due to meeting its time.
-func (s *Service) JobStartedOnTimer() {}
+func (s *Service) JobStartedOnTimer(class string) {}
 
 // JobStartedOnSignal is called when a scheduled job is started due to being manually signal.
-func (s *Service) JobStartedOnSignal() {}
+func (s *Service) JobStartedOnSignal(class string) {}
 
 // NewEpoch is called when vouch starts processing a new epoch.
 func (s *Service) NewEpoch() {}

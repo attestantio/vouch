@@ -29,6 +29,7 @@ func (s *Service) startAccountsRefresher(ctx context.Context) error {
 		return s.chainTimeService.StartOfEpoch(s.chainTimeService.CurrentEpoch() + 1).Add(65 * time.Second), nil
 	}
 	if err := s.scheduler.SchedulePeriodicJob(ctx,
+		"Refresh accounts",
 		"Account refresh ticker",
 		runtimeFunc,
 		nil,
