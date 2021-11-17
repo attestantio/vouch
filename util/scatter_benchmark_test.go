@@ -37,7 +37,7 @@ func init() {
 		input[i] = make([]byte, benchmarkElementSize)
 		_, err := rand.Read(input[i])
 		if err != nil {
-			log.WithError(err).Debug("Cannot read from rand")
+			panic(err)
 		}
 	}
 }
