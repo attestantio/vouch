@@ -24,7 +24,7 @@ func (s *Service) setupSyncCommitteeAggregationMetrics() error {
 	s.syncCommitteeAggregationProcessTimer =
 		prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: "vouch",
-			Subsystem: "sync_committee_aggregation_process",
+			Subsystem: "synccommitteeaggregation_process",
 			Name:      "duration_seconds",
 			Help:      "The time vouch spends from starting the sync committee aggregation process to submitting the sync committee aggregations.",
 			Buckets: []float64{
@@ -39,7 +39,7 @@ func (s *Service) setupSyncCommitteeAggregationMetrics() error {
 	s.syncCommitteeAggregationMarkTimer =
 		prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: "vouch",
-			Subsystem: "sync_committee_aggregation",
+			Subsystem: "synccommitteeaggregation",
 			Name:      "mark_seconds",
 			Help:      "The time in to the slot at which the sync committee aggregates were broadcast.",
 			Buckets: []float64{
@@ -63,7 +63,7 @@ func (s *Service) setupSyncCommitteeAggregationMetrics() error {
 
 	s.syncCommitteeAggregationProcessLatestSlot = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "vouch",
-		Subsystem: "sync_committee_aggregation_process",
+		Subsystem: "synccommitteeaggregation_process",
 		Name:      "latest_slot",
 		Help:      "The latest slot for which Vouch created a sync committee aggregate.",
 	})
@@ -73,7 +73,7 @@ func (s *Service) setupSyncCommitteeAggregationMetrics() error {
 
 	s.syncCommitteeAggregationProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
-		Subsystem: "sync_committee_aggregation_process",
+		Subsystem: "synccommitteeaggregation_process",
 		Name:      "requests_total",
 		Help:      "The number of sync committee aggregation processes.",
 	}, []string{"result"})
@@ -84,7 +84,7 @@ func (s *Service) setupSyncCommitteeAggregationMetrics() error {
 	s.syncCommitteeAggregationCoverageRatio =
 		prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: "vouch",
-			Subsystem: "sync_committee_aggregation",
+			Subsystem: "synccommitteeaggregation",
 			Name:      "coverage_ratio",
 			Help:      "The ratio of included to possible messages in the aggregate.",
 			Buckets:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},

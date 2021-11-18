@@ -24,7 +24,7 @@ func (s *Service) setupSyncCommitteeMessageMetrics() error {
 	s.syncCommitteeMessageProcessTimer =
 		prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: "vouch",
-			Subsystem: "sync_committee_message_process",
+			Subsystem: "synccommitteemessage_process",
 			Name:      "duration_seconds",
 			Help:      "The time vouch spends from starting the sync committee message process to submitting the sync committee messages.",
 			Buckets: []float64{
@@ -39,7 +39,7 @@ func (s *Service) setupSyncCommitteeMessageMetrics() error {
 	s.syncCommitteeMessageMarkTimer =
 		prometheus.NewHistogram(prometheus.HistogramOpts{
 			Namespace: "vouch",
-			Subsystem: "sync_committee_message",
+			Subsystem: "synccommitteemessage",
 			Name:      "mark_seconds",
 			Help:      "The time in to the slot at which the sync committee messages were broadcast.",
 			Buckets: []float64{
@@ -63,7 +63,7 @@ func (s *Service) setupSyncCommitteeMessageMetrics() error {
 
 	s.syncCommitteeMessageProcessLatestSlot = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "vouch",
-		Subsystem: "sync_committee_message_process",
+		Subsystem: "synccommitteemessage_process",
 		Name:      "latest_slot",
 		Help:      "The latest slot for which Vouch created a sync committee message.",
 	})
@@ -73,7 +73,7 @@ func (s *Service) setupSyncCommitteeMessageMetrics() error {
 
 	s.syncCommitteeMessageProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
-		Subsystem: "sync_committee_message_process",
+		Subsystem: "synccommitteemessage_process",
 		Name:      "requests_total",
 		Help:      "The number of sync committee message processes.",
 	}, []string{"result"})
