@@ -8,6 +8,7 @@ development:
   - add mark metrics, to provide timeliness information for validator operations
   - break down scheduler job start metrics by class
   - add last slot metrics, to track the last slot handled for validator operations
+  - remove basic scheduler; advanced scheduler is currently the only supported option
 
 1.2.2:
   - fix crash when no metrics configuration is supplied

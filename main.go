@@ -50,7 +50,6 @@ import (
 	prometheusmetrics "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/services/scheduler"
 	advancedscheduler "github.com/attestantio/vouch/services/scheduler/advanced"
-	basicscheduler "github.com/attestantio/vouch/services/scheduler/basic"
 	"github.com/attestantio/vouch/services/signer"
 	standardsigner "github.com/attestantio/vouch/services/signer/standard"
 	"github.com/attestantio/vouch/services/submitter"
@@ -625,10 +624,10 @@ func selectScheduler(ctx context.Context, monitor metrics.Service) (scheduler.Se
 	var err error
 	switch viper.GetString("scheduler.style") {
 	case "basic":
-		log.Info().Msg("Starting basic scheduler")
-		scheduler, err = basicscheduler.New(ctx,
-			basicscheduler.WithLogLevel(util.LogLevel("scheduler.basic")),
-			basicscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
+		log.Warn().Msg("Basic scheduler is no longer available; defaulting to advanced scheduler.  To avoid this message in future please change your scheduler type to 'advanced'")
+		scheduler, err = advancedscheduler.New(ctx,
+			advancedscheduler.WithLogLevel(util.LogLevel("scheduler.advanced")),
+			advancedscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
 		)
 	default:
 		log.Info().Msg("Starting advanced scheduler")
