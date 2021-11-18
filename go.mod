@@ -3,7 +3,6 @@ module github.com/attestantio/vouch
 go 1.16
 
 require (
-	github.com/attestantio/dirk v1.1.0
 	github.com/attestantio/go-eth2-client v0.8.1
 	github.com/aws/aws-sdk-go v1.41.19
 	github.com/mitchellh/go-homedir v1.1.0

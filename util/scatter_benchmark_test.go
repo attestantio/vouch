@@ -16,10 +16,11 @@ package util_test
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"runtime"
 	"sync"
 	"testing"
 
-	"github.com/attestantio/dirk/util"
+	"github.com/attestantio/vouch/util"
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,7 +65,7 @@ func BenchmarkHash(b *testing.B) {
 func BenchmarkHashMP(b *testing.B) {
 	output := make([][]byte, len(input))
 	for i := 0; i < b.N; i++ {
-		workerResults, err := util.Scatter(len(input), func(offset int, entries int, _ *sync.RWMutex) (interface{}, error) {
+		workerResults, err := util.Scatter(len(input), runtime.GOMAXPROCS(0), func(offset int, entries int, _ *sync.RWMutex) (interface{}, error) {
 			return hash(input[offset : offset+entries]), nil
 		})
 		require.NoError(b, err)
