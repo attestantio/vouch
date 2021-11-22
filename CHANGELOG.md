@@ -1,4 +1,4 @@
-development:
+1.3.0:
   - make scheduler channels asynchronous, to avoid potential deadlock
   - add metrics for sync committee operations
   - add `controller.max-attestation-aggregation-delay` option
