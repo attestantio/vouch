@@ -39,6 +39,10 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
+// syncCommitteePreparationEpochs is the number of epochs ahead of the sync committee
+// period change at which to prepare the relevant jobs.
+var syncCommitteePreparationEpochs = uint64(5)
+
 // Service is the co-ordination system for vouch.
 // It runs purely against clock events, setting up jobs for the validator's processes of block proposal, attestation
 // creation and attestation aggregation.
@@ -206,7 +210,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		thisSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch) / s.epochsPerSyncCommitteePeriod)
 		go s.scheduleSyncCommitteeMessages(ctx, thisSyncCommitteePeriodStartEpoch, validatorIndices, true /* notCurrentSlot */)
 		nextSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch)/s.epochsPerSyncCommitteePeriod + 1)
-		go s.scheduleSyncCommitteeMessages(ctx, nextSyncCommitteePeriodStartEpoch, validatorIndices, true /* notCurrentSlot */)
+		if uint64(nextSyncCommitteePeriodStartEpoch-epoch) <= syncCommitteePreparationEpochs {
+			go s.scheduleSyncCommitteeMessages(ctx, nextSyncCommitteePeriodStartEpoch, validatorIndices, true /* notCurrentSlot */)
+		}
 	}
 	go s.scheduleAttestations(ctx, epoch+1, nextEpochValidatorIndices, true /* notCurrentSlot */)
 	// Update beacon committee subscriptions this and the next epoch.
@@ -308,7 +314,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	s.monitor.NewEpoch()
 
 	// We wait for the beacon node to update, but keep ourselves busy in the meantime.
-	waitCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	waitCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 
 	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, currentEpoch)
 	if err != nil {
@@ -336,9 +342,9 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 			go s.handleAltairForkEpoch(ctx)
 		}
 
-		// Update the _next_ period if we are on an EPOCHS_PER_SYNC_COMMITTEE_PERIOD boundary.
-		if uint64(currentEpoch)%s.epochsPerSyncCommitteePeriod == 0 {
-			go s.scheduleSyncCommitteeMessages(ctx, currentEpoch+phase0.Epoch(s.epochsPerSyncCommitteePeriod), validatorIndices, false /* notCurrentSlot */)
+		// Update the _next_ period if we close to an EPOCHS_PER_SYNC_COMMITTEE_PERIOD boundary.
+		if uint64(currentEpoch)%s.epochsPerSyncCommitteePeriod == s.epochsPerSyncCommitteePeriod-syncCommitteePreparationEpochs {
+			go s.scheduleSyncCommitteeMessages(ctx, currentEpoch+phase0.Epoch(syncCommitteePreparationEpochs), validatorIndices, false /* notCurrentSlot */)
 		}
 	}
 
@@ -444,11 +450,13 @@ func (s *Service) handleAltairForkEpoch(ctx context.Context) {
 
 	go func() {
 		nextPeriodEpoch := phase0.Epoch((uint64(s.altairForkEpoch)/s.epochsPerSyncCommitteePeriod + 1) * s.epochsPerSyncCommitteePeriod)
-		_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, nextPeriodEpoch)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to obtain active validator indices for the period following the Altair fork epoch")
-			return
+		if uint64(nextPeriodEpoch-s.altairForkEpoch) <= syncCommitteePreparationEpochs {
+			_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, nextPeriodEpoch)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to obtain active validator indices for the period following the Altair fork epoch")
+				return
+			}
+			go s.scheduleSyncCommitteeMessages(ctx, nextPeriodEpoch, validatorIndices, false /* notCurrentSlot */)
 		}
-		go s.scheduleSyncCommitteeMessages(ctx, nextPeriodEpoch, validatorIndices, false /* notCurrentSlot */)
 	}()
 }

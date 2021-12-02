@@ -1,3 +1,6 @@
+dev:
+  - prepare sync committee duties a few epochs before change of period
+
 1.3.0:
   - make scheduler channels asynchronous, to avoid potential deadlock
   - add metrics for sync committee operations
