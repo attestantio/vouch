@@ -81,10 +81,23 @@ func (s *Service) scheduleProposals(ctx context.Context,
 				log.Error().Uint64("proposal_slot", uint64(duty.Slot())).Err(err).Msg("Failed to prepare beacon block proposal")
 				return
 			}
+			// Only bother trying to propose early if the alternative is later.
+			if s.maxProposalDelay > 0 {
+				if err := s.scheduler.ScheduleJob(ctx,
+					"Propose check",
+					fmt.Sprintf("Early beacon block proposal for slot %d", duty.Slot()),
+					s.chainTimeService.StartOfSlot(duty.Slot()),
+					s.proposeEarly,
+					duty,
+				); err != nil {
+					// Don't return here; we want to try to set up as many proposer jobs as possible.
+					log.Error().Err(err).Msg("Failed to schedule early beacon block proposal")
+				}
+			}
 			if err := s.scheduler.ScheduleJob(ctx,
 				"Propose",
 				fmt.Sprintf("Beacon block proposal for slot %d", duty.Slot()),
-				s.chainTimeService.StartOfSlot(duty.Slot()),
+				s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxProposalDelay),
 				s.beaconBlockProposer.Propose,
 				duty,
 			); err != nil {
@@ -94,4 +107,31 @@ func (s *Service) scheduleProposals(ctx context.Context,
 		}(duty)
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Scheduled beacon block proposals")
+}
+
+// proposeEarly attempts to propose as soon as the slot starts, as long
+// as the head of the chain is up-to-date.
+func (s *Service) proposeEarly(ctx context.Context, data interface{}) {
+	duty, ok := data.(*beaconblockproposer.Duty)
+	if !ok {
+		log.Error().Msg("Invalid duty data for proposal")
+		return
+	}
+
+	// Start off by fetching the current head.
+	header, err := s.beaconBlockHeadersProvider.BeaconBlockHeader(ctx, "head")
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to obtain beacon block header")
+		return
+	}
+	if header == nil {
+		log.Error().Msg("Obtained nil beacon block header")
+		return
+	}
+
+	// If the current head is up to the prior slot then we can propose immediately.
+	if header.Header.Message.Slot == duty.Slot()-1 {
+		log.Info().Uint64("slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Msg("Head of chain is up to date; proposing immediately")
+		s.scheduler.RunJobIfExists(ctx, fmt.Sprintf("Beacon block proposal for slot %d", duty.Slot()))
+	}
 }

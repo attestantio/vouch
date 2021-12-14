@@ -1,5 +1,6 @@
 dev:
   - prepare sync committee duties a few epochs before change of period
+  - add `controller.max-proposal-delay` option
 
 1.3.0:
   - make scheduler channels asynchronous, to avoid potential deadlock

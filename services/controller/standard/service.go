@@ -62,12 +62,14 @@ type Service struct {
 	syncCommitteeAggregator       synccommitteeaggregator.Service
 	syncCommitteesSubscriber      synccommitteesubscriber.Service
 	beaconBlockProposer           beaconblockproposer.Service
+	beaconBlockHeadersProvider    eth2client.BeaconBlockHeadersProvider
 	attestationAggregator         attestationaggregator.Service
 	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
 	activeValidators              int
 	subscriptionInfos             map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription
 	subscriptionInfosMutex        sync.Mutex
 	accountsRefresher             accountmanager.Refresher
+	maxProposalDelay              time.Duration
 	maxAttestationDelay           time.Duration
 	attestationAggregationDelay   time.Duration
 	maxSyncCommitteeMessageDelay  time.Duration
@@ -166,9 +168,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeMessenger:        parameters.syncCommitteeMessenger,
 		syncCommitteeAggregator:       parameters.syncCommitteeAggregator,
 		beaconBlockProposer:           parameters.beaconBlockProposer,
+		beaconBlockHeadersProvider:    parameters.beaconBlockHeadersProvider,
 		attestationAggregator:         parameters.attestationAggregator,
 		beaconCommitteeSubscriber:     parameters.beaconCommitteeSubscriber,
 		accountsRefresher:             parameters.accountsRefresher,
+		maxProposalDelay:              parameters.maxProposalDelay,
 		maxAttestationDelay:           parameters.maxAttestationDelay,
 		attestationAggregationDelay:   parameters.attestationAggregationDelay,
 		maxSyncCommitteeMessageDelay:  parameters.maxSyncCommitteeMessageDelay,

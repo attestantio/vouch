@@ -50,9 +50,11 @@ type parameters struct {
 	syncCommitteeMessenger        synccommitteemessenger.Service
 	syncCommitteeAggregator       synccommitteeaggregator.Service
 	beaconBlockProposer           beaconblockproposer.Service
+	beaconBlockHeadersProvider    eth2client.BeaconBlockHeadersProvider
 	attestationAggregator         attestationaggregator.Service
 	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
 	accountsRefresher             accountmanager.Refresher
+	maxProposalDelay              time.Duration
 	maxAttestationDelay           time.Duration
 	attestationAggregationDelay   time.Duration
 	maxSyncCommitteeMessageDelay  time.Duration
@@ -176,6 +178,13 @@ func WithSyncCommitteeAggregator(aggregator synccommitteeaggregator.Service) Par
 	})
 }
 
+// WithBeaconBlockHeadersProvider sets the beacon block headers provider.
+func WithBeaconBlockHeadersProvider(provider eth2client.BeaconBlockHeadersProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.beaconBlockHeadersProvider = provider
+	})
+}
+
 // WithBeaconBlockProposer sets the beacon block propser.
 func WithBeaconBlockProposer(proposer beaconblockproposer.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -201,6 +210,13 @@ func WithBeaconCommitteeSubscriber(subscriber beaconcommitteesubscriber.Service)
 func WithAccountsRefresher(refresher accountmanager.Refresher) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.accountsRefresher = refresher
+	})
+}
+
+// WithMaxProposalDelay sets the maximum delay before proposing.
+func WithMaxProposalDelay(delay time.Duration) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.maxProposalDelay = delay
 	})
 }
 
@@ -281,6 +297,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.beaconBlockProposer == nil {
 		return nil, errors.New("no beacon block proposer specified")
 	}
+	if parameters.beaconBlockHeadersProvider == nil {
+		return nil, errors.New("no beacon block headers provider specified")
+	}
 	if parameters.attestationAggregator == nil {
 		return nil, errors.New("no attestation aggregator specified")
 	}
@@ -294,6 +313,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain spec")
 	}
+	// maxProposalDelay can be 0, so no check for it here.
 	if parameters.maxAttestationDelay == 0 {
 		tmp, exists := spec["SECONDS_PER_SLOT"]
 		if !exists {

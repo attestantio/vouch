@@ -90,7 +90,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.3.0"
+var ReleaseVersion = "1.3.1-dev"
 
 func main() {
 	os.Exit(main2())
@@ -201,6 +201,7 @@ func fetchConfig() error {
 	viper.SetDefault("process-concurrency", int64(runtime.GOMAXPROCS(-1)))
 	viper.SetDefault("strategies.timeout", 2*time.Second)
 	viper.SetDefault("eth2client.timeout", 2*time.Minute)
+	viper.SetDefault("controller.max-proposal-delay", 0)
 	viper.SetDefault("controller.max-attestation-delay", 4*time.Second)
 	viper.SetDefault("controller.max-sync-committee-message-delay", 4*time.Second)
 	viper.SetDefault("controller.attestation-aggregation-delay", 8*time.Second)
@@ -486,10 +487,12 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardcontroller.WithSyncCommitteeMessenger(syncCommitteeMessenger),
 		standardcontroller.WithSyncCommitteeAggregator(syncCommitteeAggregator),
 		standardcontroller.WithBeaconBlockProposer(beaconBlockProposer),
+		standardcontroller.WithBeaconBlockHeadersProvider(eth2Client.(eth2client.BeaconBlockHeadersProvider)),
 		standardcontroller.WithAttestationAggregator(attestationAggregator),
 		standardcontroller.WithBeaconCommitteeSubscriber(beaconCommitteeSubscriber),
 		standardcontroller.WithSyncCommitteeSubscriber(syncCommitteeSubscriber),
 		standardcontroller.WithAccountsRefresher(accountManager.(accountmanager.Refresher)),
+		standardcontroller.WithMaxProposalDelay(viper.GetDuration("controller.max-proposal-delay")),
 		standardcontroller.WithMaxAttestationDelay(viper.GetDuration("controller.max-attestation-delay")),
 		standardcontroller.WithAttestationAggregationDelay(viper.GetDuration("controller.attestation-aggregation-delay")),
 		standardcontroller.WithMaxSyncCommitteeMessageDelay(viper.GetDuration("controller.max-sync-committee-message-delay")),
