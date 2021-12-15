@@ -95,8 +95,7 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 			continue
 		}
 		go func(duty *attester.Duty) {
-			// Adding 200 ms to ensure that head is up to date before we fetch attester duties.
-			jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxAttestationDelay).Add(200 * time.Millisecond)
+			jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxAttestationDelay)
 			if err := s.scheduler.ScheduleJob(ctx,
 				"Attest",
 				fmt.Sprintf("Attestations for slot %d", duty.Slot()),

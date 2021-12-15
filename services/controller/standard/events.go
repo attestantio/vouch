@@ -53,6 +53,16 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 
 	s.monitor.BlockDelay(uint(uint64(data.Slot)%s.slotsPerEpoch), time.Since(s.chainTimeService.StartOfSlot(data.Slot)))
 
+	// If this block is for the prior slot and we may have a proposal waiting then kick
+	// off any proposal for this slot.
+	if data.Slot == s.chainTimeService.CurrentSlot()-1 && s.maxProposalDelay > 0 {
+		proposalJobName := fmt.Sprintf("Beacon block proposal for slot %d", s.chainTimeService.CurrentSlot())
+		if s.scheduler.JobExists(ctx, proposalJobName) {
+			log.Info().Msg("Kicking off proposal for slot now that parent block for last slot has arrived")
+			s.scheduler.RunJobIfExists(ctx, proposalJobName)
+		}
+	}
+
 	// Check to see if there is a reorganisation that requires re-fetching duties.
 	if s.reorgs && s.lastBlockEpoch != 0 {
 		if epoch > s.lastBlockEpoch {
@@ -97,9 +107,9 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	s.previousDutyDependentRoot = data.PreviousDutyDependentRoot
 	s.currentDutyDependentRoot = data.CurrentDutyDependentRoot
 
-	// We give the block half a second to propagate around the rest of the
-	// network before kicking off attestations for the block's slot.
-	time.Sleep(500 * time.Millisecond)
+	// We give the block some time to propagate around the rest of the
+	// nodes before kicking off attestations for the block's slot.
+	time.Sleep(200 * time.Millisecond)
 	jobName := fmt.Sprintf("Attestations for slot %d", data.Slot)
 	if s.scheduler.JobExists(ctx, jobName) {
 		log.Trace().Msg("Kicking off attestations for slot early due to receiving relevant block")
@@ -141,8 +151,11 @@ func (s *Service) handleCurrentDependentRootChanged(ctx context.Context) {
 }
 
 func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {
-	// First thing we do is cancel all scheduled beacon bock proposal jobs.
-	s.scheduler.CancelJobs(ctx, "Beacon block proposal")
+	// First thing we do is cancel all scheduled beacon bock proposal jobs for the epoch.
+	for slot := s.chainTimeService.FirstSlotOfEpoch(epoch); slot < s.chainTimeService.FirstSlotOfEpoch(epoch+1); slot++ {
+		s.scheduler.CancelJobIfExists(ctx, fmt.Sprintf("Early beacon block proposal for slot %d", slot))
+		s.scheduler.CancelJobIfExists(ctx, fmt.Sprintf("Beacon block proposal for slot %d", slot))
+	}
 
 	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, epoch)
 	if err != nil {
