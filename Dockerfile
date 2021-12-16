@@ -1,4 +1,4 @@
-FROM golang:1.14-buster as builder
+FROM golang:1.17-bullseye as builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY . .
 
 RUN go build
 
-FROM debian:buster-slim
+FROM debian:bullseye-slim
 
 WORKDIR /app
 
