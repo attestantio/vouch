@@ -89,7 +89,10 @@ func (s *Service) Subscribe(ctx context.Context,
 	return nil
 }
 
-func (s *Service) calculateSubscriptions(ctx context.Context,
+// calculateSubscriptions calculates the sync committee subscriptions
+// given a set of duties.
+// skipcq: RVV-B0012
+func (*Service) calculateSubscriptions(ctx context.Context,
 	endEpoch phase0.Epoch,
 	duties []*api.SyncCommitteeDuty,
 ) (

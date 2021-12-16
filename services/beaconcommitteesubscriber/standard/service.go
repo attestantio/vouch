@@ -103,7 +103,7 @@ func (s *Service) Subscribe(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to merge attester duties")
 	}
 
-	subscriptionInfo, err := s.calculateSubscriptionInfo(ctx, epoch, accounts, duties)
+	subscriptionInfo, err := s.calculateSubscriptionInfo(ctx, accounts, duties)
 	if err != nil {
 		s.monitor.BeaconCommitteeSubscriptionCompleted(started, "failed")
 		return nil, errors.Wrap(err, "failed to calculate subscription duties")
@@ -155,7 +155,6 @@ func (s *Service) Subscribe(ctx context.Context,
 // calculateSubscriptionInfo calculates our beacon block attesation subnet requirements given a set of duties.
 // It returns a map of slot => committee => subscription information.
 func (s *Service) calculateSubscriptionInfo(ctx context.Context,
-	epoch phase0.Epoch,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 	duties []*attester.Duty,
 ) (map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
@@ -203,7 +202,6 @@ func (s *Service) calculateSubscriptionInfo(ctx context.Context,
 					isAggregator, signature, err := s.attestationAggregator.(attestationaggregator.IsAggregatorProvider).
 						IsAggregator(ctx,
 							duty.ValidatorIndices()[i],
-							duty.CommitteeIndices()[i],
 							duty.Slot(),
 							duty.CommitteeSize(duty.CommitteeIndices()[i]))
 					if err != nil {

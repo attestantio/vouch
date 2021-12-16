@@ -51,6 +51,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // Graffiti provides graffiti.
-func (s *Service) Graffiti(ctx context.Context, slot phase0.Slot, validatorIndex phase0.ValidatorIndex) ([]byte, error) {
+func (s *Service) Graffiti(ctx context.Context, _ phase0.Slot, _ phase0.ValidatorIndex) ([]byte, error) {
 	return s.graffiti, nil
 }

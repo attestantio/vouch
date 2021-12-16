@@ -29,9 +29,9 @@ func New() synccommitteesubscriber.Service {
 }
 
 // Subscribe is a mock.
-func (s *service) Subscribe(ctx context.Context,
-	endEpoch spec.Epoch,
-	duties []*api.SyncCommitteeDuty,
+func (*service) Subscribe(_ context.Context,
+	_ spec.Epoch,
+	_ []*api.SyncCommitteeDuty,
 ) error {
 	return nil
 }

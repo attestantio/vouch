@@ -111,8 +111,9 @@ func main2() int {
 		return 1
 	}
 
-	// runCommands will not return if a command is run.
-	runCommands(ctx, majordomo)
+	if exit := runCommands(ctx); exit {
+		return 0
+	}
 
 	if err := initLogging(); err != nil {
 		log.Error().Err(err).Msg("Failed to initialise logging")
@@ -147,7 +148,7 @@ func main2() int {
 		log.Error().Err(err).Msg("Failed to initialise services")
 		return 1
 	}
-	setReady(ctx, true)
+	setReady(true)
 	log.Info().Msg("All services operational")
 
 	// Wait for signal.
@@ -258,6 +259,7 @@ func initProfiling() error {
 	return nil
 }
 
+// startServices starts all required services.
 func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	log.Trace().Msg("Starting Ethereum 2 client service")
 	eth2Client, err := fetchClient(ctx, viper.GetString("beacon-node-address"))
@@ -281,11 +283,11 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to start metrics service")
 	}
-	if err := registerMetrics(ctx, monitor); err != nil {
+	if err := registerMetrics(monitor); err != nil {
 		return errors.Wrap(err, "failed to register metrics")
 	}
-	setRelease(ctx, ReleaseVersion)
-	setReady(ctx, false)
+	setRelease(ReleaseVersion)
+	setReady(false)
 
 	log.Trace().Msg("Selecting scheduler")
 	scheduler, err := selectScheduler(ctx, monitor)
@@ -506,6 +508,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	return nil
 }
 
+// logModules logs a list of modules with their versions.
 func logModules() {
 	buildInfo, ok := debug.ReadBuildInfo()
 	if ok {
@@ -538,6 +541,7 @@ func resolvePath(path string) string {
 	return filepath.Join(baseDir, path)
 }
 
+// initMajordomo initialises majordomo and its required confidants given user input.
 func initMajordomo(ctx context.Context) (majordomo.Service, error) {
 	majordomo, err := standardmajordomo.New(ctx,
 		standardmajordomo.WithLogLevel(util.LogLevel("majordomo")),
@@ -601,6 +605,7 @@ func initMajordomo(ctx context.Context) (majordomo.Service, error) {
 	return majordomo, nil
 }
 
+// startMonitor starts the relevant metrics monitor given user input.
 func startMonitor(ctx context.Context, chainTime chaintime.Service) (metrics.Service, error) {
 	log.Trace().Msg("Starting metrics service")
 	var monitor metrics.Service
@@ -622,6 +627,7 @@ func startMonitor(ctx context.Context, chainTime chaintime.Service) (metrics.Ser
 	return monitor, nil
 }
 
+// selectScheduler selects the appropriate scheduler given user input.
 func selectScheduler(ctx context.Context, monitor metrics.Service) (scheduler.Service, error) {
 	var scheduler scheduler.Service
 	var err error
@@ -645,6 +651,7 @@ func selectScheduler(ctx context.Context, monitor metrics.Service) (scheduler.Se
 	return scheduler, nil
 }
 
+// startGraffitiProvider starts the appropriate graffiti provider given user input.
 func startGraffitiProvider(ctx context.Context, majordomo majordomo.Service) (graffitiprovider.Service, error) {
 	switch {
 	case viper.Get("graffiti.dynamic") != nil:
@@ -663,6 +670,7 @@ func startGraffitiProvider(ctx context.Context, majordomo majordomo.Service) (gr
 	}
 }
 
+// startValidatorsManager starts the appropriate validators manager given user input.
 func startValidatorsManager(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (validatorsmanager.Service, error) {
 	farFutureEpoch, err := eth2Client.(eth2client.FarFutureEpochProvider).FarFutureEpoch(ctx)
 	if err != nil {
@@ -697,6 +705,7 @@ func startSigner(ctx context.Context, monitor metrics.Service, eth2Client eth2cl
 	return signer, nil
 }
 
+// startAccountManager starts the appropriate account manager given user input.
 func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service, validatorsManager validatorsmanager.Service, majordomo majordomo.Service, chainTime chaintime.Service) (accountmanager.Service, error) {
 	var accountManager accountmanager.Service
 	if viper.Get("accountmanager.dirk") != nil {
@@ -774,6 +783,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 	return nil, errors.New("no account manager defined")
 }
 
+// selectAttestationDataProvider selects the appropriate attestation data provider given user input.
 func selectAttestationDataProvider(ctx context.Context,
 	monitor metrics.Service,
 	eth2Client eth2client.Service,
@@ -828,6 +838,7 @@ func selectAttestationDataProvider(ctx context.Context,
 	return attestationDataProvider, nil
 }
 
+// selectAggregateAttestationProvider selects the appropriate aggregate attestation provider given user input.
 func selectAggregateAttestationProvider(ctx context.Context,
 	monitor metrics.Service,
 	eth2Client eth2client.Service,
@@ -885,6 +896,7 @@ func selectAggregateAttestationProvider(ctx context.Context,
 	return aggregateAttestationProvider, nil
 }
 
+// selectBeaconBlockProposalProvider selects the appropriate beacon block proposal provider given user input.
 func selectBeaconBlockProposalProvider(ctx context.Context,
 	monitor metrics.Service,
 	eth2Client eth2client.Service,
@@ -940,6 +952,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 	return beaconBlockProposalProvider, nil
 }
 
+// selectSyncCommitteeContributionProvider selects the appropriate sync committee contribution provider given user input.
 func selectSyncCommitteeContributionProvider(ctx context.Context,
 	monitor metrics.Service,
 	eth2Client eth2client.Service,
@@ -994,6 +1007,7 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 	return syncCommitteeContributionProvider, nil
 }
 
+// selectSubmitterStrategy selects the appropriate submitter strategy given user input.
 func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (submitter.Service, error) {
 	var submitter submitter.Service
 	var err error
@@ -1052,9 +1066,14 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 	return submitter, nil
 }
 
-func runCommands(ctx context.Context, majordomo majordomo.Service) {
+// runCommands potentially runs commands.
+// Returns true if Vouch should exit.
+// skipcq: RVV-B0012
+func runCommands(ctx context.Context) bool {
 	if viper.GetBool("version") {
 		fmt.Printf("%s\n", ReleaseVersion)
-		os.Exit(0)
+		return true
 	}
+
+	return false
 }

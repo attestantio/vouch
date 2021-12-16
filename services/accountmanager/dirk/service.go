@@ -341,14 +341,14 @@ func accountPathsToVerificationRegexes(paths []string) []*regexp.Regexp {
 	for _, path := range paths {
 		log := log.With().Str("path", path).Logger()
 		parts := strings.Split(path, "/")
-		if len(parts) == 0 || len(parts[0]) == 0 {
+		if len(parts) == 0 || parts[0] == "" {
 			log.Debug().Msg("Invalid path")
 			continue
 		}
 		if len(parts) == 1 {
 			parts = append(parts, ".*")
 		}
-		if len(parts[1]) == 0 {
+		if parts[1] == "" {
 			parts[1] = ".*"
 		}
 		parts[0] = strings.TrimPrefix(parts[0], "^")
@@ -366,7 +366,7 @@ func accountPathsToVerificationRegexes(paths []string) []*regexp.Regexp {
 	return regexes
 }
 
-func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wallet, verificationRegexes []*regexp.Regexp) map[phase0.BLSPubKey]e2wtypes.Account {
+func (*Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wallet, verificationRegexes []*regexp.Regexp) map[phase0.BLSPubKey]e2wtypes.Account {
 	res := make(map[phase0.BLSPubKey]e2wtypes.Account)
 	for account := range wallet.Accounts(ctx) {
 		// Ensure the name matches one of our account paths.

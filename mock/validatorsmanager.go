@@ -29,21 +29,21 @@ func NewValidatorsManager() validatorsmanager.Service {
 }
 
 // RefreshValidatorsFromBeaconNode is a mock.
-func (v *validatorsManager) RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys []phase0.BLSPubKey) error {
+func (*validatorsManager) RefreshValidatorsFromBeaconNode(_ context.Context, _ []phase0.BLSPubKey) error {
 	return nil
 }
 
 // ValidatorsByIndex is a mock.
-func (v *validatorsManager) ValidatorsByIndex(ctx context.Context, indices []phase0.ValidatorIndex) map[phase0.ValidatorIndex]*phase0.Validator {
+func (*validatorsManager) ValidatorsByIndex(_ context.Context, _ []phase0.ValidatorIndex) map[phase0.ValidatorIndex]*phase0.Validator {
 	return make(map[phase0.ValidatorIndex]*phase0.Validator)
 }
 
 // ValidatorsByIndex is a mock.
-func (v *validatorsManager) ValidatorsByPubKey(ctx context.Context, pubKeys []phase0.BLSPubKey) map[phase0.ValidatorIndex]*phase0.Validator {
+func (*validatorsManager) ValidatorsByPubKey(_ context.Context, _ []phase0.BLSPubKey) map[phase0.ValidatorIndex]*phase0.Validator {
 	return make(map[phase0.ValidatorIndex]*phase0.Validator)
 }
 
 // ValidatorStateAtEpoch is a mock.
-func (v *validatorsManager) ValidatorStateAtEpoch(ctx context.Context, index phase0.ValidatorIndex, epoch phase0.Epoch) (api.ValidatorState, error) {
+func (*validatorsManager) ValidatorStateAtEpoch(_ context.Context, _ phase0.ValidatorIndex, _ phase0.Epoch) (api.ValidatorState, error) {
 	return api.ValidatorStateUnknown, nil
 }

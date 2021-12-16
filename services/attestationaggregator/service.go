@@ -34,7 +34,7 @@ type Duty struct {
 // IsAggregatorProvider provides information about if a validator is an aggregator.
 type IsAggregatorProvider interface {
 	// IsAggregator returns true if the given validator is an aggregator for the given committee at the given slot.
-	IsAggregator(ctx context.Context, validatorIndex phase0.ValidatorIndex, committeeIndex phase0.CommitteeIndex, slot phase0.Slot, committeeSize uint64) (bool, phase0.BLSSignature, error)
+	IsAggregator(ctx context.Context, validatorIndex phase0.ValidatorIndex, slot phase0.Slot, committeeSize uint64) (bool, phase0.BLSSignature, error)
 }
 
 // Service is the attestation aggregation service.

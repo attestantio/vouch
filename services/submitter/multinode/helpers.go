@@ -21,7 +21,7 @@ import (
 )
 
 // serviceInfo returns the service name and provider information.
-func (s *Service) serviceInfo(ctx context.Context, submitter interface{}) (string, string) {
+func (*Service) serviceInfo(ctx context.Context, submitter interface{}) (string, string) {
 	serviceName := "<unknown>"
 	provider := "<unknown>"
 	if service, isService := submitter.(eth2client.Service); isService {

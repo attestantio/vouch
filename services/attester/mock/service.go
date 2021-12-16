@@ -28,6 +28,6 @@ func New() *Service {
 }
 
 // Attest carries out attestations for a slot.
-func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attestation, error) {
+func (*Service) Attest(_ context.Context, _ interface{}) ([]*phase0.Attestation, error) {
 	return make([]*phase0.Attestation, 0), nil
 }

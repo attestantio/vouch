@@ -29,14 +29,14 @@ func NewValidatingAccountsProvider() accountmanager.ValidatingAccountsProvider {
 }
 
 // ValidatingAccountsForEpoch is a mock.
-func (v *validatingAccountsProvider) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+func (*validatingAccountsProvider) ValidatingAccountsForEpoch(_ context.Context, _ phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
 	return make(map[phase0.ValidatorIndex]e2wtypes.Account), nil
 }
 
 // ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
-func (v *validatingAccountsProvider) ValidatingAccountsForEpochByIndex(ctx context.Context,
-	epoch phase0.Epoch,
-	indices []phase0.ValidatorIndex,
+func (*validatingAccountsProvider) ValidatingAccountsForEpochByIndex(_ context.Context,
+	_ phase0.Epoch,
+	_ []phase0.ValidatorIndex,
 ) (
 	map[phase0.ValidatorIndex]e2wtypes.Account,
 	error,
@@ -52,4 +52,4 @@ func NewRefresher() accountmanager.Refresher {
 }
 
 // Refresh is a mock.
-func (r *refresher) Refresh(ctx context.Context) {}
+func (*refresher) Refresh(_ context.Context) {}

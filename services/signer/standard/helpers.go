@@ -23,7 +23,7 @@ import (
 )
 
 // sign signs a root, using protected methods if possible.
-func (s *Service) sign(ctx context.Context,
+func (*Service) sign(ctx context.Context,
 	account e2wtypes.Account,
 	root phase0.Root,
 	domain phase0.Domain,

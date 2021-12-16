@@ -266,7 +266,7 @@ func accountPathsToVerificationRegexes(paths []string) []*regexp.Regexp {
 	for _, path := range paths {
 		log := log.With().Str("path", path).Logger()
 		parts := strings.Split(path, "/")
-		if len(parts) == 0 || len(parts[0]) == 0 {
+		if len(parts) == 0 || parts[0] == "" {
 			log.Debug().Msg("Invalid path")
 			continue
 		}
