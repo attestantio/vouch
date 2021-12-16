@@ -22,6 +22,7 @@ import (
 
 // scoreSyncCommitteeContribution generates a score for an aggregate attestation.
 // The score is relative to the completeness of the aggregate.
+// skipcq: RVV-B0012
 func (*Service) scoreSyncCommitteeContribution(ctx context.Context,
 	name string,
 	contribution *altair.SyncCommitteeContribution,
