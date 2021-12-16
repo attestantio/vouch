@@ -147,10 +147,8 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 	}
 
 	attestations, err := s.attest(ctx,
-		duty.Slot(),
 		duty,
 		accountsArray,
-		accountValidatorIndices,
 		committeeIndices,
 		validatorCommitteeIndices,
 		committeeSizes,
@@ -172,10 +170,8 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 
 func (s *Service) attest(
 	ctx context.Context,
-	slot phase0.Slot,
 	duty *attester.Duty,
 	accounts []e2wtypes.Account,
-	validatorIndices []phase0.ValidatorIndex,
 	committeeIndices []phase0.CommitteeIndex,
 	validatorCommitteeIndices []phase0.ValidatorIndex,
 	committeeSizes []uint64,

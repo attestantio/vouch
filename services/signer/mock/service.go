@@ -30,10 +30,10 @@ func New() *Service {
 }
 
 // SignAggregateAndProof signs an aggregate attestation for given slot and root.
-func (s *Service) SignAggregateAndProof(ctx context.Context,
-	account e2wtypes.Account,
-	slot phase0.Slot,
-	root phase0.Root,
+func (s *Service) SignAggregateAndProof(_ context.Context,
+	_ e2wtypes.Account,
+	_ phase0.Slot,
+	_ phase0.Root,
 ) (
 	phase0.BLSSignature,
 	error,
@@ -42,15 +42,15 @@ func (s *Service) SignAggregateAndProof(ctx context.Context,
 }
 
 // SignBeaconAttestation signs a beacon attestation.
-func (s *Service) SignBeaconAttestation(ctx context.Context,
-	account e2wtypes.Account,
-	slot phase0.Slot,
-	committeeIndex phase0.CommitteeIndex,
-	blockRoot phase0.Root,
-	sourceEpoch phase0.Epoch,
-	sourceRoot phase0.Root,
-	targetEpoch phase0.Epoch,
-	targetRoot phase0.Root,
+func (s *Service) SignBeaconAttestation(_ context.Context,
+	_ e2wtypes.Account,
+	_ phase0.Slot,
+	_ phase0.CommitteeIndex,
+	_ phase0.Root,
+	_ phase0.Epoch,
+	_ phase0.Root,
+	_ phase0.Epoch,
+	_ phase0.Root,
 ) (
 	phase0.BLSSignature,
 	error,
@@ -59,15 +59,15 @@ func (s *Service) SignBeaconAttestation(ctx context.Context,
 }
 
 // SignBeaconAttestations signs multiple beacon attestations.
-func (s *Service) SignBeaconAttestations(ctx context.Context,
-	accounts []e2wtypes.Account,
-	slot phase0.Slot,
-	committeeIndices []phase0.CommitteeIndex,
-	blockRoot phase0.Root,
-	sourceEpoch phase0.Epoch,
-	sourceRoot phase0.Root,
-	targetEpoch phase0.Epoch,
-	targetRoot phase0.Root,
+func (s *Service) SignBeaconAttestations(_ context.Context,
+	_ []e2wtypes.Account,
+	_ phase0.Slot,
+	_ []phase0.CommitteeIndex,
+	_ phase0.Root,
+	_ phase0.Epoch,
+	_ phase0.Root,
+	_ phase0.Epoch,
+	_ phase0.Root,
 ) (
 	[]phase0.BLSSignature,
 	error,
@@ -76,13 +76,13 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 }
 
 // SignBeaconBlockProposal signs a beacon block proposal.
-func (s *Service) SignBeaconBlockProposal(ctx context.Context,
-	account e2wtypes.Account,
-	slot phase0.Slot,
-	proposerIndex phase0.ValidatorIndex,
-	parentRoot phase0.Root,
-	stateRoot phase0.Root,
-	bodyRoot phase0.Root,
+func (s *Service) SignBeaconBlockProposal(_ context.Context,
+	_ e2wtypes.Account,
+	_ phase0.Slot,
+	_ phase0.ValidatorIndex,
+	_ phase0.Root,
+	_ phase0.Root,
+	_ phase0.Root,
 ) (
 	phase0.BLSSignature,
 	error,
@@ -92,9 +92,9 @@ func (s *Service) SignBeaconBlockProposal(ctx context.Context,
 
 // SignRANDAOReveal returns a RANDAO signature.
 // This signs an epoch with the "RANDAO" domain.
-func (s *Service) SignRANDAOReveal(ctx context.Context,
-	account e2wtypes.Account,
-	slot phase0.Slot,
+func (s *Service) SignRANDAOReveal(_ context.Context,
+	_ e2wtypes.Account,
+	_ phase0.Slot,
 ) (
 	phase0.BLSSignature,
 	error,
@@ -104,9 +104,9 @@ func (s *Service) SignRANDAOReveal(ctx context.Context,
 
 // SignSlotSelection returns a slot selection signature.
 // This signs a slot with the "selection proof" domain.
-func (s *Service) SignSlotSelection(ctx context.Context,
-	account e2wtypes.Account,
-	slot phase0.Slot,
+func (s *Service) SignSlotSelection(_ context.Context,
+	_ e2wtypes.Account,
+	_ phase0.Slot,
 ) (
 	phase0.BLSSignature,
 	error,
@@ -115,9 +115,9 @@ func (s *Service) SignSlotSelection(ctx context.Context,
 }
 
 // SignContributionAndProof signs a sync committee contribution for given slot and root.
-func (s *Service) SignContributionAndProof(ctx context.Context,
-	account e2wtypes.Account,
-	contributionAndProof *altair.ContributionAndProof,
+func (s *Service) SignContributionAndProof(_ context.Context,
+	_ e2wtypes.Account,
+	_ *altair.ContributionAndProof,
 ) (
 	phase0.BLSSignature,
 	error,
@@ -127,10 +127,10 @@ func (s *Service) SignContributionAndProof(ctx context.Context,
 
 // SignSyncCommitteeRoot returns a root signature.
 // This signs a beacon block root with the "sync committee" domain.
-func (s *Service) SignSyncCommitteeRoot(ctx context.Context,
-	account e2wtypes.Account,
-	epoch phase0.Epoch,
-	root phase0.Root,
+func (s *Service) SignSyncCommitteeRoot(_ context.Context,
+	_ e2wtypes.Account,
+	_ phase0.Epoch,
+	_ phase0.Root,
 ) (
 	phase0.BLSSignature,
 	error,
@@ -140,10 +140,10 @@ func (s *Service) SignSyncCommitteeRoot(ctx context.Context,
 
 // SignSyncCommitteeSelection returns a sync committee selection signature.
 // This signs a slot and subcommittee with the "sync committee selection proof" domain.
-func (s *Service) SignSyncCommitteeSelection(ctx context.Context,
-	account e2wtypes.Account,
-	slot phase0.Slot,
-	subcommitteeIndex uint64,
+func (s *Service) SignSyncCommitteeSelection(_ context.Context,
+	_ e2wtypes.Account,
+	_ phase0.Slot,
+	_ uint64,
 ) (
 	phase0.BLSSignature,
 	error,

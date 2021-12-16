@@ -29,9 +29,9 @@ func New() beaconcommitteesubscriber.Service {
 }
 
 // Subscribe is a mock.
-func (s *service) Subscribe(ctx context.Context,
-	epoch phase0.Epoch,
-	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
+func (s *service) Subscribe(_ context.Context,
+	_ phase0.Epoch,
+	_ map[phase0.ValidatorIndex]e2wtypes.Account,
 ) (map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
 	return make(map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription), nil
 }

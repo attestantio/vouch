@@ -111,8 +111,9 @@ func main2() int {
 		return 1
 	}
 
-	// runCommands will not return if a command is run.
-	runCommands(ctx, majordomo)
+	if exit := runCommands(ctx); exit {
+		return 0
+	}
 
 	if err := initLogging(); err != nil {
 		log.Error().Err(err).Msg("Failed to initialise logging")
@@ -147,7 +148,7 @@ func main2() int {
 		log.Error().Err(err).Msg("Failed to initialise services")
 		return 1
 	}
-	setReady(ctx, true)
+	setReady(true)
 	log.Info().Msg("All services operational")
 
 	// Wait for signal.
@@ -281,11 +282,11 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to start metrics service")
 	}
-	if err := registerMetrics(ctx, monitor); err != nil {
+	if err := registerMetrics(monitor); err != nil {
 		return errors.Wrap(err, "failed to register metrics")
 	}
-	setRelease(ctx, ReleaseVersion)
-	setReady(ctx, false)
+	setRelease(ReleaseVersion)
+	setReady(false)
 
 	log.Trace().Msg("Selecting scheduler")
 	scheduler, err := selectScheduler(ctx, monitor)
@@ -1052,9 +1053,13 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 	return submitter, nil
 }
 
-func runCommands(ctx context.Context, majordomo majordomo.Service) {
+// runCommands potentially runs commands.
+// Returns true if Vouch should exit.
+func runCommands(ctx context.Context) bool {
 	if viper.GetBool("version") {
 		fmt.Printf("%s\n", ReleaseVersion)
-		os.Exit(0)
+		return true
 	}
+
+	return false
 }

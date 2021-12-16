@@ -40,7 +40,7 @@ func NewLogCapture() *LogCapture {
 }
 
 // Run is the hook to capture log entries.  It also stops the entry from being printed.
-func (c *LogCapture) Run(e *zerolog.Event, level zerolog.Level, msg string) {
+func (c *LogCapture) Run(e *zerolog.Event, _ zerolog.Level, msg string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries = append(c.entries, msg)
