@@ -259,14 +259,27 @@ func initProfiling() error {
 	return nil
 }
 
-// startServices starts all required services.
-func startServices(ctx context.Context, majordomo majordomo.Service) error {
-	log.Trace().Msg("Starting Ethereum 2 client service")
-	eth2Client, err := fetchClient(ctx, viper.GetString("beacon-node-address"))
+func startClient(ctx context.Context) (eth2client.Service, error) {
+	log.Trace().Msg("Starting consensus client service")
+	var consensusClient eth2client.Service
+	var err error
+	if len(viper.GetStringSlice("beacon-node-addresses")) > 0 {
+		consensusClient, err = fetchMultiClient(ctx, viper.GetStringSlice("beacon-node-addresses"))
+	} else {
+		consensusClient, err = fetchClient(ctx, viper.GetString("beacon-node-address"))
+	}
 	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("failed to fetch client %s", viper.GetString("beacon-node-address")))
+		return nil, err
 	}
 
+	return consensusClient, nil
+}
+
+func startServices(ctx context.Context, majordomo majordomo.Service) error {
+	eth2Client, err := startClient(ctx)
+	if err != nil {
+		return err
+	}
 	log.Trace().Msg("Starting chain time service")
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithLogLevel(util.LogLevel("chaintime")),
