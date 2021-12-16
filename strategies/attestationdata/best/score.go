@@ -23,7 +23,7 @@ import (
 
 // scoreAttestationData generates a score for attestation data.
 // The score is relative to the reward expected by proposing the block.
-func (s *Service) scoreAttestationData(ctx context.Context,
+func (*Service) scoreAttestationData(ctx context.Context,
 	provider eth2client.AttestationDataProvider,
 	name string,
 	attestationData *phase0.AttestationData,

@@ -29,40 +29,40 @@ func New() scheduler.Service {
 }
 
 // ScheduleJob schedules a one-off job for a given time.
-func (s *service) ScheduleJob(_ context.Context, _ string, _ string, _ time.Time, _ scheduler.JobFunc, _ interface{}) error {
+func (*service) ScheduleJob(_ context.Context, _ string, _ string, _ time.Time, _ scheduler.JobFunc, _ interface{}) error {
 	return nil
 }
 
 // SchedulePeriodicJob schedules a job to run in a loop.
-func (s *service) SchedulePeriodicJob(_ context.Context, _ string, _ string, _ scheduler.RuntimeFunc, _ interface{}, _ scheduler.JobFunc, _ interface{}) error {
+func (*service) SchedulePeriodicJob(_ context.Context, _ string, _ string, _ scheduler.RuntimeFunc, _ interface{}, _ scheduler.JobFunc, _ interface{}) error {
 	return nil
 }
 
 // RunJob runs a named job immediately.
-func (s *service) RunJob(_ context.Context, _ string) error {
+func (*service) RunJob(_ context.Context, _ string) error {
 	return nil
 }
 
 // JobExists returns true if a job exists.
-func (s *service) JobExists(_ context.Context, _ string) bool {
+func (*service) JobExists(_ context.Context, _ string) bool {
 	return false
 }
 
 // ListJobs returns the names of all jobs.
-func (s *service) ListJobs(_ context.Context) []string {
+func (*service) ListJobs(_ context.Context) []string {
 	return []string{}
 }
 
 // RunJobIfExists runs a job if it exists.
-func (s *service) RunJobIfExists(_ context.Context, _ string) {}
+func (*service) RunJobIfExists(_ context.Context, _ string) {}
 
 // CancelJob removes a named job.
-func (s *service) CancelJob(_ context.Context, _ string) error {
+func (*service) CancelJob(_ context.Context, _ string) error {
 	return nil
 }
 
 // CancelJobIfExists cancels a job that may or may not exist.
-func (s *service) CancelJobIfExists(_ context.Context, _ string) {}
+func (*service) CancelJobIfExists(_ context.Context, _ string) {}
 
 // CancelJobs cancels all jobs with the given prefix.
-func (s *service) CancelJobs(_ context.Context, _ string) {}
+func (*service) CancelJobs(_ context.Context, _ string) {}

@@ -51,7 +51,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // SubmitBeaconBlock submits a block.
-func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error {
+func (*Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error {
 	if block == nil {
 		return errors.New("no beacon block supplied")
 	}
@@ -67,7 +67,7 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSi
 }
 
 // SubmitAttestations submits multiple attestations.
-func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error {
+func (*Service) SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error {
 	if len(attestations) == 0 {
 		return errors.New("no attestations supplied")
 	}
@@ -83,7 +83,7 @@ func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0
 }
 
 // SubmitBeaconCommitteeSubscriptions submits a batch of beacon committee subscriptions.
-func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*api.BeaconCommitteeSubscription) error {
+func (*Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*api.BeaconCommitteeSubscription) error {
 	if subscriptions == nil {
 		return errors.New("no subscriptions supplied")
 	}
@@ -107,7 +107,7 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 }
 
 // SubmitAggregateAttestations submits aggregate attestations.
-func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []*phase0.SignedAggregateAndProof) error {
+func (*Service) SubmitAggregateAttestations(ctx context.Context, aggregates []*phase0.SignedAggregateAndProof) error {
 	if len(aggregates) == 0 {
 		return errors.New("no aggregate attestations supplied")
 	}
@@ -123,7 +123,7 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []
 }
 
 // SubmitSyncCommitteeMessages submits sync committee messages.
-func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
+func (*Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
 	if len(messages) == 0 {
 		return errors.New("no sync committee messages supplied")
 	}
@@ -139,7 +139,7 @@ func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*a
 }
 
 // SubmitSyncCommitteeSubscriptions submits a batch of sync committee subscriptions.
-func (s *Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+func (*Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
 	if len(subscriptions) == 0 {
 		return errors.New("no sync committee subscriptions supplied")
 	}
@@ -155,7 +155,7 @@ func (s *Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscrip
 }
 
 // SubmitSyncCommitteeContributions submits sync committee contributions.
-func (s *Service) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
+func (*Service) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
 	if len(contributionAndProofs) == 0 {
 		return errors.New("no sync committee contribution and proofs supplied")
 	}

@@ -27,9 +27,9 @@ func New() beaconblockproposer.Service {
 }
 
 // Prepare is a mock.
-func (s *service) Prepare(_ context.Context, _ interface{}) error {
+func (*service) Prepare(_ context.Context, _ interface{}) error {
 	return nil
 }
 
 // Propose is a mock.
-func (s *service) Propose(_ context.Context, _ interface{}) {}
+func (*service) Propose(_ context.Context, _ interface{}) {}

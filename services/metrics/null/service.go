@@ -30,78 +30,78 @@ func New(_ context.Context) *Service {
 }
 
 // Presenter provides the presenter for this service.
-func (s *Service) Presenter() string {
+func (*Service) Presenter() string {
 	return "null"
 }
 
 // JobScheduled is called when a job is scheduled.
-func (s *Service) JobScheduled(_ string) {}
+func (*Service) JobScheduled(_ string) {}
 
 // JobCancelled is called when a scheduled job is cancelled.
-func (s *Service) JobCancelled(_ string) {}
+func (*Service) JobCancelled(_ string) {}
 
 // JobStartedOnTimer is called when a scheduled job is started due to meeting its time.
-func (s *Service) JobStartedOnTimer(_ string) {}
+func (*Service) JobStartedOnTimer(_ string) {}
 
 // JobStartedOnSignal is called when a scheduled job is started due to being manually signal.
-func (s *Service) JobStartedOnSignal(_ string) {}
+func (*Service) JobStartedOnSignal(_ string) {}
 
 // NewEpoch is called when vouch starts processing a new epoch.
-func (s *Service) NewEpoch() {}
+func (*Service) NewEpoch() {}
 
 // BlockDelay provides the delay between the start of a slot and vouch receiving its block.
-func (s *Service) BlockDelay(_ uint, _ time.Duration) {}
+func (*Service) BlockDelay(_ uint, _ time.Duration) {}
 
 // BeaconBlockProposalCompleted is called when a block proposal process has completed.
-func (s *Service) BeaconBlockProposalCompleted(_ time.Time, _ phase0.Slot, _ string) {}
+func (*Service) BeaconBlockProposalCompleted(_ time.Time, _ phase0.Slot, _ string) {}
 
 // AttestationsCompleted is called when an attestation process has completed.
-func (s *Service) AttestationsCompleted(_ time.Time, _ phase0.Slot, _ int, _ string) {
+func (*Service) AttestationsCompleted(_ time.Time, _ phase0.Slot, _ int, _ string) {
 }
 
 // AttestationAggregationCompleted is called when an attestation aggregation process has completed.
-func (s *Service) AttestationAggregationCompleted(_ time.Time, _ phase0.Slot, _ string) {
+func (*Service) AttestationAggregationCompleted(_ time.Time, _ phase0.Slot, _ string) {
 }
 
 // AttestationAggregationCoverage measures the attestation ratio of the attestation aggregation.
-func (s *Service) AttestationAggregationCoverage(_ float64) {}
+func (*Service) AttestationAggregationCoverage(_ float64) {}
 
 // BeaconCommitteeSubscriptionCompleted is called when an beacon committee subscription process has completed.
-func (s *Service) BeaconCommitteeSubscriptionCompleted(_ time.Time, _ string) {}
+func (*Service) BeaconCommitteeSubscriptionCompleted(_ time.Time, _ string) {}
 
 // BeaconCommitteeSubscribers sets the number of beacon committees to which our validators are subscribed.
-func (s *Service) BeaconCommitteeSubscribers(_ int) {}
+func (*Service) BeaconCommitteeSubscribers(_ int) {}
 
 // BeaconCommitteeAggregators sets the number of beacon committees for which our validators are aggregating.
-func (s *Service) BeaconCommitteeAggregators(_ int) {}
+func (*Service) BeaconCommitteeAggregators(_ int) {}
 
 // Accounts sets the number of accounts in a given state.
-func (s *Service) Accounts(_ string, _ uint64) {}
+func (*Service) Accounts(_ string, _ uint64) {}
 
 // ClientOperation provides a generic monitor for client operations.
-func (s *Service) ClientOperation(_ string, _ string, _ bool, _ time.Duration) {
+func (*Service) ClientOperation(_ string, _ string, _ bool, _ time.Duration) {
 }
 
 // StrategyOperation provides a generic monitor for strategy operations.
-func (s *Service) StrategyOperation(_ string, _ string, _ string, _ time.Duration) {
+func (*Service) StrategyOperation(_ string, _ string, _ string, _ time.Duration) {
 }
 
 // SyncCommitteeAggregationsCompleted is called when a sync committee aggregation process has completed.
-func (s *Service) SyncCommitteeAggregationsCompleted(_ time.Time, _ phase0.Slot, _ int, _ string) {
+func (*Service) SyncCommitteeAggregationsCompleted(_ time.Time, _ phase0.Slot, _ int, _ string) {
 }
 
 // SyncCommitteeAggregationCoverage measures the message ratio of the sync committee aggregation.
-func (s *Service) SyncCommitteeAggregationCoverage(_ float64) {
+func (*Service) SyncCommitteeAggregationCoverage(_ float64) {
 }
 
 // SyncCommitteeMessagesCompleted is called when a sync committee message process has completed.
-func (s *Service) SyncCommitteeMessagesCompleted(_ time.Time, _ phase0.Slot, _ int, _ string) {
+func (*Service) SyncCommitteeMessagesCompleted(_ time.Time, _ phase0.Slot, _ int, _ string) {
 }
 
 // SyncCommitteeSubscriptionCompleted is called when a sync committee subscription process has completed.
-func (s *Service) SyncCommitteeSubscriptionCompleted(_ time.Time, _ string) {
+func (*Service) SyncCommitteeSubscriptionCompleted(_ time.Time, _ string) {
 }
 
 // SyncCommitteeSubscribers sets the number of sync committees to which our validators are subscribed.
-func (s *Service) SyncCommitteeSubscribers(_ int) {
+func (*Service) SyncCommitteeSubscribers(_ int) {
 }

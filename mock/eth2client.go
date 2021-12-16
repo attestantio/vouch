@@ -71,7 +71,7 @@ func NewErroringSlotDurationProvider() eth2client.SlotDurationProvider {
 }
 
 // SlotDuration is a mock.
-func (m *ErroringSlotDurationProvider) SlotDuration(_ context.Context) (time.Duration, error) {
+func (*ErroringSlotDurationProvider) SlotDuration(_ context.Context) (time.Duration, error) {
 	return 0, errors.New("mock")
 }
 
@@ -118,7 +118,7 @@ func NewErroringSlotsPerEpochProvider() eth2client.SlotsPerEpochProvider {
 }
 
 // SlotsPerEpoch is a mock.
-func (m *ErroringSlotsPerEpochProvider) SlotsPerEpoch(_ context.Context) (uint64, error) {
+func (*ErroringSlotsPerEpochProvider) SlotsPerEpoch(_ context.Context) (uint64, error) {
 	return 0, errors.New("error")
 }
 
@@ -131,7 +131,7 @@ func NewProposerDutiesProvider() eth2client.ProposerDutiesProvider {
 }
 
 // ProposerDuties is a mock.
-func (m *ProposerDutiesProvider) ProposerDuties(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) ([]*api.ProposerDuty, error) {
+func (*ProposerDutiesProvider) ProposerDuties(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) ([]*api.ProposerDuty, error) {
 	return make([]*api.ProposerDuty, 0), nil
 }
 
@@ -144,7 +144,7 @@ func NewAttesterDutiesProvider() eth2client.AttesterDutiesProvider {
 }
 
 // AttesterDuties is a mock.
-func (m *AttesterDutiesProvider) AttesterDuties(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) ([]*api.AttesterDuty, error) {
+func (*AttesterDutiesProvider) AttesterDuties(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) ([]*api.AttesterDuty, error) {
 	return make([]*api.AttesterDuty, 0), nil
 }
 
@@ -157,7 +157,7 @@ func NewSyncCommitteeDutiesProvider() eth2client.SyncCommitteeDutiesProvider {
 }
 
 // SyncCommitteeDuties is a mock.
-func (m *SyncCommitteeDutiesProvider) SyncCommitteeDuties(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) ([]*api.SyncCommitteeDuty, error) {
+func (*SyncCommitteeDutiesProvider) SyncCommitteeDuties(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) ([]*api.SyncCommitteeDuty, error) {
 	return make([]*api.SyncCommitteeDuty, 0), nil
 }
 
@@ -170,7 +170,7 @@ func NewSyncCommitteeSubscriptionsSubmitter() eth2client.SyncCommitteeSubscripti
 }
 
 // SubmitSyncCommitteeSubscriptions is a mock
-func (m *SyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+func (*SyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
 	return nil
 }
 
@@ -183,7 +183,7 @@ func NewErroringSyncCommitteeSubscriptionsSubmitter() eth2client.SyncCommitteeSu
 }
 
 // SubmitSyncCommitteeSubscriptions is a mock
-func (m *ErroringSyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+func (*ErroringSyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
 	return errors.New("error")
 }
 
@@ -196,7 +196,7 @@ func NewSyncCommitteeMessagesSubmitter() eth2client.SyncCommitteeMessagesSubmitt
 }
 
 // SubmitSyncCommitteeMessages submits sync committee messages.
-func (m *SyncCommitteeMessagesSubmitter) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
+func (*SyncCommitteeMessagesSubmitter) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
 	return nil
 }
 
@@ -209,7 +209,7 @@ func NewErroringSyncCommitteeMessagesSubmitter() eth2client.SyncCommitteeMessage
 }
 
 // SubmitSyncCommitteeMessages submits sync committee messages.
-func (m *ErroringSyncCommitteeMessagesSubmitter) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
+func (*ErroringSyncCommitteeMessagesSubmitter) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
 	return errors.New("error")
 }
 
@@ -222,7 +222,7 @@ func NewSyncCommitteeContributionsSubmitter() eth2client.SyncCommitteeContributi
 }
 
 // SubmitSyncCommitteeContributions submits sync committee contributions.
-func (m *SyncCommitteeContributionsSubmitter) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
+func (*SyncCommitteeContributionsSubmitter) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
 	return nil
 }
 
@@ -235,7 +235,7 @@ func NewErroringSyncCommitteeContributionsSubmitter() eth2client.SyncCommitteeCo
 }
 
 // SubmitSyncCommitteeContributions submits sync committee contributions.
-func (m *ErroringSyncCommitteeContributionsSubmitter) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
+func (*ErroringSyncCommitteeContributionsSubmitter) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
 	return errors.New("error")
 }
 
@@ -248,7 +248,7 @@ func NewEventsProvider() eth2client.EventsProvider {
 }
 
 // Events is a mock
-func (m *EventsProvider) Events(ctx context.Context, topics []string, handler eth2client.EventHandlerFunc) error {
+func (*EventsProvider) Events(ctx context.Context, topics []string, handler eth2client.EventHandlerFunc) error {
 	return nil
 }
 
@@ -261,7 +261,7 @@ func NewAttestationsSubmitter() eth2client.AttestationsSubmitter {
 }
 
 // SubmitAttestations is a mock.
-func (m *AttestationsSubmitter) SubmitAttestations(_ context.Context, _ []*phase0.Attestation) error {
+func (*AttestationsSubmitter) SubmitAttestations(_ context.Context, _ []*phase0.Attestation) error {
 	return nil
 }
 
@@ -274,7 +274,7 @@ func NewErroringAttestationsSubmitter() eth2client.AttestationsSubmitter {
 }
 
 // SubmitAttestations is a mock.
-func (m *ErroringAttestationsSubmitter) SubmitAttestations(_ context.Context, _ []*phase0.Attestation) error {
+func (*ErroringAttestationsSubmitter) SubmitAttestations(_ context.Context, _ []*phase0.Attestation) error {
 	return errors.New("error")
 }
 
@@ -287,7 +287,7 @@ func NewBeaconBlockSubmitter() eth2client.BeaconBlockSubmitter {
 }
 
 // SubmitBeaconBlock is a mock.
-func (m *BeaconBlockSubmitter) SubmitBeaconBlock(_ context.Context, _ *spec.VersionedSignedBeaconBlock) error {
+func (*BeaconBlockSubmitter) SubmitBeaconBlock(_ context.Context, _ *spec.VersionedSignedBeaconBlock) error {
 	return nil
 }
 
@@ -300,7 +300,7 @@ func NewErroringBeaconBlockSubmitter() eth2client.BeaconBlockSubmitter {
 }
 
 // SubmitBeaconBlock is a mock.
-func (m *ErroringBeaconBlockSubmitter) SubmitBeaconBlock(_ context.Context, _ *spec.VersionedSignedBeaconBlock) error {
+func (*ErroringBeaconBlockSubmitter) SubmitBeaconBlock(_ context.Context, _ *spec.VersionedSignedBeaconBlock) error {
 	return errors.New("error")
 }
 
@@ -313,7 +313,7 @@ func NewAggregateAttestationsSubmitter() eth2client.AggregateAttestationsSubmitt
 }
 
 // SubmitAggregateAttestations is a mock.
-func (m *AggregateAttestationsSubmitter) SubmitAggregateAttestations(_ context.Context, _ []*phase0.SignedAggregateAndProof) error {
+func (*AggregateAttestationsSubmitter) SubmitAggregateAttestations(_ context.Context, _ []*phase0.SignedAggregateAndProof) error {
 	return nil
 }
 
@@ -326,7 +326,7 @@ func NewErroringAggregateAttestationsSubmitter() eth2client.AggregateAttestation
 }
 
 // SubmitAggregateAttestations is a mock.
-func (m *ErroringAggregateAttestationsSubmitter) SubmitAggregateAttestations(_ context.Context, _ []*phase0.SignedAggregateAndProof) error {
+func (*ErroringAggregateAttestationsSubmitter) SubmitAggregateAttestations(_ context.Context, _ []*phase0.SignedAggregateAndProof) error {
 	return errors.New("error")
 }
 
@@ -339,7 +339,7 @@ func NewBeaconCommitteeSubscriptionsSubmitter() eth2client.BeaconCommitteeSubscr
 }
 
 // SubmitBeaconCommitteeSubscriptions is a mock.
-func (m *BeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(_ context.Context, _ []*api.BeaconCommitteeSubscription) error {
+func (*BeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(_ context.Context, _ []*api.BeaconCommitteeSubscription) error {
 	return nil
 }
 
@@ -352,7 +352,7 @@ func NewErroringBeaconCommitteeSubscriptionsSubmitter() eth2client.BeaconCommitt
 }
 
 // SubmitBeaconCommitteeSubscriptions is a mock.
-func (m *ErroringBeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(_ context.Context, _ []*api.BeaconCommitteeSubscription) error {
+func (*ErroringBeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(_ context.Context, _ []*api.BeaconCommitteeSubscription) error {
 	return errors.New("error")
 }
 
@@ -365,7 +365,7 @@ func NewBeaconBlockProposalProvider() eth2client.BeaconBlockProposalProvider {
 }
 
 // BeaconBlockProposal is a mock.
-func (m *BeaconBlockProposalProvider) BeaconBlockProposal(_ context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*spec.VersionedBeaconBlock, error) {
+func (*BeaconBlockProposalProvider) BeaconBlockProposal(_ context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*spec.VersionedBeaconBlock, error) {
 	// Graffiti should be 32 bytes.
 	fixedGraffiti := make([]byte, 32)
 	copy(fixedGraffiti, graffiti)
@@ -460,7 +460,7 @@ func NewBeaconBlockHeadersProvider() eth2client.BeaconBlockHeadersProvider {
 }
 
 // BeaconBlockHeader provides the block header of a given block ID.
-func (m *BeaconBlockHeadersProvider) BeaconBlockHeader(ctx context.Context, blockID string) (*api.BeaconBlockHeader, error) {
+func (*BeaconBlockHeadersProvider) BeaconBlockHeader(ctx context.Context, blockID string) (*api.BeaconBlockHeader, error) {
 	return &api.BeaconBlockHeader{
 		Root: phase0.Root([32]byte{
 			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
@@ -505,7 +505,7 @@ func NewSignedBeaconBlockProvider() eth2client.SignedBeaconBlockProvider {
 }
 
 // SignedBeaconBlock is a mock.
-func (m *SignedBeaconBlockProvider) SignedBeaconBlock(_ context.Context, _ string) (*spec.VersionedSignedBeaconBlock, error) {
+func (*SignedBeaconBlockProvider) SignedBeaconBlock(_ context.Context, _ string) (*spec.VersionedSignedBeaconBlock, error) {
 	return &spec.VersionedSignedBeaconBlock{
 		Version: spec.DataVersionPhase0,
 		Phase0: &phase0.SignedBeaconBlock{
@@ -525,7 +525,7 @@ func NewAttestationDataProvider() eth2client.AttestationDataProvider {
 }
 
 // AttestationData is a mock.
-func (m *AttestationDataProvider) AttestationData(_ context.Context, slot phase0.Slot, committeeIndex phase0.CommitteeIndex) (*phase0.AttestationData, error) {
+func (*AttestationDataProvider) AttestationData(_ context.Context, slot phase0.Slot, committeeIndex phase0.CommitteeIndex) (*phase0.AttestationData, error) {
 	return &phase0.AttestationData{
 		Slot:  slot,
 		Index: committeeIndex,
@@ -559,7 +559,7 @@ func NewErroringAttestationDataProvider() eth2client.AttestationDataProvider {
 }
 
 // AttestationData is a mock.
-func (m *ErroringAttestationDataProvider) AttestationData(_ context.Context, _ phase0.Slot, _ phase0.CommitteeIndex) (*phase0.AttestationData, error) {
+func (*ErroringAttestationDataProvider) AttestationData(_ context.Context, _ phase0.Slot, _ phase0.CommitteeIndex) (*phase0.AttestationData, error) {
 	return nil, errors.New("mock error")
 }
 
@@ -572,7 +572,7 @@ func NewNilAttestationDataProvider() eth2client.AttestationDataProvider {
 }
 
 // AttestationData is a mock.
-func (m *NilAttestationDataProvider) AttestationData(_ context.Context, _ phase0.Slot, _ phase0.CommitteeIndex) (*phase0.AttestationData, error) {
+func (*NilAttestationDataProvider) AttestationData(_ context.Context, _ phase0.Slot, _ phase0.CommitteeIndex) (*phase0.AttestationData, error) {
 	return nil, nil
 }
 
@@ -605,7 +605,7 @@ func NewAggregateAttestationProvider() eth2client.AggregateAttestationProvider {
 }
 
 // AggregateAttestation is a mock.
-func (m *AggregateAttestationProvider) AggregateAttestation(_ context.Context, slot phase0.Slot, _ phase0.Root) (*phase0.Attestation, error) {
+func (*AggregateAttestationProvider) AggregateAttestation(_ context.Context, slot phase0.Slot, _ phase0.Root) (*phase0.Attestation, error) {
 	aggregationBits := bitfield.NewBitlist(128)
 	aggregationBits.SetBitAt(1, true)
 	aggregationBits.SetBitAt(3, true)
@@ -657,7 +657,7 @@ func NewErroringAggregateAttestationProvider() eth2client.AggregateAttestationPr
 }
 
 // AggregateAttestation is a mock.
-func (m *ErroringAggregateAttestationProvider) AggregateAttestation(_ context.Context, _ phase0.Slot, _ phase0.Root) (*phase0.Attestation, error) {
+func (*ErroringAggregateAttestationProvider) AggregateAttestation(_ context.Context, _ phase0.Slot, _ phase0.Root) (*phase0.Attestation, error) {
 	return nil, errors.New("mock error")
 }
 
@@ -670,7 +670,7 @@ func NewNilAggregateAttestationProvider() eth2client.AggregateAttestationProvide
 }
 
 // AggregateAttestation is a mock.
-func (m *NilAggregateAttestationProvider) AggregateAttestation(_ context.Context, _ phase0.Slot, _ phase0.Root) (*phase0.Attestation, error) {
+func (*NilAggregateAttestationProvider) AggregateAttestation(_ context.Context, _ phase0.Slot, _ phase0.Root) (*phase0.Attestation, error) {
 	return nil, nil
 }
 
@@ -703,7 +703,7 @@ func NewErroringSpecProvider() eth2client.SpecProvider {
 }
 
 // Spec is a mock.
-func (m *ErroringSpecProvider) Spec(_ context.Context) (map[string]interface{}, error) {
+func (*ErroringSpecProvider) Spec(_ context.Context) (map[string]interface{}, error) {
 	return nil, errors.New("error")
 }
 
@@ -716,7 +716,7 @@ func NewSpecProvider() eth2client.SpecProvider {
 }
 
 // Spec is a mock.
-func (m *SpecProvider) Spec(_ context.Context) (map[string]interface{}, error) {
+func (*SpecProvider) Spec(_ context.Context) (map[string]interface{}, error) {
 	return map[string]interface{}{
 		// Mainnet params (give or take).
 		"DOMAIN_AGGREGATE_AND_PROOF":               phase0.DomainType{0x06, 0x00, 0x00, 0x00},
@@ -747,7 +747,7 @@ func NewForkScheduleProvider() eth2client.ForkScheduleProvider {
 }
 
 // ForkSchedule is a mock.
-func (m *ForkScheduleProvider) ForkSchedule(_ context.Context) ([]*phase0.Fork, error) {
+func (*ForkScheduleProvider) ForkSchedule(_ context.Context) ([]*phase0.Fork, error) {
 	return []*phase0.Fork{
 		{
 			PreviousVersion: phase0.Version{0x00, 0x01, 0x02, 0x03},
@@ -771,7 +771,7 @@ func NewDomainProvider() eth2client.DomainProvider {
 }
 
 // Domain is a mock.
-func (m *DomainProvider) Domain(_ context.Context, domainType phase0.DomainType, _ phase0.Epoch) (phase0.Domain, error) {
+func (*DomainProvider) Domain(_ context.Context, domainType phase0.DomainType, _ phase0.Epoch) (phase0.Domain, error) {
 	var domain phase0.Domain
 	// Put the domain type in the first four bytes, to differentiate signatures.
 	copy(domain[:], domainType[:])
@@ -788,7 +788,7 @@ func NewErroringDomainProvider() eth2client.DomainProvider {
 }
 
 // Domain is a mock.
-func (m *ErroringDomainProvider) Domain(_ context.Context, _ phase0.DomainType, _ phase0.Epoch) (phase0.Domain, error) {
+func (*ErroringDomainProvider) Domain(_ context.Context, _ phase0.DomainType, _ phase0.Epoch) (phase0.Domain, error) {
 	return phase0.Domain{}, errors.New("error")
 }
 
@@ -831,7 +831,7 @@ func NewValidatorsProvider() eth2client.ValidatorsProvider {
 }
 
 // Validators is a mock.
-func (m *ValidatorsProvider) Validators(_ context.Context, _ string, validators []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]*api.Validator, error) {
+func (*ValidatorsProvider) Validators(_ context.Context, _ string, validators []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]*api.Validator, error) {
 	base := map[phase0.ValidatorIndex]*api.Validator{
 		0: _epochValidator(0,
 			"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
@@ -948,7 +948,7 @@ func (m *ValidatorsProvider) Validators(_ context.Context, _ string, validators 
 }
 
 // ValidatorsByPubKey is a mock.
-func (m *ValidatorsProvider) ValidatorsByPubKey(_ context.Context, _ string, validators []phase0.BLSPubKey) (map[phase0.ValidatorIndex]*api.Validator, error) {
+func (*ValidatorsProvider) ValidatorsByPubKey(_ context.Context, _ string, validators []phase0.BLSPubKey) (map[phase0.ValidatorIndex]*api.Validator, error) {
 	base := map[phase0.ValidatorIndex]*api.Validator{
 		0: _epochValidator(0,
 			"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
@@ -1073,7 +1073,7 @@ func NewValidatorsWithoutBalanceProvider() eth2client.ValidatorsProvider {
 }
 
 // Validators is a mock.
-func (m *ValidatorsWithoutBalanceProvider) Validators(_ context.Context, _ string, validators []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]*api.Validator, error) {
+func (*ValidatorsWithoutBalanceProvider) Validators(_ context.Context, _ string, validators []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]*api.Validator, error) {
 	base := map[phase0.ValidatorIndex]*api.Validator{
 		0: _epochValidator(0,
 			"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
@@ -1190,7 +1190,7 @@ func (m *ValidatorsWithoutBalanceProvider) Validators(_ context.Context, _ strin
 }
 
 // ValidatorsByPubKey is a mock.
-func (m *ValidatorsWithoutBalanceProvider) ValidatorsByPubKey(_ context.Context, _ string, validators []phase0.BLSPubKey) (map[phase0.ValidatorIndex]*api.Validator, error) {
+func (*ValidatorsWithoutBalanceProvider) ValidatorsByPubKey(_ context.Context, _ string, validators []phase0.BLSPubKey) (map[phase0.ValidatorIndex]*api.Validator, error) {
 	base := map[phase0.ValidatorIndex]*api.Validator{
 		0: _epochValidator(0,
 			"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
@@ -1307,7 +1307,7 @@ func (m *ValidatorsWithoutBalanceProvider) ValidatorsByPubKey(_ context.Context,
 }
 
 // ValidatorsWithoutBalance is a mock.
-func (m *ValidatorsWithoutBalanceProvider) ValidatorsWithoutBalance(_ context.Context, _ string, validators []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]*api.Validator, error) {
+func (*ValidatorsWithoutBalanceProvider) ValidatorsWithoutBalance(_ context.Context, _ string, validators []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]*api.Validator, error) {
 	base := map[phase0.ValidatorIndex]*api.Validator{
 		0: _epochValidator(0,
 			"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
@@ -1436,7 +1436,7 @@ func NewSyncCommitteeContributionProvider() eth2client.SyncCommitteeContribution
 }
 
 // SyncCommitteeContribution is a mock.
-func (m *SyncCommitteeContributionProvider) SyncCommitteeContribution(_ context.Context, slot phase0.Slot, subcommitteeIndex uint64, beaconBlockRoot phase0.Root) (*altair.SyncCommitteeContribution, error) {
+func (*SyncCommitteeContributionProvider) SyncCommitteeContribution(_ context.Context, slot phase0.Slot, subcommitteeIndex uint64, beaconBlockRoot phase0.Root) (*altair.SyncCommitteeContribution, error) {
 	aggregationBits := bitfield.NewBitvector128()
 	aggregationBits.SetBitAt(1, true)
 	aggregationBits.SetBitAt(3, true)
@@ -1469,7 +1469,7 @@ func NewErroringSyncCommitteeContributionProvider() eth2client.SyncCommitteeCont
 }
 
 // SyncCommitteeContribution is a mock.
-func (m *ErroringSyncCommitteeContributionProvider) SyncCommitteeContribution(_ context.Context, _ phase0.Slot, _ uint64, _ phase0.Root) (*altair.SyncCommitteeContribution, error) {
+func (*ErroringSyncCommitteeContributionProvider) SyncCommitteeContribution(_ context.Context, _ phase0.Slot, _ uint64, _ phase0.Root) (*altair.SyncCommitteeContribution, error) {
 	return nil, errors.New("mock error")
 }
 
@@ -1482,7 +1482,7 @@ func NewNilSyncCommitteeContributionProvider() eth2client.SyncCommitteeContribut
 }
 
 // SyncCommitteeContribution is a mock.
-func (m *NilSyncCommitteeContributionProvider) SyncCommitteeContribution(_ context.Context, _ phase0.Slot, _ uint64, _ phase0.Root) (*altair.SyncCommitteeContribution, error) {
+func (*NilSyncCommitteeContributionProvider) SyncCommitteeContribution(_ context.Context, _ phase0.Slot, _ uint64, _ phase0.Root) (*altair.SyncCommitteeContribution, error) {
 	return nil, nil
 }
 

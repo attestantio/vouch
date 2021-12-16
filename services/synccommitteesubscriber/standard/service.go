@@ -89,7 +89,7 @@ func (s *Service) Subscribe(ctx context.Context,
 	return nil
 }
 
-func (s *Service) calculateSubscriptions(ctx context.Context,
+func (*Service) calculateSubscriptions(ctx context.Context,
 	endEpoch phase0.Epoch,
 	duties []*api.SyncCommitteeDuty,
 ) (

@@ -30,7 +30,7 @@ func New() *Service {
 }
 
 // SignAggregateAndProof signs an aggregate attestation for given slot and root.
-func (s *Service) SignAggregateAndProof(_ context.Context,
+func (*Service) SignAggregateAndProof(_ context.Context,
 	_ e2wtypes.Account,
 	_ phase0.Slot,
 	_ phase0.Root,
@@ -42,7 +42,7 @@ func (s *Service) SignAggregateAndProof(_ context.Context,
 }
 
 // SignBeaconAttestation signs a beacon attestation.
-func (s *Service) SignBeaconAttestation(_ context.Context,
+func (*Service) SignBeaconAttestation(_ context.Context,
 	_ e2wtypes.Account,
 	_ phase0.Slot,
 	_ phase0.CommitteeIndex,
@@ -59,7 +59,7 @@ func (s *Service) SignBeaconAttestation(_ context.Context,
 }
 
 // SignBeaconAttestations signs multiple beacon attestations.
-func (s *Service) SignBeaconAttestations(_ context.Context,
+func (*Service) SignBeaconAttestations(_ context.Context,
 	_ []e2wtypes.Account,
 	_ phase0.Slot,
 	_ []phase0.CommitteeIndex,
@@ -76,7 +76,7 @@ func (s *Service) SignBeaconAttestations(_ context.Context,
 }
 
 // SignBeaconBlockProposal signs a beacon block proposal.
-func (s *Service) SignBeaconBlockProposal(_ context.Context,
+func (*Service) SignBeaconBlockProposal(_ context.Context,
 	_ e2wtypes.Account,
 	_ phase0.Slot,
 	_ phase0.ValidatorIndex,
@@ -92,7 +92,7 @@ func (s *Service) SignBeaconBlockProposal(_ context.Context,
 
 // SignRANDAOReveal returns a RANDAO signature.
 // This signs an epoch with the "RANDAO" domain.
-func (s *Service) SignRANDAOReveal(_ context.Context,
+func (*Service) SignRANDAOReveal(_ context.Context,
 	_ e2wtypes.Account,
 	_ phase0.Slot,
 ) (
@@ -104,7 +104,7 @@ func (s *Service) SignRANDAOReveal(_ context.Context,
 
 // SignSlotSelection returns a slot selection signature.
 // This signs a slot with the "selection proof" domain.
-func (s *Service) SignSlotSelection(_ context.Context,
+func (*Service) SignSlotSelection(_ context.Context,
 	_ e2wtypes.Account,
 	_ phase0.Slot,
 ) (
@@ -115,7 +115,7 @@ func (s *Service) SignSlotSelection(_ context.Context,
 }
 
 // SignContributionAndProof signs a sync committee contribution for given slot and root.
-func (s *Service) SignContributionAndProof(_ context.Context,
+func (*Service) SignContributionAndProof(_ context.Context,
 	_ e2wtypes.Account,
 	_ *altair.ContributionAndProof,
 ) (
@@ -127,7 +127,7 @@ func (s *Service) SignContributionAndProof(_ context.Context,
 
 // SignSyncCommitteeRoot returns a root signature.
 // This signs a beacon block root with the "sync committee" domain.
-func (s *Service) SignSyncCommitteeRoot(_ context.Context,
+func (*Service) SignSyncCommitteeRoot(_ context.Context,
 	_ e2wtypes.Account,
 	_ phase0.Epoch,
 	_ phase0.Root,
@@ -140,7 +140,7 @@ func (s *Service) SignSyncCommitteeRoot(_ context.Context,
 
 // SignSyncCommitteeSelection returns a sync committee selection signature.
 // This signs a slot and subcommittee with the "sync committee selection proof" domain.
-func (s *Service) SignSyncCommitteeSelection(_ context.Context,
+func (*Service) SignSyncCommitteeSelection(_ context.Context,
 	_ e2wtypes.Account,
 	_ phase0.Slot,
 	_ uint64,

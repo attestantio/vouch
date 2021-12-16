@@ -28,9 +28,9 @@ func New() *Service {
 }
 
 // SetBeaconBlockRoot sets the beacon block root used for a given slot.
-func (s *Service) SetBeaconBlockRoot(_ phase0.Slot, _ phase0.Root) {
+func (*Service) SetBeaconBlockRoot(_ phase0.Slot, _ phase0.Root) {
 }
 
 // Aggregate carries out aggregation for a slot and committee.
-func (s *Service) Aggregate(_ context.Context, _ interface{}) {
+func (*Service) Aggregate(_ context.Context, _ interface{}) {
 }
