@@ -51,6 +51,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // SubmitBeaconBlock submits a block.
+// skipcq: RVV-B0012
 func (*Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error {
 	if block == nil {
 		return errors.New("no beacon block supplied")
@@ -67,6 +68,7 @@ func (*Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSign
 }
 
 // SubmitAttestations submits multiple attestations.
+// skipcq: RVV-B0012
 func (*Service) SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error {
 	if len(attestations) == 0 {
 		return errors.New("no attestations supplied")
