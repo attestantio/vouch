@@ -170,7 +170,7 @@ func NewSyncCommitteeSubscriptionsSubmitter() eth2client.SyncCommitteeSubscripti
 }
 
 // SubmitSyncCommitteeSubscriptions is a mock
-func (*SyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+func (*SyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(_ context.Context, _ []*api.SyncCommitteeSubscription) error {
 	return nil
 }
 
@@ -183,7 +183,7 @@ func NewErroringSyncCommitteeSubscriptionsSubmitter() eth2client.SyncCommitteeSu
 }
 
 // SubmitSyncCommitteeSubscriptions is a mock
-func (*ErroringSyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+func (*ErroringSyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(_ context.Context, _ []*api.SyncCommitteeSubscription) error {
 	return errors.New("error")
 }
 
@@ -196,7 +196,7 @@ func NewSyncCommitteeMessagesSubmitter() eth2client.SyncCommitteeMessagesSubmitt
 }
 
 // SubmitSyncCommitteeMessages submits sync committee messages.
-func (*SyncCommitteeMessagesSubmitter) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
+func (*SyncCommitteeMessagesSubmitter) SubmitSyncCommitteeMessages(_ context.Context, _ []*altair.SyncCommitteeMessage) error {
 	return nil
 }
 
@@ -209,7 +209,7 @@ func NewErroringSyncCommitteeMessagesSubmitter() eth2client.SyncCommitteeMessage
 }
 
 // SubmitSyncCommitteeMessages submits sync committee messages.
-func (*ErroringSyncCommitteeMessagesSubmitter) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
+func (*ErroringSyncCommitteeMessagesSubmitter) SubmitSyncCommitteeMessages(_ context.Context, _ []*altair.SyncCommitteeMessage) error {
 	return errors.New("error")
 }
 
@@ -222,7 +222,7 @@ func NewSyncCommitteeContributionsSubmitter() eth2client.SyncCommitteeContributi
 }
 
 // SubmitSyncCommitteeContributions submits sync committee contributions.
-func (*SyncCommitteeContributionsSubmitter) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
+func (*SyncCommitteeContributionsSubmitter) SubmitSyncCommitteeContributions(_ context.Context, _ []*altair.SignedContributionAndProof) error {
 	return nil
 }
 
@@ -235,7 +235,7 @@ func NewErroringSyncCommitteeContributionsSubmitter() eth2client.SyncCommitteeCo
 }
 
 // SubmitSyncCommitteeContributions submits sync committee contributions.
-func (*ErroringSyncCommitteeContributionsSubmitter) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
+func (*ErroringSyncCommitteeContributionsSubmitter) SubmitSyncCommitteeContributions(_ context.Context, _ []*altair.SignedContributionAndProof) error {
 	return errors.New("error")
 }
 
@@ -248,7 +248,7 @@ func NewEventsProvider() eth2client.EventsProvider {
 }
 
 // Events is a mock
-func (*EventsProvider) Events(ctx context.Context, topics []string, handler eth2client.EventHandlerFunc) error {
+func (*EventsProvider) Events(_ context.Context, _ []string, _ eth2client.EventHandlerFunc) error {
 	return nil
 }
 
@@ -460,7 +460,7 @@ func NewBeaconBlockHeadersProvider() eth2client.BeaconBlockHeadersProvider {
 }
 
 // BeaconBlockHeader provides the block header of a given block ID.
-func (*BeaconBlockHeadersProvider) BeaconBlockHeader(ctx context.Context, blockID string) (*api.BeaconBlockHeader, error) {
+func (*BeaconBlockHeadersProvider) BeaconBlockHeader(_ context.Context, _ string) (*api.BeaconBlockHeader, error) {
 	return &api.BeaconBlockHeader{
 		Root: phase0.Root([32]byte{
 			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
