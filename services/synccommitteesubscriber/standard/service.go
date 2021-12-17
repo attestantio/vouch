@@ -36,7 +36,7 @@ type Service struct {
 var log zerolog.Logger
 
 // New creates a new sync committee subscriber.
-func New(ctx context.Context, params ...Parameter) (*Service, error) {
+func New(_ context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem with parameters")
@@ -91,8 +91,7 @@ func (s *Service) Subscribe(ctx context.Context,
 
 // calculateSubscriptions calculates the sync committee subscriptions
 // given a set of duties.
-// skipcq: RVV-B0012
-func (*Service) calculateSubscriptions(ctx context.Context,
+func (*Service) calculateSubscriptions(_ context.Context,
 	endEpoch phase0.Epoch,
 	duties []*api.SyncCommitteeDuty,
 ) (

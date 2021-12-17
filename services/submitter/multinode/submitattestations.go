@@ -44,6 +44,8 @@ func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0
 	return nil
 }
 
+// submitAttestations carries out the internal work of submitting attestations.
+// skipcq: RVV-B0001
 func (s *Service) submitAttestations(ctx context.Context,
 	sem *semaphore.Weighted,
 	wg *sync.WaitGroup,

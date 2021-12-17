@@ -1068,8 +1068,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 
 // runCommands potentially runs commands.
 // Returns true if Vouch should exit.
-// skipcq: RVV-B0012
-func runCommands(ctx context.Context) bool {
+func runCommands(_ context.Context) bool {
 	if viper.GetBool("version") {
 		fmt.Printf("%s\n", ReleaseVersion)
 		return true

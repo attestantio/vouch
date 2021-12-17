@@ -238,7 +238,7 @@ func (s *Service) refreshValidators(ctx context.Context) error {
 	return nil
 }
 
-func credentialsFromCerts(ctx context.Context, clientCert []byte, clientKey []byte, caCert []byte) (credentials.TransportCredentials, error) {
+func credentialsFromCerts(_ context.Context, clientCert []byte, clientKey []byte, caCert []byte) (credentials.TransportCredentials, error) {
 	clientPair, err := tls.X509KeyPair(clientCert, clientKey)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load client keypair")

@@ -20,7 +20,7 @@ import (
 )
 
 // ValidatorsByPubKey fetches the requested validators from local store given their public keys.
-func (s *Service) ValidatorsByPubKey(ctx context.Context, pubKeys []phase0.BLSPubKey) map[phase0.ValidatorIndex]*phase0.Validator {
+func (s *Service) ValidatorsByPubKey(_ context.Context, pubKeys []phase0.BLSPubKey) map[phase0.ValidatorIndex]*phase0.Validator {
 	res := make(map[phase0.ValidatorIndex]*phase0.Validator)
 	s.validatorsMutex.RLock()
 	for _, pubKey := range pubKeys {
