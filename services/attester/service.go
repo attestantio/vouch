@@ -31,7 +31,7 @@ type Duty struct {
 }
 
 // NewDuty creates a new beacon block attester duty.
-func NewDuty(ctx context.Context,
+func NewDuty(_ context.Context,
 	slot phase0.Slot,
 	committeesAtSlot uint64,
 	validatorIndices []phase0.ValidatorIndex,

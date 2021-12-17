@@ -33,7 +33,7 @@ type Service struct{}
 var log zerolog.Logger
 
 // New creates a new submitter.
-func New(ctx context.Context, params ...Parameter) (*Service, error) {
+func New(_ context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem with parameters")
@@ -51,8 +51,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // SubmitBeaconBlock submits a block.
-// skipcq: RVV-B0012
-func (*Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error {
+func (*Service) SubmitBeaconBlock(_ context.Context, block *spec.VersionedSignedBeaconBlock) error {
 	if block == nil {
 		return errors.New("no beacon block supplied")
 	}
@@ -68,8 +67,7 @@ func (*Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSign
 }
 
 // SubmitAttestations submits multiple attestations.
-// skipcq: RVV-B0012
-func (*Service) SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error {
+func (*Service) SubmitAttestations(_ context.Context, attestations []*phase0.Attestation) error {
 	if len(attestations) == 0 {
 		return errors.New("no attestations supplied")
 	}
@@ -85,8 +83,7 @@ func (*Service) SubmitAttestations(ctx context.Context, attestations []*phase0.A
 }
 
 // SubmitBeaconCommitteeSubscriptions submits a batch of beacon committee subscriptions.
-// skipcq: RVV-B0012
-func (*Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*api.BeaconCommitteeSubscription) error {
+func (*Service) SubmitBeaconCommitteeSubscriptions(_ context.Context, subscriptions []*api.BeaconCommitteeSubscription) error {
 	if subscriptions == nil {
 		return errors.New("no subscriptions supplied")
 	}
@@ -110,8 +107,7 @@ func (*Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscrip
 }
 
 // SubmitAggregateAttestations submits aggregate attestations.
-// skipcq: RVV-B0012
-func (*Service) SubmitAggregateAttestations(ctx context.Context, aggregates []*phase0.SignedAggregateAndProof) error {
+func (*Service) SubmitAggregateAttestations(_ context.Context, aggregates []*phase0.SignedAggregateAndProof) error {
 	if len(aggregates) == 0 {
 		return errors.New("no aggregate attestations supplied")
 	}
@@ -127,8 +123,7 @@ func (*Service) SubmitAggregateAttestations(ctx context.Context, aggregates []*p
 }
 
 // SubmitSyncCommitteeMessages submits sync committee messages.
-// skipcq: RVV-B0012
-func (*Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
+func (*Service) SubmitSyncCommitteeMessages(_ context.Context, messages []*altair.SyncCommitteeMessage) error {
 	if len(messages) == 0 {
 		return errors.New("no sync committee messages supplied")
 	}
@@ -144,8 +139,7 @@ func (*Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*alt
 }
 
 // SubmitSyncCommitteeSubscriptions submits a batch of sync committee subscriptions.
-// skipcq: RVV-B0012
-func (*Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+func (*Service) SubmitSyncCommitteeSubscriptions(_ context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
 	if len(subscriptions) == 0 {
 		return errors.New("no sync committee subscriptions supplied")
 	}
@@ -161,8 +155,7 @@ func (*Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscripti
 }
 
 // SubmitSyncCommitteeContributions submits sync committee contributions.
-// skipcq: RVV-B0012
-func (*Service) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
+func (*Service) SubmitSyncCommitteeContributions(_ context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
 	if len(contributionAndProofs) == 0 {
 		return errors.New("no sync committee contribution and proofs supplied")
 	}

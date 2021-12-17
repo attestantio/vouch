@@ -168,6 +168,8 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 	return attestations, nil
 }
 
+// attest carries out the internal work of attesting.
+// skipcq: RVV-B0001
 func (s *Service) attest(
 	ctx context.Context,
 	duty *attester.Duty,

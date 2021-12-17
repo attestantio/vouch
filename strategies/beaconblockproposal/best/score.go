@@ -23,7 +23,7 @@ import (
 
 // scoreBeaconBlockPropsal generates a score for a beacon block.
 // The score is relative to the reward expected by proposing the block.
-func scoreBeaconBlockProposal(ctx context.Context, name string, parentSlot phase0.Slot, blockProposal *spec.VersionedBeaconBlock) float64 {
+func scoreBeaconBlockProposal(_ context.Context, name string, parentSlot phase0.Slot, blockProposal *spec.VersionedBeaconBlock) float64 {
 	if blockProposal == nil {
 		return 0
 	}

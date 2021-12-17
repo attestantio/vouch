@@ -31,7 +31,7 @@ type Service struct {
 var log zerolog.Logger
 
 // New creates a new graffiti provider service.
-func New(ctx context.Context, params ...Parameter) (*Service, error) {
+func New(_ context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem with parameters")
@@ -51,6 +51,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // Graffiti provides graffiti.
-func (s *Service) Graffiti(ctx context.Context, _ phase0.Slot, _ phase0.ValidatorIndex) ([]byte, error) {
+func (s *Service) Graffiti(_ context.Context, _ phase0.Slot, _ phase0.ValidatorIndex) ([]byte, error) {
 	return s.graffiti, nil
 }

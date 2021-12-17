@@ -84,7 +84,7 @@ type Service struct {
 var log zerolog.Logger
 
 // New creates a new prometheus metrics service.
-func New(ctx context.Context, params ...Parameter) (*Service, error) {
+func New(_ context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem with parameters")
@@ -145,6 +145,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // Presenter returns the presenter for the events.
-func (s *Service) Presenter() string {
+func (*Service) Presenter() string {
 	return "prometheus"
 }

@@ -21,8 +21,7 @@ import (
 
 // scoreAggregateAttestation generates a score for an aggregate attestation.
 // The score is relative to the completeness of the aggregate.
-// skipcq: RVV-B0012
-func (*Service) scoreAggregateAttestation(ctx context.Context,
+func (*Service) scoreAggregateAttestation(_ context.Context,
 	name string,
 	aggregate *phase0.Attestation,
 ) float64 {

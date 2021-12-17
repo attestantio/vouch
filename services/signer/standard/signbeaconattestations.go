@@ -94,6 +94,8 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 	return sigs, nil
 }
 
+// signBeaconAttestations carries out the internal work of signing beacon attestations.
+// skipcq: RVV-B0001
 func (s *Service) signBeaconAttestations(ctx context.Context,
 	accounts []e2wtypes.Account,
 	slot phase0.Slot,

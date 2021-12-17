@@ -30,7 +30,7 @@ func init() {
 }
 
 // LogWithID returns a new logger based on the supplied logger with an additional ID field.
-func LogWithID(ctx context.Context, log zerolog.Logger, tag string) zerolog.Logger {
+func LogWithID(_ context.Context, log zerolog.Logger, tag string) zerolog.Logger {
 	// #nosec G404
 	return log.With().Str(tag, fmt.Sprintf("%02x", rand.Int31())).Logger()
 }
