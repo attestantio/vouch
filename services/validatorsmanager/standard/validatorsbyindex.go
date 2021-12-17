@@ -20,7 +20,7 @@ import (
 )
 
 // ValidatorsByIndex fetches the requested validators from local store given their indices.
-func (s *Service) ValidatorsByIndex(ctx context.Context, indices []phase0.ValidatorIndex) map[phase0.ValidatorIndex]*phase0.Validator {
+func (s *Service) ValidatorsByIndex(_ context.Context, indices []phase0.ValidatorIndex) map[phase0.ValidatorIndex]*phase0.Validator {
 	res := make(map[phase0.ValidatorIndex]*phase0.Validator)
 	s.validatorsMutex.RLock()
 	for _, index := range indices {
