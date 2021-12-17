@@ -29,29 +29,14 @@ func (s *Service) RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys [
 	var validators map[phase0.ValidatorIndex]*api.Validator
 	var err error
 	started := time.Now()
-	// Use ValidatorsWithoutBalance by preference (check relative timings to see if this has improved.)
-	if validatorsWithoutBalanceProvider, isProvider := s.validatorsProvider.(eth2client.ValidatorsWithoutBalanceProvider); isProvider {
-		log.Trace().Msg("Using ValidatorsWithoutBalanceByPubKey to refresh validator information")
-		validators, err = validatorsWithoutBalanceProvider.ValidatorsWithoutBalanceByPubKey(ctx, "head", pubKeys)
-		if service, isService := s.validatorsProvider.(eth2client.Service); isService {
-			s.clientMonitor.ClientOperation(service.Address(), "validators without balance", err == nil, time.Since(started))
-		} else {
-			s.clientMonitor.ClientOperation("<unknown>", "validators without balance", err == nil, time.Since(started))
-		}
-		if err != nil {
-			return errors.Wrap(err, "failed to obtain validators without balances")
-		}
+	validators, err = s.validatorsProvider.ValidatorsByPubKey(ctx, "head", pubKeys)
+	if service, isService := s.validatorsProvider.(eth2client.Service); isService {
+		s.clientMonitor.ClientOperation(service.Address(), "validators", err == nil, time.Since(started))
 	} else {
-		log.Trace().Msg("Using ValidatorsByPubKey to refresh validator information")
-		validators, err = s.validatorsProvider.ValidatorsByPubKey(ctx, "head", pubKeys)
-		if service, isService := s.validatorsProvider.(eth2client.Service); isService {
-			s.clientMonitor.ClientOperation(service.Address(), "validators", err == nil, time.Since(started))
-		} else {
-			s.clientMonitor.ClientOperation("<unknown>", "validators", err == nil, time.Since(started))
-		}
-		if err != nil {
-			return errors.Wrap(err, "failed to obtain validators")
-		}
+		s.clientMonitor.ClientOperation("<unknown>", "validators", err == nil, time.Since(started))
+	}
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain validators")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Int("received", len(validators)).Msg("Received validators from beacon node")
 
