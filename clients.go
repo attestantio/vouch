@@ -20,9 +20,11 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	httpclient "github.com/attestantio/go-eth2-client/http"
+	"github.com/attestantio/go-eth2-client/metrics"
 	multiclient "github.com/attestantio/go-eth2-client/multi"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 )
 
 var clients map[string]eth2client.Service
@@ -60,11 +62,20 @@ func fetchMultiClient(ctx context.Context, addresses []string) (eth2client.Servi
 		clients = make(map[string]eth2client.Service)
 	}
 
+	// The prometheus metrics service requires a client connection, and the client connection
+	// requires a prometheus metrics service.  Square the circle by creating a local metrics
+	// service if required.
+	var monitor metrics.Service
+	if viper.Get("metrics.prometheus") != nil {
+		monitor = &consensusMonitor{}
+	}
+
 	var client eth2client.Service
 	var exists bool
 	if client, exists = clients[strings.Join(addresses, ",")]; !exists {
 		var err error
 		client, err = multiclient.New(ctx,
+			multiclient.WithMonitor(monitor),
 			multiclient.WithLogLevel(util.LogLevel("eth2client")),
 			multiclient.WithTimeout(util.Timeout("eth2client")),
 			multiclient.WithAddresses(addresses))
@@ -74,4 +85,11 @@ func fetchMultiClient(ctx context.Context, addresses []string) (eth2client.Servi
 		clients[strings.Join(addresses, ",")] = client
 	}
 	return client, nil
+}
+
+// consensusMonitor is a monitor for the consensus client.
+type consensusMonitor struct{}
+
+func (c *consensusMonitor) Presenter() string {
+	return "prometheus"
 }

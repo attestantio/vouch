@@ -63,6 +63,7 @@ type Service struct {
 	syncCommitteesSubscriber      synccommitteesubscriber.Service
 	beaconBlockProposer           beaconblockproposer.Service
 	beaconBlockHeadersProvider    eth2client.BeaconBlockHeadersProvider
+	signedBeaconBlockProvider     eth2client.SignedBeaconBlockProvider
 	attestationAggregator         attestationaggregator.Service
 	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
 	activeValidators              int
@@ -169,6 +170,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeAggregator:       parameters.syncCommitteeAggregator,
 		beaconBlockProposer:           parameters.beaconBlockProposer,
 		beaconBlockHeadersProvider:    parameters.beaconBlockHeadersProvider,
+		signedBeaconBlockProvider:     parameters.signedBeaconBlockProvider,
 		attestationAggregator:         parameters.attestationAggregator,
 		beaconCommitteeSubscriber:     parameters.beaconCommitteeSubscriber,
 		accountsRefresher:             parameters.accountsRefresher,
