@@ -90,6 +90,7 @@ func fetchMultiClient(ctx context.Context, addresses []string) (eth2client.Servi
 // consensusMonitor is a monitor for the consensus client.
 type consensusMonitor struct{}
 
-func (c *consensusMonitor) Presenter() string {
+// Presenter provides the presenter for the monitor.
+func (*consensusMonitor) Presenter() string {
 	return "prometheus"
 }
