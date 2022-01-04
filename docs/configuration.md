@@ -19,7 +19,21 @@ log-file: /home/me/vouch.log
 log-level: Debug
 
 # beacon-node-address is the address of the beacon node.  Can be prysm, lighthouse, teku
+# Overridden by beacon-node-addresses if present.
 beacon-node-address: localhost:4000
+
+# beacon-node-addresseses is the list of address of the beacon nodes.  Can be prysm, lighthouse, teku
+# If multiple addresses are supplied here it makes Vouch resilient in the situation where a beacon
+# node goes offline entirely.  If this occurs to the currently used node then the next in the list will
+# be used.  If a beacon node comes back online it is added to the end of the list of potential nodes to
+# use.
+#
+# Note that some beacon nodes have slightly different behavior in their events.  As such, users should
+# ensure they are happy with the event output of all beacon nodes in this list.
+beacon-node-addresses:
+  - localhost:4000
+  - localhost:5051
+  - localhost:5052
 
 # metrics is the module that logs metrics, in this case using prometheus.
 metrics:

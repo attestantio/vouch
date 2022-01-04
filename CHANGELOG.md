@@ -1,6 +1,7 @@
 dev:
   - prepare sync committee duties a few epochs before change of period
   - add `controller.max-proposal-delay` option
+  - integrate multi-client consensus client connections.  See configuration documentation for details.
 
 1.3.0:
   - make scheduler channels asynchronous, to avoid potential deadlock

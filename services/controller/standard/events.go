@@ -58,7 +58,7 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	if data.Slot == s.chainTimeService.CurrentSlot()-1 && s.maxProposalDelay > 0 {
 		proposalJobName := fmt.Sprintf("Beacon block proposal for slot %d", s.chainTimeService.CurrentSlot())
 		if s.scheduler.JobExists(ctx, proposalJobName) {
-			log.Info().Msg("Kicking off proposal for slot now that parent block for last slot has arrived")
+			log.Trace().Msg("Kicking off proposal for slot now that parent block for last slot has arrived")
 			s.scheduler.RunJobIfExists(ctx, proposalJobName)
 		}
 	}

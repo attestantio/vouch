@@ -131,7 +131,9 @@ func (s *Service) proposeEarly(ctx context.Context, data interface{}) {
 
 	// If the current head is up to the prior slot then we can propose immediately.
 	if header.Header.Message.Slot == duty.Slot()-1 {
-		log.Info().Uint64("slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Msg("Head of chain is up to date; proposing immediately")
+		log.Trace().Uint64("slot", uint64(duty.Slot())).Uint64("header_slot", uint64(header.Header.Message.Slot)).Uint64("validator_index", uint64(duty.ValidatorIndex())).Str("header", header.String()).Msg("Head of chain is up to date; proposing immediately")
 		s.scheduler.RunJobIfExists(ctx, fmt.Sprintf("Beacon block proposal for slot %d", duty.Slot()))
+	} else {
+		log.Trace().Uint64("slot", uint64(duty.Slot())).Uint64("header_slot", uint64(header.Header.Message.Slot)).Uint64("validator_index", uint64(duty.ValidatorIndex())).Str("header", header.String()).Msg("Head of chain is not up to date; not proposing immediately")
 	}
 }

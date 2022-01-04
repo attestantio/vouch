@@ -51,6 +51,7 @@ type parameters struct {
 	syncCommitteeAggregator       synccommitteeaggregator.Service
 	beaconBlockProposer           beaconblockproposer.Service
 	beaconBlockHeadersProvider    eth2client.BeaconBlockHeadersProvider
+	signedBeaconBlockProvider     eth2client.SignedBeaconBlockProvider
 	attestationAggregator         attestationaggregator.Service
 	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
 	accountsRefresher             accountmanager.Refresher
@@ -185,6 +186,13 @@ func WithBeaconBlockHeadersProvider(provider eth2client.BeaconBlockHeadersProvid
 	})
 }
 
+// WithSignedBeaconBlockProvider sets the signed beacon block provider.
+func WithSignedBeaconBlockProvider(provider eth2client.SignedBeaconBlockProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.signedBeaconBlockProvider = provider
+	})
+}
+
 // WithBeaconBlockProposer sets the beacon block propser.
 func WithBeaconBlockProposer(proposer beaconblockproposer.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -300,6 +308,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.beaconBlockHeadersProvider == nil {
 		return nil, errors.New("no beacon block headers provider specified")
 	}
+	if parameters.signedBeaconBlockProvider == nil {
+		return nil, errors.New("no signed beacon block provider specified")
+	}
 	if parameters.attestationAggregator == nil {
 		return nil, errors.New("no attestation aggregator specified")
 	}
@@ -313,49 +324,25 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain spec")
 	}
+	tmp, exists := spec["SECONDS_PER_SLOT"]
+	if !exists {
+		return nil, errors.New("SECONDS_PER_SLOT not found in spec")
+	}
+	slotDuration, ok := tmp.(time.Duration)
+	if !ok {
+		return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
+	}
 	// maxProposalDelay can be 0, so no check for it here.
 	if parameters.maxAttestationDelay == 0 {
-		tmp, exists := spec["SECONDS_PER_SLOT"]
-		if !exists {
-			return nil, errors.New("SECONDS_PER_SLOT not found in spec")
-		}
-		slotDuration, ok := tmp.(time.Duration)
-		if !ok {
-			return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
-		}
 		parameters.maxAttestationDelay = slotDuration / 3
 	}
 	if parameters.attestationAggregationDelay == 0 {
-		tmp, exists := spec["SECONDS_PER_SLOT"]
-		if !exists {
-			return nil, errors.New("SECONDS_PER_SLOT not found in spec")
-		}
-		slotDuration, ok := tmp.(time.Duration)
-		if !ok {
-			return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
-		}
 		parameters.attestationAggregationDelay = slotDuration * 2 / 3
 	}
 	if parameters.maxSyncCommitteeMessageDelay == 0 {
-		tmp, exists := spec["SECONDS_PER_SLOT"]
-		if !exists {
-			return nil, errors.New("SECONDS_PER_SLOT not found in spec")
-		}
-		slotDuration, ok := tmp.(time.Duration)
-		if !ok {
-			return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
-		}
 		parameters.maxSyncCommitteeMessageDelay = slotDuration / 3
 	}
 	if parameters.syncCommitteeAggregationDelay == 0 {
-		tmp, exists := spec["SECONDS_PER_SLOT"]
-		if !exists {
-			return nil, errors.New("SECONDS_PER_SLOT not found in spec")
-		}
-		slotDuration, ok := tmp.(time.Duration)
-		if !ok {
-			return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
-		}
 		parameters.syncCommitteeAggregationDelay = slotDuration * 2 / 3
 	}
 	// Sync committee duties provider/messenger/aggregator/subscriber are optional so no checks here.
