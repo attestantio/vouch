@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -72,7 +73,8 @@ func fetchMultiClient(ctx context.Context, addresses []string) (eth2client.Servi
 
 	var client eth2client.Service
 	var exists bool
-	if client, exists = clients[strings.Join(addresses, ",")]; !exists {
+	multiID := fmt.Sprintf("multi:%s", strings.Join(addresses, ","))
+	if client, exists = clients[multiID]; !exists {
 		var err error
 		client, err = multiclient.New(ctx,
 			multiclient.WithMonitor(monitor),
@@ -82,7 +84,7 @@ func fetchMultiClient(ctx context.Context, addresses []string) (eth2client.Servi
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate client")
 		}
-		clients[strings.Join(addresses, ",")] = client
+		clients[multiID] = client
 	}
 	return client, nil
 }
