@@ -63,18 +63,18 @@ func fetchMultiClient(ctx context.Context, addresses []string) (eth2client.Servi
 		clients = make(map[string]eth2client.Service)
 	}
 
-	// The prometheus metrics service requires a client connection, and the client connection
-	// requires a prometheus metrics service.  Square the circle by creating a local metrics
-	// service if required.
-	var monitor metrics.Service
-	if viper.Get("metrics.prometheus") != nil {
-		monitor = &consensusMonitor{}
-	}
-
 	var client eth2client.Service
 	var exists bool
 	multiID := fmt.Sprintf("multi:%s", strings.Join(addresses, ","))
 	if client, exists = clients[multiID]; !exists {
+		// The prometheus metrics service requires a client connection, and the client connection
+		// requires a prometheus metrics service.  Square the circle by creating a local metrics
+		// service if required.
+		var monitor metrics.Service
+		if viper.Get("metrics.prometheus") != nil {
+			monitor = &consensusMonitor{}
+		}
+
 		var err error
 		client, err = multiclient.New(ctx,
 			multiclient.WithMonitor(monitor),
