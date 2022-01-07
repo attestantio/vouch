@@ -1,3 +1,7 @@
+1.3.2:
+  - fix crash if beacon block root is returned as nil
+  - separate multiclient cache from individual client cache
+
 1.3.1:
   - prepare sync committee duties a few epochs before change of period
   - add `controller.max-proposal-delay` option
