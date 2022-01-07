@@ -163,6 +163,10 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 		s.monitor.SyncCommitteeMessagesCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed")
 		return nil, errors.Wrap(err, "failed to obtain beacon block root")
 	}
+	if beaconBlockRoot == nil {
+		s.monitor.SyncCommitteeMessagesCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed")
+		return nil, errors.Wrap(err, "empty beacon block root obtained")
+	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block root")
 	s.syncCommitteeAggregator.SetBeaconBlockRoot(duty.Slot(), *beaconBlockRoot)
 
