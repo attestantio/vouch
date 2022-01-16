@@ -83,8 +83,8 @@ github.com/aryann/difflib v0.0.0-20170710044230-e206f873d14a/go.mod h1:DAHtR1m6l
 github.com/attestantio/dirk v1.1.0 h1:hwMTYZkwj/Y0um3OD0LQxg2xSl4/5xqVWV2MRePE4ec=
 github.com/attestantio/dirk v1.1.0/go.mod h1:2jkOw/XHjvIDdhDcmj+Z3kuVPpxMcQ6zxzzjSSv71PY=
 github.com/attestantio/go-eth2-client v0.8.1/go.mod h1:kEK9iAAOBoADO5wEkd84FEOzjT1zXgVWveQsqn+uBGg=
-github.com/attestantio/go-eth2-client v0.9.2 h1:ghz2OxpjvDyqzfAy9Fp36mpr1vNLZOtS5jvPUppXDxA=
-github.com/attestantio/go-eth2-client v0.9.2/go.mod h1:Qf+B4ZFb8gSwpmH8mndllZP+YIfdBnPwFqoZZ/lqmB0=
+github.com/attestantio/go-eth2-client v0.9.4 h1:tELTJEd0Nq7tr5dw38mRbuWJWAOcz6b8FhULAqIv594=
+github.com/attestantio/go-eth2-client v0.9.4/go.mod h1:Qf+B4ZFb8gSwpmH8mndllZP+YIfdBnPwFqoZZ/lqmB0=
 github.com/aws/aws-lambda-go v1.13.3/go.mod h1:4UKl9IzQMoD+QF79YdCuzCwp8VbmG4VAQwij/eHl5CU=
 github.com/aws/aws-sdk-go v1.27.0/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/aws/aws-sdk-go v1.33.17/go.mod h1:5zCpMtNQVjRREroY7sYe8lOMRSxkhG6MZveU8YkpAk0=
