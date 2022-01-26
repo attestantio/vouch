@@ -252,6 +252,19 @@ func (*EventsProvider) Events(_ context.Context, _ []string, _ eth2client.EventH
 	return nil
 }
 
+// ErroringEventsProvider is a mock for eth2client.EventsProvider.
+type ErroringEventsProvider struct{}
+
+// NewErroringEventsProvider returns a mock events provider.
+func NewErroringEventsProvider() eth2client.EventsProvider {
+	return &ErroringEventsProvider{}
+}
+
+// Events submits sync committee contributions.
+func (*ErroringEventsProvider) Events(_ context.Context, _ []string, _ eth2client.EventHandlerFunc) error {
+	return errors.New("error")
+}
+
 // AttestationsSubmitter is a mock for eth2client.AttestationsSubmitter.
 type AttestationsSubmitter struct{}
 

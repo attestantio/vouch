@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,15 +16,23 @@ package best
 import (
 	"context"
 	"testing"
+	"time"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/mock"
+	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
+	"github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/testutil"
 	"github.com/prysmaticlabs/go-bitfield"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func aggregationBits(set uint64, total uint64) bitfield.Bitlist {
+func bitList(set uint64, total uint64) bitfield.Bitlist {
 	bits := bitfield.NewBitlist(total)
 	for i := uint64(0); i < set; i++ {
 		bits.SetBitAt(i, true)
@@ -42,11 +50,12 @@ func specificAggregationBits(set []uint64, total uint64) bitfield.Bitlist {
 
 func TestScore(t *testing.T) {
 	tests := []struct {
-		name       string
-		block      *spec.VersionedBeaconBlock
-		parentSlot phase0.Slot
-		score      float64
-		err        string
+		name        string
+		priorBlocks map[phase0.Root]*priorBlockVotes
+		block       *spec.VersionedBeaconBlock
+		parentSlot  phase0.Slot
+		score       float64
+		err         string
 	}{
 		{
 			name:       "Nil",
@@ -68,7 +77,7 @@ func TestScore(t *testing.T) {
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
-								AggregationBits: aggregationBits(1, 128),
+								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
 								},
@@ -89,7 +98,7 @@ func TestScore(t *testing.T) {
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
-								AggregationBits: aggregationBits(1, 128),
+								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
 								},
@@ -110,7 +119,7 @@ func TestScore(t *testing.T) {
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
-								AggregationBits: aggregationBits(1, 128),
+								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12343,
 								},
@@ -131,13 +140,13 @@ func TestScore(t *testing.T) {
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
-								AggregationBits: aggregationBits(2, 128),
+								AggregationBits: bitList(2, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
 								},
 							},
 							{
-								AggregationBits: aggregationBits(1, 128),
+								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12341,
 								},
@@ -158,7 +167,7 @@ func TestScore(t *testing.T) {
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
-								AggregationBits: aggregationBits(50, 128),
+								AggregationBits: bitList(50, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
 								},
@@ -178,7 +187,7 @@ func TestScore(t *testing.T) {
 				},
 			},
 			parentSlot: 12344,
-			score:      1450,
+			score:      5450,
 		},
 		{
 			name: "DuplicateAttestations",
@@ -216,7 +225,7 @@ func TestScore(t *testing.T) {
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
-								AggregationBits: aggregationBits(50, 128),
+								AggregationBits: bitList(50, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
 								},
@@ -260,7 +269,7 @@ func TestScore(t *testing.T) {
 				},
 			},
 			parentSlot: 12344,
-			score:      2150,
+			score:      8150,
 		},
 		{
 			name: "FullParentRootDistance2",
@@ -271,7 +280,7 @@ func TestScore(t *testing.T) {
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
-								AggregationBits: aggregationBits(50, 128),
+								AggregationBits: bitList(50, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
 								},
@@ -315,7 +324,7 @@ func TestScore(t *testing.T) {
 				},
 			},
 			parentSlot: 12343,
-			score:      1075,
+			score:      8125,
 		},
 		{
 			name: "FullParentRootDistance4",
@@ -326,7 +335,7 @@ func TestScore(t *testing.T) {
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
-								AggregationBits: aggregationBits(50, 128),
+								AggregationBits: bitList(50, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
 								},
@@ -370,13 +379,282 @@ func TestScore(t *testing.T) {
 				},
 			},
 			parentSlot: 12341,
-			score:      537.5,
+			score:      8112.5,
+		},
+		{
+			name: "AltairSingleAttestationDistance1",
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionAltair,
+				Altair: &altair.BeaconBlock{
+					Slot: 12345,
+					Body: &altair.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: bitList(1, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12344,
+								},
+							},
+						},
+						SyncAggregate: &altair.SyncAggregate{
+							SyncCommitteeBits: bitfield.NewBitvector512(),
+						},
+					},
+				},
+			},
+			parentSlot: 12344,
+			score:      0.84375,
+		},
+		{
+			name: "AltairSingleAttestationDistance1IncorrectHead",
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionAltair,
+				Altair: &altair.BeaconBlock{
+					Slot: 12345,
+					Body: &altair.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: bitList(1, 128),
+								Data: &phase0.AttestationData{
+									Slot:            12344,
+									BeaconBlockRoot: testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+								},
+							},
+						},
+						SyncAggregate: &altair.SyncAggregate{
+							SyncCommitteeBits: bitfield.NewBitvector512(),
+						},
+					},
+				},
+			},
+			parentSlot: 12344,
+			score:      0.625,
+		},
+		{
+			name: "AltairSingleAttestationDistance2",
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionAltair,
+				Altair: &altair.BeaconBlock{
+					Slot: 12345,
+					Body: &altair.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: bitList(1, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12343,
+								},
+							},
+						},
+						SyncAggregate: &altair.SyncAggregate{
+							SyncCommitteeBits: bitfield.NewBitvector512(),
+						},
+					},
+				},
+			},
+			parentSlot: 12344,
+			score:      0.625,
+		},
+		{
+			name: "AltairSingleAttestationDistance5",
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionAltair,
+				Altair: &altair.BeaconBlock{
+					Slot: 12345,
+					Body: &altair.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: bitList(1, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12340,
+								},
+							},
+						},
+						SyncAggregate: &altair.SyncAggregate{
+							SyncCommitteeBits: bitfield.NewBitvector512(),
+						},
+					},
+				},
+			},
+			parentSlot: 12344,
+			score:      0.625,
+		},
+		{
+			name: "AltairSingleAttestationDistance6",
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionAltair,
+				Altair: &altair.BeaconBlock{
+					Slot: 12345,
+					Body: &altair.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: bitList(1, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12339,
+								},
+							},
+						},
+						SyncAggregate: &altair.SyncAggregate{
+							SyncCommitteeBits: bitfield.NewBitvector512(),
+						},
+					},
+				},
+			},
+			parentSlot: 12344,
+			score:      0.40625,
+		},
+		{
+			name: "AltairOverlappingAttestations",
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionAltair,
+				Altair: &altair.BeaconBlock{
+					Slot: 12345,
+					Body: &altair.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: bitList(1, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12343,
+								},
+							},
+							{
+								AggregationBits: bitList(2, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12343,
+								},
+							},
+						},
+						SyncAggregate: &altair.SyncAggregate{
+							SyncCommitteeBits: bitfield.NewBitvector512(),
+						},
+					},
+				},
+			},
+			parentSlot: 12344,
+			score:      1.25,
+		},
+		{
+			name: "PriorVotes",
+			priorBlocks: map[phase0.Root]*priorBlockVotes{
+				// Chain with middle block orphaned.
+				testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"): {
+					parent: testutil.HexToRoot("0x0000000000000000000000000000000000000000000000000000000000000000"),
+					slot:   12341,
+				},
+				testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"): {
+					parent: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+					slot:   12342,
+					votes: map[phase0.Slot]map[phase0.CommitteeIndex]bitfield.Bitlist{
+						// This block is orphaned so its votes should be ignored.
+						12342: {
+							0: bitList(5, 128),
+						},
+					},
+				},
+				testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"): {
+					parent: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+					slot:   12343,
+					votes: map[phase0.Slot]map[phase0.CommitteeIndex]bitfield.Bitlist{
+						// This block is a recent ancestore so its votes should be considered.
+						12342: {
+							0: bitList(2, 128),
+						},
+					},
+				},
+			},
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionAltair,
+				Altair: &altair.BeaconBlock{
+					Slot:       12344,
+					ParentRoot: testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+					Body: &altair.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: bitList(5, 128),
+								Data: &phase0.AttestationData{
+									BeaconBlockRoot: testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+									Slot:            12342,
+								},
+							},
+						},
+						SyncAggregate: &altair.SyncAggregate{
+							SyncCommitteeBits: bitfield.NewBitvector512(),
+						},
+					},
+				},
+			},
+			parentSlot: 12343,
+			score:      1.875,
+		},
+		{
+			name: "InvalidVersion",
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersion(999),
+				Altair: &altair.BeaconBlock{
+					Slot: 12345,
+					Body: &altair.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: bitList(1, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12343,
+								},
+							},
+							{
+								AggregationBits: bitList(2, 128),
+								Data: &phase0.AttestationData{
+									Slot: 12343,
+								},
+							},
+						},
+						SyncAggregate: &altair.SyncAggregate{
+							SyncCommitteeBits: bitfield.NewBitvector512(),
+						},
+					},
+				},
+			},
+			parentSlot: 12344,
+			score:      0,
 		},
 	}
 
+	ctx := context.Background()
+
+	genesisTime := time.Now()
+	slotDuration := 12 * time.Second
+	slotsPerEpoch := uint64(32)
+	genesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
+	slotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
+	slotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
+	specProvider := mock.NewSpecProvider()
+
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisTimeProvider(genesisTimeProvider),
+		standardchaintime.WithSlotDurationProvider(slotDurationProvider),
+		standardchaintime.WithSlotsPerEpochProvider(slotsPerEpochProvider),
+	)
+	require.NoError(t, err)
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			score := scoreBeaconBlockProposal(context.Background(), test.name, test.parentSlot, test.block)
+			s, err := New(ctx,
+				WithLogLevel(zerolog.Disabled),
+				WithTimeout(2*time.Second),
+				WithClientMonitor(null.New(context.Background())),
+				WithEventsProvider(mock.NewEventsProvider()),
+				WithChainTimeService(chainTime),
+				WithSpecProvider(specProvider),
+				WithProcessConcurrency(6),
+				WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
+					"one": mock.NewBeaconBlockProposalProvider(),
+				}),
+				WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
+			)
+			require.NoError(t, err)
+			if test.priorBlocks != nil {
+				s.priorBlocks = test.priorBlocks
+			}
+			score := s.scoreBeaconBlockProposal(context.Background(), test.name, test.parentSlot, test.block)
 			assert.Equal(t, test.score, score)
 		})
 	}

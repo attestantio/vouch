@@ -90,7 +90,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.3.2"
+var ReleaseVersion = "1.4.0-dev"
 
 func main() {
 	os.Exit(main2())
@@ -339,7 +339,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	}
 
 	log.Trace().Msg("Selecting beacon block proposal provider")
-	beaconBlockProposalProvider, err := selectBeaconBlockProposalProvider(ctx, monitor, eth2Client)
+	beaconBlockProposalProvider, err := selectBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime)
 	if err != nil {
 		return errors.Wrap(err, "failed to select beacon block proposal provider")
 	}
@@ -914,6 +914,7 @@ func selectAggregateAttestationProvider(ctx context.Context,
 func selectBeaconBlockProposalProvider(ctx context.Context,
 	monitor metrics.Service,
 	eth2Client eth2client.Service,
+	chainTime chaintime.Service,
 ) (eth2client.BeaconBlockProposalProvider, error) {
 	var beaconBlockProposalProvider eth2client.BeaconBlockProposalProvider
 	var err error
@@ -932,6 +933,9 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 			bestbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestbeaconblockproposalstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.beaconblockproposal.best")),
 			bestbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.best")),
+			bestbeaconblockproposalstrategy.WithEventsProvider(eth2Client.(eth2client.EventsProvider)),
+			bestbeaconblockproposalstrategy.WithChainTimeService(chainTime),
+			bestbeaconblockproposalstrategy.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 			bestbeaconblockproposalstrategy.WithBeaconBlockProposalProviders(beaconBlockProposalProviders),
 			bestbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
 			bestbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.best")),

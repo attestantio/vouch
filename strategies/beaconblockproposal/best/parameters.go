@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -20,6 +20,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/pkg/errors"
@@ -30,6 +31,9 @@ type parameters struct {
 	logLevel                     zerolog.Level
 	clientMonitor                metrics.ClientMonitor
 	processConcurrency           int64
+	eventsProvider               eth2client.EventsProvider
+	chainTime                    chaintime.Service
+	specProvider                 eth2client.SpecProvider
 	beaconBlockProposalProviders map[string]eth2client.BeaconBlockProposalProvider
 	signedBeaconBlockProvider    eth2client.SignedBeaconBlockProvider
 	timeout                      time.Duration
@@ -74,6 +78,27 @@ func WithProcessConcurrency(concurrency int64) Parameter {
 	})
 }
 
+// WithEventsProvider sets the events provider.
+func WithEventsProvider(provider eth2client.EventsProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.eventsProvider = provider
+	})
+}
+
+// WithChainTimeService sets the chain time service.
+func WithChainTimeService(chainTime chaintime.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.chainTime = chainTime
+	})
+}
+
+// WithSpecProvider sets the beacon spec provider.
+func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.specProvider = provider
+	})
+}
+
 // WithBeaconBlockProposalProviders sets the beacon block proposal providers.
 func WithBeaconBlockProposalProviders(providers map[string]eth2client.BeaconBlockProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -108,6 +133,15 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.processConcurrency == 0 {
 		return nil, errors.New("no process concurrency specified")
+	}
+	if parameters.eventsProvider == nil {
+		return nil, errors.New("no events provider specified")
+	}
+	if parameters.chainTime == nil {
+		return nil, errors.New("no chain time service specified")
+	}
+	if parameters.specProvider == nil {
+		return nil, errors.New("no spec provider specified")
 	}
 	if len(parameters.beaconBlockProposalProviders) == 0 {
 		return nil, errors.New("no beacon block proposal providers specified")

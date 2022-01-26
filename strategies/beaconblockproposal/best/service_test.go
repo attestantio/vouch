@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -20,6 +20,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/mock"
+	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	"github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	"github.com/rs/zerolog"
@@ -27,6 +28,24 @@ import (
 )
 
 func TestService(t *testing.T) {
+	ctx := context.Background()
+
+	genesisTime := time.Now()
+	slotDuration := 12 * time.Second
+	slotsPerEpoch := uint64(32)
+	genesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
+	slotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
+	slotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
+	specProvider := mock.NewSpecProvider()
+
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisTimeProvider(genesisTimeProvider),
+		standardchaintime.WithSlotDurationProvider(slotDurationProvider),
+		standardchaintime.WithSlotsPerEpochProvider(slotsPerEpochProvider),
+	)
+	require.NoError(t, err)
+
 	tests := []struct {
 		name   string
 		params []best.Parameter
@@ -38,6 +57,9 @@ func TestService(t *testing.T) {
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(nil),
+				best.WithEventsProvider(mock.NewEventsProvider()),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
 					"one":   mock.NewBeaconBlockProposalProvider(),
@@ -53,6 +75,9 @@ func TestService(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithClientMonitor(null.New(context.Background())),
+				best.WithEventsProvider(mock.NewEventsProvider()),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
 					"one":   mock.NewBeaconBlockProposalProvider(),
@@ -68,6 +93,9 @@ func TestService(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithClientMonitor(null.New(context.Background())),
+				best.WithEventsProvider(mock.NewEventsProvider()),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
 				best.WithTimeout(0),
 				best.WithProcessConcurrency(1),
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
@@ -80,11 +108,68 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: no timeout specified",
 		},
 		{
+			name: "EventsProviderMissing",
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.Disabled),
+				best.WithTimeout(2 * time.Second),
+				best.WithClientMonitor(null.New(context.Background())),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
+				best.WithProcessConcurrency(1),
+				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
+					"one":   mock.NewBeaconBlockProposalProvider(),
+					"two":   mock.NewBeaconBlockProposalProvider(),
+					"three": mock.NewBeaconBlockProposalProvider(),
+				}),
+				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
+			},
+			err: "problem with parameters: no events provider specified",
+		},
+		{
+			name: "ChainTimeServiceMissing",
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.Disabled),
+				best.WithTimeout(2 * time.Second),
+				best.WithClientMonitor(null.New(context.Background())),
+				best.WithEventsProvider(mock.NewEventsProvider()),
+				best.WithSpecProvider(specProvider),
+				best.WithProcessConcurrency(1),
+				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
+					"one":   mock.NewBeaconBlockProposalProvider(),
+					"two":   mock.NewBeaconBlockProposalProvider(),
+					"three": mock.NewBeaconBlockProposalProvider(),
+				}),
+				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
+			},
+			err: "problem with parameters: no chain time service specified",
+		},
+		{
+			name: "SpecProviderMissing",
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.Disabled),
+				best.WithTimeout(2 * time.Second),
+				best.WithClientMonitor(null.New(context.Background())),
+				best.WithEventsProvider(mock.NewEventsProvider()),
+				best.WithChainTimeService(chainTime),
+				best.WithProcessConcurrency(1),
+				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
+					"one":   mock.NewBeaconBlockProposalProvider(),
+					"two":   mock.NewBeaconBlockProposalProvider(),
+					"three": mock.NewBeaconBlockProposalProvider(),
+				}),
+				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
+			},
+			err: "problem with parameters: no spec provider specified",
+		},
+		{
 			name: "ProcessConcurrencyBad",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(null.New(context.Background())),
+				best.WithEventsProvider(mock.NewEventsProvider()),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(0),
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
 					"one":   mock.NewBeaconBlockProposalProvider(),
@@ -101,6 +186,9 @@ func TestService(t *testing.T) {
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(null.New(context.Background())),
+				best.WithEventsProvider(mock.NewEventsProvider()),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 			},
@@ -112,6 +200,9 @@ func TestService(t *testing.T) {
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(null.New(context.Background())),
+				best.WithEventsProvider(mock.NewEventsProvider()),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
@@ -124,6 +215,9 @@ func TestService(t *testing.T) {
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(null.New(context.Background())),
+				best.WithEventsProvider(mock.NewEventsProvider()),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
 					"one":   mock.NewBeaconBlockProposalProvider(),
@@ -134,11 +228,52 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: no signed beacon block provider specified",
 		},
 		{
+			name: "ErroringSpecProvider",
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.Disabled),
+				best.WithTimeout(2 * time.Second),
+				best.WithClientMonitor(null.New(context.Background())),
+				best.WithEventsProvider(mock.NewEventsProvider()),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(mock.NewErroringSpecProvider()),
+				best.WithProcessConcurrency(1),
+				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
+					"one":   mock.NewBeaconBlockProposalProvider(),
+					"two":   mock.NewBeaconBlockProposalProvider(),
+					"three": mock.NewBeaconBlockProposalProvider(),
+				}),
+				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
+			},
+			err: "failed to obtain spec: error",
+		},
+		{
+			name: "ErroringEventsProvider",
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.Disabled),
+				best.WithTimeout(2 * time.Second),
+				best.WithClientMonitor(null.New(context.Background())),
+				best.WithEventsProvider(mock.NewErroringEventsProvider()),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
+				best.WithProcessConcurrency(1),
+				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
+					"one":   mock.NewBeaconBlockProposalProvider(),
+					"two":   mock.NewBeaconBlockProposalProvider(),
+					"three": mock.NewBeaconBlockProposalProvider(),
+				}),
+				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
+			},
+			err: "failed to add head event handler: error",
+		},
+		{
 			name: "Good",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(null.New(context.Background())),
+				best.WithEventsProvider(mock.NewEventsProvider()),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
 					"one":   mock.NewBeaconBlockProposalProvider(),
