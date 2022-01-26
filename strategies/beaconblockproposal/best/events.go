@@ -49,7 +49,7 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 }
 
 // updateBlockVotes updates the votes made in attestations for this block.
-func (s *Service) updateBlockVotes(ctx context.Context,
+func (s *Service) updateBlockVotes(_ context.Context,
 	block *spec.VersionedSignedBeaconBlock,
 ) {
 	if block == nil {

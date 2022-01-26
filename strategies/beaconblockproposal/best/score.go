@@ -223,7 +223,7 @@ func scoreSlashings(attesterSlashings []*phase0.AttesterSlashing,
 	return attesterSlashingScore, proposerSlashingScore
 }
 
-func (s *Service) priorVotesForAttestation(ctx context.Context,
+func (s *Service) priorVotesForAttestation(_ context.Context,
 	attestation *phase0.Attestation,
 	root phase0.Root,
 ) (
