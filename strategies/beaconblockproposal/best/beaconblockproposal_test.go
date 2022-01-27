@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,6 +21,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
+	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	"github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	"github.com/rs/zerolog"
@@ -30,10 +31,29 @@ import (
 func TestBeaconBlockProposal(t *testing.T) {
 	ctx := context.Background()
 
+	genesisTime := time.Now()
+	slotDuration := 12 * time.Second
+	slotsPerEpoch := uint64(32)
+	genesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
+	slotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
+	slotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
+	specProvider := mock.NewSpecProvider()
+
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisTimeProvider(genesisTimeProvider),
+		standardchaintime.WithSlotDurationProvider(slotDurationProvider),
+		standardchaintime.WithSlotsPerEpochProvider(slotsPerEpochProvider),
+	)
+	require.NoError(t, err)
+
 	service, err := best.New(ctx,
 		best.WithLogLevel(zerolog.Disabled),
 		best.WithTimeout(2*time.Second),
 		best.WithClientMonitor(null.New(context.Background())),
+		best.WithEventsProvider(mock.NewEventsProvider()),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
 		best.WithProcessConcurrency(6),
 		best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
 			"one":   mock.NewBeaconBlockProposalProvider(),

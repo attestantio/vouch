@@ -1,3 +1,6 @@
+development:
+  - increase accuracy of beacon block proposal scorer by incorporating attestation history
+
 1.3.2:
   - fix crash if beacon block root is returned as nil
   - separate multiclient cache from individual client cache
