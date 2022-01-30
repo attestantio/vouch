@@ -1,5 +1,6 @@
 development:
   - increase accuracy of beacon block proposal scorer by incorporating attestation history
+  - multinode submitter returns after first successful submission rather than waiting for all to complete
 
 1.3.2:
   - fix crash if beacon block root is returned as nil

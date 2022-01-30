@@ -200,7 +200,7 @@ func fetchConfig() error {
 
 	// Defaults.
 	viper.SetDefault("process-concurrency", int64(runtime.GOMAXPROCS(-1)))
-	viper.SetDefault("strategies.timeout", 2*time.Second)
+	viper.SetDefault("timeout", 2*time.Second)
 	viper.SetDefault("eth2client.timeout", 2*time.Minute)
 	viper.SetDefault("controller.max-proposal-delay", 0)
 	viper.SetDefault("controller.max-attestation-delay", 4*time.Second)
@@ -1056,6 +1056,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
 			multinodesubmitter.WithLogLevel(util.LogLevel("submitter.multinode")),
+			multinodesubmitter.WithTimeout(util.Timeout("submitter.multinode")),
 			multinodesubmitter.WithBeaconBlockSubmitters(beaconBlockSubmitters),
 			multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),
 			multinodesubmitter.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),

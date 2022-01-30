@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,6 +15,7 @@ package multinode
 
 import (
 	"context"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
@@ -26,6 +27,7 @@ import (
 // Service is the provider for beacon block proposals.
 type Service struct {
 	clientMonitor                         metrics.ClientMonitor
+	timeout                               time.Duration
 	processConcurrency                    int64
 	beaconBlockSubmitters                 map[string]eth2client.BeaconBlockSubmitter
 	attestationsSubmitters                map[string]eth2client.AttestationsSubmitter
@@ -54,6 +56,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 
 	s := &Service{
 		clientMonitor:                         parameters.clientMonitor,
+		timeout:                               parameters.timeout,
 		processConcurrency:                    parameters.processConcurrency,
 		beaconBlockSubmitters:                 parameters.beaconBlockSubmitters,
 		attestationsSubmitters:                parameters.attestationsSubmitters,

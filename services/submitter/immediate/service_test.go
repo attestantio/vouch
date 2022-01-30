@@ -189,6 +189,9 @@ func TestInterfaces(t *testing.T) {
 	require.Implements(t, (*submitter.AttestationsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.BeaconCommitteeSubscriptionsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.AggregateAttestationsSubmitter)(nil), s)
+	require.Implements(t, (*submitter.SyncCommitteeMessagesSubmitter)(nil), s)
+	require.Implements(t, (*submitter.SyncCommitteeSubscriptionsSubmitter)(nil), s)
+	require.Implements(t, (*submitter.SyncCommitteeContributionsSubmitter)(nil), s)
 }
 
 func TestSubmitBeaconBlock(t *testing.T) {

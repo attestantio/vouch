@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -17,6 +17,7 @@ package multinode
 
 import (
 	"context"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
@@ -27,6 +28,7 @@ import (
 
 type parameters struct {
 	logLevel                               zerolog.Level
+	timeout                                time.Duration
 	clientMonitor                          metrics.ClientMonitor
 	processConcurrency                     int64
 	beaconBlockSubmitters                  map[string]eth2client.BeaconBlockSubmitter
@@ -53,6 +55,13 @@ func (f parameterFunc) apply(p *parameters) {
 func WithLogLevel(logLevel zerolog.Level) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.logLevel = logLevel
+	})
+}
+
+// WithTimeout sets the timeout for calls made by the module.
+func WithTimeout(timeout time.Duration) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.timeout = timeout
 	})
 }
 
@@ -131,6 +140,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
+	if parameters.timeout == 0 {
+		return nil, errors.New("no timeout specified")
+	}
 	if parameters.clientMonitor == nil {
 		return nil, errors.New("no client monitor specified")
 	}
@@ -153,10 +165,10 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		return nil, errors.New("no sync committee messages submitters specified")
 	}
 	if len(parameters.syncCommitteeSubscriptionsSubmitters) == 0 {
-		return nil, errors.New("no sync committee subscription submitters specified")
+		return nil, errors.New("no sync committee subscriptions submitters specified")
 	}
 	if len(parameters.syncCommitteeContributionsSubmitters) == 0 {
-		return nil, errors.New("no sync committee subscription contributions specified")
+		return nil, errors.New("no sync committee contributions submitters specified")
 	}
 
 	return &parameters, nil

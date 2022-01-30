@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -30,43 +30,56 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSi
 		return errors.New("no beacon block supplied")
 	}
 
-	blockSlot, err := block.Slot()
-	if err != nil {
-		return err
-	}
-
-	log := log.With().Uint64("slot", uint64(blockSlot)).Logger()
+	var err error
 	sem := semaphore.NewWeighted(s.processConcurrency)
-	var wg sync.WaitGroup
+	w := sync.NewCond(&sync.Mutex{})
+	w.L.Lock()
 	for name, submitter := range s.beaconBlockSubmitters {
-		wg.Add(1)
-		go func(ctx context.Context,
-			sem *semaphore.Weighted,
-			wg *sync.WaitGroup,
-			name string,
-			submitter eth2client.BeaconBlockSubmitter,
-		) {
-			defer wg.Done()
-			log := log.With().Str("submitter", name).Logger()
-			if err := sem.Acquire(ctx, 1); err != nil {
-				log.Error().Err(err).Msg("Failed to acquire semaphore")
-				return
-			}
-			defer sem.Release(1)
-
-			_, address := s.serviceInfo(ctx, submitter)
-			started := time.Now()
-			err := submitter.SubmitBeaconBlock(ctx, block)
-			s.clientMonitor.ClientOperation(address, "submit beacon block", err == nil, time.Since(started))
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to submit beacon block")
-				return
-			}
-			log.Trace().Msg("Submitted beacon block")
-		}(ctx, sem, &wg, name, submitter)
+		go s.submitBeaconBlock(ctx, sem, w, name, block, submitter)
 	}
-	wg.Wait()
-	log.Trace().Msg("Submitted beacon block")
+	// Also set a timeout condition, in case no submitters return.
+	go func(s *Service, w *sync.Cond) {
+		time.Sleep(s.timeout)
+		err = errors.New("no successful submissions before timeout")
+		w.Signal()
+	}(s, w)
+	w.Wait()
+	w.L.Unlock()
 
-	return nil
+	return err
+}
+
+// submitBeaconBlock carries out the internal work of submitting beacon blocks.
+// skipcq: RVV-B0001
+func (s *Service) submitBeaconBlock(ctx context.Context,
+	sem *semaphore.Weighted,
+	w *sync.Cond,
+	name string,
+	block *spec.VersionedSignedBeaconBlock,
+	submitter eth2client.BeaconBlockSubmitter,
+) {
+	slot, err := block.Slot()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to obtain slot")
+		return
+	}
+	log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(slot)).Logger()
+	if err := sem.Acquire(ctx, 1); err != nil {
+		log.Error().Err(err).Msg("Failed to acquire semaphore")
+		return
+	}
+	defer sem.Release(1)
+
+	_, address := s.serviceInfo(ctx, submitter)
+	started := time.Now()
+	err = submitter.SubmitBeaconBlock(ctx, block)
+
+	s.clientMonitor.ClientOperation(address, "submit beacon block", err == nil, time.Since(started))
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to submit beacon block")
+		return
+	}
+
+	w.Signal()
+	log.Trace().Msg("Submitted beacon block")
 }

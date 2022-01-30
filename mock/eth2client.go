@@ -187,6 +187,26 @@ func (*ErroringSyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscript
 	return errors.New("error")
 }
 
+// SleepySyncCommitteeSubscriptionsSubmitter is a mock for eth2client.SyncCommitteeSubscriptionsSubmitter.
+type SleepySyncCommitteeSubscriptionsSubmitter struct {
+	wait time.Duration
+	next eth2client.SyncCommitteeSubscriptionsSubmitter
+}
+
+// NewSleepySyncCommitteeSubscriptionsSubmitter returns a mock sync committee subscriptions submitter.
+func NewSleepySyncCommitteeSubscriptionsSubmitter(wait time.Duration, next eth2client.SyncCommitteeSubscriptionsSubmitter) eth2client.SyncCommitteeSubscriptionsSubmitter {
+	return &SleepySyncCommitteeSubscriptionsSubmitter{
+		wait: wait,
+		next: next,
+	}
+}
+
+// SubmitSyncCommitteeSubscriptions is a mock.
+func (m *SleepySyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+	time.Sleep(m.wait)
+	return m.next.SubmitSyncCommitteeSubscriptions(ctx, subscriptions)
+}
+
 // SyncCommitteeMessagesSubmitter is a mock for eth2client.SyncCommitteeMessagesSubmitter.
 type SyncCommitteeMessagesSubmitter struct{}
 
@@ -213,6 +233,26 @@ func (*ErroringSyncCommitteeMessagesSubmitter) SubmitSyncCommitteeMessages(_ con
 	return errors.New("error")
 }
 
+// SleepySyncCommitteeMessagesSubmitter is a mock for eth2client.SyncCommitteeMessagesSubmitter.
+type SleepySyncCommitteeMessagesSubmitter struct {
+	wait time.Duration
+	next eth2client.SyncCommitteeMessagesSubmitter
+}
+
+// NewSleepySyncCommitteeMessagesSubmitter returns a mock sync committee messages submitter.
+func NewSleepySyncCommitteeMessagesSubmitter(wait time.Duration, next eth2client.SyncCommitteeMessagesSubmitter) eth2client.SyncCommitteeMessagesSubmitter {
+	return &SleepySyncCommitteeMessagesSubmitter{
+		wait: wait,
+		next: next,
+	}
+}
+
+// SubmitSyncCommitteeMessages is a mock.
+func (m *SleepySyncCommitteeMessagesSubmitter) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
+	time.Sleep(m.wait)
+	return m.next.SubmitSyncCommitteeMessages(ctx, messages)
+}
+
 // SyncCommitteeContributionsSubmitter is a mock for eth2client.SyncCommitteeContributionsSubmitter.
 type SyncCommitteeContributionsSubmitter struct{}
 
@@ -237,6 +277,26 @@ func NewErroringSyncCommitteeContributionsSubmitter() eth2client.SyncCommitteeCo
 // SubmitSyncCommitteeContributions submits sync committee contributions.
 func (*ErroringSyncCommitteeContributionsSubmitter) SubmitSyncCommitteeContributions(_ context.Context, _ []*altair.SignedContributionAndProof) error {
 	return errors.New("error")
+}
+
+// SleepySyncCommitteeContributionsSubmitter is a mock for eth2client.SyncCommitteeContributionsSubmitter.
+type SleepySyncCommitteeContributionsSubmitter struct {
+	wait time.Duration
+	next eth2client.SyncCommitteeContributionsSubmitter
+}
+
+// NewSleepySyncCommitteeContributionsSubmitter returns a mock contribution and proofs submitter.
+func NewSleepySyncCommitteeContributionsSubmitter(wait time.Duration, next eth2client.SyncCommitteeContributionsSubmitter) eth2client.SyncCommitteeContributionsSubmitter {
+	return &SleepySyncCommitteeContributionsSubmitter{
+		wait: wait,
+		next: next,
+	}
+}
+
+// SubmitSyncCommitteeContributions is a mock.
+func (m *SleepySyncCommitteeContributionsSubmitter) SubmitSyncCommitteeContributions(ctx context.Context, proofs []*altair.SignedContributionAndProof) error {
+	time.Sleep(m.wait)
+	return m.next.SubmitSyncCommitteeContributions(ctx, proofs)
 }
 
 // EventsProvider is a mock for eth2client.EventsProvider.
@@ -291,6 +351,26 @@ func (*ErroringAttestationsSubmitter) SubmitAttestations(_ context.Context, _ []
 	return errors.New("error")
 }
 
+// SleepyAttestationsSubmitter is a mock for eth2client.AttestationsSubmitter.
+type SleepyAttestationsSubmitter struct {
+	wait time.Duration
+	next eth2client.AttestationsSubmitter
+}
+
+// NewSleepyAttestationsSubmitter returns a mock attestations submitter.
+func NewSleepyAttestationsSubmitter(wait time.Duration, next eth2client.AttestationsSubmitter) eth2client.AttestationsSubmitter {
+	return &SleepyAttestationsSubmitter{
+		wait: wait,
+		next: next,
+	}
+}
+
+// SubmitAttestations is a mock.
+func (m *SleepyAttestationsSubmitter) SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error {
+	time.Sleep(m.wait)
+	return m.next.SubmitAttestations(ctx, attestations)
+}
+
 // BeaconBlockSubmitter is a mock for eth2client.BeaconBlockSubmitter.
 type BeaconBlockSubmitter struct{}
 
@@ -315,6 +395,26 @@ func NewErroringBeaconBlockSubmitter() eth2client.BeaconBlockSubmitter {
 // SubmitBeaconBlock is a mock.
 func (*ErroringBeaconBlockSubmitter) SubmitBeaconBlock(_ context.Context, _ *spec.VersionedSignedBeaconBlock) error {
 	return errors.New("error")
+}
+
+// SleepyBeaconBlockSubmitter is a mock for eth2client.BeaconBlockSubmitter.
+type SleepyBeaconBlockSubmitter struct {
+	wait time.Duration
+	next eth2client.BeaconBlockSubmitter
+}
+
+// NewSleepyBeaconBlockSubmitter returns a mock beacon block submitter.
+func NewSleepyBeaconBlockSubmitter(wait time.Duration, next eth2client.BeaconBlockSubmitter) eth2client.BeaconBlockSubmitter {
+	return &SleepyBeaconBlockSubmitter{
+		wait: wait,
+		next: next,
+	}
+}
+
+// SubmitBeaconBlock is a mock.
+func (m *SleepyBeaconBlockSubmitter) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error {
+	time.Sleep(m.wait)
+	return m.next.SubmitBeaconBlock(ctx, block)
 }
 
 // AggregateAttestationsSubmitter is a mock for eth2client.AggregateAttestationsSubmitter.
@@ -343,6 +443,26 @@ func (*ErroringAggregateAttestationsSubmitter) SubmitAggregateAttestations(_ con
 	return errors.New("error")
 }
 
+// SleepyAggregateAttestationsSubmitter is a mock for eth2client.AggregateAttestationsSubmitter.
+type SleepyAggregateAttestationsSubmitter struct {
+	wait time.Duration
+	next eth2client.AggregateAttestationsSubmitter
+}
+
+// NewSleepyAggregateAttestationsSubmitter returns a mock aggregate attestations submitter.
+func NewSleepyAggregateAttestationsSubmitter(wait time.Duration, next eth2client.AggregateAttestationsSubmitter) eth2client.AggregateAttestationsSubmitter {
+	return &SleepyAggregateAttestationsSubmitter{
+		wait: wait,
+		next: next,
+	}
+}
+
+// SubmitAggregateAttestations is a mock.
+func (m *SleepyAggregateAttestationsSubmitter) SubmitAggregateAttestations(ctx context.Context, aggregateAndProofs []*phase0.SignedAggregateAndProof) error {
+	time.Sleep(m.wait)
+	return m.next.SubmitAggregateAttestations(ctx, aggregateAndProofs)
+}
+
 // BeaconCommitteeSubscriptionsSubmitter is a mock for eth2client.BeaconCommitteeSubscriptionsSubmitter.
 type BeaconCommitteeSubscriptionsSubmitter struct{}
 
@@ -367,6 +487,26 @@ func NewErroringBeaconCommitteeSubscriptionsSubmitter() eth2client.BeaconCommitt
 // SubmitBeaconCommitteeSubscriptions is a mock.
 func (*ErroringBeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(_ context.Context, _ []*api.BeaconCommitteeSubscription) error {
 	return errors.New("error")
+}
+
+// SleepyBeaconCommitteeSubscriptionsSubmitter is a mock for eth2client.BeaconCommitteeSubscriptionsSubmitter.
+type SleepyBeaconCommitteeSubscriptionsSubmitter struct {
+	wait time.Duration
+	next eth2client.BeaconCommitteeSubscriptionsSubmitter
+}
+
+// NewSleepyBeaconCommitteeSubscriptionsSubmitter returns a mock beacon committee subscriptions submitter.
+func NewSleepyBeaconCommitteeSubscriptionsSubmitter(wait time.Duration, next eth2client.BeaconCommitteeSubscriptionsSubmitter) eth2client.BeaconCommitteeSubscriptionsSubmitter {
+	return &SleepyBeaconCommitteeSubscriptionsSubmitter{
+		wait: wait,
+		next: next,
+	}
+}
+
+// SubmitBeaconCommitteeSubscriptions is a mock.
+func (m *SleepyBeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*api.BeaconCommitteeSubscription) error {
+	time.Sleep(m.wait)
+	return m.next.SubmitBeaconCommitteeSubscriptions(ctx, subscriptions)
 }
 
 // BeaconBlockProposalProvider is a mock for eth2client.BeaconBlockProposalProvider.
