@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,6 +16,7 @@ package standard
 import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/attestationaggregator"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
@@ -26,6 +27,7 @@ type parameters struct {
 	logLevel                 zerolog.Level
 	processConcurrency       int64
 	monitor                  metrics.BeaconCommitteeSubscriptionMonitor
+	chainTimeService         chaintime.Service
 	attesterDutiesProvider   eth2client.AttesterDutiesProvider
 	beaconCommitteeSubmitter submitter.BeaconCommitteeSubscriptionsSubmitter
 	attestationAggregator    attestationaggregator.Service
@@ -60,6 +62,13 @@ func WithProcessConcurrency(concurrency int64) Parameter {
 func WithMonitor(monitor metrics.BeaconCommitteeSubscriptionMonitor) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
+	})
+}
+
+// WithChainTimeService sets the chaintime service.
+func WithChainTimeService(service chaintime.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.chainTimeService = service
 	})
 }
 
@@ -100,6 +109,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")
+	}
+	if parameters.chainTimeService == nil {
+		return nil, errors.New("no chain time service specified")
 	}
 	if parameters.attesterDutiesProvider == nil {
 		return nil, errors.New("no attester duties provider specified")
