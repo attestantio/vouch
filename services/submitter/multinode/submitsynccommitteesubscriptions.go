@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2021, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,7 +15,6 @@ package multinode
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"time"
 
@@ -28,44 +27,54 @@ import (
 // SubmitSyncCommitteeSubscriptions submits a batch of sync committee subscriptions.
 func (s *Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
 	if len(subscriptions) == 0 {
-		return errors.New("no subscriptions supplied")
+		return errors.New("no sync committee subscriptions supplied")
 	}
 
+	var err error
 	sem := semaphore.NewWeighted(s.processConcurrency)
-	var wg sync.WaitGroup
+	w := sync.NewCond(&sync.Mutex{})
+	w.L.Lock()
 	for name, submitter := range s.syncCommitteeSubscriptionSubmitters {
-		wg.Add(1)
-		go func(ctx context.Context,
-			sem *semaphore.Weighted,
-			wg *sync.WaitGroup,
-			name string,
-			submitter eth2client.SyncCommitteeSubscriptionsSubmitter,
-		) {
-			defer wg.Done()
-			log := log.With().Str("beacon_node_address", name).Int("subscriptions", len(subscriptions)).Logger()
-			if err := sem.Acquire(ctx, 1); err != nil {
-				log.Error().Err(err).Msg("Failed to acquire semaphore")
-				return
-			}
-			defer sem.Release(1)
-
-			_, address := s.serviceInfo(ctx, submitter)
-			started := time.Now()
-			err := submitter.SubmitSyncCommitteeSubscriptions(ctx, subscriptions)
-			s.clientMonitor.ClientOperation(address, "submit sync committee subscriptions", err == nil, time.Since(started))
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to submit subscriptions")
-			} else {
-				data, err := json.Marshal(submitter)
-				if err != nil {
-					log.Error().Err(err).Msg("Failed to marshal JSON")
-				} else {
-					log.Trace().Str("data", string(data)).Msg("Submitted subscriptions")
-				}
-			}
-		}(ctx, sem, &wg, name, submitter)
+		go s.submitSyncCommitteeSubscriptions(ctx, sem, w, name, subscriptions, submitter)
 	}
-	wg.Wait()
+	// Also set a timeout condition, in case no submitters return.
+	go func(s *Service, w *sync.Cond) {
+		time.Sleep(s.timeout)
+		err = errors.New("no successful submissions before timeout")
+		w.Signal()
+	}(s, w)
+	w.Wait()
+	w.L.Unlock()
 
-	return nil
+	return err
+}
+
+// submitSyncCommitteeSubscriptions carries out the internal work of submitting sync committee subscriptions.
+// skipcq: RVV-B0001
+func (s *Service) submitSyncCommitteeSubscriptions(ctx context.Context,
+	sem *semaphore.Weighted,
+	w *sync.Cond,
+	name string,
+	subscriptions []*api.SyncCommitteeSubscription,
+	submitter eth2client.SyncCommitteeSubscriptionsSubmitter,
+) {
+	log := log.With().Str("beacon_node_address", name).Int("subscriptions", len(subscriptions)).Logger()
+	if err := sem.Acquire(ctx, 1); err != nil {
+		log.Error().Err(err).Msg("Failed to acquire semaphore")
+		return
+	}
+	defer sem.Release(1)
+
+	_, address := s.serviceInfo(ctx, submitter)
+	started := time.Now()
+	err := submitter.SubmitSyncCommitteeSubscriptions(ctx, subscriptions)
+
+	s.clientMonitor.ClientOperation(address, "submit sync committee subscriptions", err == nil, time.Since(started))
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to submit sync committee subscriptions")
+		return
+	}
+
+	w.Signal()
+	log.Trace().Msg("Submitted sync committee subscriptions")
 }

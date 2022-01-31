@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2021, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -29,83 +29,93 @@ import (
 // SubmitSyncCommitteeContributions submits sync committee contributions.
 func (s *Service) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
 	if len(contributionAndProofs) == 0 {
-		return errors.New("no contribution and proofs supplied")
+		return errors.New("no sync committee contribution and proofs supplied")
 	}
 
+	var err error
 	sem := semaphore.NewWeighted(s.processConcurrency)
-	var wg sync.WaitGroup
+	w := sync.NewCond(&sync.Mutex{})
+	w.L.Lock()
 	for name, submitter := range s.syncCommitteeContributionsSubmitters {
-		wg.Add(1)
-		go func(ctx context.Context,
-			sem *semaphore.Weighted,
-			wg *sync.WaitGroup,
-			name string,
-			submitter eth2client.SyncCommitteeContributionsSubmitter,
-		) {
-			defer wg.Done()
-			log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(contributionAndProofs[0].Message.Contribution.Slot)).Logger()
-			if err := sem.Acquire(ctx, 1); err != nil {
-				log.Error().Err(err).Msg("Failed to acquire semaphore")
-				return
-			}
-			defer sem.Release(1)
-
-			_, address := s.serviceInfo(ctx, submitter)
-			started := time.Now()
-			err := submitter.SubmitSyncCommitteeContributions(ctx, contributionAndProofs)
-			s.clientMonitor.ClientOperation(address, "submit contribution and proofs", err == nil, time.Since(started))
-			if err != nil {
-				s.handleSubmitSyncCommitteeContributionsError(ctx, submitter, err)
-			} else {
-				data, err := json.Marshal(contributionAndProofs)
-				if err != nil {
-					log.Error().Err(err).Msg("Failed to marshal JSON")
-				} else {
-					log.Trace().Str("data", string(data)).Msg("Submitted contribution and proofs")
-				}
-			}
-		}(ctx, sem, &wg, name, submitter)
+		go s.submitSyncCommitteeContributions(ctx, sem, w, name, contributionAndProofs, submitter)
 	}
-	wg.Wait()
+	// Also set a timeout condition, in case no submitters return.
+	go func(s *Service, w *sync.Cond) {
+		time.Sleep(s.timeout)
+		err = errors.New("no successful submissions before timeout")
+		w.Signal()
+	}(s, w)
+	w.Wait()
+	w.L.Unlock()
 
-	return nil
+	return err
+}
+
+// submitSyncCommitteeContributions carries out the internal work of submitting sync committee contributions.
+// skipcq: RVV-B0001
+func (s *Service) submitSyncCommitteeContributions(ctx context.Context,
+	sem *semaphore.Weighted,
+	w *sync.Cond,
+	name string,
+	contributionAndProofs []*altair.SignedContributionAndProof,
+	submitter eth2client.SyncCommitteeContributionsSubmitter,
+) {
+	log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(contributionAndProofs[0].Message.Contribution.Slot)).Logger()
+	if err := sem.Acquire(ctx, 1); err != nil {
+		log.Error().Err(err).Msg("Failed to acquire semaphore")
+		return
+	}
+	defer sem.Release(1)
+
+	_, address := s.serviceInfo(ctx, submitter)
+	started := time.Now()
+	err := submitter.SubmitSyncCommitteeContributions(ctx, contributionAndProofs)
+	if err != nil {
+		err = s.handleSubmitSyncCommitteeContributionsError(ctx, submitter, err)
+	}
+
+	s.clientMonitor.ClientOperation(address, "submit sync committee contribution and proofs", err == nil, time.Since(started))
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to submit sync committee contribution and proofs")
+		return
+	}
+
+	w.Signal()
+	log.Trace().Msg("Submitted sync committee contribution and proofs")
 }
 
 func (s *Service) handleSubmitSyncCommitteeContributionsError(ctx context.Context,
 	submitter eth2client.SyncCommitteeContributionsSubmitter,
 	err error,
-) {
+) error {
 	// Fetch the JSON response from the error.
 	errorStr := err.Error()
 	jsonIndex := strings.Index(errorStr, "{")
 	if jsonIndex == -1 {
-		log.Warn().Err(err).Msg("Failed to submit sync committee contribution and proofs")
-		return
+		return err
 	}
 
-	serverType, provider := s.serviceInfo(ctx, submitter)
+	serverType, address := s.serviceInfo(ctx, submitter)
 	allowedFailures := 0
-	switch serverType {
-	case "lighthouse":
+	if serverType == "lighthouse" {
 		resp := lhErrorResponse{}
 		if err := json.Unmarshal([]byte(errorStr[jsonIndex:]), &resp); err != nil {
-			log.Warn().Err(err).Msg("Failed to submit sync committee contribution and proofs")
-			return
+			return err
 		}
 		for i := 0; i < len(resp.Failures); i++ {
 			switch {
 			case strings.HasPrefix(resp.Failures[i].Message, "Verification: AggregatorAlreadyKnown"):
-				log.Trace().Str("provider", provider).Int("index", resp.Failures[i].Index).Msg("Contribution and proof already received for that slot; ignoring")
+				log.Trace().Str("beacon_node_address", address).Int("index", resp.Failures[i].Index).Msg("Contribution and proof already received for that slot; ignoring")
 				allowedFailures++
 			default:
-				log.Trace().Str("provider", provider).Int("index", resp.Failures[i].Index).Str("msg", resp.Failures[i].Message).Msg("Real lighthouse error")
+				log.Trace().Str("beacon_node_address", address).Int("index", resp.Failures[i].Index).Str("msg", resp.Failures[i].Message).Msg("Real lighthouse error")
 			}
 		}
 		if len(resp.Failures) == allowedFailures {
-			log.Trace().Str("provider", provider).Msg("Errors from node are allowable; continuing")
-			return
+			log.Trace().Str("beacon_node_address", address).Msg("Errors from node are allowable; no error")
+			return nil
 		}
-	default:
-		log.Warn().Str("server", serverType).Err(err).Msg("Failed to submit sync committee contribution and proof")
 	}
+
+	return err
 }

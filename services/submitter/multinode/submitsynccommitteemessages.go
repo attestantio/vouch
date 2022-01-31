@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2021, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -29,46 +29,59 @@ import (
 // SubmitSyncCommitteeMessages submits sync committee messages.
 func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
 	if len(messages) == 0 {
-		return errors.New("no messages supplied")
+		return errors.New("no sync committee messages supplied")
 	}
 
+	var err error
 	sem := semaphore.NewWeighted(s.processConcurrency)
-	var wg sync.WaitGroup
+	w := sync.NewCond(&sync.Mutex{})
+	w.L.Lock()
 	for name, submitter := range s.syncCommitteeMessagesSubmitter {
-		wg.Add(1)
-		go func(ctx context.Context,
-			sem *semaphore.Weighted,
-			wg *sync.WaitGroup,
-			name string,
-			submitter eth2client.SyncCommitteeMessagesSubmitter,
-		) {
-			defer wg.Done()
-			log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(messages[0].Slot)).Logger()
-			if err := sem.Acquire(ctx, 1); err != nil {
-				log.Error().Err(err).Msg("Failed to acquire semaphore")
-				return
-			}
-			defer sem.Release(1)
-
-			_, address := s.serviceInfo(ctx, submitter)
-			started := time.Now()
-			err := submitter.SubmitSyncCommitteeMessages(ctx, messages)
-			if err != nil {
-				err = s.handleSubmitSyncCommitteeMessagesError(ctx, submitter, err)
-			} else {
-				data, err := json.Marshal(messages)
-				if err != nil {
-					log.Error().Err(err).Msg("Failed to marshal JSON")
-				} else {
-					log.Trace().Str("data", string(data)).Msg("Submitted messages")
-				}
-			}
-			s.clientMonitor.ClientOperation(address, "submit sync committee messages", err == nil, time.Since(started))
-		}(ctx, sem, &wg, name, submitter)
+		go s.submitSyncCommitteeMessages(ctx, sem, w, name, messages, submitter)
 	}
-	wg.Wait()
+	// Also set a timeout condition, in case no submitters return.
+	go func(s *Service, w *sync.Cond) {
+		time.Sleep(s.timeout)
+		err = errors.New("no successful submissions before timeout")
+		w.Signal()
+	}(s, w)
+	w.Wait()
+	w.L.Unlock()
 
-	return nil
+	return err
+}
+
+// submitSyncCommitteeMessages carries out the internal work of submitting sync committee messages.
+// skipcq: RVV-B0001
+func (s *Service) submitSyncCommitteeMessages(ctx context.Context,
+	sem *semaphore.Weighted,
+	w *sync.Cond,
+	name string,
+	messages []*altair.SyncCommitteeMessage,
+	submitter eth2client.SyncCommitteeMessagesSubmitter,
+) {
+	log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(messages[0].Slot)).Logger()
+	if err := sem.Acquire(ctx, 1); err != nil {
+		log.Error().Err(err).Msg("Failed to acquire semaphore")
+		return
+	}
+	defer sem.Release(1)
+
+	_, address := s.serviceInfo(ctx, submitter)
+	started := time.Now()
+	err := submitter.SubmitSyncCommitteeMessages(ctx, messages)
+	if err != nil {
+		err = s.handleSubmitSyncCommitteeMessagesError(ctx, submitter, err)
+	}
+
+	s.clientMonitor.ClientOperation(address, "submit sync committee messages", err == nil, time.Since(started))
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to submit sync committee messages")
+		return
+	}
+
+	w.Signal()
+	log.Trace().Msg("Submitted sync committee messages")
 }
 
 type lhErrorResponse struct {
