@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -22,7 +22,7 @@ import (
 )
 
 // scoreAttestationData generates a score for attestation data.
-// The score is relative to the reward expected by proposing the block.
+// The score is relative to the reward expected from the contents of the attestation.
 func (*Service) scoreAttestationData(ctx context.Context,
 	provider eth2client.AttestationDataProvider,
 	name string,
@@ -37,6 +37,10 @@ func (*Service) scoreAttestationData(ctx context.Context,
 		block, err := headerProvider.BeaconBlockHeader(ctx, fmt.Sprintf("%#x", attestationData.BeaconBlockRoot))
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to obtain block header")
+			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
+		}
+		if block == nil {
+			log.Debug().Msg("Obtained nil beacon block header")
 			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
 		}
 		slot = block.Header.Message.Slot
