@@ -280,7 +280,7 @@ func altairHeadCorrect(blockProposal *altair.BeaconBlock, attestation *phase0.At
 }
 
 // altairTargetCorrect calculates if the target of an Altair attestation is correct.
-func (s *Service) altairTargetCorrect(ctx context.Context,
+func (s *Service) altairTargetCorrect(_ context.Context,
 	attestation *phase0.Attestation,
 ) bool {
 	s.priorBlocksMu.RLock()
