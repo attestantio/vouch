@@ -137,9 +137,8 @@ func (s *Service) scoreAltairBeaconBlockProposal(ctx context.Context,
 
 		priorVotes, err := s.priorVotesForAttestation(ctx, attestation, blockProposal.ParentRoot)
 		if err != nil {
-			log.Warn().Err(err).Msg("Failed to obtain prior votes for attestation; assuming no votes")
+			log.Debug().Err(err).Msg("Failed to obtain prior votes for attestation; assuming no votes")
 		}
-		log.Trace().Str("prior_votes", fmt.Sprintf("%#x", priorVotes.Bytes())).Msg("Prior votes")
 
 		votes := 0
 		for i := uint64(0); i < attestation.AggregationBits.Len(); i++ {
@@ -160,24 +159,27 @@ func (s *Service) scoreAltairBeaconBlockProposal(ctx context.Context,
 		// Now we know how many new votes are in this attestation we can score it.
 		// We can calculate if the head vote is correct, but not target so for the
 		// purposes of the calculation we assume that it is.
-		switch blockProposal.Slot - attestation.Data.Slot {
-		case 1:
-			// If the attesation was for the past slot we know that the head vote
-			// can only be correct if it matches the parent root in the block.
-			score := float64(votes)
-			if bytes.Equal(blockProposal.ParentRoot[:], attestation.Data.BeaconBlockRoot[:]) {
-				score *= float64(s.timelySourceWeight+s.timelyTargetWeight+s.timelyHeadWeight) / float64(s.weightDenominator)
-			} else {
-				score *= float64(s.timelySourceWeight+s.timelyTargetWeight) / float64(s.weightDenominator)
-			}
-			attestationScore += score
+
+		headCorrect := altairHeadCorrect(blockProposal, attestation)
+		targetCorrect := s.altairTargetCorrect(ctx, attestation)
+		inclusionDistance := blockProposal.Slot - attestation.Data.Slot
+
+		score := 0.0
+		if targetCorrect {
+			// Target is correct (and timely).
+			score += float64(s.timelyTargetWeight) / float64(s.weightDenominator)
+		}
+		if inclusionDistance <= 5 {
+			// Source is timely.
+			score += float64(s.timelySourceWeight) / float64(s.weightDenominator)
+		}
+		if headCorrect && inclusionDistance == 1 {
+			score += float64(s.timelyHeadWeight) / float64(s.weightDenominator)
+		}
+		score *= float64(votes)
+		attestationScore += score
+		if inclusionDistance == 1 {
 			immediateAttestationScore += score
-		case 2, 3, 4, 5:
-			// Head vote is no longer timely; source and target counts.
-			attestationScore += float64(votes) * float64(s.timelySourceWeight+s.timelyTargetWeight) / float64(s.weightDenominator)
-		default:
-			// Head and source votes are no longer timely; target counts.
-			attestationScore += float64(votes) * float64(s.timelyTargetWeight) / float64(s.weightDenominator)
 		}
 	}
 
@@ -270,6 +272,35 @@ func (s *Service) priorVotesForAttestation(_ context.Context,
 	}
 
 	return res, nil
+}
+
+// altairHeadCorrect calculates if the head of an Altair attestation is correct.
+func altairHeadCorrect(blockProposal *altair.BeaconBlock, attestation *phase0.Attestation) bool {
+	return bytes.Equal(blockProposal.ParentRoot[:], attestation.Data.BeaconBlockRoot[:])
+}
+
+// altairTargetCorrect calculates if the target of an Altair attestation is correct.
+func (s *Service) altairTargetCorrect(_ context.Context,
+	attestation *phase0.Attestation,
+) bool {
+	s.priorBlocksMu.RLock()
+	defer s.priorBlocksMu.RUnlock()
+	root := attestation.Data.BeaconBlockRoot
+	maxSlot := s.chainTime.FirstSlotOfEpoch(attestation.Data.Target.Epoch)
+	for {
+		priorBlock, exists := s.priorBlocks[root]
+		if !exists {
+			// We don't have data on this block, assume the target is correct.
+			// (We could assume the target is incorrect in this situation, but that
+			// would give false incorrects whilst the prior block cache warms up.)
+			log.Trace().Uint64("attestation_slot", uint64(attestation.Data.Slot)).Uint64("max_slot", uint64(maxSlot)).Str("root", fmt.Sprintf("%#x", root)).Msg("Root does not exist, assuming true")
+			return true
+		}
+		if priorBlock.slot <= maxSlot {
+			return bytes.Equal(attestation.Data.Target.Root[:], priorBlock.root[:])
+		}
+		root = priorBlock.parent
+	}
 }
 
 // intersection returns a list of items common between the two sets.

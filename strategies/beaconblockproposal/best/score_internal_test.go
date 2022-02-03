@@ -80,6 +80,10 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -101,6 +105,10 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -122,6 +130,10 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12343,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -143,12 +155,20 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(2, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										Epoch: 385,
+									},
 								},
 							},
 							{
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12341,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -170,6 +190,10 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(50, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -201,12 +225,20 @@ func TestScore(t *testing.T) {
 								AggregationBits: specificAggregationBits([]uint64{1, 2, 3}, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										Epoch: 385,
+									},
 								},
 							},
 							{
 								AggregationBits: specificAggregationBits([]uint64{2, 3, 4}, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -228,6 +260,10 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(50, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -283,6 +319,10 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(50, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -338,6 +378,10 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(50, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -393,6 +437,10 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12344,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -417,7 +465,11 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot:            12344,
-									BeaconBlockRoot: testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+									BeaconBlockRoot: testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -442,6 +494,10 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12343,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -466,6 +522,10 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12340,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -490,6 +550,10 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12339,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x0707070707070707070707070707070707070707070707070707070707070707"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -514,12 +578,20 @@ func TestScore(t *testing.T) {
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12343,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x4343434343434343434343434343434343434343434343434343434343434343"),
+										Epoch: 385,
+									},
 								},
 							},
 							{
 								AggregationBits: bitList(2, 128),
 								Data: &phase0.AttestationData{
 									Slot: 12343,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x4343434343434343434343434343434343434343434343434343434343434343"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -533,15 +605,56 @@ func TestScore(t *testing.T) {
 			score:      1.25,
 		},
 		{
+			name: "AltairParentMissing",
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionAltair,
+				Altair: &altair.BeaconBlock{
+					Slot:       12345,
+					ParentRoot: testutil.HexToRoot("0x1111111111111111111111111111111111111111111111111111111111111111"),
+					Body: &altair.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: bitList(1, 128),
+								Data: &phase0.AttestationData{
+									Slot:            12344,
+									BeaconBlockRoot: testutil.HexToRoot("0x1111111111111111111111111111111111111111111111111111111111111111"),
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
+										Epoch: 385,
+									},
+								},
+							},
+							{
+								AggregationBits: bitList(1, 128),
+								Data: &phase0.AttestationData{
+									Slot:            12343,
+									BeaconBlockRoot: testutil.HexToRoot("0x1111111111111111111111111111111111111111111111111111111111111111"),
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x4343434343434343434343434343434343434343434343434343434343434343"),
+										Epoch: 385,
+									},
+								},
+							},
+						},
+						SyncAggregate: &altair.SyncAggregate{
+							SyncCommitteeBits: bitfield.NewBitvector512(),
+						},
+					},
+				},
+			},
+			parentSlot: 12343,
+			score:      0.84375 + 0.625,
+		},
+		{
 			name: "PriorVotes",
 			priorBlocks: map[phase0.Root]*priorBlockVotes{
 				// Chain with middle block orphaned.
-				testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"): {
-					parent: testutil.HexToRoot("0x0000000000000000000000000000000000000000000000000000000000000000"),
+				testutil.HexToRoot("0x4141414141414141414141414141414141414141414141414141414141414141"): {
+					parent: testutil.HexToRoot("0x4040404040404040404040404040404040404040404040404040404040404040"),
 					slot:   12341,
 				},
-				testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"): {
-					parent: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+				testutil.HexToRoot("0x4242424242424242424242424242424242424242424242424242424242424242"): {
+					parent: testutil.HexToRoot("0x4141414141414141414141414141414141414141414141414141414141414141"),
 					slot:   12342,
 					votes: map[phase0.Slot]map[phase0.CommitteeIndex]bitfield.Bitlist{
 						// This block is orphaned so its votes should be ignored.
@@ -550,8 +663,8 @@ func TestScore(t *testing.T) {
 						},
 					},
 				},
-				testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"): {
-					parent: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+				testutil.HexToRoot("0x4343434343434343434343434343434343434343434343434343434343434343"): {
+					parent: testutil.HexToRoot("0x4141414141414141414141414141414141414141414141414141414141414141"),
 					slot:   12343,
 					votes: map[phase0.Slot]map[phase0.CommitteeIndex]bitfield.Bitlist{
 						// This block is a recent ancestore so its votes should be considered.
@@ -565,14 +678,18 @@ func TestScore(t *testing.T) {
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
 					Slot:       12344,
-					ParentRoot: testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+					ParentRoot: testutil.HexToRoot("0x4343434343434343434343434343434343434343434343434343434343434343"),
 					Body: &altair.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(5, 128),
 								Data: &phase0.AttestationData{
-									BeaconBlockRoot: testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+									BeaconBlockRoot: testutil.HexToRoot("0x4242424242424242424242424242424242424242424242424242424242424242"),
 									Slot:            12342,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x4242424242424242424242424242424242424242424242424242424242424242"),
+										Epoch: 385,
+									},
 								},
 							},
 						},
@@ -584,6 +701,90 @@ func TestScore(t *testing.T) {
 			},
 			parentSlot: 12343,
 			score:      1.875,
+		},
+		{
+			name: "TargetCorrect",
+			priorBlocks: map[phase0.Root]*priorBlockVotes{
+				testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"): {
+					root:   testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
+					parent: testutil.HexToRoot("0x2020202020202020202020202020202020202020202020202020202020202020"),
+					slot:   12344,
+				},
+				testutil.HexToRoot("0x2020202020202020202020202020202020202020202020202020202020202020"): {
+					root:   testutil.HexToRoot("0x2020202020202020202020202020202020202020202020202020202020202020"),
+					parent: testutil.HexToRoot("0x1919191919191919191919191919191919191919191919191919191919191919"),
+					slot:   12320,
+				},
+			},
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionAltair,
+				Altair: &altair.BeaconBlock{
+					Slot:       12345,
+					ParentRoot: testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
+					Body: &altair.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: bitList(1, 128),
+								Data: &phase0.AttestationData{
+									BeaconBlockRoot: testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
+									Slot:            12344,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x2020202020202020202020202020202020202020202020202020202020202020"),
+										Epoch: 385,
+									},
+								},
+							},
+						},
+						SyncAggregate: &altair.SyncAggregate{
+							SyncCommitteeBits: bitfield.NewBitvector512(),
+						},
+					},
+				},
+			},
+			parentSlot: 12343,
+			score:      0.84375,
+		},
+		{
+			name: "TargetIncorrect",
+			priorBlocks: map[phase0.Root]*priorBlockVotes{
+				testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"): {
+					root:   testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
+					parent: testutil.HexToRoot("0x2020202020202020202020202020202020202020202020202020202020202020"),
+					slot:   12344,
+				},
+				testutil.HexToRoot("0x2020202020202020202020202020202020202020202020202020202020202020"): {
+					root:   testutil.HexToRoot("0x2020202020202020202020202020202020202020202020202020202020202020"),
+					parent: testutil.HexToRoot("0x1919191919191919191919191919191919191919191919191919191919191919"),
+					slot:   12320,
+				},
+			},
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionAltair,
+				Altair: &altair.BeaconBlock{
+					Slot:       12345,
+					ParentRoot: testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
+					Body: &altair.BeaconBlockBody{
+						Attestations: []*phase0.Attestation{
+							{
+								AggregationBits: bitList(1, 128),
+								Data: &phase0.AttestationData{
+									BeaconBlockRoot: testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
+									Slot:            12344,
+									Target: &phase0.Checkpoint{
+										Root:  testutil.HexToRoot("0x1515151515151515151515151515151515151515151515151515151515151515"),
+										Epoch: 385,
+									},
+								},
+							},
+						},
+						SyncAggregate: &altair.SyncAggregate{
+							SyncCommitteeBits: bitfield.NewBitvector512(),
+						},
+					},
+				},
+			},
+			parentSlot: 12343,
+			score:      0.4375,
 		},
 		{
 			name: "InvalidVersion",

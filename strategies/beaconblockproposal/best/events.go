@@ -35,7 +35,19 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	log := log.With().Uint64("slot", uint64(data.Slot)).Logger()
 	log.Trace().Msg("Received head event")
 
-	if data.Slot != s.chainTime.CurrentSlot() {
+	// An attestation in a block could be up to 1 epoch old.  We keep an
+	// additional epoch's worth of attestations for target root matching,
+	// for a total of 2 epochs of prior block information.
+	if data.Slot < s.chainTime.CurrentSlot()-phase0.Slot(2*s.slotsPerEpoch) {
+		// Block is too old for us to care about it.
+		return
+	}
+
+	s.priorBlocksMu.RLock()
+	_, exists := s.priorBlocks[data.Block]
+	s.priorBlocksMu.RUnlock()
+	if exists {
+		// We already have data for this block.
 		return
 	}
 
@@ -107,11 +119,12 @@ func (s *Service) updateBlockVotes(_ context.Context,
 	s.priorBlocksMu.Lock()
 	s.priorBlocks[root] = priorBlockVotes
 	for k, v := range s.priorBlocks {
-		if v.slot < slot-phase0.Slot(s.slotsPerEpoch) {
+		// Keep 2 epochs' worth of data as per comment above.
+		if v.slot < slot-phase0.Slot(2*s.slotsPerEpoch) {
 			delete(s.priorBlocks, k)
 		}
 	}
 	s.priorBlocksMu.Unlock()
 
-	log.Trace().Uint64("slot", uint64(slot)).Msg("Set votes for slot")
+	log.Trace().Uint64("slot", uint64(slot)).Str("root", fmt.Sprintf("%#x", root[:])).Msg("Set votes for slot")
 }
