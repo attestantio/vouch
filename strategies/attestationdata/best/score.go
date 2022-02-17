@@ -36,7 +36,7 @@ func (*Service) scoreAttestationData(ctx context.Context,
 	if headerProvider, isProvider := provider.(eth2client.BeaconBlockHeadersProvider); isProvider {
 		block, err := headerProvider.BeaconBlockHeader(ctx, fmt.Sprintf("%#x", attestationData.BeaconBlockRoot))
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to obtain block header")
+			log.Warn().Err(err).Msg("Failed to obtain block header")
 			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
 		}
 		if block == nil {
@@ -47,7 +47,7 @@ func (*Service) scoreAttestationData(ctx context.Context,
 	} else if blockProvider, isProvider := provider.(eth2client.SignedBeaconBlockProvider); isProvider {
 		block, err := blockProvider.SignedBeaconBlock(ctx, fmt.Sprintf("%#x", attestationData.BeaconBlockRoot))
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to obtain block")
+			log.Warn().Err(err).Msg("Failed to obtain block")
 			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
 		}
 		if block == nil {
