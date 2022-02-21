@@ -1,4 +1,4 @@
-1.4.0-rc1:
+1.4.0:
   - increase accuracy of beacon block proposal scorer by incorporating attestation history
   - multinode submitter returns after first successful submission rather than waiting for all to complete
   - do not send beacon committee subscriptions for current or previous slots on startup
