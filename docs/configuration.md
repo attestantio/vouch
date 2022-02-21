@@ -18,11 +18,11 @@ log-file: /home/me/vouch.log
 # information logged.
 log-level: Debug
 
-# beacon-node-address is the address of the beacon node.  Can be prysm, lighthouse, teku
+# beacon-node-address is the address of the beacon node.  Can be lighthouse, nimbus, prysm or teku
 # Overridden by beacon-node-addresses if present.
 beacon-node-address: localhost:4000
 
-# beacon-node-addresseses is the list of address of the beacon nodes.  Can be prysm, lighthouse, teku
+# beacon-node-addresseses is the list of address of the beacon nodes.  Can be lighthouse, nimbus, prysm or teku
 # If multiple addresses are supplied here it makes Vouch resilient in the situation where a beacon
 # node goes offline entirely.  If this occurs to the currently used node then the next in the list will
 # be used.  If a beacon node comes back online it is added to the end of the list of potential nodes to
