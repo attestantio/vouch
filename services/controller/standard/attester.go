@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -94,6 +94,12 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 				Msg("Attestation for the current slot; not scheduling")
 			continue
 		}
+
+		// Make a note that we are carrying out attestations at the given slot.
+		s.pendingAttestationsMutex.Lock()
+		s.pendingAttestations[duty.Slot()] = true
+		s.pendingAttestationsMutex.Unlock()
+
 		go func(duty *attester.Duty) {
 			jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxAttestationDelay)
 			if err := s.scheduler.ScheduleJob(ctx,
@@ -120,6 +126,15 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 		return
 	}
 	log := log.With().Uint64("slot", uint64(duty.Slot())).Logger()
+
+	// At the end of this function note that we have carried out the attestation process
+	// for this slot, regardless of result.  This allows the main codebase to shut down
+	// only after attestations have completed for the given slot.
+	defer func() {
+		s.pendingAttestationsMutex.Lock()
+		delete(s.pendingAttestations, duty.Slot())
+		s.pendingAttestationsMutex.Unlock()
+	}()
 
 	attestations, err := s.attester.Attest(ctx, duty)
 	if err != nil {

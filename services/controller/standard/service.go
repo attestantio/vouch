@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -86,6 +86,10 @@ type Service struct {
 	lastBlockEpoch            phase0.Epoch
 	currentDutyDependentRoot  phase0.Root
 	previousDutyDependentRoot phase0.Root
+
+	// Tracking for attestations.
+	pendingAttestations      map[phase0.Slot]bool
+	pendingAttestationsMutex sync.RWMutex
 }
 
 // module-wide log.
@@ -183,6 +187,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		subscriptionInfos:             make(map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
 		handlingAltair:                handlingAltair,
 		altairForkEpoch:               altairForkEpoch,
+		pendingAttestations:           make(map[phase0.Slot]bool),
 	}
 
 	// Subscribe to head events.  This allows us to go early for attestations if a block arrives, as well as
@@ -465,4 +470,14 @@ func (s *Service) handleAltairForkEpoch(ctx context.Context) {
 			go s.scheduleSyncCommitteeMessages(ctx, nextPeriodEpoch, validatorIndices, false /* notCurrentSlot */)
 		}
 	}()
+}
+
+// HasPendingAttestations returns true if there are pending attestations for the given slot.
+func (s *Service) HasPendingAttestations(_ context.Context,
+	slot phase0.Slot,
+) bool {
+	s.pendingAttestationsMutex.RLock()
+	defer s.pendingAttestationsMutex.RUnlock()
+
+	return s.pendingAttestations[slot]
 }
