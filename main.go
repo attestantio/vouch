@@ -90,7 +90,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.4.0"
+var ReleaseVersion = "1.5.0-dev"
 
 func main() {
 	os.Exit(main2())
@@ -144,7 +144,8 @@ func main2() int {
 		return 1
 	}
 
-	if err := startServices(ctx, majordomo); err != nil {
+	chainTime, controller, err := startServices(ctx, majordomo)
+	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialise services")
 		return 1
 	}
@@ -157,6 +158,20 @@ func main2() int {
 	for {
 		sig := <-sigCh
 		if sig == syscall.SIGINT || sig == syscall.SIGTERM || sig == os.Interrupt || sig == os.Kill {
+			// Received a signal to stop, but don't do so until we have finished attesting for this slot.
+			slot := chainTime.CurrentSlot()
+			first := true
+			for {
+				if !controller.HasPendingAttestations(ctx, slot) {
+					log.Info().Uint64("slot", uint64(slot)).Msg("Attestations complete; shutting down")
+					break
+				}
+				if first {
+					log.Info().Uint64("slot", uint64(slot)).Msg("Waiting for attestations to complete")
+					first = false
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
 			break
 		}
 	}
@@ -275,10 +290,16 @@ func startClient(ctx context.Context) (eth2client.Service, error) {
 	return consensusClient, nil
 }
 
-func startServices(ctx context.Context, majordomo majordomo.Service) error {
+func startServices(ctx context.Context,
+	majordomo majordomo.Service,
+) (
+	chaintime.Service,
+	*standardcontroller.Service,
+	error,
+) {
 	eth2Client, err := startClient(ctx)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	log.Trace().Msg("Starting chain time service")
 	chainTime, err := standardchaintime.New(ctx,
@@ -288,16 +309,16 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardchaintime.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
 	)
 	if err != nil {
-		return errors.Wrap(err, "failed to start chain time service")
+		return nil, nil, errors.Wrap(err, "failed to start chain time service")
 	}
 
 	log.Trace().Msg("Starting metrics service")
 	monitor, err := startMonitor(ctx, chainTime)
 	if err != nil {
-		return errors.Wrap(err, "failed to start metrics service")
+		return nil, nil, errors.Wrap(err, "failed to start metrics service")
 	}
 	if err := registerMetrics(monitor); err != nil {
-		return errors.Wrap(err, "failed to register metrics")
+		return nil, nil, errors.Wrap(err, "failed to register metrics")
 	}
 	setRelease(ReleaseVersion)
 	setReady(false)
@@ -305,43 +326,43 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 	log.Trace().Msg("Selecting scheduler")
 	scheduler, err := selectScheduler(ctx, monitor)
 	if err != nil {
-		return errors.Wrap(err, "failed to select scheduler")
+		return nil, nil, errors.Wrap(err, "failed to select scheduler")
 	}
 
 	log.Trace().Msg("Starting validators manager")
 	validatorsManager, err := startValidatorsManager(ctx, monitor, eth2Client)
 	if err != nil {
-		return errors.Wrap(err, "failed to start validators manager")
+		return nil, nil, errors.Wrap(err, "failed to start validators manager")
 	}
 
 	log.Trace().Msg("Starting signer")
 	signerSvc, err := startSigner(ctx, monitor, eth2Client)
 	if err != nil {
-		return errors.Wrap(err, "failed to start signer")
+		return nil, nil, errors.Wrap(err, "failed to start signer")
 	}
 
 	log.Trace().Msg("Starting account manager")
 	accountManager, err := startAccountManager(ctx, monitor, eth2Client, validatorsManager, majordomo, chainTime)
 	if err != nil {
-		return errors.Wrap(err, "failed to start account manager")
+		return nil, nil, errors.Wrap(err, "failed to start account manager")
 	}
 
 	log.Trace().Msg("Selecting submitter strategy")
 	submitterStrategy, err := selectSubmitterStrategy(ctx, monitor, eth2Client)
 	if err != nil {
-		return errors.Wrap(err, "failed to select submitter")
+		return nil, nil, errors.Wrap(err, "failed to select submitter")
 	}
 
 	log.Trace().Msg("Starting graffiti provider")
 	graffitiProvider, err := startGraffitiProvider(ctx, majordomo)
 	if err != nil {
-		return errors.Wrap(err, "failed to start graffiti provider")
+		return nil, nil, errors.Wrap(err, "failed to start graffiti provider")
 	}
 
 	log.Trace().Msg("Selecting beacon block proposal provider")
 	beaconBlockProposalProvider, err := selectBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime)
 	if err != nil {
-		return errors.Wrap(err, "failed to select beacon block proposal provider")
+		return nil, nil, errors.Wrap(err, "failed to select beacon block proposal provider")
 	}
 
 	log.Trace().Msg("Starting beacon block proposer")
@@ -357,13 +378,13 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardbeaconblockproposer.WithBeaconBlockSigner(signerSvc.(signer.BeaconBlockSigner)),
 	)
 	if err != nil {
-		return errors.Wrap(err, "failed to start beacon block proposer service")
+		return nil, nil, errors.Wrap(err, "failed to start beacon block proposer service")
 	}
 
 	log.Trace().Msg("Selecting attestation data provider")
 	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, eth2Client)
 	if err != nil {
-		return errors.Wrap(err, "failed to select attestation data provider")
+		return nil, nil, errors.Wrap(err, "failed to select attestation data provider")
 	}
 
 	log.Trace().Msg("Starting attester")
@@ -378,13 +399,13 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardattester.WithBeaconAttestationsSigner(signerSvc.(signer.BeaconAttestationsSigner)),
 	)
 	if err != nil {
-		return errors.Wrap(err, "failed to start attester service")
+		return nil, nil, errors.Wrap(err, "failed to start attester service")
 	}
 
 	log.Trace().Msg("Selecting aggregate attestation provider")
 	aggregateAttestationProvider, err := selectAggregateAttestationProvider(ctx, monitor, eth2Client)
 	if err != nil {
-		return errors.Wrap(err, "failed to select aggregate attestation provider")
+		return nil, nil, errors.Wrap(err, "failed to select aggregate attestation provider")
 	}
 
 	log.Trace().Msg("Starting beacon attestation aggregator")
@@ -400,7 +421,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardattestationaggregator.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
 	)
 	if err != nil {
-		return errors.Wrap(err, "failed to start beacon attestation aggregator service")
+		return nil, nil, errors.Wrap(err, "failed to start beacon attestation aggregator service")
 	}
 
 	log.Trace().Msg("Starting beacon committee subscriber service")
@@ -414,14 +435,14 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardbeaconcommitteesubscriber.WithBeaconCommitteeSubmitter(submitterStrategy.(submitter.BeaconCommitteeSubscriptionsSubmitter)),
 	)
 	if err != nil {
-		return errors.Wrap(err, "failed to start beacon committee subscriber service")
+		return nil, nil, errors.Wrap(err, "failed to start beacon committee subscriber service")
 	}
 
 	// Decide if the ETH2 client is capable of Altair.
 	altairCapable := false
 	spec, err := eth2Client.(eth2client.SpecProvider).Spec(ctx)
 	if err != nil {
-		return errors.Wrap(err, "failed to obtain spec")
+		return nil, nil, errors.Wrap(err, "failed to obtain spec")
 	}
 	if _, exists := spec["INACTIVITY_PENALTY_QUOTIENT_ALTAIR"]; exists {
 		altairCapable = true
@@ -442,13 +463,13 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 			standardsynccommitteesubscriber.WithSyncCommitteeSubmitter(submitterStrategy.(submitter.SyncCommitteeSubscriptionsSubmitter)),
 		)
 		if err != nil {
-			return errors.Wrap(err, "failed to start beacon committee subscriber service")
+			return nil, nil, errors.Wrap(err, "failed to start beacon committee subscriber service")
 		}
 
 		log.Trace().Msg("Selecting sync committee contribution provider")
 		syncCommitteeContributionProvider, err := selectSyncCommitteeContributionProvider(ctx, monitor, eth2Client)
 		if err != nil {
-			return errors.Wrap(err, "failed to select sync committee contribution provider")
+			return nil, nil, errors.Wrap(err, "failed to select sync committee contribution provider")
 		}
 
 		log.Trace().Msg("Starting sync committee aggregator")
@@ -463,7 +484,7 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 			standardsynccommitteeaggregator.WithSyncCommitteeContributionsSubmitter(submitterStrategy.(submitter.SyncCommitteeContributionsSubmitter)),
 		)
 		if err != nil {
-			return errors.Wrap(err, "failed to start sync committee aggregator service")
+			return nil, nil, errors.Wrap(err, "failed to start sync committee aggregator service")
 		}
 
 		log.Trace().Msg("Starting sync committee messenger")
@@ -482,12 +503,12 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 			standardsynccommitteemessenger.WithSyncCommitteeSubscriptionsSubmitter(submitterStrategy.(submitter.SyncCommitteeSubscriptionsSubmitter)),
 		)
 		if err != nil {
-			return errors.Wrap(err, "failed to start sync committee messenger service")
+			return nil, nil, errors.Wrap(err, "failed to start sync committee messenger service")
 		}
 	}
 
 	log.Trace().Msg("Starting controller")
-	_, err = standardcontroller.New(ctx,
+	controller, err := standardcontroller.New(ctx,
 		standardcontroller.WithLogLevel(util.LogLevel("controller")),
 		standardcontroller.WithMonitor(monitor.(metrics.ControllerMonitor)),
 		standardcontroller.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
@@ -517,10 +538,10 @@ func startServices(ctx context.Context, majordomo majordomo.Service) error {
 		standardcontroller.WithReorgs(viper.GetBool("controller.reorgs")),
 	)
 	if err != nil {
-		return errors.Wrap(err, "failed to start controller service")
+		return nil, nil, errors.Wrap(err, "failed to start controller service")
 	}
 
-	return nil
+	return chainTime, controller, nil
 }
 
 // logModules logs a list of modules with their versions.
