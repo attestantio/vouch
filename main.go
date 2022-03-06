@@ -76,7 +76,6 @@ import (
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
-	zerologger "github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	jaegerconfig "github.com/uber/jaeger-client-go/config"
@@ -101,13 +100,13 @@ func main2() int {
 	defer cancel()
 
 	if err := fetchConfig(); err != nil {
-		zerologger.Error().Err(err).Msg("Failed to fetch configuration")
+		fmt.Fprintf(os.Stderr, "failed to fetch configuration: %v\n", err)
 		return 1
 	}
 
 	majordomo, err := initMajordomo(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to initialise majordomo")
+		fmt.Fprintf(os.Stderr, "failed to initialise majordomo: %v\n", err)
 		return 1
 	}
 
@@ -116,7 +115,7 @@ func main2() int {
 	}
 
 	if err := initLogging(); err != nil {
-		log.Error().Err(err).Msg("Failed to initialise logging")
+		fmt.Fprintf(os.Stderr, "failed to initialise logging: %v\n", err)
 		return 1
 	}
 
