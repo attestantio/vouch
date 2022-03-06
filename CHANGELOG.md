@@ -1,5 +1,6 @@
 Development:
   - wait until any attestations for the current slot have completed before shutting down
+  - send errors to stderr before logging is ready
 
 1.4.0:
   - increase accuracy of beacon block proposal scorer by incorporating attestation history
