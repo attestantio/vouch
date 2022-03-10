@@ -58,7 +58,7 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 		i++
 	}
 
-	if s.proposalPreparationsSubmitter.SubmitProposalPreparations(ctx, proposalPreparations); err != nil {
+	if err := s.proposalPreparationsSubmitter.SubmitProposalPreparations(ctx, proposalPreparations); err != nil {
 		proposalPreparationCompleted(started, epoch, "failed")
 		return errors.Wrap(err, "failed to update proposal preparations")
 	}
