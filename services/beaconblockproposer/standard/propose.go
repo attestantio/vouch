@@ -17,8 +17,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/attestantio/go-eth2-client/api"
-	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -144,78 +142,6 @@ func (s *Service) proposeBlock(ctx context.Context,
 
 	// Submit the block.
 	if err := s.beaconBlockSubmitter.SubmitBeaconBlock(ctx, signedBlock); err != nil {
-		return errors.Wrap(err, "failed to submit beacon block proposal")
-	}
-
-	return nil
-}
-
-// proposeBlindedBlock proposes a full block.
-func (s *Service) proposeBlindedBlock(ctx context.Context,
-	started time.Time,
-	duty *beaconblockproposer.Duty,
-	graffiti []byte,
-) error {
-	proposal, err := s.blindedProposalProvider.BlindedBeaconBlockProposal(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti)
-	if err != nil {
-		return errors.Wrap(err, "failed to obtain blinded proposal data")
-	}
-	if proposal == nil {
-		return errors.New("provider did not return blinded beacon block proposal")
-	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained blinded proposal")
-
-	proposalSlot, err := proposal.Slot()
-	if err != nil {
-		return errors.Wrap(err, "failed to obtain proposal slot")
-	}
-
-	if proposalSlot != duty.Slot() {
-		return errors.New("proposal data for incorrect slot")
-	}
-
-	bodyRoot, err := proposal.BodyRoot()
-	if err != nil {
-		return errors.Wrap(err, "failed to calculate hash tree root of block body")
-	}
-
-	parentRoot, err := proposal.ParentRoot()
-	if err != nil {
-		return errors.Wrap(err, "failed to obtain parent root of block")
-	}
-
-	stateRoot, err := proposal.StateRoot()
-	if err != nil {
-		return errors.Wrap(err, "failed to obtain state root of block")
-	}
-
-	sig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
-		duty.Account(),
-		proposalSlot,
-		duty.ValidatorIndex(),
-		parentRoot,
-		stateRoot,
-		bodyRoot)
-	if err != nil {
-		return errors.Wrap(err, "failed to sign beacon block proposal")
-	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed proposal")
-
-	signedBlock := &api.VersionedSignedBlindedBeaconBlock{
-		Version: proposal.Version,
-	}
-	switch signedBlock.Version {
-	case spec.DataVersionBellatrix:
-		signedBlock.Bellatrix = &apiv1.SignedBlindedBeaconBlock{
-			Message:   proposal.Bellatrix,
-			Signature: sig,
-		}
-	default:
-		return errors.New("unknown proposal version")
-	}
-
-	// Submit the block.
-	if err := s.blindedBeaconBlockSubmitter.SubmitBlindedBeaconBlock(ctx, signedBlock); err != nil {
 		return errors.Wrap(err, "failed to submit beacon block proposal")
 	}
 
