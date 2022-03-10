@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,7 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	api "github.com/attestantio/go-eth2-client/api/v1"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -36,6 +36,7 @@ type Service struct {
 	beaconBlockSubmitter                  eth2client.BeaconBlockSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
+	proposalPreparationsSubmitter         eth2client.ProposalPreparationsSubmitter
 	syncCommitteeMessagesSubmitter        eth2client.SyncCommitteeMessagesSubmitter
 	syncCommitteeSubscriptionsSubmitter   eth2client.SyncCommitteeSubscriptionsSubmitter
 	syncCommitteeContributionsSubmitter   eth2client.SyncCommitteeContributionsSubmitter
@@ -63,6 +64,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		beaconBlockSubmitter:                  parameters.beaconBlockSubmitter,
 		beaconCommitteeSubscriptionsSubmitter: parameters.beaconCommitteeSubscriptionsSubmitter,
 		aggregateAttestationsSubmitter:        parameters.aggregateAttestationsSubmitter,
+		proposalPreparationsSubmitter:         parameters.proposalPreparationsSubmitter,
 		syncCommitteeMessagesSubmitter:        parameters.syncCommitteeMessagesSubmitter,
 		syncCommitteeSubscriptionsSubmitter:   parameters.syncCommitteeSubscriptionsSubmitter,
 		syncCommitteeContributionsSubmitter:   parameters.syncCommitteeContributionsSubmitter,
@@ -126,14 +128,14 @@ func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0
 }
 
 // SubmitBeaconCommitteeSubscriptions submits a batch of beacon committee subscriptions.
-func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*api.BeaconCommitteeSubscription) error {
+func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*apiv1.BeaconCommitteeSubscription) error {
 	if len(subscriptions) == 0 {
 		return errors.New("no beacon committee subscriptions supplied")
 	}
 
-	subs := make([]*api.BeaconCommitteeSubscription, len(subscriptions))
+	subs := make([]*apiv1.BeaconCommitteeSubscription, len(subscriptions))
 	for i, subscription := range subscriptions {
-		subs[i] = &api.BeaconCommitteeSubscription{
+		subs[i] = &apiv1.BeaconCommitteeSubscription{
 			Slot:             subscription.Slot,
 			CommitteeIndex:   subscription.CommitteeIndex,
 			CommitteesAtSlot: subscription.CommitteesAtSlot,
@@ -196,6 +198,33 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []
 	return nil
 }
 
+// SubmitProposalPreparations submits proposal preparations.
+func (s *Service) SubmitProposalPreparations(ctx context.Context, preparations []*apiv1.ProposalPreparation) error {
+	if len(preparations) == 0 {
+		return errors.New("no proposal preparations supplied")
+	}
+
+	started := time.Now()
+	err := s.proposalPreparationsSubmitter.SubmitProposalPreparations(ctx, preparations)
+	if service, isService := s.proposalPreparationsSubmitter.(eth2client.Service); isService {
+		s.clientMonitor.ClientOperation(service.Address(), "submit proposal preparations", err == nil, time.Since(started))
+	} else {
+		s.clientMonitor.ClientOperation("<unknown>", "submit proposal preparations", err == nil, time.Since(started))
+	}
+	if err != nil {
+		return errors.Wrap(err, "failed to submit proposal preparations")
+	}
+
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(preparations)
+		if err == nil {
+			e.Str("prepaprations", string(data)).Msg("Submitted proposal preparations")
+		}
+	}
+
+	return nil
+}
+
 // SubmitSyncCommitteeMessages submits sync committee messages.
 func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
 	if len(messages) == 0 {
@@ -224,7 +253,7 @@ func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*a
 }
 
 // SubmitSyncCommitteeSubscriptions submits a batch of beacon committee subscriptions.
-func (s *Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+func (s *Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*apiv1.SyncCommitteeSubscription) error {
 	if len(subscriptions) == 0 {
 		return errors.New("no sync committee subscriptions supplied")
 	}

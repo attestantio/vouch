@@ -3,7 +3,7 @@ module github.com/attestantio/vouch
 go 1.17
 
 require (
-	github.com/attestantio/go-eth2-client v0.10.0
+	github.com/attestantio/go-eth2-client v0.11.0
 	github.com/aws/aws-sdk-go v1.42.44
 	github.com/herumi/bls-eth-go-binary v0.0.0-20220103074059-01b0ca9e9ef7 // indirect
 	github.com/jackc/puddle v1.2.1 // indirect
@@ -33,7 +33,7 @@ require (
 	golang.org/x/crypto v0.0.0-20211215165025-cf75a172585e // indirect
 	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20220128215802-99c3d69c2c27 // indirect
+	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9 // indirect
 	google.golang.org/grpc v1.44.0
 	gotest.tools v2.2.0+incompatible
 )
@@ -57,7 +57,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.1.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.11 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect

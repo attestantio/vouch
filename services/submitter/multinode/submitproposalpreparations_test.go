@@ -19,7 +19,8 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/attestantio/go-eth2-client/spec/altair"
+	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/submitter/multinode"
 	"github.com/attestantio/vouch/testing/logger"
@@ -27,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSubmitSyncCommitteeMessagesEmpty(t *testing.T) {
+func TestSubmitProposalPreparationsEmpty(t *testing.T) {
 	ctx := context.Background()
 
 	s, err := multinode.New(context.Background(),
@@ -61,11 +62,11 @@ func TestSubmitSyncCommitteeMessagesEmpty(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitSyncCommitteeMessages(ctx, []*altair.SyncCommitteeMessage{})
-	require.EqualError(t, err, "no sync committee messages supplied")
+	err = s.SubmitProposalPreparations(ctx, []*api.ProposalPreparation{})
+	require.EqualError(t, err, "no proposal preparations supplied")
 }
 
-func TestSubmitSyncCommitteeMessages(t *testing.T) {
+func TestSubmitProposalPreparations(t *testing.T) {
 	ctx := context.Background()
 
 	capture := logger.NewLogCapture()
@@ -101,14 +102,17 @@ func TestSubmitSyncCommitteeMessages(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitSyncCommitteeMessages(ctx, []*altair.SyncCommitteeMessage{
-		{},
+	err = s.SubmitProposalPreparations(ctx, []*api.ProposalPreparation{
+		{
+			ValidatorIndex: 1,
+			FeeRecipient:   bellatrix.ExecutionAddress{},
+		},
 	})
 	require.NoError(t, err)
-	capture.AssertHasEntry(t, "Submitted sync committee messages")
+	capture.AssertHasEntry(t, "Submitted proposal preparations")
 }
 
-func TestSubmitSyncCommitteeMessagesErroring(t *testing.T) {
+func TestSubmitProposalPreparationsErroring(t *testing.T) {
 	ctx := context.Background()
 
 	s, err := multinode.New(context.Background(),
@@ -128,10 +132,10 @@ func TestSubmitSyncCommitteeMessagesErroring(t *testing.T) {
 			"1": mock.NewAggregateAttestationsSubmitter(),
 		}),
 		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{
-			"1": mock.NewProposalPreparationsSubmitter(),
+			"1": mock.NewErroringProposalPreparationsSubmitter(),
 		}),
 		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{
-			"1": mock.NewErroringSyncCommitteeMessagesSubmitter(),
+			"1": mock.NewSyncCommitteeMessagesSubmitter(),
 		}),
 		multinode.WithSyncCommitteeSubscriptionsSubmitters(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter{
 			"1": mock.NewSyncCommitteeSubscriptionsSubmitter(),
@@ -142,13 +146,16 @@ func TestSubmitSyncCommitteeMessagesErroring(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitSyncCommitteeMessages(ctx, []*altair.SyncCommitteeMessage{
-		{},
+	err = s.SubmitProposalPreparations(ctx, []*api.ProposalPreparation{
+		{
+			ValidatorIndex: 1,
+			FeeRecipient:   bellatrix.ExecutionAddress{},
+		},
 	})
-	require.EqualError(t, err, "no successful submissions before timeout")
+	require.EqualError(t, err, "no successful proposal preparations before timeout")
 }
 
-func TestSubmitSyncCommitteeMessagesSleepy(t *testing.T) {
+func TestSubmitProposalPreparationsSleepy(t *testing.T) {
 	ctx := context.Background()
 
 	s, err := multinode.New(context.Background(),
@@ -168,10 +175,10 @@ func TestSubmitSyncCommitteeMessagesSleepy(t *testing.T) {
 			"1": mock.NewAggregateAttestationsSubmitter(),
 		}),
 		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{
-			"1": mock.NewProposalPreparationsSubmitter(),
+			"1": mock.NewSleepyProposalPreparationsSubmitter(200*time.Millisecond, mock.NewProposalPreparationsSubmitter()),
 		}),
 		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{
-			"1": mock.NewSleepySyncCommitteeMessagesSubmitter(200*time.Millisecond, mock.NewSyncCommitteeMessagesSubmitter()),
+			"1": mock.NewSyncCommitteeMessagesSubmitter(),
 		}),
 		multinode.WithSyncCommitteeSubscriptionsSubmitters(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter{
 			"1": mock.NewSyncCommitteeSubscriptionsSubmitter(),
@@ -182,13 +189,16 @@ func TestSubmitSyncCommitteeMessagesSleepy(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitSyncCommitteeMessages(ctx, []*altair.SyncCommitteeMessage{
-		{},
+	err = s.SubmitProposalPreparations(ctx, []*api.ProposalPreparation{
+		{
+			ValidatorIndex: 1,
+			FeeRecipient:   bellatrix.ExecutionAddress{},
+		},
 	})
-	require.EqualError(t, err, "no successful submissions before timeout")
+	require.EqualError(t, err, "no successful proposal preparations before timeout")
 }
 
-func TestSubmitSyncCommitteeMessagesSleepySuccess(t *testing.T) {
+func TestSubmitProposalPreparationsSleepySuccess(t *testing.T) {
 	ctx := context.Background()
 
 	s, err := multinode.New(context.Background(),
@@ -208,10 +218,10 @@ func TestSubmitSyncCommitteeMessagesSleepySuccess(t *testing.T) {
 			"1": mock.NewAggregateAttestationsSubmitter(),
 		}),
 		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{
-			"1": mock.NewProposalPreparationsSubmitter(),
+			"1": mock.NewSleepyProposalPreparationsSubmitter(100*time.Millisecond, mock.NewProposalPreparationsSubmitter()),
 		}),
 		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{
-			"1": mock.NewSleepySyncCommitteeMessagesSubmitter(100*time.Millisecond, mock.NewSyncCommitteeMessagesSubmitter()),
+			"1": mock.NewSyncCommitteeMessagesSubmitter(),
 		}),
 		multinode.WithSyncCommitteeSubscriptionsSubmitters(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter{
 			"1": mock.NewSyncCommitteeSubscriptionsSubmitter(),
@@ -222,8 +232,11 @@ func TestSubmitSyncCommitteeMessagesSleepySuccess(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitSyncCommitteeMessages(ctx, []*altair.SyncCommitteeMessage{
-		{},
+	err = s.SubmitProposalPreparations(ctx, []*api.ProposalPreparation{
+		{
+			ValidatorIndex: 1,
+			FeeRecipient:   bellatrix.ExecutionAddress{},
+		},
 	})
 	require.NoError(t, err)
 }

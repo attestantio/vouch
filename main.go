@@ -15,9 +15,11 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	// #nosec G108
 	_ "net/http/pprof"
@@ -31,6 +33,8 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/loggers"
 	"github.com/attestantio/vouch/services/accountmanager"
 	dirkaccountmanager "github.com/attestantio/vouch/services/accountmanager/dirk"
@@ -42,12 +46,16 @@ import (
 	"github.com/attestantio/vouch/services/chaintime"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	standardcontroller "github.com/attestantio/vouch/services/controller/standard"
+	"github.com/attestantio/vouch/services/feerecipientprovider"
+	staticfeerecipientprovider "github.com/attestantio/vouch/services/feerecipientprovider/static"
 	"github.com/attestantio/vouch/services/graffitiprovider"
 	dynamicgraffitiprovider "github.com/attestantio/vouch/services/graffitiprovider/dynamic"
 	staticgraffitiprovider "github.com/attestantio/vouch/services/graffitiprovider/static"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	prometheusmetrics "github.com/attestantio/vouch/services/metrics/prometheus"
+	"github.com/attestantio/vouch/services/proposalpreparer"
+	standardproposalpreparer "github.com/attestantio/vouch/services/proposalpreparer/standard"
 	"github.com/attestantio/vouch/services/scheduler"
 	advancedscheduler "github.com/attestantio/vouch/services/scheduler/advanced"
 	"github.com/attestantio/vouch/services/signer"
@@ -358,6 +366,12 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to start graffiti provider")
 	}
 
+	log.Trace().Msg("Starting fee recipient provider")
+	feeRecipientProvider, err := startFeeRecipientProvider(ctx, monitor, majordomo)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to start fee recipient provider")
+	}
+
 	log.Trace().Msg("Selecting beacon block proposal provider")
 	beaconBlockProposalProvider, err := selectBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime)
 	if err != nil {
@@ -370,6 +384,7 @@ func startServices(ctx context.Context,
 		standardbeaconblockproposer.WithChainTimeService(chainTime),
 		standardbeaconblockproposer.WithProposalDataProvider(beaconBlockProposalProvider),
 		standardbeaconblockproposer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+		standardbeaconblockproposer.WithFeeRecipientProvider(feeRecipientProvider),
 		standardbeaconblockproposer.WithGraffitiProvider(graffitiProvider),
 		standardbeaconblockproposer.WithMonitor(monitor.(metrics.BeaconBlockProposalMonitor)),
 		standardbeaconblockproposer.WithBeaconBlockSubmitter(submitterStrategy.(submitter.BeaconBlockSubmitter)),
@@ -450,6 +465,10 @@ func startServices(ctx context.Context,
 		log.Info().Msg("Client is not Altair-capable")
 	}
 
+	// TODO decide if the consensus client is capable of Bellatrix.
+	bellatrixCapable := true
+	log.Info().Msg("Client is Bellatrix-capable")
+
 	// The following items are for Altair.  These are optional.
 	var syncCommitteeSubscriber synccommitteesubscriber.Service
 	var syncCommitteeMessenger synccommitteemessenger.Service
@@ -506,6 +525,22 @@ func startServices(ctx context.Context,
 		}
 	}
 
+	var proposalPreparer proposalpreparer.Service
+	if bellatrixCapable {
+		log.Trace().Msg("Starting proposals preparer")
+		proposalPreparer, err = standardproposalpreparer.New(ctx,
+			standardproposalpreparer.WithLogLevel(util.LogLevel("proposalspreparor")),
+			standardproposalpreparer.WithMonitor(monitor),
+			standardproposalpreparer.WithChainTimeService(chainTime),
+			standardproposalpreparer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+			standardproposalpreparer.WithFeeRecipientProvider(feeRecipientProvider),
+			standardproposalpreparer.WithProposalPreparationsSubmitter(submitterStrategy.(eth2client.ProposalPreparationsSubmitter)),
+		)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "failed to start proposal preparer service")
+		}
+	}
+
 	log.Trace().Msg("Starting controller")
 	controller, err := standardcontroller.New(ctx,
 		standardcontroller.WithLogLevel(util.LogLevel("controller")),
@@ -525,6 +560,7 @@ func startServices(ctx context.Context,
 		standardcontroller.WithBeaconBlockProposer(beaconBlockProposer),
 		standardcontroller.WithBeaconBlockHeadersProvider(eth2Client.(eth2client.BeaconBlockHeadersProvider)),
 		standardcontroller.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
+		standardcontroller.WithProposalsPreparer(proposalPreparer),
 		standardcontroller.WithAttestationAggregator(attestationAggregator),
 		standardcontroller.WithBeaconCommitteeSubscriber(beaconCommitteeSubscriber),
 		standardcontroller.WithSyncCommitteeSubscriber(syncCommitteeSubscriber),
@@ -684,6 +720,49 @@ func selectScheduler(ctx context.Context, monitor metrics.Service) (scheduler.Se
 		return nil, errors.Wrap(err, "failed to start scheduler service")
 	}
 	return scheduler, nil
+}
+
+// startFeeRecipientProvider starts the appropriate fee recipient provider given user input.
+func startFeeRecipientProvider(ctx context.Context, monitor metrics.Service, majordomo majordomo.Service) (feerecipientprovider.Service, error) {
+	log.Info().Msg("Starting static fee recipient provider")
+	addr := viper.GetString("feerecipient.static.default-address")
+	if addr == "" {
+		return nil, errors.New("no default fee recipient address")
+	}
+	bytes, err := hex.DecodeString(strings.TrimPrefix(addr, "0x"))
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid default fee recipient address")
+	}
+	if len(bytes) != bellatrix.FeeRecipientLength {
+		return nil, errors.New("default fee recipient address wrong length")
+	}
+	var feeRecipient bellatrix.ExecutionAddress
+	copy(feeRecipient[:], bytes)
+
+	feeRecipients := make(map[phase0.ValidatorIndex]bellatrix.ExecutionAddress)
+	for k, v := range viper.GetStringMap("feerecipient.static.validator-addresses") {
+		index, err := strconv.ParseUint(k, 10, 64)
+		if err != nil {
+			return nil, errors.New("invalid validator index")
+		}
+		bytes, err := hex.DecodeString(strings.TrimPrefix(v.(string), "0x"))
+		if err != nil {
+			return nil, errors.New("invalid fee recipient address")
+		}
+		if len(bytes) != bellatrix.FeeRecipientLength {
+			return nil, errors.New("fee recipient address wrong length")
+		}
+		var feeRecipient bellatrix.ExecutionAddress
+		copy(feeRecipient[:], bytes)
+		feeRecipients[phase0.ValidatorIndex(index)] = feeRecipient
+	}
+
+	return staticfeerecipientprovider.New(ctx,
+		staticfeerecipientprovider.WithMonitor(monitor),
+		staticfeerecipientprovider.WithLogLevel(util.LogLevel("feerecipipent.static")),
+		staticfeerecipientprovider.WithFeeRecipients(feeRecipients),
+		staticfeerecipientprovider.WithDefaultFeeRecipient(feeRecipient),
+	)
 }
 
 // startGraffitiProvider starts the appropriate graffiti provider given user input.
@@ -1060,6 +1139,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 		syncCommitteeMessagesSubmitters := make(map[string]eth2client.SyncCommitteeMessagesSubmitter)
 		syncCommitteeContributionsSubmitters := make(map[string]eth2client.SyncCommitteeContributionsSubmitter)
 		syncCommitteeSubscriptionsSubmitters := make(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter)
+		proposalPreparationSubmitters := make(map[string]eth2client.ProposalPreparationsSubmitter)
 		for _, address := range viper.GetStringSlice("submitter.beacon-node-addresses") {
 			client, err := fetchClient(ctx, address)
 			if err != nil {
@@ -1072,6 +1152,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			syncCommitteeMessagesSubmitters[address] = client.(eth2client.SyncCommitteeMessagesSubmitter)
 			syncCommitteeContributionsSubmitters[address] = client.(eth2client.SyncCommitteeContributionsSubmitter)
 			syncCommitteeSubscriptionsSubmitters[address] = client.(eth2client.SyncCommitteeSubscriptionsSubmitter)
+			proposalPreparationSubmitters[address] = client.(eth2client.ProposalPreparationsSubmitter)
 		}
 		submitter, err = multinodesubmitter.New(ctx,
 			multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
@@ -1085,6 +1166,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			multinodesubmitter.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 			multinodesubmitter.WithAggregateAttestationsSubmitters(aggregateAttestationSubmitters),
 			multinodesubmitter.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
+			multinodesubmitter.WithProposalPreparationsSubmitters(proposalPreparationSubmitters),
 		)
 	default:
 		log.Info().Msg("Starting standard submitter strategy")
@@ -1098,6 +1180,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			immediatesubmitter.WithSyncCommitteeSubscriptionsSubmitter(eth2Client.(eth2client.SyncCommitteeSubscriptionsSubmitter)),
 			immediatesubmitter.WithBeaconCommitteeSubscriptionsSubmitter(eth2Client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)),
 			immediatesubmitter.WithAggregateAttestationsSubmitter(eth2Client.(eth2client.AggregateAttestationsSubmitter)),
+			immediatesubmitter.WithProposalPreparationsSubmitter(eth2Client.(eth2client.ProposalPreparationsSubmitter)),
 		)
 	}
 	if err != nil {

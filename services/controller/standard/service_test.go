@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -27,6 +27,7 @@ import (
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	"github.com/attestantio/vouch/services/controller/standard"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	mockproposalpreparer "github.com/attestantio/vouch/services/proposalpreparer/mock"
 	mockscheduler "github.com/attestantio/vouch/services/scheduler/mock"
 	mocksynccommitteeaggregator "github.com/attestantio/vouch/services/synccommitteeaggregator/mock"
 	mocksynccommitteemessenger "github.com/attestantio/vouch/services/synccommitteemessenger/mock"
@@ -62,6 +63,7 @@ func TestService(t *testing.T) {
 	mockSyncCommitteeSubscriber := mocksynccommitteesubscriber.New()
 	mockAttestationAggregator := mockattestationaggregator.New()
 	mockValidatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
+	mockProposalsPreparer := mockproposalpreparer.New()
 	mockAccountsRefresher := mockaccountmanager.NewRefresher()
 	mockBeaconBlockProposer := mockbeaconblockproposer.New()
 	mockEventsProvider := mock.NewEventsProvider()
@@ -92,6 +94,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -123,6 +126,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -154,6 +158,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -186,6 +191,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -217,6 +223,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -248,6 +255,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -279,6 +287,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -311,6 +320,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -342,6 +352,7 @@ func TestService(t *testing.T) {
 				standard.WithAttesterDutiesProvider(attesterDutiesProvider),
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -362,6 +373,38 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: no validating accounts provider specified",
 		},
 		{
+			name: "ProposalsPreparerMissing",
+			params: []standard.Parameter{
+				standard.WithLogLevel(zerolog.Disabled),
+				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithSpecProvider(specProvider),
+				standard.WithForkScheduleProvider(forkScheduleProvider),
+				standard.WithChainTimeService(chainTime),
+				standard.WithProposerDutiesProvider(proposerDutiesProvider),
+				standard.WithAttesterDutiesProvider(attesterDutiesProvider),
+				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
+				standard.WithEventsProvider(mockEventsProvider),
+				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithScheduler(mockScheduler),
+				standard.WithAttester(mockAttester),
+				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
+				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
+				standard.WithSyncCommitteeSubscriber(mockSyncCommitteeSubscriber),
+				standard.WithBeaconBlockProposer(mockBeaconBlockProposer),
+				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
+				standard.WithAttestationAggregator(mockAttestationAggregator),
+				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
+				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
+				standard.WithMaxAttestationDelay(4 * time.Second),
+				standard.WithMaxProposalDelay(4 * time.Second),
+				standard.WithMaxSyncCommitteeMessageDelay(4 * time.Second),
+				standard.WithAttestationAggregationDelay(8 * time.Second),
+				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
+			},
+			err: "problem with parameters: no proposals preparer specified",
+		},
+		{
 			name: "SchedulerMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
@@ -374,6 +417,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
@@ -405,6 +449,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
@@ -435,6 +480,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -466,6 +512,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -498,6 +545,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeSubscriber(mockSyncCommitteeSubscriber),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -528,6 +576,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -559,6 +608,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -591,6 +641,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -623,6 +674,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
@@ -656,6 +708,7 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
 				standard.WithEventsProvider(mockEventsProvider),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
 				standard.WithAttester(mockAttester),
 				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),

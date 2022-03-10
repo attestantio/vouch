@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -20,24 +20,17 @@ import (
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/feerecipientprovider"
-	"github.com/attestantio/vouch/services/graffitiprovider"
 	"github.com/attestantio/vouch/services/metrics"
-	"github.com/attestantio/vouch/services/signer"
-	"github.com/attestantio/vouch/services/submitter"
 	"github.com/rs/zerolog"
 )
 
 type parameters struct {
-	logLevel                   zerolog.Level
-	monitor                    metrics.BeaconBlockProposalMonitor
-	chainTimeService           chaintime.Service
-	proposalProvider           eth2client.BeaconBlockProposalProvider
-	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
-	feeRecipientProvider       feerecipientprovider.Service
-	graffitiProvider           graffitiprovider.Service
-	beaconBlockSubmitter       submitter.BeaconBlockSubmitter
-	randaoRevealSigner         signer.RANDAORevealSigner
-	beaconBlockSigner          signer.BeaconBlockSigner
+	logLevel                      zerolog.Level
+	monitor                       metrics.Service
+	chainTimeService              chaintime.Service
+	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
+	feeRecipientProvider          feerecipientprovider.Service
+	proposalPreparationsSubmitter eth2client.ProposalPreparationsSubmitter
 }
 
 // Parameter is the interface for service parameters.
@@ -65,15 +58,8 @@ func WithChainTimeService(service chaintime.Service) Parameter {
 	})
 }
 
-// WithProposalDataProvider sets the proposal data provider.
-func WithProposalDataProvider(provider eth2client.BeaconBlockProposalProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.proposalProvider = provider
-	})
-}
-
 // WithMonitor sets the monitor for this module.
-func WithMonitor(monitor metrics.BeaconBlockProposalMonitor) Parameter {
+func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})
@@ -93,31 +79,10 @@ func WithFeeRecipientProvider(provider feerecipientprovider.Service) Parameter {
 	})
 }
 
-// WithGraffitiProvider sets the graffiti provider.
-func WithGraffitiProvider(provider graffitiprovider.Service) Parameter {
+// WithProposalPreparationsSubmitter sets the proposal preparations submitter.
+func WithProposalPreparationsSubmitter(submitter eth2client.ProposalPreparationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.graffitiProvider = provider
-	})
-}
-
-// WithBeaconBlockSubmitter sets the beacon block submitter.
-func WithBeaconBlockSubmitter(submitter submitter.BeaconBlockSubmitter) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.beaconBlockSubmitter = submitter
-	})
-}
-
-// WithRANDAORevealSigner sets the RANDAO reveal signer.
-func WithRANDAORevealSigner(signer signer.RANDAORevealSigner) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.randaoRevealSigner = signer
-	})
-}
-
-// WithBeaconBlockSigner sets the beacon block signer.
-func WithBeaconBlockSigner(signer signer.BeaconBlockSigner) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.beaconBlockSigner = signer
+		p.proposalPreparationsSubmitter = submitter
 	})
 }
 
@@ -132,9 +97,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
-	if parameters.proposalProvider == nil {
-		return nil, errors.New("no proposal data provider specified")
-	}
 	if parameters.chainTimeService == nil {
 		return nil, errors.New("no chain time service specified")
 	}
@@ -147,14 +109,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.feeRecipientProvider == nil {
 		return nil, errors.New("no fee recipient provider specified")
 	}
-	if parameters.beaconBlockSubmitter == nil {
-		return nil, errors.New("no beacon block submitter specified")
-	}
-	if parameters.randaoRevealSigner == nil {
-		return nil, errors.New("no RANDAO reveal signer specified")
-	}
-	if parameters.beaconBlockSigner == nil {
-		return nil, errors.New("no beacon block signer specified")
+	if parameters.proposalPreparationsSubmitter == nil {
+		return nil, errors.New("no proposal preparations submitter specified")
 	}
 
 	return &parameters, nil
