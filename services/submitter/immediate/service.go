@@ -218,7 +218,7 @@ func (s *Service) SubmitProposalPreparations(ctx context.Context, preparations [
 	if e := log.Trace(); e.Enabled() {
 		data, err := json.Marshal(preparations)
 		if err == nil {
-			e.Str("prepaprations", string(data)).Msg("Submitted proposal preparations")
+			e.Str("preparations", string(data)).Msg("Submitted proposal preparations")
 		}
 	}
 
@@ -299,7 +299,7 @@ func (s *Service) SubmitSyncCommitteeContributions(ctx context.Context, contribu
 	if e := log.Trace(); e.Enabled() {
 		data, err := json.Marshal(contributionAndProofs)
 		if err == nil {
-			e.Str("contributionAndProofs", string(data)).Msg("Submitted contribution and proofs")
+			e.Str("contribution_and_proofs", string(data)).Msg("Submitted contribution and proofs")
 		}
 	}
 
