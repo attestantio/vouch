@@ -2,6 +2,8 @@ Development:
   - add soft timeout to "best" strategies: return half way through the timeout if results have been obtained
   - wait until any attestations for the current slot have completed before shutting down
   - send errors to stderr before logging is ready
+  - support Bellatrix
+  - ensure that attestations are created for slot 0
 
 1.4.0:
   - increase accuracy of beacon block proposal scorer by incorporating attestation history

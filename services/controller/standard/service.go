@@ -220,7 +220,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Start tickers, to carry out periodic operations.
-	if err := s.startTickers(ctx, handlingBellatrix); err != nil {
+	waitedForGenesis, err := s.startTickers(ctx, handlingBellatrix)
+	if err != nil {
 		return nil, errors.Wrap(err, "failed to start controller tickers")
 	}
 
@@ -238,8 +239,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain active validator indices for the next epoch")
 	}
-	go s.scheduleProposals(ctx, epoch, validatorIndices, true /* notCurrentSlot */)
-	go s.scheduleAttestations(ctx, epoch, validatorIndices, true /* notCurrentSlot */)
+	go s.scheduleProposals(ctx, epoch, validatorIndices, !waitedForGenesis)
+	go s.scheduleAttestations(ctx, epoch, validatorIndices, !waitedForGenesis)
 	if handlingAltair {
 		thisSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch) / s.epochsPerSyncCommitteePeriod)
 		go s.scheduleSyncCommitteeMessages(ctx, thisSyncCommitteePeriodStartEpoch, validatorIndices, true /* notCurrentSlot */)
@@ -285,7 +286,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 // startTickers starts the various tickers for the controller's operations.
 func (s *Service) startTickers(ctx context.Context,
 	handlingBellatrix bool,
-) error {
+) (
+	bool,
+	error,
+) {
 	genesisTime := s.chainTimeService.GenesisTime()
 	now := time.Now()
 	waitedForGenesis := false
@@ -299,24 +303,24 @@ func (s *Service) startTickers(ctx context.Context,
 	// Start epoch ticker.
 	log.Trace().Msg("Starting epoch tickers")
 	if err := s.startEpochTicker(ctx, waitedForGenesis); err != nil {
-		return errors.Wrap(err, "failed to start epoch ticker")
+		return false, errors.Wrap(err, "failed to start epoch ticker")
 	}
 
 	// Start account refresher.
 	log.Trace().Msg("Starting accounts refresher")
 	if err := s.startAccountsRefresher(ctx); err != nil {
-		return errors.Wrap(err, "failed to start accounts refresher")
+		return false, errors.Wrap(err, "failed to start accounts refresher")
 	}
 
 	// Start proposals preparer.
 	if handlingBellatrix {
 		log.Trace().Msg("Starting proposals preparer ticker")
 		if err := s.startProposalsPreparer(ctx); err != nil {
-			return errors.Wrap(err, "failed to start proposals preparer")
+			return false, errors.Wrap(err, "failed to start proposals preparer")
 		}
 	}
 
-	return nil
+	return waitedForGenesis, nil
 }
 
 type epochTickerData struct {
