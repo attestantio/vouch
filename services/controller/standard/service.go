@@ -169,6 +169,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if err != nil {
 		// Not handling bellatrix after all.
 		handlingBellatrix = false
+		bellatrixForkEpoch = 0xffffffffffffffff
 	} else {
 		log.Trace().Uint64("epoch", uint64(bellatrixForkEpoch)).Msg("Obtained Bellatrix fork epoch")
 	}
@@ -275,9 +276,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	// Update proposal preparers.
 	go func() {
-		if err := s.proposalsPreparer.UpdatePreparations(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed to update fee recipients")
-		}
+		s.prepareProposals(ctx, nil)
 	}()
 
 	return s, nil
@@ -394,7 +393,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	if s.handlingAltair {
 		// Handle the Altair hard fork transition epoch.
 		if currentEpoch == s.altairForkEpoch {
-			log.Trace().Msg("At Altair fork epoch")
+			log.Info().Msg("At Altair fork epoch")
 			go s.handleAltairForkEpoch(ctx)
 		}
 
@@ -404,13 +403,26 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 		}
 	}
 
+	if s.handlingBellatrix {
+		// Handle the Bellatrix hard fork transition epoch.
+		if currentEpoch == s.bellatrixForkEpoch {
+			log.Info().Msg("At Bellatrix fork epoch")
+			go s.handleBellatrixForkEpoch(ctx)
+		}
+	}
+
 	// Next epoch's attestations and beacon committee subscriptions are now available, but wait until
 	// half-way through the epoch to set them up (and half-way through that slot).
 	// This allows us to set them up at a time when the beacon node should be less busy.
+	epochDuration := s.chainTimeService.StartOfEpoch(currentEpoch + 1).Sub(s.chainTimeService.StartOfEpoch(currentEpoch))
+	currentSlot := s.chainTimeService.CurrentSlot()
+	slotDuration := s.chainTimeService.StartOfSlot(currentSlot + 1).Sub(s.chainTimeService.StartOfSlot(currentSlot))
+	offset := int(epochDuration.Seconds()/2.0 + slotDuration.Seconds()/2.0)
 	if err := s.scheduler.ScheduleJob(ctx,
 		"Epoch",
 		fmt.Sprintf("Prepare for epoch %d", currentEpoch+1),
-		s.chainTimeService.StartOfSlot(s.chainTimeService.FirstSlotOfEpoch(currentEpoch)+phase0.Slot(s.slotsPerEpoch/2)).Add(s.slotDuration/2),
+		s.chainTimeService.StartOfEpoch(currentEpoch).Add(time.Duration(offset)*time.Second),
+		//s.chainTimeService.StartOfSlot(s.chainTimeService.FirstSlotOfEpoch(currentEpoch)+phase0.Slot(s.slotsPerEpoch/2)).Add(s.slotDuration/2),
 		s.prepareForEpoch,
 		&prepareForEpochData{
 			epoch: currentEpoch + 1,
@@ -538,6 +550,18 @@ func (s *Service) handleAltairForkEpoch(ctx context.Context) {
 			}
 			go s.scheduleSyncCommitteeMessages(ctx, nextPeriodEpoch, validatorIndices, false /* notCurrentSlot */)
 		}
+	}()
+}
+
+// handleBellatrixForkEpoch handles changes that need to take place at the Bellatrix hard fork boundary.
+func (s *Service) handleBellatrixForkEpoch(ctx context.Context) {
+	if !s.handlingBellatrix {
+		return
+	}
+
+	go func() {
+		// Send a proposals preparation immediately.
+		s.prepareProposals(ctx, nil)
 	}()
 }
 
