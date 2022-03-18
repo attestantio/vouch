@@ -74,8 +74,12 @@ strategies:
       - localhost:4000
       - localhost:5051
       - localhost:5052
-    # timeout is the time that the strategy will wait for beacon nodes to respond before selecting the best from those available.
-    timeout: 1s
+    # timeout defines the maximum amount of time the strategy will wait for a response.  As soon as a response from all beacon
+    # nodes has been obtained,the strategy will return with the best.  Half-way through the timeout period, Vouch will check to see
+    # if there have been any responses from the beacon nodes, and if so will return with the best.
+    # This allows Vouch to remain responsive in the situation where some beacon nodes are significantly slower than others, for
+    # example if one is remote.
+    timeout: 2s
   # The attestationdata strategy obtains attestation data from multiple sources.
   attestationdata:
     # style can be 'best', which obtains attestation data from all nodes and selects the best, or 'first', which uses the first returned

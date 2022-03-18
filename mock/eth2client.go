@@ -604,6 +604,52 @@ func (*BeaconBlockProposalProvider) BeaconBlockProposal(_ context.Context, slot 
 	return block, nil
 }
 
+// ErroringBeaconBlockProposalProvider is a mock for eth2client.BeaconBlockProposalProvider.
+type ErroringBeaconBlockProposalProvider struct{}
+
+// NewErroringBeaconBlockProposalProvider returns a mock beacon block proposal provider.
+func NewErroringBeaconBlockProposalProvider() eth2client.BeaconBlockProposalProvider {
+	return &ErroringBeaconBlockProposalProvider{}
+}
+
+// BeaconBlockProposal is a mock.
+func (*ErroringBeaconBlockProposalProvider) BeaconBlockProposal(_ context.Context, _ phase0.Slot, _ phase0.BLSSignature, _ []byte) (*spec.VersionedBeaconBlock, error) {
+	return nil, errors.New("error")
+}
+
+// NilBeaconBlockProposalProvider is a mock for eth2client.BeaconBlockProposalProvider.
+type NilBeaconBlockProposalProvider struct{}
+
+// NewNilBeaconBlockProposalProvider returns a mock beacon block proposal provider.
+func NewNilBeaconBlockProposalProvider() eth2client.BeaconBlockProposalProvider {
+	return &NilBeaconBlockProposalProvider{}
+}
+
+// BeaconBlockProposal is a mock.
+func (*NilBeaconBlockProposalProvider) BeaconBlockProposal(_ context.Context, _ phase0.Slot, _ phase0.BLSSignature, _ []byte) (*spec.VersionedBeaconBlock, error) {
+	return nil, nil
+}
+
+// SleepyBeaconBlockProposalProvider is a mock for eth2client.BeaconBlockProposalProvider.
+type SleepyBeaconBlockProposalProvider struct {
+	wait time.Duration
+	next eth2client.BeaconBlockProposalProvider
+}
+
+// NewSleepyBeaconBlockProposalProvider returns a mock beacon block proposal
+func NewSleepyBeaconBlockProposalProvider(wait time.Duration, next eth2client.BeaconBlockProposalProvider) eth2client.BeaconBlockProposalProvider {
+	return &SleepyBeaconBlockProposalProvider{
+		wait: wait,
+		next: next,
+	}
+}
+
+// BeaconBlockProposal is a mock.
+func (m *SleepyBeaconBlockProposalProvider) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*spec.VersionedBeaconBlock, error) {
+	time.Sleep(m.wait)
+	return m.next.BeaconBlockProposal(ctx, slot, randaoReveal, graffiti)
+}
+
 // BeaconBlockHeadersProvider is a mock for eth2client.BeaconBlockHeadersProvider.
 type BeaconBlockHeadersProvider struct{}
 
