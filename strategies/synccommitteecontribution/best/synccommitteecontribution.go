@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2021, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -35,52 +35,42 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 	started := time.Now()
 	log := util.LogWithID(ctx, log, "strategy_id")
 
-	// We create a cancelable context with a timeout.  If the context times out we take the best to date.
+	// We have two timeouts: a soft timeout and a hard timeout.
+	// At the soft timeout, we return if we have any responses so far.
+	// At the hard timeout, we return unconditionally.
+	// The soft timeout is half the duration of the hard timeout.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
 
 	respCh := make(chan *syncCommitteeContributionResponse, len(s.syncCommitteeContributionProviders))
 	errCh := make(chan error, len(s.syncCommitteeContributionProviders))
 	// Kick off the requests.
 	for name, provider := range s.syncCommitteeContributionProviders {
-		go func(ctx context.Context,
-			name string,
-			provider eth2client.SyncCommitteeContributionProvider,
-			respCh chan *syncCommitteeContributionResponse,
-			errCh chan error,
-		) {
-			contribution, err := provider.SyncCommitteeContribution(ctx, slot, subcommitteeIndex, beaconBlockRoot)
-			s.clientMonitor.ClientOperation(name, "sync committee contribution", err == nil, time.Since(started))
-			if err != nil {
-				errCh <- err
-				return
-			}
-			log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained sync committee contribution")
-			if contribution == nil {
-				return
-			}
-
-			score := s.scoreSyncCommitteeContribution(ctx, name, contribution)
-			respCh <- &syncCommitteeContributionResponse{
-				provider:     name,
-				contribution: contribution,
-				score:        score,
-			}
-		}(ctx, name, provider, respCh, errCh)
+		go s.syncCommitteeContribution(ctx, started, name, provider, respCh, errCh, slot, subcommitteeIndex, beaconBlockRoot)
 	}
 
 	// Wait for all responses (or context done).
 	responded := 0
 	errored := 0
+	timedOut := 0
 	bestScore := float64(0)
 	var bestSyncCommitteeContribution *altair.SyncCommitteeContribution
 	bestProvider := ""
 
-	for responded+errored != len(s.syncCommitteeContributionProviders) {
+	for responded+errored+timedOut != len(s.syncCommitteeContributionProviders) {
 		select {
+		case <-softCtx.Done():
+			// If we have any responses at this point we consider the non-responders timed out.
+			if responded > 0 {
+				timedOut = len(s.syncCommitteeContributionProviders) - responded - errored
+				log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Msg("Soft timeout reached with responses")
+			} else {
+				log.Debug().Dur("elapsed", time.Since(started)).Int("errored", errored).Msg("Soft timeout reached with no responses")
+			}
 		case <-ctx.Done():
 			// Anyone not responded by now is considered errored.
 			errored = len(s.syncCommitteeContributionProviders) - responded
-			log.Debug().Dur("elapsed", time.Since(started)).Msg("Timed out waiting for responses")
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
 		case err := <-errCh:
 			errored++
 			log.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Responded with error")
@@ -94,8 +84,9 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Response")
 		}
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Str("best_provider", bestProvider).Msg("Complete")
+	softCancel()
 	cancel()
+	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Responses")
 
 	if bestSyncCommitteeContribution == nil {
 		return nil, errors.New("no sync committee contribution received")
@@ -106,4 +97,33 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 	}
 
 	return bestSyncCommitteeContribution, nil
+}
+
+func (s *Service) syncCommitteeContribution(ctx context.Context,
+	started time.Time,
+	name string,
+	provider eth2client.SyncCommitteeContributionProvider,
+	respCh chan *syncCommitteeContributionResponse,
+	errCh chan error,
+	slot phase0.Slot,
+	subcommitteeIndex uint64,
+	beaconBlockRoot phase0.Root,
+) {
+	contribution, err := provider.SyncCommitteeContribution(ctx, slot, subcommitteeIndex, beaconBlockRoot)
+	s.clientMonitor.ClientOperation(name, "sync committee contribution", err == nil, time.Since(started))
+	if err != nil {
+		errCh <- err
+		return
+	}
+	log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained sync committee contribution")
+	if contribution == nil {
+		return
+	}
+
+	score := s.scoreSyncCommitteeContribution(ctx, name, contribution)
+	respCh <- &syncCommitteeContributionResponse{
+		provider:     name,
+		contribution: contribution,
+		score:        score,
+	}
 }
