@@ -57,7 +57,9 @@ where in this case `11,16,29` are the indices of the validators for which Vouch 
 
 _i.e._ an entry for each requested index with details of the fee recipient address.
 
-Each time Vouch fetches this information it will replace the old data with it, allowing the remote endpoint to use
+Each time Vouch fetches this information it will replace the old data with the information received.  This provides maximum flexibility for situations where the fee recipient may change over time, and can update the fee recipient without requiring a restart of Vouch.
+
+*Note that if both the remote and static fee recipient providers are configured then the remote provider will be used.*
 
 # Which to use?
 If you are running Vouch in an environment where you own all validators then you can set a default fee recipient; no further configuration is required.
@@ -65,8 +67,3 @@ If you are running Vouch in an environment where you own all validators then you
 If you are running Vouch in an environment where each validator has its own fee recipient, for purposes of separation of funds to different end users, then you can use the static fee recipients provider.
 
 If you are running Vouch in an environment where each validator's fee recipient may change, for example if you are providing a service and as part of that service customers may alter their fee recipient address, then you can use the remote fee recipients provider.
-
-
-
-
-Note that if both the remote and static fee recipient providers are confiured then the remote proider will be used.
