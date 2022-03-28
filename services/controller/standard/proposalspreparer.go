@@ -54,6 +54,10 @@ func (s *Service) prepareProposals(ctx context.Context, _ interface{}) {
 		return
 	}
 
-	s.proposalsPreparer.UpdatePreparations(ctx)
+	if err := s.proposalsPreparer.UpdatePreparations(ctx); err != nil {
+		log.Error().Err(err).Msg("Failed to prepare proposals")
+		return
+	}
+
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Prepared proposals")
 }

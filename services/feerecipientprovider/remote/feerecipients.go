@@ -40,10 +40,6 @@ type feeRecipientResponseJSON struct {
 	FeeRecipient string `json:"fee_recipient"`
 }
 
-type errorResponseJSON struct {
-	Error string `json:"error"`
-}
-
 // FeeRecipients returns the fee recipients for the given validators.
 func (s *Service) FeeRecipients(ctx context.Context,
 	indices []phase0.ValidatorIndex,

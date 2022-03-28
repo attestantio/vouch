@@ -422,7 +422,6 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 		"Epoch",
 		fmt.Sprintf("Prepare for epoch %d", currentEpoch+1),
 		s.chainTimeService.StartOfEpoch(currentEpoch).Add(time.Duration(offset)*time.Second),
-		//s.chainTimeService.StartOfSlot(s.chainTimeService.FirstSlotOfEpoch(currentEpoch)+phase0.Slot(s.slotsPerEpoch/2)).Add(s.slotDuration/2),
 		s.prepareForEpoch,
 		&prepareForEpochData{
 			epoch: currentEpoch + 1,
