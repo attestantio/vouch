@@ -28,6 +28,6 @@ func New() proposalpreparer.Service {
 }
 
 // UpdatePreparations updates the preparations for validators on the beacon nodes.
-func (s *Service) UpdatePreparations(ctx context.Context) error {
+func (s *Service) UpdatePreparations(_ context.Context) error {
 	return nil
 }

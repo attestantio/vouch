@@ -22,7 +22,12 @@ import (
 )
 
 // FeeRecipients returns the fee recipients for the given validators.
-func (s *Service) FeeRecipients(ctx context.Context, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]bellatrix.ExecutionAddress, error) {
+func (s *Service) FeeRecipients(_ context.Context,
+	indices []phase0.ValidatorIndex,
+) (
+	map[phase0.ValidatorIndex]bellatrix.ExecutionAddress,
+	error,
+) {
 	started := time.Now()
 
 	res := make(map[phase0.ValidatorIndex]bellatrix.ExecutionAddress, len(indices))

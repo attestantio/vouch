@@ -31,11 +31,16 @@ func New() feerecipientprovider.Service {
 }
 
 // FeeRecipients returns the fee recipients for the given validators.
-func (s *Service) FeeRecipients(ctx context.Context, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]bellatrix.ExecutionAddress, error) {
+func (s *Service) FeeRecipients(_ context.Context,
+	_ []phase0.ValidatorIndex,
+) (
+	map[phase0.ValidatorIndex]bellatrix.ExecutionAddress,
+	error,
+) {
 	return map[phase0.ValidatorIndex]bellatrix.ExecutionAddress{
-		0: bellatrix.ExecutionAddress{0x00},
-		1: bellatrix.ExecutionAddress{0x01},
-		2: bellatrix.ExecutionAddress{0x02},
+		0: {0x00},
+		1: {0x01},
+		2: {0x02},
 	}, nil
 }
 
@@ -48,6 +53,11 @@ func NewErroring() feerecipientprovider.Service {
 }
 
 // FeeRecipients returns the fee recipients for the given validators.
-func (s *ErroringService) FeeRecipients(ctx context.Context, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]bellatrix.ExecutionAddress, error) {
+func (s *ErroringService) FeeRecipients(_ context.Context,
+	_ []phase0.ValidatorIndex,
+) (
+	map[phase0.ValidatorIndex]bellatrix.ExecutionAddress,
+	error,
+) {
 	return nil, errors.New("error")
 }

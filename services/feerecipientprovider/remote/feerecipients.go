@@ -149,7 +149,7 @@ func (s *Service) padResults(ctx context.Context,
 
 // padResult fills in a result that has not been obtained remotely, either
 // from the cache or the default results.
-func (s *Service) padResult(ctx context.Context,
+func (s *Service) padResult(_ context.Context,
 	index phase0.ValidatorIndex,
 	res map[phase0.ValidatorIndex]bellatrix.ExecutionAddress,
 ) {

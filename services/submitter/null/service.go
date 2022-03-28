@@ -123,7 +123,7 @@ func (*Service) SubmitAggregateAttestations(_ context.Context, aggregates []*pha
 }
 
 // SubmitProposalPreparations submits proposal preparations.
-func (s *Service) SubmitProposalPreparations(ctx context.Context, preparations []*api.ProposalPreparation) error {
+func (s *Service) SubmitProposalPreparations(_ context.Context, preparations []*api.ProposalPreparation) error {
 	if len(preparations) == 0 {
 		return errors.New("no preparations supplied")
 	}
