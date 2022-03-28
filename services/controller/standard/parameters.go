@@ -25,6 +25,7 @@ import (
 	"github.com/attestantio/vouch/services/beaconcommitteesubscriber"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/proposalpreparer"
 	"github.com/attestantio/vouch/services/scheduler"
 	"github.com/attestantio/vouch/services/synccommitteeaggregator"
 	"github.com/attestantio/vouch/services/synccommitteemessenger"
@@ -44,6 +45,7 @@ type parameters struct {
 	syncCommitteeDutiesProvider   eth2client.SyncCommitteeDutiesProvider
 	syncCommitteesSubscriber      synccommitteesubscriber.Service
 	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
+	proposalsPreparer             proposalpreparer.Service
 	scheduler                     scheduler.Service
 	eventsProvider                eth2client.EventsProvider
 	attester                      attester.Service
@@ -148,6 +150,13 @@ func WithEventsProvider(provider eth2client.EventsProvider) Parameter {
 func WithValidatingAccountsProvider(provider accountmanager.ValidatingAccountsProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.validatingAccountsProvider = provider
+	})
+}
+
+// WithProposalsPreparer sets the proposals preparer.
+func WithProposalsPreparer(provider proposalpreparer.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.proposalsPreparer = provider
 	})
 }
 
@@ -295,6 +304,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.validatingAccountsProvider == nil {
 		return nil, errors.New("no validating accounts provider specified")
+	}
+	if parameters.proposalsPreparer == nil {
+		return nil, errors.New("no proposals preparer specified")
 	}
 	if parameters.scheduler == nil {
 		return nil, errors.New("no scheduler service specified")

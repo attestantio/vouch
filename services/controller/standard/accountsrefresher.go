@@ -23,10 +23,13 @@ import (
 // startAccountsRefresher starts a period job that ticks approximately half-way through an epoch.
 func (s *Service) startAccountsRefresher(ctx context.Context) error {
 	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
-		// Schedule for 65 seconds in to the of the next epoch.
-		// Doesn't matter too much when we run, but avoid the start of the epoch and
-		// also the start of a slot.
-		return s.chainTimeService.StartOfEpoch(s.chainTimeService.CurrentEpoch() + 1).Add(65 * time.Second), nil
+		// Schedule for the middle of the slot, quarter through the epoch.
+		currentEpoch := s.chainTimeService.CurrentEpoch()
+		epochDuration := s.chainTimeService.StartOfEpoch(currentEpoch + 1).Sub(s.chainTimeService.StartOfEpoch(currentEpoch))
+		currentSlot := s.chainTimeService.CurrentSlot()
+		slotDuration := s.chainTimeService.StartOfSlot(currentSlot + 1).Sub(s.chainTimeService.StartOfSlot(currentSlot))
+		offset := int(epochDuration.Seconds()/4.0 + slotDuration.Seconds()/2.0)
+		return s.chainTimeService.StartOfEpoch(s.chainTimeService.CurrentEpoch() + 1).Add(time.Duration(offset) * time.Second), nil
 	}
 	if err := s.scheduler.SchedulePeriodicJob(ctx,
 		"Refresh accounts",

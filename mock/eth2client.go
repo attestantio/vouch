@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,7 +21,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	api "github.com/attestantio/go-eth2-client/api/v1"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -131,8 +131,8 @@ func NewProposerDutiesProvider() eth2client.ProposerDutiesProvider {
 }
 
 // ProposerDuties is a mock.
-func (*ProposerDutiesProvider) ProposerDuties(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) ([]*api.ProposerDuty, error) {
-	return make([]*api.ProposerDuty, 0), nil
+func (*ProposerDutiesProvider) ProposerDuties(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) ([]*apiv1.ProposerDuty, error) {
+	return make([]*apiv1.ProposerDuty, 0), nil
 }
 
 // AttesterDutiesProvider is a mock for eth2client.AttesterDutiesProvider.
@@ -144,8 +144,8 @@ func NewAttesterDutiesProvider() eth2client.AttesterDutiesProvider {
 }
 
 // AttesterDuties is a mock.
-func (*AttesterDutiesProvider) AttesterDuties(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) ([]*api.AttesterDuty, error) {
-	return make([]*api.AttesterDuty, 0), nil
+func (*AttesterDutiesProvider) AttesterDuties(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) ([]*apiv1.AttesterDuty, error) {
+	return make([]*apiv1.AttesterDuty, 0), nil
 }
 
 // SyncCommitteeDutiesProvider is a mock for eth2client.SyncCommitteeDutiesProvider.
@@ -157,8 +157,8 @@ func NewSyncCommitteeDutiesProvider() eth2client.SyncCommitteeDutiesProvider {
 }
 
 // SyncCommitteeDuties is a mock.
-func (*SyncCommitteeDutiesProvider) SyncCommitteeDuties(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) ([]*api.SyncCommitteeDuty, error) {
-	return make([]*api.SyncCommitteeDuty, 0), nil
+func (*SyncCommitteeDutiesProvider) SyncCommitteeDuties(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) ([]*apiv1.SyncCommitteeDuty, error) {
+	return make([]*apiv1.SyncCommitteeDuty, 0), nil
 }
 
 // SyncCommitteeSubscriptionsSubmitter is a mock for eth2client.SyncCommitteeSubscriptionsSubmitter.
@@ -170,7 +170,7 @@ func NewSyncCommitteeSubscriptionsSubmitter() eth2client.SyncCommitteeSubscripti
 }
 
 // SubmitSyncCommitteeSubscriptions is a mock
-func (*SyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(_ context.Context, _ []*api.SyncCommitteeSubscription) error {
+func (*SyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(_ context.Context, _ []*apiv1.SyncCommitteeSubscription) error {
 	return nil
 }
 
@@ -183,7 +183,7 @@ func NewErroringSyncCommitteeSubscriptionsSubmitter() eth2client.SyncCommitteeSu
 }
 
 // SubmitSyncCommitteeSubscriptions is a mock
-func (*ErroringSyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(_ context.Context, _ []*api.SyncCommitteeSubscription) error {
+func (*ErroringSyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(_ context.Context, _ []*apiv1.SyncCommitteeSubscription) error {
 	return errors.New("error")
 }
 
@@ -202,7 +202,7 @@ func NewSleepySyncCommitteeSubscriptionsSubmitter(wait time.Duration, next eth2c
 }
 
 // SubmitSyncCommitteeSubscriptions is a mock.
-func (m *SleepySyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+func (m *SleepySyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*apiv1.SyncCommitteeSubscription) error {
 	time.Sleep(m.wait)
 	return m.next.SubmitSyncCommitteeSubscriptions(ctx, subscriptions)
 }
@@ -463,6 +463,52 @@ func (m *SleepyAggregateAttestationsSubmitter) SubmitAggregateAttestations(ctx c
 	return m.next.SubmitAggregateAttestations(ctx, aggregateAndProofs)
 }
 
+// ProposalPreparationsSubmitter is a mock for eth2client.ProposalPreparationsSubmitter.
+type ProposalPreparationsSubmitter struct{}
+
+// NewProposalPreparationsSubmitter returns a mock proposal preparations submitter.
+func NewProposalPreparationsSubmitter() eth2client.ProposalPreparationsSubmitter {
+	return &ProposalPreparationsSubmitter{}
+}
+
+// SubmitProposalPreparations is a mock.
+func (*ProposalPreparationsSubmitter) SubmitProposalPreparations(_ context.Context, _ []*apiv1.ProposalPreparation) error {
+	return nil
+}
+
+// ErroringProposalPreparationsSubmitter is a mock for eth2client.ProposalPreparationsSubmitter that returns errors.
+type ErroringProposalPreparationsSubmitter struct{}
+
+// NewErroringProposalPreparationsSubmitter returns a mock aggregate attestation submitter.
+func NewErroringProposalPreparationsSubmitter() eth2client.ProposalPreparationsSubmitter {
+	return &ErroringProposalPreparationsSubmitter{}
+}
+
+// SubmitProposalPreparations is a mock.
+func (*ErroringProposalPreparationsSubmitter) SubmitProposalPreparations(_ context.Context, _ []*apiv1.ProposalPreparation) error {
+	return errors.New("error")
+}
+
+// SleepyProposalPreparationsSubmitter is a mock for eth2client.ProposalPreparationsSubmitter.
+type SleepyProposalPreparationsSubmitter struct {
+	wait time.Duration
+	next eth2client.ProposalPreparationsSubmitter
+}
+
+// NewSleepyProposalPreparationsSubmitter returns a mock aggregate attestations submitter.
+func NewSleepyProposalPreparationsSubmitter(wait time.Duration, next eth2client.ProposalPreparationsSubmitter) eth2client.ProposalPreparationsSubmitter {
+	return &SleepyProposalPreparationsSubmitter{
+		wait: wait,
+		next: next,
+	}
+}
+
+// SubmitProposalPreparations is a mock.
+func (m *SleepyProposalPreparationsSubmitter) SubmitProposalPreparations(ctx context.Context, preparations []*apiv1.ProposalPreparation) error {
+	time.Sleep(m.wait)
+	return m.next.SubmitProposalPreparations(ctx, preparations)
+}
+
 // BeaconCommitteeSubscriptionsSubmitter is a mock for eth2client.BeaconCommitteeSubscriptionsSubmitter.
 type BeaconCommitteeSubscriptionsSubmitter struct{}
 
@@ -472,7 +518,7 @@ func NewBeaconCommitteeSubscriptionsSubmitter() eth2client.BeaconCommitteeSubscr
 }
 
 // SubmitBeaconCommitteeSubscriptions is a mock.
-func (*BeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(_ context.Context, _ []*api.BeaconCommitteeSubscription) error {
+func (*BeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(_ context.Context, _ []*apiv1.BeaconCommitteeSubscription) error {
 	return nil
 }
 
@@ -485,7 +531,7 @@ func NewErroringBeaconCommitteeSubscriptionsSubmitter() eth2client.BeaconCommitt
 }
 
 // SubmitBeaconCommitteeSubscriptions is a mock.
-func (*ErroringBeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(_ context.Context, _ []*api.BeaconCommitteeSubscription) error {
+func (*ErroringBeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(_ context.Context, _ []*apiv1.BeaconCommitteeSubscription) error {
 	return errors.New("error")
 }
 
@@ -504,7 +550,7 @@ func NewSleepyBeaconCommitteeSubscriptionsSubmitter(wait time.Duration, next eth
 }
 
 // SubmitBeaconCommitteeSubscriptions is a mock.
-func (m *SleepyBeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*api.BeaconCommitteeSubscription) error {
+func (m *SleepyBeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*apiv1.BeaconCommitteeSubscription) error {
 	time.Sleep(m.wait)
 	return m.next.SubmitBeaconCommitteeSubscriptions(ctx, subscriptions)
 }
@@ -659,8 +705,8 @@ func NewBeaconBlockHeadersProvider() eth2client.BeaconBlockHeadersProvider {
 }
 
 // BeaconBlockHeader provides the block header of a given block ID.
-func (*BeaconBlockHeadersProvider) BeaconBlockHeader(_ context.Context, _ string) (*api.BeaconBlockHeader, error) {
-	return &api.BeaconBlockHeader{
+func (*BeaconBlockHeadersProvider) BeaconBlockHeader(_ context.Context, _ string) (*apiv1.BeaconBlockHeader, error) {
+	return &apiv1.BeaconBlockHeader{
 		Root: phase0.Root([32]byte{
 			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 			0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
@@ -1003,11 +1049,11 @@ func _blsPubKey(input string) phase0.BLSPubKey {
 	return res
 }
 
-func _epochValidator(index phase0.ValidatorIndex, pubKey string, withdrwalCredentials string) *api.Validator {
-	return &api.Validator{
+func _epochValidator(index phase0.ValidatorIndex, pubKey string, withdrwalCredentials string) *apiv1.Validator {
+	return &apiv1.Validator{
 		Index:   index,
 		Balance: 32000000000,
-		Status:  api.ValidatorStateActiveOngoing,
+		Status:  apiv1.ValidatorStateActiveOngoing,
 		Validator: &phase0.Validator{
 			PublicKey:                  _blsPubKey(pubKey),
 			WithdrawalCredentials:      _byte(withdrwalCredentials),
@@ -1030,8 +1076,8 @@ func NewValidatorsProvider() eth2client.ValidatorsProvider {
 }
 
 // Validators is a mock.
-func (*ValidatorsProvider) Validators(_ context.Context, _ string, validators []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]*api.Validator, error) {
-	base := map[phase0.ValidatorIndex]*api.Validator{
+func (*ValidatorsProvider) Validators(_ context.Context, _ string, validators []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]*apiv1.Validator, error) {
+	base := map[phase0.ValidatorIndex]*apiv1.Validator{
 		0: _epochValidator(0,
 			"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
 			"0x00fad2a6bfb0e7f1f0f45460944fbd8dfa7f37da06a4d13b3983cc90bb46963b"),
@@ -1134,7 +1180,7 @@ func (*ValidatorsProvider) Validators(_ context.Context, _ string, validators []
 		return base, nil
 	}
 
-	res := make(map[phase0.ValidatorIndex]*api.Validator)
+	res := make(map[phase0.ValidatorIndex]*apiv1.Validator)
 	for k, v := range base {
 		for _, index := range validators {
 			if k == index {
@@ -1147,8 +1193,8 @@ func (*ValidatorsProvider) Validators(_ context.Context, _ string, validators []
 }
 
 // ValidatorsByPubKey is a mock.
-func (*ValidatorsProvider) ValidatorsByPubKey(_ context.Context, _ string, validators []phase0.BLSPubKey) (map[phase0.ValidatorIndex]*api.Validator, error) {
-	base := map[phase0.ValidatorIndex]*api.Validator{
+func (*ValidatorsProvider) ValidatorsByPubKey(_ context.Context, _ string, validators []phase0.BLSPubKey) (map[phase0.ValidatorIndex]*apiv1.Validator, error) {
+	base := map[phase0.ValidatorIndex]*apiv1.Validator{
 		0: _epochValidator(0,
 			"0xa99a76ed7796f7be22d5b7e85deeb7c5677e88e511e0b337618f8c4eb61349b4bf2d153f649f7b53359fe8b94a38e44c",
 			"0x00fad2a6bfb0e7f1f0f45460944fbd8dfa7f37da06a4d13b3983cc90bb46963b"),
@@ -1251,7 +1297,7 @@ func (*ValidatorsProvider) ValidatorsByPubKey(_ context.Context, _ string, valid
 		return base, nil
 	}
 
-	res := make(map[phase0.ValidatorIndex]*api.Validator)
+	res := make(map[phase0.ValidatorIndex]*apiv1.Validator)
 	for k, v := range base {
 		for _, pubKey := range validators {
 			if v.Validator.PublicKey == pubKey {

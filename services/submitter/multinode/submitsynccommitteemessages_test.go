@@ -46,6 +46,9 @@ func TestSubmitSyncCommitteeMessagesEmpty(t *testing.T) {
 		multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{
 			"1": mock.NewAggregateAttestationsSubmitter(),
 		}),
+		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{
+			"1": mock.NewProposalPreparationsSubmitter(),
+		}),
 		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{
 			"1": mock.NewSyncCommitteeMessagesSubmitter(),
 		}),
@@ -82,6 +85,9 @@ func TestSubmitSyncCommitteeMessages(t *testing.T) {
 		}),
 		multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{
 			"1": mock.NewAggregateAttestationsSubmitter(),
+		}),
+		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{
+			"1": mock.NewProposalPreparationsSubmitter(),
 		}),
 		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{
 			"1": mock.NewSyncCommitteeMessagesSubmitter(),
@@ -121,6 +127,9 @@ func TestSubmitSyncCommitteeMessagesErroring(t *testing.T) {
 		multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{
 			"1": mock.NewAggregateAttestationsSubmitter(),
 		}),
+		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{
+			"1": mock.NewProposalPreparationsSubmitter(),
+		}),
 		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{
 			"1": mock.NewErroringSyncCommitteeMessagesSubmitter(),
 		}),
@@ -158,6 +167,9 @@ func TestSubmitSyncCommitteeMessagesSleepy(t *testing.T) {
 		multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{
 			"1": mock.NewAggregateAttestationsSubmitter(),
 		}),
+		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{
+			"1": mock.NewProposalPreparationsSubmitter(),
+		}),
 		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{
 			"1": mock.NewSleepySyncCommitteeMessagesSubmitter(200*time.Millisecond, mock.NewSyncCommitteeMessagesSubmitter()),
 		}),
@@ -194,6 +206,9 @@ func TestSubmitSyncCommitteeMessagesSleepySuccess(t *testing.T) {
 		}),
 		multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{
 			"1": mock.NewAggregateAttestationsSubmitter(),
+		}),
+		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{
+			"1": mock.NewProposalPreparationsSubmitter(),
 		}),
 		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{
 			"1": mock.NewSleepySyncCommitteeMessagesSubmitter(100*time.Millisecond, mock.NewSyncCommitteeMessagesSubmitter()),

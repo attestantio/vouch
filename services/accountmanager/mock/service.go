@@ -15,6 +15,7 @@ package mock
 
 import (
 	"context"
+	"errors"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
@@ -53,3 +54,26 @@ func NewRefresher() accountmanager.Refresher {
 
 // Refresh is a mock.
 func (*refresher) Refresh(_ context.Context) {}
+
+type erroringValidatingAccountsProvider struct{}
+
+// NewErroringValidatingAccountsProvider is a mock.
+func NewErroringValidatingAccountsProvider() accountmanager.ValidatingAccountsProvider {
+	return &erroringValidatingAccountsProvider{}
+}
+
+// ValidatingAccountsForEpoch is a mock.
+func (*erroringValidatingAccountsProvider) ValidatingAccountsForEpoch(_ context.Context, _ phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	return nil, errors.New("error")
+}
+
+// ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
+func (*erroringValidatingAccountsProvider) ValidatingAccountsForEpochByIndex(_ context.Context,
+	_ phase0.Epoch,
+	_ []phase0.ValidatorIndex,
+) (
+	map[phase0.ValidatorIndex]e2wtypes.Account,
+	error,
+) {
+	return nil, errors.New("error")
+}

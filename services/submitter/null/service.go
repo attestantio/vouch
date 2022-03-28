@@ -122,6 +122,22 @@ func (*Service) SubmitAggregateAttestations(_ context.Context, aggregates []*pha
 	return nil
 }
 
+// SubmitProposalPreparations submits proposal preparations.
+func (s *Service) SubmitProposalPreparations(_ context.Context, preparations []*api.ProposalPreparation) error {
+	if len(preparations) == 0 {
+		return errors.New("no preparations supplied")
+	}
+
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(preparations)
+		if err == nil {
+			e.Str("preparations", string(data)).Msg("Not submitting proposal preparations")
+		}
+	}
+
+	return nil
+}
+
 // SubmitSyncCommitteeMessages submits sync committee messages.
 func (*Service) SubmitSyncCommitteeMessages(_ context.Context, messages []*altair.SyncCommitteeMessage) error {
 	if len(messages) == 0 {

@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2021, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -23,6 +23,7 @@ import (
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/beaconblockproposer/standard"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
+	mockfeerecipientprovider "github.com/attestantio/vouch/services/feerecipientprovider/mock"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	mocksigner "github.com/attestantio/vouch/services/signer/mock"
 	"github.com/attestantio/vouch/testing/logger"
@@ -47,6 +48,7 @@ func TestProposeNoRANDAOReveal(t *testing.T) {
 		standard.WithProposalDataProvider(mock.NewBeaconBlockProposalProvider()),
 		standard.WithChainTimeService(chainTime),
 		standard.WithValidatingAccountsProvider(mockaccountsprovider.NewValidatingAccountsProvider()),
+		standard.WithFeeRecipientProvider(mockfeerecipientprovider.New()),
 		standard.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 		standard.WithRANDAORevealSigner(mocksigner.New()),
 		standard.WithBeaconBlockSigner(mocksigner.New()),

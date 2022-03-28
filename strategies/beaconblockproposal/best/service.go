@@ -46,8 +46,8 @@ type Service struct {
 	proposerWeight     uint64
 	weightDenominator  uint64
 
-	priorBlocks   map[phase0.Root]*priorBlockVotes
-	priorBlocksMu sync.RWMutex
+	priorBlocksVotes   map[phase0.Root]*priorBlockVotes
+	priorBlocksVotesMu sync.RWMutex
 }
 
 type priorBlockVotes struct {
@@ -162,7 +162,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		syncRewardWeight:             syncRewardWeight,
 		proposerWeight:               proposerWeight,
 		weightDenominator:            weightDenominator,
-		priorBlocks:                  make(map[phase0.Root]*priorBlockVotes),
+		priorBlocksVotes:             make(map[phase0.Root]*priorBlockVotes),
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 

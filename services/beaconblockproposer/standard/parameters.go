@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,6 +19,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/chaintime"
+	"github.com/attestantio/vouch/services/feerecipientprovider"
 	"github.com/attestantio/vouch/services/graffitiprovider"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
@@ -32,6 +33,7 @@ type parameters struct {
 	chainTimeService           chaintime.Service
 	proposalProvider           eth2client.BeaconBlockProposalProvider
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
+	feeRecipientProvider       feerecipientprovider.Service
 	graffitiProvider           graffitiprovider.Service
 	beaconBlockSubmitter       submitter.BeaconBlockSubmitter
 	randaoRevealSigner         signer.RANDAORevealSigner
@@ -81,6 +83,13 @@ func WithMonitor(monitor metrics.BeaconBlockProposalMonitor) Parameter {
 func WithValidatingAccountsProvider(provider accountmanager.ValidatingAccountsProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.validatingAccountsProvider = provider
+	})
+}
+
+// WithFeeRecipientProvider sets the fee recipient provider.
+func WithFeeRecipientProvider(provider feerecipientprovider.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.feeRecipientProvider = provider
 	})
 }
 
@@ -134,6 +143,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.validatingAccountsProvider == nil {
 		return nil, errors.New("no validating accounts provider specified")
+	}
+	if parameters.feeRecipientProvider == nil {
+		return nil, errors.New("no fee recipient provider specified")
 	}
 	if parameters.beaconBlockSubmitter == nil {
 		return nil, errors.New("no beacon block submitter specified")

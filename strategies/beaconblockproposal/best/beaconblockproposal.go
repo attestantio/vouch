@@ -16,7 +16,6 @@ package best
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -46,11 +45,9 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 
 	respCh := make(chan *beaconBlockResponse, len(s.beaconBlockProposalProviders))
 	errCh := make(chan error, len(s.beaconBlockProposalProviders))
-	// TODO confirm if this is still required.
-	var mu sync.Mutex
 	// Kick off the requests.
 	for name, provider := range s.beaconBlockProposalProviders {
-		go s.beaconBlockProposal(ctx, started, name, provider, respCh, errCh, &mu, slot, randaoReveal, graffiti)
+		go s.beaconBlockProposal(ctx, started, name, provider, respCh, errCh, slot, randaoReveal, graffiti)
 	}
 
 	// Wait for all responses (or context done).
@@ -94,8 +91,7 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 	if bestProposal == nil {
 		return nil, errors.New("no proposals received")
 	}
-	// TODO fix.
-	// log.Trace().Stringer("proposal", bestProposal).Float64("score", bestScore).Msg("Selected best proposal")
+	log.Trace().Stringer("proposal", bestProposal).Float64("score", bestScore).Msg("Selected best proposal")
 	if bestProvider != "" {
 		s.clientMonitor.StrategyOperation("best", bestProvider, "beacon block proposal", time.Since(started))
 	}
@@ -109,7 +105,6 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 	provider eth2client.BeaconBlockProposalProvider,
 	respCh chan *beaconBlockResponse,
 	errCh chan error,
-	mu *sync.Mutex,
 	slot phase0.Slot,
 	randaoReveal phase0.BLSSignature,
 	graffiti []byte,
@@ -157,9 +152,7 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 		parentSlot = slot
 	}
 
-	mu.Lock()
 	score := s.scoreBeaconBlockProposal(ctx, name, parentSlot, proposal)
-	mu.Unlock()
 	respCh <- &beaconBlockResponse{
 		provider: name,
 		proposal: proposal,

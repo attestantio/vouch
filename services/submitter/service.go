@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,7 +16,7 @@ package submitter
 import (
 	"context"
 
-	api "github.com/attestantio/go-eth2-client/api/v1"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -40,13 +40,19 @@ type BeaconBlockSubmitter interface {
 // BeaconCommitteeSubscriptionsSubmitter is the interface for a submitter of beacon committee subscriptions.
 type BeaconCommitteeSubscriptionsSubmitter interface {
 	// SubmitBeaconCommitteeSubscription submits a batch of beacon committee subscriptions.
-	SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*api.BeaconCommitteeSubscription) error
+	SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*apiv1.BeaconCommitteeSubscription) error
 }
 
 // AggregateAttestationsSubmitter is the interface for a submitter of aggregate attestations.
 type AggregateAttestationsSubmitter interface {
 	// SubmitAggregateAttestations submits aggregate attestations.
 	SubmitAggregateAttestations(ctx context.Context, aggregateAttestations []*phase0.SignedAggregateAndProof) error
+}
+
+// ProposalPreparationsSubmitter is the interface for a submitter of proposal preparations.
+type ProposalPreparationsSubmitter interface {
+	// SubmitProposalPreparations submits proposal preparations.
+	SubmitProposalPreparations(ctx context.Context, preparations []*apiv1.ProposalPreparation) error
 }
 
 // SyncCommitteeMessagesSubmitter is the interface for a submitter of sync committee messages.
@@ -58,7 +64,7 @@ type SyncCommitteeMessagesSubmitter interface {
 // SyncCommitteeSubscriptionsSubmitter is the interface for a submitter of sync committee subscriptions.
 type SyncCommitteeSubscriptionsSubmitter interface {
 	// SubmitSyncCommitteeSubscription submits a batch of sync committee subscriptions.
-	SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error
+	SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*apiv1.SyncCommitteeSubscription) error
 }
 
 // SyncCommitteeContributionsSubmitter is the interface for a submitter of sync committee contributions.

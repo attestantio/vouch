@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -31,6 +31,7 @@ type parameters struct {
 	attestationsSubmitter                 eth2client.AttestationsSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
+	proposalPreparationsSubmitter         eth2client.ProposalPreparationsSubmitter
 	syncCommitteeMessagesSubmitter        eth2client.SyncCommitteeMessagesSubmitter
 	syncCommitteeSubscriptionsSubmitter   eth2client.SyncCommitteeSubscriptionsSubmitter
 	syncCommitteeContributionsSubmitter   eth2client.SyncCommitteeContributionsSubmitter
@@ -110,6 +111,13 @@ func WithAggregateAttestationsSubmitter(submitter eth2client.AggregateAttestatio
 	})
 }
 
+// WithProposalPreparationsSubmitter sets the proposal preparations submitter.
+func WithProposalPreparationsSubmitter(submitter eth2client.ProposalPreparationsSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.proposalPreparationsSubmitter = submitter
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -145,6 +153,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.aggregateAttestationsSubmitter == nil {
 		return nil, errors.New("no aggregate attestations submitter specified")
+	}
+	if parameters.proposalPreparationsSubmitter == nil {
+		return nil, errors.New("no proposal preparations submitter specified")
 	}
 
 	return &parameters, nil

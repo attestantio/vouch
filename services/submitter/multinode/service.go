@@ -32,6 +32,7 @@ type Service struct {
 	beaconBlockSubmitters                 map[string]eth2client.BeaconBlockSubmitter
 	attestationsSubmitters                map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters       map[string]eth2client.AggregateAttestationsSubmitter
+	proposalPreparationsSubmitters        map[string]eth2client.ProposalPreparationsSubmitter
 	beaconCommitteeSubscriptionSubmitters map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter
 	syncCommitteeMessagesSubmitter        map[string]eth2client.SyncCommitteeMessagesSubmitter
 	syncCommitteeSubscriptionSubmitters   map[string]eth2client.SyncCommitteeSubscriptionsSubmitter
@@ -61,6 +62,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		beaconBlockSubmitters:                 parameters.beaconBlockSubmitters,
 		attestationsSubmitters:                parameters.attestationsSubmitters,
 		aggregateAttestationsSubmitters:       parameters.aggregateAttestationsSubmitters,
+		proposalPreparationsSubmitters:        parameters.proposalPreparationsSubmitters,
 		beaconCommitteeSubscriptionSubmitters: parameters.beaconCommitteeSubscriptionsSubmitters,
 		syncCommitteeMessagesSubmitter:        parameters.syncCommitteeMessagesSubmitter,
 		syncCommitteeSubscriptionSubmitters:   parameters.syncCommitteeSubscriptionsSubmitters,

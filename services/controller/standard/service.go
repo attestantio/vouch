@@ -29,6 +29,7 @@ import (
 	"github.com/attestantio/vouch/services/beaconcommitteesubscriber"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/proposalpreparer"
 	"github.com/attestantio/vouch/services/scheduler"
 	"github.com/attestantio/vouch/services/synccommitteeaggregator"
 	"github.com/attestantio/vouch/services/synccommitteemessenger"
@@ -56,6 +57,7 @@ type Service struct {
 	attesterDutiesProvider        eth2client.AttesterDutiesProvider
 	syncCommitteeDutiesProvider   eth2client.SyncCommitteeDutiesProvider
 	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
+	proposalsPreparer             proposalpreparer.Service
 	scheduler                     scheduler.Service
 	attester                      attester.Service
 	syncCommitteeMessenger        synccommitteemessenger.Service
@@ -78,8 +80,10 @@ type Service struct {
 	reorgs                        bool
 
 	// Hard fork control
-	handlingAltair  bool
-	altairForkEpoch phase0.Epoch
+	handlingAltair     bool
+	altairForkEpoch    phase0.Epoch
+	handlingBellatrix  bool
+	bellatrixForkEpoch phase0.Epoch
 
 	// Tracking for reorgs.
 	lastBlockRoot             phase0.Root
@@ -142,9 +146,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	// Handling altair if we have the service and spec to do so.
 	handlingAltair := parameters.syncCommitteeAggregator != nil && epochsPerSyncCommitteePeriod != 0
-	if !handlingAltair {
-		log.Trace().Msg("Not handling Altair")
-	}
 	// Fetch the altair fork epoch from the fork schedule.
 	var altairForkEpoch phase0.Epoch
 	if handlingAltair {
@@ -155,6 +156,25 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		} else {
 			log.Trace().Uint64("epoch", uint64(altairForkEpoch)).Msg("Obtained Altair fork epoch")
 		}
+	}
+	if !handlingAltair {
+		log.Debug().Msg("Not handling Altair")
+	}
+
+	// Handling bellatrix if we can obtain its fork epoch.
+	handlingBellatrix := true
+	// Fetch the bellatrix fork epoch from the fork schedule.
+	var bellatrixForkEpoch phase0.Epoch
+	bellatrixForkEpoch, err = fetchBellatrixForkEpoch(ctx, parameters.forkScheduleProvider)
+	if err != nil {
+		// Not handling bellatrix after all.
+		handlingBellatrix = false
+		bellatrixForkEpoch = 0xffffffffffffffff
+	} else {
+		log.Trace().Uint64("epoch", uint64(bellatrixForkEpoch)).Msg("Obtained Bellatrix fork epoch")
+	}
+	if !handlingBellatrix {
+		log.Debug().Msg("Not handling Bellatrix")
 	}
 
 	s := &Service{
@@ -168,6 +188,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeDutiesProvider:   parameters.syncCommitteeDutiesProvider,
 		syncCommitteesSubscriber:      parameters.syncCommitteesSubscriber,
 		validatingAccountsProvider:    parameters.validatingAccountsProvider,
+		proposalsPreparer:             parameters.proposalsPreparer,
 		scheduler:                     parameters.scheduler,
 		attester:                      parameters.attester,
 		syncCommitteeMessenger:        parameters.syncCommitteeMessenger,
@@ -187,6 +208,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		subscriptionInfos:             make(map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
 		handlingAltair:                handlingAltair,
 		altairForkEpoch:               altairForkEpoch,
+		handlingBellatrix:             handlingBellatrix,
+		bellatrixForkEpoch:            bellatrixForkEpoch,
 		pendingAttestations:           make(map[phase0.Slot]bool),
 	}
 
@@ -197,7 +220,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.Wrap(err, "failed to add head event handler")
 	}
 
-	if err := s.startTickers(ctx); err != nil {
+	// Start tickers, to carry out periodic operations.
+	waitedForGenesis, err := s.startTickers(ctx, handlingBellatrix)
+	if err != nil {
 		return nil, errors.Wrap(err, "failed to start controller tickers")
 	}
 
@@ -215,8 +240,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain active validator indices for the next epoch")
 	}
-	go s.scheduleProposals(ctx, epoch, validatorIndices, true /* notCurrentSlot */)
-	go s.scheduleAttestations(ctx, epoch, validatorIndices, true /* notCurrentSlot */)
+	go s.scheduleProposals(ctx, epoch, validatorIndices, !waitedForGenesis)
+	go s.scheduleAttestations(ctx, epoch, validatorIndices, !waitedForGenesis)
 	if handlingAltair {
 		thisSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch) / s.epochsPerSyncCommitteePeriod)
 		go s.scheduleSyncCommitteeMessages(ctx, thisSyncCommitteePeriodStartEpoch, validatorIndices, true /* notCurrentSlot */)
@@ -226,7 +251,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		}
 	}
 	go s.scheduleAttestations(ctx, epoch+1, nextEpochValidatorIndices, true /* notCurrentSlot */)
-	// Update beacon committee subscriptions this and the next epoch.
+
+	// Update beacon committee subscriptions for this and the next epoch.
 	go func() {
 		subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, epoch, accounts)
 		if err != nil {
@@ -248,11 +274,21 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		s.subscriptionInfosMutex.Unlock()
 	}()
 
+	// Update proposal preparers.
+	go func() {
+		s.prepareProposals(ctx, nil)
+	}()
+
 	return s, nil
 }
 
 // startTickers starts the various tickers for the controller's operations.
-func (s *Service) startTickers(ctx context.Context) error {
+func (s *Service) startTickers(ctx context.Context,
+	handlingBellatrix bool,
+) (
+	bool,
+	error,
+) {
 	genesisTime := s.chainTimeService.GenesisTime()
 	now := time.Now()
 	waitedForGenesis := false
@@ -263,19 +299,27 @@ func (s *Service) startTickers(ctx context.Context) error {
 		time.Sleep(time.Until(genesisTime))
 	}
 
-	// Start epoch tickers.
+	// Start epoch ticker.
 	log.Trace().Msg("Starting epoch tickers")
 	if err := s.startEpochTicker(ctx, waitedForGenesis); err != nil {
-		return errors.Wrap(err, "failed to start epoch ticker")
+		return false, errors.Wrap(err, "failed to start epoch ticker")
 	}
 
 	// Start account refresher.
 	log.Trace().Msg("Starting accounts refresher")
 	if err := s.startAccountsRefresher(ctx); err != nil {
-		return errors.Wrap(err, "failed to start accounts refresher")
+		return false, errors.Wrap(err, "failed to start accounts refresher")
 	}
 
-	return nil
+	// Start proposals preparer.
+	if handlingBellatrix {
+		log.Trace().Msg("Starting proposals preparer ticker")
+		if err := s.startProposalsPreparer(ctx); err != nil {
+			return false, errors.Wrap(err, "failed to start proposals preparer")
+		}
+	}
+
+	return waitedForGenesis, nil
 }
 
 type epochTickerData struct {
@@ -349,7 +393,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	if s.handlingAltair {
 		// Handle the Altair hard fork transition epoch.
 		if currentEpoch == s.altairForkEpoch {
-			log.Trace().Msg("At Altair fork epoch")
+			log.Info().Msg("At Altair fork epoch")
 			go s.handleAltairForkEpoch(ctx)
 		}
 
@@ -359,13 +403,25 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 		}
 	}
 
+	if s.handlingBellatrix {
+		// Handle the Bellatrix hard fork transition epoch.
+		if currentEpoch == s.bellatrixForkEpoch {
+			log.Info().Msg("At Bellatrix fork epoch")
+			go s.handleBellatrixForkEpoch(ctx)
+		}
+	}
+
 	// Next epoch's attestations and beacon committee subscriptions are now available, but wait until
 	// half-way through the epoch to set them up (and half-way through that slot).
 	// This allows us to set them up at a time when the beacon node should be less busy.
+	epochDuration := s.chainTimeService.StartOfEpoch(currentEpoch + 1).Sub(s.chainTimeService.StartOfEpoch(currentEpoch))
+	currentSlot := s.chainTimeService.CurrentSlot()
+	slotDuration := s.chainTimeService.StartOfSlot(currentSlot + 1).Sub(s.chainTimeService.StartOfSlot(currentSlot))
+	offset := int(epochDuration.Seconds()/2.0 + slotDuration.Seconds()/2.0)
 	if err := s.scheduler.ScheduleJob(ctx,
 		"Epoch",
 		fmt.Sprintf("Prepare for epoch %d", currentEpoch+1),
-		s.chainTimeService.StartOfSlot(s.chainTimeService.FirstSlotOfEpoch(currentEpoch)+phase0.Slot(s.slotsPerEpoch/2)).Add(s.slotDuration/2),
+		s.chainTimeService.StartOfEpoch(currentEpoch).Add(time.Duration(offset)*time.Second),
 		s.prepareForEpoch,
 		&prepareForEpochData{
 			epoch: currentEpoch + 1,
@@ -434,14 +490,38 @@ func fetchAltairForkEpoch(ctx context.Context, forkScheduleProvider eth2client.F
 	if err != nil {
 		return 0, err
 	}
+	forkCount := 0
 	for i := range forkSchedule {
 		if bytes.Equal(forkSchedule[i].CurrentVersion[:], forkSchedule[i].PreviousVersion[:]) {
 			// This is the genesis fork; ignore it.
 			continue
 		}
+		forkCount++
+		if forkCount == 1 {
+			return forkSchedule[i].Epoch, nil
+		}
 		return forkSchedule[i].Epoch, nil
 	}
 	return 0, errors.New("no altair fork obtained")
+}
+
+func fetchBellatrixForkEpoch(ctx context.Context, forkScheduleProvider eth2client.ForkScheduleProvider) (phase0.Epoch, error) {
+	forkSchedule, err := forkScheduleProvider.ForkSchedule(ctx)
+	if err != nil {
+		return 0, err
+	}
+	forkCount := 0
+	for i := range forkSchedule {
+		if bytes.Equal(forkSchedule[i].CurrentVersion[:], forkSchedule[i].PreviousVersion[:]) {
+			// This is the genesis fork; ignore it.
+			continue
+		}
+		forkCount++
+		if forkCount == 2 {
+			return forkSchedule[i].Epoch, nil
+		}
+	}
+	return 0, errors.New("no bellatrix fork obtained")
 }
 
 // handleAltairForkEpoch handles changes that need to take place at the Altair hard fork boundary.
@@ -469,6 +549,18 @@ func (s *Service) handleAltairForkEpoch(ctx context.Context) {
 			}
 			go s.scheduleSyncCommitteeMessages(ctx, nextPeriodEpoch, validatorIndices, false /* notCurrentSlot */)
 		}
+	}()
+}
+
+// handleBellatrixForkEpoch handles changes that need to take place at the Bellatrix hard fork boundary.
+func (s *Service) handleBellatrixForkEpoch(ctx context.Context) {
+	if !s.handlingBellatrix {
+		return
+	}
+
+	go func() {
+		// Send a proposals preparation immediately.
+		s.prepareProposals(ctx, nil)
 	}()
 }
 

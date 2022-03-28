@@ -39,6 +39,9 @@ func TestService(t *testing.T) {
 	aggregateAttestationsSubmitters := map[string]eth2client.AggregateAttestationsSubmitter{
 		"1": mock.NewAggregateAttestationsSubmitter(),
 	}
+	proposalPrepartionsSubmitters := map[string]eth2client.ProposalPreparationsSubmitter{
+		"1": mock.NewProposalPreparationsSubmitter(),
+	}
 	syncCommitteeMessagesSubmitters := map[string]eth2client.SyncCommitteeMessagesSubmitter{
 		"1": mock.NewSyncCommitteeMessagesSubmitter(),
 	}
@@ -65,6 +68,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -81,6 +85,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -97,6 +102,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -112,6 +118,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -128,6 +135,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -143,6 +151,7 @@ func TestService(t *testing.T) {
 				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -159,6 +168,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{}),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -174,6 +184,7 @@ func TestService(t *testing.T) {
 				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -190,6 +201,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{}),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -205,6 +217,7 @@ func TestService(t *testing.T) {
 				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -221,11 +234,45 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{}),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
 			},
 			err: "problem with parameters: no aggregate attestations submitters specified",
+		},
+		{
+			name: "ProposalPreparationsSubmittersMissing",
+			params: []multinode.Parameter{
+				multinode.WithLogLevel(zerolog.Disabled),
+				multinode.WithTimeout(2 * time.Second),
+				multinode.WithProcessConcurrency(2),
+				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithAttestationsSubmitters(attestationsSubmitters),
+				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
+				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
+				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
+				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
+			},
+			err: "problem with parameters: no proposal preparations submitters specified",
+		},
+		{
+			name: "ProposalPreparationsSubmittersEmpty",
+			params: []multinode.Parameter{
+				multinode.WithLogLevel(zerolog.Disabled),
+				multinode.WithTimeout(2 * time.Second),
+				multinode.WithProcessConcurrency(2),
+				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithAttestationsSubmitters(attestationsSubmitters),
+				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
+				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{}),
+				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
+				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
+				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
+			},
+			err: "problem with parameters: no proposal preparations submitters specified",
 		},
 		{
 			name: "SyncCommitteeMessagesSubmittersMissing",
@@ -237,6 +284,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
 			},
@@ -252,6 +300,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{}),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -268,6 +317,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
 			},
@@ -283,6 +333,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter{}),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -299,6 +350,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 			},
@@ -314,6 +366,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{}),
@@ -330,6 +383,7 @@ func TestService(t *testing.T) {
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -366,6 +420,9 @@ func TestInterfaces(t *testing.T) {
 		multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{
 			"1": mock.NewAggregateAttestationsSubmitter(),
 		}),
+		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{
+			"1": mock.NewProposalPreparationsSubmitter(),
+		}),
 		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{
 			"1": mock.NewSyncCommitteeMessagesSubmitter(),
 		}),
@@ -381,6 +438,7 @@ func TestInterfaces(t *testing.T) {
 	require.Implements(t, (*submitter.AttestationsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.BeaconCommitteeSubscriptionsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.AggregateAttestationsSubmitter)(nil), s)
+	require.Implements(t, (*submitter.ProposalPreparationsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.SyncCommitteeMessagesSubmitter)(nil), s)
 	require.Implements(t, (*submitter.SyncCommitteeSubscriptionsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.SyncCommitteeContributionsSubmitter)(nil), s)

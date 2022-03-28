@@ -34,6 +34,7 @@ type parameters struct {
 	beaconBlockSubmitters                  map[string]eth2client.BeaconBlockSubmitter
 	attestationsSubmitters                 map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters        map[string]eth2client.AggregateAttestationsSubmitter
+	proposalPreparationsSubmitters         map[string]eth2client.ProposalPreparationsSubmitter
 	beaconCommitteeSubscriptionsSubmitters map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter
 	syncCommitteeMessagesSubmitter         map[string]eth2client.SyncCommitteeMessagesSubmitter
 	syncCommitteeSubscriptionsSubmitters   map[string]eth2client.SyncCommitteeSubscriptionsSubmitter
@@ -100,6 +101,13 @@ func WithAggregateAttestationsSubmitters(submitters map[string]eth2client.Aggreg
 	})
 }
 
+// WithProposalPreparationsSubmitters sets the proposal preparation submitters.
+func WithProposalPreparationsSubmitters(submitters map[string]eth2client.ProposalPreparationsSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.proposalPreparationsSubmitters = submitters
+	})
+}
+
 // WithBeaconCommitteeSubscriptionsSubmitters sets the attestation submitters.
 func WithBeaconCommitteeSubscriptionsSubmitters(submitters map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -157,6 +165,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if len(parameters.aggregateAttestationsSubmitters) == 0 {
 		return nil, errors.New("no aggregate attestations submitters specified")
+	}
+	if len(parameters.proposalPreparationsSubmitters) == 0 {
+		return nil, errors.New("no proposal preparations submitters specified")
 	}
 	if len(parameters.beaconCommitteeSubscriptionsSubmitters) == 0 {
 		return nil, errors.New("no beacon committee subscription submitters specified")
