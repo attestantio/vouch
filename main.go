@@ -47,6 +47,7 @@ import (
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	standardcontroller "github.com/attestantio/vouch/services/controller/standard"
 	"github.com/attestantio/vouch/services/feerecipientprovider"
+	remotefeerecipientprovider "github.com/attestantio/vouch/services/feerecipientprovider/remote"
 	staticfeerecipientprovider "github.com/attestantio/vouch/services/feerecipientprovider/static"
 	"github.com/attestantio/vouch/services/graffitiprovider"
 	dynamicgraffitiprovider "github.com/attestantio/vouch/services/graffitiprovider/dynamic"
@@ -97,7 +98,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.5.0-dev"
+var ReleaseVersion = "1.5.0-rc1"
 
 func main() {
 	os.Exit(main2())
@@ -465,9 +466,14 @@ func startServices(ctx context.Context,
 		log.Info().Msg("Client is not Altair-capable")
 	}
 
-	// TODO decide if the consensus client is capable of Bellatrix.
-	bellatrixCapable := true
-	log.Info().Msg("Client is Bellatrix-capable")
+	// Decide if the ETH2 client is capabale of Bellatrix.
+	bellatrixCapable := false
+	if _, exists := spec["BELLATRIX_FORK_EPOCH"]; exists {
+		bellatrixCapable = true
+		log.Info().Msg("Client is Bellatrix-capable")
+	} else {
+		log.Info().Msg("Client is not Bellatrix-capable")
+	}
 
 	// The following items are for Altair.  These are optional.
 	var syncCommitteeSubscriber synccommitteesubscriber.Service
@@ -724,10 +730,9 @@ func selectScheduler(ctx context.Context, monitor metrics.Service) (scheduler.Se
 
 // startFeeRecipientProvider starts the appropriate fee recipient provider given user input.
 func startFeeRecipientProvider(ctx context.Context, monitor metrics.Service, majordomo majordomo.Service) (feerecipientprovider.Service, error) {
-	log.Info().Msg("Starting static fee recipient provider")
-	addr := viper.GetString("feerecipient.static.default-address")
+	addr := viper.GetString("feerecipient.default-address")
 	if addr == "" {
-		return nil, errors.New("no default fee recipient address")
+		return nil, errors.New("no default fee recipient address, cannot continue")
 	}
 	bytes, err := hex.DecodeString(strings.TrimPrefix(addr, "0x"))
 	if err != nil {
@@ -739,30 +744,63 @@ func startFeeRecipientProvider(ctx context.Context, monitor metrics.Service, maj
 	var feeRecipient bellatrix.ExecutionAddress
 	copy(feeRecipient[:], bytes)
 
-	feeRecipients := make(map[phase0.ValidatorIndex]bellatrix.ExecutionAddress)
-	for k, v := range viper.GetStringMap("feerecipient.static.validator-addresses") {
-		index, err := strconv.ParseUint(k, 10, 64)
-		if err != nil {
-			return nil, errors.New("invalid validator index")
-		}
-		bytes, err := hex.DecodeString(strings.TrimPrefix(v.(string), "0x"))
-		if err != nil {
-			return nil, errors.New("invalid fee recipient address")
-		}
-		if len(bytes) != bellatrix.FeeRecipientLength {
-			return nil, errors.New("fee recipient address wrong length")
-		}
-		var feeRecipient bellatrix.ExecutionAddress
-		copy(feeRecipient[:], bytes)
-		feeRecipients[phase0.ValidatorIndex(index)] = feeRecipient
-	}
+	switch {
+	case viper.Get("feerecipient.remote") != nil:
+		log.Info().Msg("Starting remote fee recipient provider")
 
-	return staticfeerecipientprovider.New(ctx,
-		staticfeerecipientprovider.WithMonitor(monitor),
-		staticfeerecipientprovider.WithLogLevel(util.LogLevel("feerecipipent.static")),
-		staticfeerecipientprovider.WithFeeRecipients(feeRecipients),
-		staticfeerecipientprovider.WithDefaultFeeRecipient(feeRecipient),
-	)
+		certPEMBlock, err := majordomo.Fetch(ctx, viper.GetString("feerecipient.remote.client-cert"))
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to obtain server certificate")
+		}
+		keyPEMBlock, err := majordomo.Fetch(ctx, viper.GetString("feerecipient.remote.client-key"))
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to obtain server key")
+		}
+		var caPEMBlock []byte
+		if viper.GetString("feerecipient.remote.ca-cert") != "" {
+			caPEMBlock, err = majordomo.Fetch(ctx, viper.GetString("feerecipient.remote.ca-cert"))
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to obtain client CA certificate")
+			}
+		}
+
+		return remotefeerecipientprovider.New(ctx,
+			remotefeerecipientprovider.WithMonitor(monitor),
+			remotefeerecipientprovider.WithLogLevel(util.LogLevel("feerecipient.remote")),
+			remotefeerecipientprovider.WithTimeout(util.Timeout("feerecipient.remote")),
+			remotefeerecipientprovider.WithBaseURL(viper.GetString("feerecipient.remote.base-url")),
+			remotefeerecipientprovider.WithClientCert(certPEMBlock),
+			remotefeerecipientprovider.WithClientKey(keyPEMBlock),
+			remotefeerecipientprovider.WithCACert(caPEMBlock),
+			remotefeerecipientprovider.WithDefaultFeeRecipient(feeRecipient),
+		)
+	default:
+		log.Info().Msg("Starting static fee recipient provider")
+		feeRecipients := make(map[phase0.ValidatorIndex]bellatrix.ExecutionAddress)
+		for k, v := range viper.GetStringMap("feerecipient.static.validator-addresses") {
+			index, err := strconv.ParseUint(k, 10, 64)
+			if err != nil {
+				return nil, errors.New("invalid validator index")
+			}
+			bytes, err := hex.DecodeString(strings.TrimPrefix(v.(string), "0x"))
+			if err != nil {
+				return nil, errors.New("invalid fee recipient address")
+			}
+			if len(bytes) != bellatrix.FeeRecipientLength {
+				return nil, errors.New("fee recipient address wrong length")
+			}
+			var feeRecipient bellatrix.ExecutionAddress
+			copy(feeRecipient[:], bytes)
+			feeRecipients[phase0.ValidatorIndex(index)] = feeRecipient
+		}
+
+		return staticfeerecipientprovider.New(ctx,
+			staticfeerecipientprovider.WithMonitor(monitor),
+			staticfeerecipientprovider.WithLogLevel(util.LogLevel("feerecipient.static")),
+			staticfeerecipientprovider.WithFeeRecipients(feeRecipients),
+			staticfeerecipientprovider.WithDefaultFeeRecipient(feeRecipient),
+		)
+	}
 }
 
 // startGraffitiProvider starts the appropriate graffiti provider given user input.

@@ -15,6 +15,7 @@ package mock
 
 import (
 	"context"
+	"errors"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -31,5 +32,22 @@ func New() feerecipientprovider.Service {
 
 // FeeRecipients returns the fee recipients for the given validators.
 func (s *Service) FeeRecipients(ctx context.Context, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]bellatrix.ExecutionAddress, error) {
-	return nil, nil
+	return map[phase0.ValidatorIndex]bellatrix.ExecutionAddress{
+		0: bellatrix.ExecutionAddress{0x00},
+		1: bellatrix.ExecutionAddress{0x01},
+		2: bellatrix.ExecutionAddress{0x02},
+	}, nil
+}
+
+// ErroringService is a mock fee recipient provider.
+type ErroringService struct{}
+
+// NewErroring creates a new mock fee recipient provider.
+func NewErroring() feerecipientprovider.Service {
+	return &ErroringService{}
+}
+
+// FeeRecipients returns the fee recipients for the given validators.
+func (s *ErroringService) FeeRecipients(ctx context.Context, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]bellatrix.ExecutionAddress, error) {
+	return nil, errors.New("error")
 }

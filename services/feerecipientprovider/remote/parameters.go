@@ -16,8 +16,7 @@ package remote
 import (
 	"context"
 	"errors"
-	"net/url"
-	"strings"
+	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/vouch/services/metrics"
@@ -28,6 +27,7 @@ import (
 type parameters struct {
 	logLevel            zerolog.Level
 	monitor             metrics.Service
+	timeout             time.Duration
 	baseURL             string
 	clientCert          []byte
 	clientKey           []byte
@@ -57,6 +57,13 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
+	})
+}
+
+// WithTimeout sets the timeout for calls made by the module.
+func WithTimeout(timeout time.Duration) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.timeout = timeout
 	})
 }
 
@@ -110,18 +117,12 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.monitor == nil {
 		return nil, errors.New("monitor not supplied")
 	}
+	if parameters.timeout == 0 {
+		return nil, errors.New("no timeout specified")
+	}
 	if parameters.baseURL == "" {
 		return nil, errors.New("base URL not supplied")
 	}
-	url, err := url.Parse(parameters.baseURL)
-	if err != nil {
-		return nil, errors.New("base URL invalid")
-	}
-	if url.Scheme != "http" && url.Scheme != "https" {
-		return nil, errors.New("invalid URL scheme")
-	}
-	url.Path = strings.TrimSuffix(url.Path, "/")
-	parameters.baseURL = url.String()
 	// client cert is optional.
 	// client key is optional.
 	// ca cert is optional.

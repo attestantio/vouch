@@ -853,7 +853,7 @@ func TestScore(t *testing.T) {
 			)
 			require.NoError(t, err)
 			if test.priorBlocks != nil {
-				s.priorBlocks = test.priorBlocks
+				s.priorBlocksVotes = test.priorBlocks
 			}
 			score := s.scoreBeaconBlockProposal(context.Background(), test.name, test.parentSlot, test.block)
 			assert.Equal(t, test.score, score)

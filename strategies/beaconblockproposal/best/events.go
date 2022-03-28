@@ -16,6 +16,7 @@ package best
 import (
 	"context"
 	"fmt"
+	"time"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -43,9 +44,9 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 		return
 	}
 
-	s.priorBlocksMu.RLock()
-	_, exists := s.priorBlocks[data.Block]
-	s.priorBlocksMu.RUnlock()
+	s.priorBlocksVotesMu.RLock()
+	_, exists := s.priorBlocksVotes[data.Block]
+	s.priorBlocksVotesMu.RUnlock()
 	if exists {
 		// We already have data for this block.
 		return
@@ -67,6 +68,7 @@ func (s *Service) updateBlockVotes(_ context.Context,
 	if block == nil {
 		return
 	}
+	started := time.Now()
 
 	slot, err := block.Slot()
 	if err != nil {
@@ -116,15 +118,15 @@ func (s *Service) updateBlockVotes(_ context.Context,
 		votes:  votes,
 	}
 
-	s.priorBlocksMu.Lock()
-	s.priorBlocks[root] = priorBlockVotes
-	for k, v := range s.priorBlocks {
+	s.priorBlocksVotesMu.Lock()
+	s.priorBlocksVotes[root] = priorBlockVotes
+	for k, v := range s.priorBlocksVotes {
 		// Keep 2 epochs' worth of data as per comment above.
 		if v.slot < slot-phase0.Slot(2*s.slotsPerEpoch) {
-			delete(s.priorBlocks, k)
+			delete(s.priorBlocksVotes, k)
 		}
 	}
-	s.priorBlocksMu.Unlock()
+	s.priorBlocksVotesMu.Unlock()
 
-	log.Trace().Uint64("slot", uint64(slot)).Str("root", fmt.Sprintf("%#x", root[:])).Msg("Set votes for slot")
+	log.Trace().Uint64("slot", uint64(slot)).Str("root", fmt.Sprintf("%#x", root[:])).Dur("elapsed", time.Since(started)).Msg("Set votes for slot")
 }

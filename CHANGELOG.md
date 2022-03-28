@@ -1,4 +1,4 @@
-Development:
+1.5.0:
   - add soft timeout to "best" strategies: return half way through the timeout if results have been obtained
   - wait until any attestations for the current slot have completed before shutting down
   - send errors to stderr before logging is ready

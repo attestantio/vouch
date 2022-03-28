@@ -11,18 +11,22 @@ It also assumes there is an accessible instance of the Ethereum 2 beacon chain t
 A basic configuration file can be created in the user's home directory with the name `.vouch.yml` and the following contents:
 
 ```YAML
-beacon-node-address: localhost:4000
+beacon-node-address: localhost:5052
 accountmanager:
   wallet:
     accounts:
       - Validators
     passphrases:
       - secret
+feerecipient:
+  default-address: 0x0000000000000000000000000000000000000001
 ```
 
 `beacon-node-address` should be changed to access a suitable beacon node.
 
-`secret` should be changed to be the passphrase you used to secure the accounts.
+The passphrase `secret` should be changed to be the passphrase you used to secure the accounts.
+
+`default-address` should be changed to an execution address to which execution block rewards should be sent.
 
 #### Starting Vouch
 

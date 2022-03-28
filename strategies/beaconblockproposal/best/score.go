@@ -329,9 +329,9 @@ func (s *Service) priorVotesForAttestation(_ context.Context,
 	var res bitfield.Bitlist
 	var err error
 	found := false
-	s.priorBlocksMu.RLock()
+	s.priorBlocksVotesMu.RLock()
 	for {
-		priorBlock, exists := s.priorBlocks[root]
+		priorBlock, exists := s.priorBlocksVotes[root]
 		if !exists {
 			// This means we do not have a parent block.
 			break
@@ -358,7 +358,7 @@ func (s *Service) priorVotesForAttestation(_ context.Context,
 
 		root = priorBlock.parent
 	}
-	s.priorBlocksMu.RUnlock()
+	s.priorBlocksVotesMu.RUnlock()
 
 	if !found {
 		// No prior votes found, return an empty list.
@@ -377,12 +377,12 @@ func altairHeadCorrect(blockProposal *altair.BeaconBlock, attestation *phase0.At
 func (s *Service) altairTargetCorrect(_ context.Context,
 	attestation *phase0.Attestation,
 ) bool {
-	s.priorBlocksMu.RLock()
-	defer s.priorBlocksMu.RUnlock()
+	s.priorBlocksVotesMu.RLock()
+	defer s.priorBlocksVotesMu.RUnlock()
 	root := attestation.Data.BeaconBlockRoot
 	maxSlot := s.chainTime.FirstSlotOfEpoch(attestation.Data.Target.Epoch)
 	for {
-		priorBlock, exists := s.priorBlocks[root]
+		priorBlock, exists := s.priorBlocksVotes[root]
 		if !exists {
 			// We don't have data on this block, assume the target is correct.
 			// (We could assume the target is incorrect in this situation, but that
@@ -403,27 +403,11 @@ func bellatrixHeadCorrect(blockProposal *bellatrix.BeaconBlock, attestation *pha
 }
 
 // bellatrixTargetCorrect calculates if the target of a Bellatrix attestation is correct.
-func (s *Service) bellatrixTargetCorrect(_ context.Context,
+func (s *Service) bellatrixTargetCorrect(ctx context.Context,
 	attestation *phase0.Attestation,
 ) bool {
-	s.priorBlocksMu.RLock()
-	defer s.priorBlocksMu.RUnlock()
-	root := attestation.Data.BeaconBlockRoot
-	maxSlot := s.chainTime.FirstSlotOfEpoch(attestation.Data.Target.Epoch)
-	for {
-		priorBlock, exists := s.priorBlocks[root]
-		if !exists {
-			// We don't have data on this block, assume the target is correct.
-			// (We could assume the target is incorrect in this situation, but that
-			// would give false incorrects whilst the prior block cache warms up.)
-			log.Trace().Uint64("attestation_slot", uint64(attestation.Data.Slot)).Uint64("max_slot", uint64(maxSlot)).Str("root", fmt.Sprintf("%#x", root)).Msg("Root does not exist, assuming true")
-			return true
-		}
-		if priorBlock.slot <= maxSlot {
-			return bytes.Equal(attestation.Data.Target.Root[:], priorBlock.root[:])
-		}
-		root = priorBlock.parent
-	}
+	// Same as Altair.
+	return s.altairTargetCorrect(ctx, attestation)
 }
 
 // intersection returns a list of items common between the two sets.

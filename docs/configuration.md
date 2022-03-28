@@ -63,6 +63,11 @@ submitter:
     - localhost:5051
     - localhost:5052
 
+# fee recipient provides information about the fee recipient for block proposals.  Advanced configuration
+# information is available in the documentation.
+feerecipient:
+  default-address: '0x0000000000000000000000000000000000000001'
+
 # strategies provide advanced strategies for dealing with multiple beacon nodes
 strategies:
   # The beaconblockproposal strategy obtains beacon block proposals from multiple sources.

@@ -127,6 +127,7 @@ func feeRecipientsCompleted(started time.Time, result string) {
 		return
 	}
 
+	requestsProcessed.WithLabelValues(result).Inc()
 	// Only log times for successful completions.
 	if result == "succeeded" {
 		processTimer.Observe(time.Since(started).Seconds())

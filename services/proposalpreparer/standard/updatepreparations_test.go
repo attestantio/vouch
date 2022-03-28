@@ -22,14 +22,13 @@ import (
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	mockfeerecipientprovider "github.com/attestantio/vouch/services/feerecipientprovider/mock"
-	prometheusmetrics "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/services/proposalpreparer/standard"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
-func TestService(t *testing.T) {
+func TestUpdatePreparations(t *testing.T) {
 	ctx := context.Background()
 
 	zerolog.SetGlobalLevel(zerolog.Disabled)
@@ -41,20 +40,10 @@ func TestService(t *testing.T) {
 	slotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
 	slotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
 
-	mockValidatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
-	mockFeeRecipientProvider := mockfeerecipientprovider.New()
-	mockProposalPreparationsSubmitter := mock.NewProposalPreparationsSubmitter()
-
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithGenesisTimeProvider(genesisTimeProvider),
 		standardchaintime.WithSlotDurationProvider(slotDurationProvider),
 		standardchaintime.WithSlotsPerEpochProvider(slotsPerEpochProvider),
-	)
-	require.NoError(t, err)
-
-	prometheusMetrics, err := prometheusmetrics.New(ctx,
-		prometheusmetrics.WithAddress(":12345"),
-		prometheusmetrics.WithChainTime(chainTime),
 	)
 	require.NoError(t, err)
 
@@ -65,66 +54,46 @@ func TestService(t *testing.T) {
 		logEntry string
 	}{
 		{
-			name: "MonitorNil",
-			params: []standard.Parameter{
-				standard.WithMonitor(nil),
-				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithChainTimeService(chainTime),
-				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithFeeRecipientProvider(mockFeeRecipientProvider),
-				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
-			},
-			err: "problem with parameters: no monitor specified",
-		},
-		{
-			name: "ChainTimeServiceMissing",
-			params: []standard.Parameter{
-				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithFeeRecipientProvider(mockFeeRecipientProvider),
-				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
-			},
-			err: "problem with parameters: no chain time service specified",
-		},
-		{
-			name: "ValidatingAccountsProviderMissing",
+			name: "ErroringAccountManager",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
-				standard.WithFeeRecipientProvider(mockFeeRecipientProvider),
-				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
+				standard.WithValidatingAccountsProvider(mockaccountmanager.NewErroringValidatingAccountsProvider()),
+				standard.WithFeeRecipientProvider(mockfeerecipientprovider.New()),
+				standard.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
 			},
-			err: "problem with parameters: no validating accounts provider specified",
+			err: "failed to obtain validating accounts: error",
 		},
 		{
-			name: "FeeRecipientProviderMissing",
+			name: "ErroringFeeRecipientProvider",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
-				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
+				standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
+				standard.WithFeeRecipientProvider(mockfeerecipientprovider.NewErroring()),
+				standard.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
 			},
-			err: "problem with parameters: no fee recipient provider specified",
+			err: "failed to obtain fee recipients: error",
 		},
 		{
-			name: "ProposalPreparationsSubmitterMissing",
+			name: "ErroringProposalPreparationsSubmitter",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
-				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithFeeRecipientProvider(mockFeeRecipientProvider),
+				standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
+				standard.WithFeeRecipientProvider(mockfeerecipientprovider.New()),
+				standard.WithProposalPreparationsSubmitter(mock.NewErroringProposalPreparationsSubmitter()),
 			},
-			err: "problem with parameters: no proposal preparations submitter specified",
+			err: "failed to update proposal preparations: error",
 		},
 		{
 			name: "Good",
 			params: []standard.Parameter{
-				standard.WithMonitor(prometheusMetrics),
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
-				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithFeeRecipientProvider(mockFeeRecipientProvider),
-				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
+				standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
+				standard.WithFeeRecipientProvider(mockfeerecipientprovider.New()),
+				standard.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
 			},
 		},
 	}
@@ -132,7 +101,9 @@ func TestService(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			capture := logger.NewLogCapture()
-			_, err := standard.New(ctx, test.params...)
+			s, err := standard.New(ctx, test.params...)
+			require.NoError(t, err)
+			err = s.UpdatePreparations(ctx)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 				if test.logEntry != "" {

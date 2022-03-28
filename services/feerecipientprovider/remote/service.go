@@ -18,7 +18,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -29,7 +32,8 @@ import (
 
 // Service is a fee recipient provider service.
 type Service struct {
-	baseURL             string
+	timeout             time.Duration
+	baseURL             *url.URL
 	client              *http.Client
 	defaultFeeRecipient bellatrix.ExecutionAddress
 
@@ -40,7 +44,7 @@ type Service struct {
 // module-wide log.
 var log zerolog.Logger
 
-// New creates a new graffiti provider service.
+// New creates a new fee recipient provider service.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
@@ -56,6 +60,15 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if err := registerMetrics(ctx, parameters.monitor); err != nil {
 		return nil, errors.New("failed to register metrics")
 	}
+
+	baseURL, err := url.Parse(parameters.baseURL)
+	if err != nil {
+		return nil, errors.New("base URL invalid")
+	}
+	if baseURL.Scheme != "http" && baseURL.Scheme != "https" {
+		return nil, errors.New("invalid URL scheme")
+	}
+	baseURL.Path = strings.TrimSuffix(baseURL.Path, "/")
 
 	// Set up a client connection.
 	tlsConfig := &tls.Config{
@@ -84,7 +97,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		baseURL:             parameters.baseURL,
+		timeout:             parameters.timeout,
+		baseURL:             baseURL,
 		client:              client,
 		defaultFeeRecipient: parameters.defaultFeeRecipient,
 		cache:               make(map[phase0.ValidatorIndex]bellatrix.ExecutionAddress),
