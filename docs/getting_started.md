@@ -19,7 +19,7 @@ accountmanager:
     passphrases:
       - secret
 feerecipient:
-  default-address: 0x0000000000000000000000000000000000000001
+  default-address: '0x0000000000000000000000000000000000000001'
 ```
 
 `beacon-node-address` should be changed to access a suitable beacon node.
