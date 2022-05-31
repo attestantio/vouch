@@ -97,7 +97,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./vouch-${{ env.RELEASE_VERSION }}-windows-exe.zip.sha256
-        asset_name: vouch-${{ env.RELEASE_VERSION }}-windows.sha256
+        asset_name: vouch-${{ env.RELEASE_VERSION }}-windows-exe.zip.sha256
         asset_content_type: text/plain
 
     - name: Upload windows zip file
@@ -118,8 +118,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./vouch-${{ env.RELEASE_VERSION }}-linux-amd64.sha256
-        asset_name: vouch-${{ env.RELEASE_VERSION }}-linux-amd64.sha256
+        asset_path: ./vouch-${{ env.RELEASE_VERSION }}-linux-amd64.tar.gz.sha256
+        asset_name: vouch-${{ env.RELEASE_VERSION }}-linux-amd64.tar.gz.sha256
         asset_content_type: text/plain
 
     - name: Upload linux AMD64 tgz file
@@ -140,8 +140,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./vouch-${{ env.RELEASE_VERSION }}-linux-arm64.sha256
-        asset_name: vouch-${{ env.RELEASE_VERSION }}-linux-arm64.sha256
+        asset_path: ./vouch-${{ env.RELEASE_VERSION }}-linux-arm64.tar.gz.sha256
+        asset_name: vouch-${{ env.RELEASE_VERSION }}-linux-arm64.tar.gz.sha256
         asset_content_type: text/plain
 
     - name: Upload linux ARM64 tgz file
