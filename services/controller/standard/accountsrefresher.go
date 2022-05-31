@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -20,9 +20,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-// startAccountsRefresher starts a period job that ticks approximately half-way through an epoch.
+// startAccountsRefresher starts a periodic job that refreshes the accounts known by Vouch.
 func (s *Service) startAccountsRefresher(ctx context.Context) error {
 	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+		if s.activeValidators == 0 {
+			log.Trace().Msg("No active validators; refreshing accounts next slot")
+			return time.Now().Add(s.slotDuration), nil
+		}
+
 		// Schedule for the middle of the slot, quarter through the epoch.
 		currentEpoch := s.chainTimeService.CurrentEpoch()
 		epochDuration := s.chainTimeService.StartOfEpoch(currentEpoch + 1).Sub(s.chainTimeService.StartOfEpoch(currentEpoch))

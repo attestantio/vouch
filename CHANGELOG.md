@@ -4,6 +4,7 @@
   - send errors to stderr before logging is ready
   - support Bellatrix
   - ensure that attestations are created for slot 0
+  - poll more frequently for accounts if current set is empty
 
 1.4.0:
   - increase accuracy of beacon block proposal scorer by incorporating attestation history
