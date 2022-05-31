@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -100,6 +100,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if len(endpoints) == 0 {
 		return nil, errors.New("no valid endpoints specified")
 	}
+	log.Trace().Int("endpoints", len(endpoints)).Msg("Configured endpoints")
 
 	farFutureEpoch, err := parameters.farFutureEpochProvider.FarFutureEpoch(ctx)
 	if err != nil {
@@ -138,8 +139,15 @@ func (s *Service) Refresh(ctx context.Context) {
 	if err := s.refreshAccounts(ctx); err != nil {
 		log.Error().Err(err).Msg("Failed to refresh accounts")
 	}
-	if err := s.refreshValidators(ctx); err != nil {
-		log.Error().Err(err).Msg("Failed to refresh validators")
+
+	s.mutex.RLock()
+	numAccounts := len(s.accounts)
+	s.mutex.RUnlock()
+
+	if numAccounts > 0 {
+		if err := s.refreshValidators(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed to refresh validators")
+		}
 	}
 }
 
@@ -164,6 +172,7 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 			wallets = append(wallets, wallet)
 		}
 	}
+	log.Trace().Int("wallets", len(wallets)).Msg("Fetching accounts for wallets")
 
 	verificationRegexes := accountPathsToVerificationRegexes(s.accountPaths)
 	// Fetch accounts for each wallet in parallel.
@@ -196,12 +205,12 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 	wg.Wait()
 	log.Trace().Int("accounts", len(accounts)).Msg("Obtained accounts")
 
+	s.mutex.Lock()
 	if len(accounts) == 0 && len(s.accounts) != 0 {
+		s.mutex.Unlock()
 		log.Warn().Msg("No accounts obtained; retaining old list")
 		return nil
 	}
-
-	s.mutex.Lock()
 	s.accounts = accounts
 	s.mutex.Unlock()
 
@@ -228,10 +237,14 @@ func (s *Service) openWallet(ctx context.Context, name string) (e2wtypes.Wallet,
 
 // refreshValidators refreshes the validator information for our known accounts.
 func (s *Service) refreshValidators(ctx context.Context) error {
+	s.mutex.RLock()
 	accountPubKeys := make([]phase0.BLSPubKey, 0, len(s.accounts))
 	for pubKey := range s.accounts {
 		accountPubKeys = append(accountPubKeys, pubKey)
 	}
+	s.mutex.RUnlock()
+	log.Trace().Int("accounts", len(accountPubKeys)).Msg("Refreshing validators of accounts")
+
 	if err := s.validatorsManager.RefreshValidatorsFromBeaconNode(ctx, accountPubKeys); err != nil {
 		return errors.Wrap(err, "failed to refresh validators")
 	}
@@ -276,13 +289,16 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 		api.ValidatorStateWithdrawalDone:     0,
 	}
 
-	validatingAccounts := make(map[phase0.ValidatorIndex]e2wtypes.Account)
+	s.mutex.RLock()
 	pubKeys := make([]phase0.BLSPubKey, 0, len(s.accounts))
 	for pubKey := range s.accounts {
 		pubKeys = append(pubKeys, pubKey)
 	}
+	s.mutex.RUnlock()
 
 	validators := s.validatorsManager.ValidatorsByPubKey(ctx, pubKeys)
+	validatingAccounts := make(map[phase0.ValidatorIndex]e2wtypes.Account)
+	s.mutex.RLock()
 	for index, validator := range validators {
 		state := api.ValidatorToState(validator, epoch, s.farFutureEpoch)
 		stateCount[state]++
@@ -297,10 +313,11 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 			validatingAccounts[index] = account
 		}
 	}
+	s.mutex.RUnlock()
 
 	// Update metrics if this is the current epoch.
 	if epoch == s.currentEpochProvider.CurrentEpoch() {
-		stateCount[api.ValidatorStateUnknown] += uint64(len(s.accounts) - len(validators))
+		stateCount[api.ValidatorStateUnknown] += uint64(len(pubKeys) - len(validators))
 		for state, count := range stateCount {
 			s.monitor.Accounts(strings.ToLower(state.String()), count)
 		}
@@ -311,24 +328,28 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 
 // ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
 func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch phase0.Epoch, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
-	validatingAccounts := make(map[phase0.ValidatorIndex]e2wtypes.Account)
+	s.mutex.RLock()
 	pubKeys := make([]phase0.BLSPubKey, 0, len(s.accounts))
 	for pubKey := range s.accounts {
 		pubKeys = append(pubKeys, pubKey)
 	}
+	s.mutex.RUnlock()
 
 	indexPresenceMap := make(map[phase0.ValidatorIndex]bool)
 	for _, index := range indices {
 		indexPresenceMap[index] = true
 	}
 	validators := s.validatorsManager.ValidatorsByPubKey(ctx, pubKeys)
+	validatingAccounts := make(map[phase0.ValidatorIndex]e2wtypes.Account)
 	for index, validator := range validators {
 		if _, present := indexPresenceMap[index]; !present {
 			continue
 		}
 		state := api.ValidatorToState(validator, epoch, s.farFutureEpoch)
 		if state == api.ValidatorStateActiveOngoing || state == api.ValidatorStateActiveExiting {
+			s.mutex.RLock()
 			validatingAccounts[index] = s.accounts[validator.PublicKey]
+			s.mutex.RUnlock()
 		}
 	}
 
