@@ -109,6 +109,10 @@ func registerPrometheusMetrics(_ context.Context) error {
 }
 
 func feeRecipientObtained(source string) {
+	if latestTimestamp == nil {
+		return
+	}
+
 	switch source {
 	case "remote":
 		remoteUse.Inc()

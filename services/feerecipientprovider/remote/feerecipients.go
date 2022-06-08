@@ -40,6 +40,8 @@ type feeRecipientResponseJSON struct {
 	FeeRecipient string `json:"fee_recipient"`
 }
 
+var zeroFeeRecipient = bellatrix.ExecutionAddress{}
+
 // FeeRecipients returns the fee recipients for the given validators.
 func (s *Service) FeeRecipients(ctx context.Context,
 	indices []phase0.ValidatorIndex,
@@ -72,17 +74,7 @@ func (s *Service) feeRecipients(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to obtain fee recipients from remote")
 	}
 	if data != nil {
-		for _, feeRecipientData := range data.FeeRecipients {
-			bytes, err := hex.DecodeString(strings.TrimPrefix(feeRecipientData.FeeRecipient, "0x"))
-			if err != nil {
-				log.Error().Err(err).Uint64("index", feeRecipientData.Index).Str("fee_recipient", feeRecipientData.FeeRecipient).Msg("Failed to parse fee recipient address")
-				continue
-			}
-			feeRecipient := bellatrix.ExecutionAddress{}
-			copy(feeRecipient[:], bytes)
-			res[phase0.ValidatorIndex(feeRecipientData.Index)] = feeRecipient
-			feeRecipientObtained("remote")
-		}
+		parseFeeRecipients(res, data.FeeRecipients)
 	}
 
 	if len(res) != len(indices) {
@@ -217,4 +209,22 @@ func (s *Service) post(ctx context.Context, endpoint string, body io.Reader) (io
 	log.Trace().Str("response", string(data)).Msg("POST response")
 
 	return bytes.NewReader(data), nil
+}
+
+func parseFeeRecipients(feeRecipients map[phase0.ValidatorIndex]bellatrix.ExecutionAddress, entries []*feeRecipientResponseJSON) {
+	for _, feeRecipientEntry := range entries {
+		feeRecipientBytes, err := hex.DecodeString(strings.TrimPrefix(feeRecipientEntry.FeeRecipient, "0x"))
+		if err != nil {
+			log.Error().Err(err).Uint64("index", feeRecipientEntry.Index).Str("fee_recipient", feeRecipientEntry.FeeRecipient).Msg("Failed to parse fee recipient address")
+			continue
+		}
+		if bytes.Equal(feeRecipientBytes, zeroFeeRecipient[:]) {
+			log.Warn().Uint64("index", feeRecipientEntry.Index).Str("fee_recipient", feeRecipientEntry.FeeRecipient).Msg("Received 0 fee recipient address; ignoring")
+			continue
+		}
+		feeRecipient := bellatrix.ExecutionAddress{}
+		copy(feeRecipient[:], feeRecipientBytes)
+		feeRecipients[phase0.ValidatorIndex(feeRecipientEntry.Index)] = feeRecipient
+		feeRecipientObtained("remote")
+	}
 }
