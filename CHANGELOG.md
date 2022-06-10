@@ -3,7 +3,7 @@
   - wait until any attestations for the current slot have completed before shutting down
   - send errors to stderr before logging is ready
   - support Bellatrix
-  - add 'fee recipient' servie to obtain fee recipients from local or remote source
+  - add 'fee recipient' service to obtain fee recipients from local or remote source
   - ensure that attestations are created for slot 0
   - poll more frequently for accounts if current set is empty
 
