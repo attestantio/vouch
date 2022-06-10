@@ -39,10 +39,17 @@ feerecipient:
 With the above configuration, Vouch will connect to the URL 'http://provider.example.com/feerecipients' on startup and periodically after that, and obtain a list of fee recipients for each index for which it is validating.  Specifically, it sends a POST request to the aforementioned URL with a body as follows:
 
 ``JSON
-{"indices":[11,16,29]}
+{
+  "indices":
+  [
+    11,
+    16,
+    29
+  ]
+}
 ``
 
-where in this case `11,16,29` are the indices of the validators for which Vouch is validating.  The response from the endpoint should be of the form:
+where in this case `11,16,29` are the consensus indices of the validators for which Vouch is validating.  The response from the endpoint should be of the form:
 
 ```JSON
 {

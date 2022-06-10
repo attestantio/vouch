@@ -71,17 +71,23 @@ func (s *Service) feeRecipients(ctx context.Context,
 
 	data, err := s.fetchFeeRecipientsFromRemote(ctx, indices)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain fee recipients from remote")
+		log.Error().Err(err).Msg("Failed to obtain fee recipients from remote")
+		// This is an error, however we still have default and cached results so keep going.
 	}
 	if data != nil {
 		parseFeeRecipients(res, data.FeeRecipients)
 	}
 
 	if len(res) != len(indices) {
+		log.Trace().Int("fee_recipients", len(res)).Msg("Padding fee recipients")
 		s.padResults(ctx, indices, res)
 	}
 
-	log.Trace().Int("results", len(res)).Msg("Updated fee recipients")
+	if len(res) != len(indices) {
+		log.Error().Int("fee_recipients", len(res)).Int("validators", len(indices)).Msg("Failed to obtain fee recipients for all validators")
+	}
+
+	log.Trace().Int("fee_recipients", len(res)).Msg("Updated fee recipients")
 	s.cacheMu.Lock()
 	s.cache = res
 	s.cacheMu.Unlock()
