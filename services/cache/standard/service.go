@@ -28,7 +28,6 @@ import (
 
 // Service provides cached information.
 type Service struct {
-	timeout         time.Duration
 	chainTime       chaintime.Service
 	consensusClient eth2client.Service
 
