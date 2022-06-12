@@ -55,21 +55,17 @@ func TestScore(t *testing.T) {
 		name        string
 		priorBlocks map[phase0.Root]*priorBlockVotes
 		block       *spec.VersionedBeaconBlock
-		// TODO remove parentSlot.
-		parentSlot phase0.Slot
-		score      float64
-		err        string
+		score       float64
+		err         string
 	}{
 		{
-			name:       "Nil",
-			parentSlot: 1,
-			score:      0,
+			name:  "Nil",
+			score: 0,
 		},
 		{
-			name:       "Empty",
-			block:      &spec.VersionedBeaconBlock{},
-			parentSlot: 1,
-			score:      0,
+			name:  "Empty",
+			block: &spec.VersionedBeaconBlock{},
+			score: 0,
 		},
 		{
 			name: "SingleAttestation",
@@ -94,8 +90,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12344,
-			score:      1,
+			score: 1,
 		},
 		{
 			name: "SingleAttestationParentRootDistance2",
@@ -120,8 +115,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12343,
-			score:      0.5,
+			score: 0.5,
 		},
 		{
 			name: "SingleAttestationDistance2",
@@ -146,8 +140,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12344,
-			score:      0.875,
+			score: 0.875,
 		},
 		{
 			name: "TwoAttestations",
@@ -182,8 +175,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12344,
-			score:      2.8125,
+			score: 2.8125,
 		},
 		{
 			name: "AttesterSlashing",
@@ -218,8 +210,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12344,
-			score:      5450,
+			score: 5450,
 		},
 		{
 			name: "DuplicateAttestations",
@@ -254,8 +245,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12344,
-			score:      4,
+			score: 4,
 		},
 		{
 			name: "Full",
@@ -314,8 +304,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12344,
-			score:      8150,
+			score: 8150,
 		},
 		{
 			name: "FullParentRootDistance2",
@@ -374,8 +363,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12343,
-			score:      8125,
+			score: 8125,
 		},
 		{
 			name: "FullParentRootDistance4",
@@ -434,8 +422,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12341,
-			score:      8112.5,
+			score: 8112.5,
 		},
 		{
 			name: "AltairSingleAttestationDistance1",
@@ -464,8 +451,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12344,
-			score:      0.84375,
+			score: 0.84375,
 		},
 		{
 			name: "AltairSingleAttestationDistance1IncorrectHead",
@@ -494,8 +480,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12344,
-			score:      0.625,
+			score: 0.625,
 		},
 		{
 			name: "AltairSingleAttestationDistance2",
@@ -523,8 +508,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12344,
-			score:      0.625,
+			score: 0.625,
 		},
 		{
 			name: "AltairSingleAttestationDistance5",
@@ -553,8 +537,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12344,
-			score:      0.625,
+			score: 0.625,
 		},
 		{
 			name: "AltairSingleAttestationDistance6",
@@ -582,8 +565,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12344,
-			score:      0.40625,
+			score: 0.40625,
 		},
 		{
 			name: "AltairOverlappingAttestations",
@@ -621,8 +603,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12344,
-			score:      1.25,
+			score: 1.25,
 		},
 		{
 			name: "AltairParentMissing",
@@ -662,8 +643,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12343,
-			score:      0.84375 + 0.625,
+			score: 0.84375 + 0.625,
 		},
 		{
 			name: "PriorVotes",
@@ -719,8 +699,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12343,
-			score:      1.875,
+			score: 1.875,
 		},
 		{
 			name: "TargetCorrect",
@@ -761,8 +740,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12343,
-			score:      0.84375,
+			score: 0.84375,
 		},
 		{
 			name: "TargetIncorrect",
@@ -803,8 +781,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12343,
-			score:      0.4375,
+			score: 0.4375,
 		},
 		{
 			name: "InvalidVersion",
@@ -833,8 +810,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			parentSlot: 12344,
-			score:      0,
+			score: 0,
 		},
 	}
 
