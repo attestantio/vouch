@@ -23,6 +23,8 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
+	"github.com/attestantio/vouch/services/cache"
+	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	"github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/testutil"
@@ -53,9 +55,10 @@ func TestScore(t *testing.T) {
 		name        string
 		priorBlocks map[phase0.Root]*priorBlockVotes
 		block       *spec.VersionedBeaconBlock
-		parentSlot  phase0.Slot
-		score       float64
-		err         string
+		// TODO remove parentSlot.
+		parentSlot phase0.Slot
+		score      float64
+		err        string
 	}{
 		{
 			name:       "Nil",
@@ -73,13 +76,14 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
-					Slot: 12345,
+					Slot:       12346,
+					ParentRoot: testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
-									Slot: 12344,
+									Slot: 12345,
 									Target: &phase0.Checkpoint{
 										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 										Epoch: 385,
@@ -98,13 +102,14 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
-					Slot: 12345,
+					Slot:       12346,
+					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
-									Slot: 12344,
+									Slot: 12345,
 									Target: &phase0.Checkpoint{
 										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 										Epoch: 385,
@@ -123,7 +128,8 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
-					Slot: 12345,
+					Slot:       12345,
+					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
@@ -148,7 +154,8 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
-					Slot: 12345,
+					Slot:       12345,
+					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
@@ -183,7 +190,8 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
-					Slot: 12345,
+					Slot:       12345,
+					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
@@ -218,7 +226,8 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
-					Slot: 12345,
+					Slot:       12345,
+					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
@@ -253,7 +262,8 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
-					Slot: 12345,
+					Slot:       12345,
+					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
@@ -312,13 +322,14 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
-					Slot: 12345,
+					Slot:       12346,
+					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(50, 128),
 								Data: &phase0.AttestationData{
-									Slot: 12344,
+									Slot: 12345,
 									Target: &phase0.Checkpoint{
 										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 										Epoch: 385,
@@ -371,13 +382,14 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
-					Slot: 12345,
+					Slot:       12348,
+					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 					Body: &phase0.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(50, 128),
 								Data: &phase0.AttestationData{
-									Slot: 12344,
+									Slot: 12347,
 									Target: &phase0.Checkpoint{
 										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 										Epoch: 385,
@@ -430,13 +442,15 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
-					Slot: 12345,
+					Slot:       12346,
+					ParentRoot: testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
 					Body: &altair.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
-									Slot: 12344,
+									Slot:            12345,
+									BeaconBlockRoot: testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
 									Target: &phase0.Checkpoint{
 										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 										Epoch: 385,
@@ -458,16 +472,17 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
-					Slot: 12345,
+					Slot:       12346,
+					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 					Body: &altair.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
-									Slot:            12344,
-									BeaconBlockRoot: testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
+									Slot:            12345,
+									BeaconBlockRoot: testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
 									Target: &phase0.Checkpoint{
-										Root:  testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
+										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 										Epoch: 385,
 									},
 								},
@@ -487,7 +502,8 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
-					Slot: 12345,
+					Slot:       12346,
+					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 					Body: &altair.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
@@ -515,13 +531,15 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
-					Slot: 12345,
+					Slot:       12349,
+					ParentRoot: testutil.HexToRoot("0x0505050505050505050505050505050505050505050505050505050505050505"),
 					Body: &altair.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
-									Slot: 12340,
+									Slot:            12348,
+									BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 									Target: &phase0.Checkpoint{
 										Root:  testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),
 										Epoch: 385,
@@ -543,7 +561,8 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
-					Slot: 12345,
+					Slot:       12350,
+					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 					Body: &altair.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
@@ -571,7 +590,8 @@ func TestScore(t *testing.T) {
 			block: &spec.VersionedBeaconBlock{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
-					Slot: 12345,
+					Slot:       12345,
+					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 					Body: &altair.BeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
@@ -836,6 +856,14 @@ func TestScore(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	cache := mockcache.New(map[phase0.Root]phase0.Slot{
+		testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"): phase0.Slot(12344),
+		testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"): phase0.Slot(12345),
+		testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"): phase0.Slot(12346),
+		testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"): phase0.Slot(12347),
+		testutil.HexToRoot("0x0505050505050505050505050505050505050505050505050505050505050505"): phase0.Slot(12348),
+	}).(cache.BlockRootToSlotProvider)
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			s, err := New(ctx,
@@ -850,12 +878,13 @@ func TestScore(t *testing.T) {
 					"one": mock.NewBeaconBlockProposalProvider(),
 				}),
 				WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
+				WithBlockRootToSlotCache(cache),
 			)
 			require.NoError(t, err)
 			if test.priorBlocks != nil {
 				s.priorBlocksVotes = test.priorBlocks
 			}
-			score := s.scoreBeaconBlockProposal(context.Background(), test.name, test.parentSlot, test.block)
+			score := s.scoreBeaconBlockProposal(context.Background(), test.name, test.block)
 			assert.Equal(t, test.score, score)
 		})
 	}

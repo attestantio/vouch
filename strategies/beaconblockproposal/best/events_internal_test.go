@@ -23,6 +23,8 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
+	"github.com/attestantio/vouch/services/cache"
+	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	"github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/testing/logger"
@@ -149,6 +151,8 @@ func TestUpdateBlockVotes(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	cache := mockcache.New(map[phase0.Root]phase0.Slot{}).(cache.BlockRootToSlotProvider)
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			capture := logger.NewLogCapture()
@@ -164,6 +168,7 @@ func TestUpdateBlockVotes(t *testing.T) {
 					"one": mock.NewBeaconBlockProposalProvider(),
 				}),
 				WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
+				WithBlockRootToSlotCache(cache),
 			)
 			require.NoError(t, err)
 
