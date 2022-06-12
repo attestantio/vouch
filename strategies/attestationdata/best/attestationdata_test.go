@@ -21,6 +21,9 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
+	"github.com/attestantio/vouch/services/cache"
+	mockcache "github.com/attestantio/vouch/services/cache/mock"
+	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	"github.com/attestantio/vouch/strategies/attestationdata/best"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
@@ -28,6 +31,25 @@ import (
 )
 
 func TestAttestationData(t *testing.T) {
+	ctx := context.Background()
+
+	genesisTime := time.Now()
+	slotDuration := 12 * time.Second
+	slotsPerEpoch := uint64(32)
+	genesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
+	slotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
+	slotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
+
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisTimeProvider(genesisTimeProvider),
+		standardchaintime.WithSlotDurationProvider(slotDurationProvider),
+		standardchaintime.WithSlotsPerEpochProvider(slotsPerEpochProvider),
+	)
+	require.NoError(t, err)
+
+	cache := mockcache.New(map[phase0.Root]phase0.Slot{}).(cache.BlockRootToSlotProvider)
+
 	tests := []struct {
 		name           string
 		params         []best.Parameter
@@ -44,6 +66,8 @@ func TestAttestationData(t *testing.T) {
 				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
 					"good": mock.NewAttestationDataProvider(),
 				}),
+				best.WithChainTime(chainTime),
+				best.WithBlockRootToSlotCache(cache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -56,6 +80,8 @@ func TestAttestationData(t *testing.T) {
 				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
 					"sleepy": mock.NewSleepyAttestationDataProvider(5*time.Second, mock.NewAttestationDataProvider()),
 				}),
+				best.WithChainTime(chainTime),
+				best.WithBlockRootToSlotCache(cache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -69,6 +95,8 @@ func TestAttestationData(t *testing.T) {
 				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
 					"nil": mock.NewNilAttestationDataProvider(),
 				}),
+				best.WithChainTime(chainTime),
+				best.WithBlockRootToSlotCache(cache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -83,6 +111,8 @@ func TestAttestationData(t *testing.T) {
 					"error":  mock.NewErroringAttestationDataProvider(),
 					"sleepy": mock.NewSleepyAttestationDataProvider(time.Second, mock.NewAttestationDataProvider()),
 				}),
+				best.WithChainTime(chainTime),
+				best.WithBlockRootToSlotCache(cache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -96,6 +126,8 @@ func TestAttestationData(t *testing.T) {
 					"good":   mock.NewAttestationDataProvider(),
 					"sleepy": mock.NewSleepyAttestationDataProvider(2*time.Second, mock.NewAttestationDataProvider()),
 				}),
+				best.WithChainTime(chainTime),
+				best.WithBlockRootToSlotCache(cache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -109,6 +141,8 @@ func TestAttestationData(t *testing.T) {
 				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
 					"sleepy": mock.NewSleepyAttestationDataProvider(2*time.Second, mock.NewAttestationDataProvider()),
 				}),
+				best.WithChainTime(chainTime),
+				best.WithBlockRootToSlotCache(cache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -123,6 +157,8 @@ func TestAttestationData(t *testing.T) {
 					"error":  mock.NewErroringAttestationDataProvider(),
 					"sleepy": mock.NewSleepyAttestationDataProvider(2*time.Second, mock.NewAttestationDataProvider()),
 				}),
+				best.WithChainTime(chainTime),
+				best.WithBlockRootToSlotCache(cache),
 			},
 			slot:           12345,
 			committeeIndex: 3,

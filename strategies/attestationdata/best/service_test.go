@@ -19,16 +19,39 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
+	"github.com/attestantio/vouch/services/cache"
+	mockcache "github.com/attestantio/vouch/services/cache/mock"
+	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	"github.com/attestantio/vouch/strategies/attestationdata/best"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
 func TestService(t *testing.T) {
+	ctx := context.Background()
+
 	attestationDataProviders := map[string]eth2client.AttestationDataProvider{
 		"localhost:1": mock.NewAttestationDataProvider(),
 	}
+
+	genesisTime := time.Now()
+	slotDuration := 12 * time.Second
+	slotsPerEpoch := uint64(32)
+	genesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
+	slotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
+	slotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
+
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisTimeProvider(genesisTimeProvider),
+		standardchaintime.WithSlotDurationProvider(slotDurationProvider),
+		standardchaintime.WithSlotsPerEpochProvider(slotsPerEpochProvider),
+	)
+	require.NoError(t, err)
+
+	cache := mockcache.New(map[phase0.Root]phase0.Slot{}).(cache.BlockRootToSlotProvider)
 
 	tests := []struct {
 		name   string
@@ -40,6 +63,8 @@ func TestService(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
 				best.WithAttestationDataProviders(attestationDataProviders),
+				best.WithChainTime(chainTime),
+				best.WithBlockRootToSlotCache(cache),
 			},
 			err: "problem with parameters: no timeout specified",
 		},
@@ -49,6 +74,8 @@ func TestService(t *testing.T) {
 				best.WithLogLevel(zerolog.TraceLevel),
 				best.WithTimeout(0),
 				best.WithAttestationDataProviders(attestationDataProviders),
+				best.WithChainTime(chainTime),
+				best.WithBlockRootToSlotCache(cache),
 			},
 			err: "problem with parameters: no timeout specified",
 		},
@@ -59,6 +86,8 @@ func TestService(t *testing.T) {
 				best.WithTimeout(2 * time.Second),
 				best.WithClientMonitor(nil),
 				best.WithAttestationDataProviders(attestationDataProviders),
+				best.WithChainTime(chainTime),
+				best.WithBlockRootToSlotCache(cache),
 			},
 			err: "problem with parameters: no client monitor specified",
 		},
@@ -68,6 +97,8 @@ func TestService(t *testing.T) {
 				best.WithLogLevel(zerolog.TraceLevel),
 				best.WithTimeout(2 * time.Second),
 				best.WithAttestationDataProviders(nil),
+				best.WithChainTime(chainTime),
+				best.WithBlockRootToSlotCache(cache),
 			},
 			err: "problem with parameters: no attestation data providers specified",
 		},
@@ -77,8 +108,20 @@ func TestService(t *testing.T) {
 				best.WithLogLevel(zerolog.TraceLevel),
 				best.WithTimeout(2 * time.Second),
 				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{}),
+				best.WithChainTime(chainTime),
+				best.WithBlockRootToSlotCache(cache),
 			},
 			err: "problem with parameters: no attestation data providers specified",
+		},
+		{
+			name: "ChainTimeMissing",
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(2 * time.Second),
+				best.WithAttestationDataProviders(attestationDataProviders),
+				best.WithBlockRootToSlotCache(cache),
+			},
+			err: "problem with parameters: no chain time service specified",
 		},
 		{
 			name: "Good",
@@ -86,7 +129,19 @@ func TestService(t *testing.T) {
 				best.WithLogLevel(zerolog.TraceLevel),
 				best.WithTimeout(2 * time.Second),
 				best.WithAttestationDataProviders(attestationDataProviders),
+				best.WithChainTime(chainTime),
+				best.WithBlockRootToSlotCache(cache),
 			},
+		},
+		{
+			name: "BlockRootToSlotCacheMissing",
+			params: []best.Parameter{
+				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithTimeout(2 * time.Second),
+				best.WithAttestationDataProviders(attestationDataProviders),
+				best.WithChainTime(chainTime),
+			},
+			err: "problem with parameters: no block root to slot cache specified",
 		},
 	}
 
@@ -103,14 +158,35 @@ func TestService(t *testing.T) {
 }
 
 func TestInterfaces(t *testing.T) {
+	ctx := context.Background()
+
 	attestationDataProviders := map[string]eth2client.AttestationDataProvider{
 		"localhost:1": mock.NewAttestationDataProvider(),
 	}
+
+	genesisTime := time.Now()
+	slotDuration := 12 * time.Second
+	slotsPerEpoch := uint64(32)
+	genesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
+	slotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
+	slotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
+
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisTimeProvider(genesisTimeProvider),
+		standardchaintime.WithSlotDurationProvider(slotDurationProvider),
+		standardchaintime.WithSlotsPerEpochProvider(slotsPerEpochProvider),
+	)
+	require.NoError(t, err)
+
+	cache := mockcache.New(map[phase0.Root]phase0.Slot{}).(cache.BlockRootToSlotProvider)
 
 	s, err := best.New(context.Background(),
 		best.WithLogLevel(zerolog.Disabled),
 		best.WithTimeout(2*time.Second),
 		best.WithAttestationDataProviders(attestationDataProviders),
+		best.WithChainTime(chainTime),
+		best.WithBlockRootToSlotCache(cache),
 	)
 	require.NoError(t, err)
 	require.Implements(t, (*eth2client.AttestationDataProvider)(nil), s)

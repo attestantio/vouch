@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,6 +21,8 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/vouch/services/cache"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/pkg/errors"
@@ -33,6 +35,8 @@ type parameters struct {
 	processConcurrency       int64
 	attestationDataProviders map[string]eth2client.AttestationDataProvider
 	timeout                  time.Duration
+	chainTime                chaintime.Service
+	blockRootToSlotCache     cache.BlockRootToSlotProvider
 }
 
 // Parameter is the interface for service parameters.
@@ -81,6 +85,20 @@ func WithTimeout(timeout time.Duration) Parameter {
 	})
 }
 
+// WithChainTime sets the chain time provider for this service.
+func WithChainTime(chainTime chaintime.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.chainTime = chainTime
+	})
+}
+
+// WithBlockRootToSlotCache sets the block root to slot cache.
+func WithBlockRootToSlotCache(cache cache.BlockRootToSlotProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.blockRootToSlotCache = cache
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -105,6 +123,12 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if len(parameters.attestationDataProviders) == 0 {
 		return nil, errors.New("no attestation data providers specified")
+	}
+	if parameters.chainTime == nil {
+		return nil, errors.New("no chain time service specified")
+	}
+	if parameters.blockRootToSlotCache == nil {
+		return nil, errors.New("no block root to slot cache specified")
 	}
 
 	return &parameters, nil

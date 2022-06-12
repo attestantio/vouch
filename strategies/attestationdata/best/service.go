@@ -18,6 +18,8 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/vouch/services/cache"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -30,6 +32,8 @@ type Service struct {
 	processConcurrency       int64
 	attestationDataProviders map[string]eth2client.AttestationDataProvider
 	timeout                  time.Duration
+	chainTime                chaintime.Service
+	blockRootToSlotCache     cache.BlockRootToSlotProvider
 }
 
 // module-wide log.
@@ -53,6 +57,8 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		clientMonitor:            parameters.clientMonitor,
 		processConcurrency:       parameters.processConcurrency,
 		attestationDataProviders: parameters.attestationDataProviders,
+		chainTime:                parameters.chainTime,
+		blockRootToSlotCache:     parameters.blockRootToSlotCache,
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 

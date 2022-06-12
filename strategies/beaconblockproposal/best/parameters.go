@@ -20,6 +20,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
@@ -37,6 +38,7 @@ type parameters struct {
 	beaconBlockProposalProviders map[string]eth2client.BeaconBlockProposalProvider
 	signedBeaconBlockProvider    eth2client.SignedBeaconBlockProvider
 	timeout                      time.Duration
+	blockRootToSlotCache         cache.BlockRootToSlotProvider
 }
 
 // Parameter is the interface for service parameters.
@@ -113,6 +115,13 @@ func WithSignedBeaconBlockProvider(provider eth2client.SignedBeaconBlockProvider
 	})
 }
 
+// WithBlockRootToSlotCache sets the block root to slot cache.
+func WithBlockRootToSlotCache(cache cache.BlockRootToSlotProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.blockRootToSlotCache = cache
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -148,6 +157,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.signedBeaconBlockProvider == nil {
 		return nil, errors.New("no signed beacon block provider specified")
+	}
+	if parameters.blockRootToSlotCache == nil {
+		return nil, errors.New("no block root to slot cache specified")
 	}
 
 	return &parameters, nil

@@ -6,6 +6,7 @@
   - add 'fee recipient' service to obtain fee recipients from local or remote source
   - ensure that attestations are created for slot 0
   - poll more frequently for accounts if current set is empty
+  - introduce a block root to slot cache to speed up scoring attestations and block proposals
 
 1.4.0:
   - increase accuracy of beacon block proposal scorer by incorporating attestation history
