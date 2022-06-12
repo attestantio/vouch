@@ -128,7 +128,7 @@ func (s *Service) attestationData(ctx context.Context,
 		return
 	}
 
-	score := s.scoreAttestationData(ctx, provider, name, attestationData)
+	score := s.scoreAttestationData(ctx, name, attestationData)
 	respCh <- &attestationDataResponse{
 		provider:        name,
 		attestationData: attestationData,

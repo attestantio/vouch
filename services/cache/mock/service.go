@@ -34,7 +34,7 @@ func New(blockRootToSlotMap map[phase0.Root]phase0.Slot) cache.Service {
 }
 
 // BlockRootToSlot provides the slot for a given block root.
-func (s *Service) BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0.Slot, error) {
+func (s *Service) BlockRootToSlot(_ context.Context, root phase0.Root) (phase0.Slot, error) {
 	slot, exists := s.blockRootToSlotMap[root]
 	if exists {
 		return slot, nil
