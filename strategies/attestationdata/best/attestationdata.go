@@ -114,7 +114,17 @@ func (s *Service) attestationData(ctx context.Context,
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")
+
 	if attestationData == nil {
+		errCh <- errors.New("attestation data nil")
+		return
+	}
+	if attestationData.Target == nil {
+		errCh <- errors.New("attestation data target nil")
+		return
+	}
+	if attestationData.Target.Epoch != s.chainTime.SlotToEpoch(slot) {
+		errCh <- errors.New("attestation data slot/target epoch mismatch; abandoning")
 		return
 	}
 

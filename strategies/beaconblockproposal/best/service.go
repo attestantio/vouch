@@ -20,6 +20,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
@@ -36,6 +37,7 @@ type Service struct {
 	beaconBlockProposalProviders map[string]eth2client.BeaconBlockProposalProvider
 	signedBeaconBlockProvider    eth2client.SignedBeaconBlockProvider
 	timeout                      time.Duration
+	blockRootToSlotCache         cache.BlockRootToSlotProvider
 
 	// Spec values for scoring proposals.
 	slotsPerEpoch      uint64
@@ -154,6 +156,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		beaconBlockProposalProviders: parameters.beaconBlockProposalProviders,
 		signedBeaconBlockProvider:    parameters.signedBeaconBlockProvider,
 		timeout:                      parameters.timeout,
+		blockRootToSlotCache:         parameters.blockRootToSlotCache,
 		clientMonitor:                parameters.clientMonitor,
 		slotsPerEpoch:                slotsPerEpoch,
 		timelySourceWeight:           timelySourceWeight,

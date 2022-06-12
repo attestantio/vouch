@@ -15,7 +15,6 @@ package best
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -120,39 +119,7 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 		return
 	}
 
-	// Obtain the slot of the block to which the proposal refers.
-	// We use this to allow the scorer to score blocks with earlier parents lower.
-	parentRoot, err := proposal.ParentRoot()
-	if err != nil {
-		log.Error().Str("version", proposal.Version.String()).Msg("Failed to obtain parent root")
-		return
-	}
-	var parentSlot phase0.Slot
-	parentBlock, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, fmt.Sprintf("%#x", parentRoot[:]))
-	switch {
-	case err != nil:
-		log.Warn().Err(err).Msg("Failed to obtain parent block")
-		slot, err := proposal.Slot()
-		if err != nil {
-			log.Error().Str("version", proposal.Version.String()).Err(err).Msg("Failed to obtain proposal slot")
-		}
-		parentSlot = slot - 1
-	case parentBlock == nil:
-		log.Warn().Msg("Empty parent block")
-		slot, err := proposal.Slot()
-		if err != nil {
-			log.Error().Str("version", proposal.Version.String()).Err(err).Msg("Failed to obtain proposal slot")
-		}
-		parentSlot = slot - 1
-	default:
-		slot, err := parentBlock.Slot()
-		if err != nil {
-			log.Error().Str("version", proposal.Version.String()).Err(err).Msg("Failed to obtain proposal slot for parent block")
-		}
-		parentSlot = slot
-	}
-
-	score := s.scoreBeaconBlockProposal(ctx, name, parentSlot, proposal)
+	score := s.scoreBeaconBlockProposal(ctx, name, proposal)
 	respCh <- &beaconBlockResponse{
 		provider: name,
 		proposal: proposal,

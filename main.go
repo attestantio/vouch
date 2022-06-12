@@ -43,6 +43,8 @@ import (
 	standardattester "github.com/attestantio/vouch/services/attester/standard"
 	standardbeaconblockproposer "github.com/attestantio/vouch/services/beaconblockproposer/standard"
 	standardbeaconcommitteesubscriber "github.com/attestantio/vouch/services/beaconcommitteesubscriber/standard"
+	"github.com/attestantio/vouch/services/cache"
+	standardcache "github.com/attestantio/vouch/services/cache/standard"
 	"github.com/attestantio/vouch/services/chaintime"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	standardcontroller "github.com/attestantio/vouch/services/controller/standard"
@@ -337,6 +339,12 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to select scheduler")
 	}
 
+	log.Trace().Msg("Starting cache")
+	cache, err := startCache(ctx, monitor, chainTime, scheduler, eth2Client)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to start cache")
+	}
+
 	log.Trace().Msg("Starting validators manager")
 	validatorsManager, err := startValidatorsManager(ctx, monitor, eth2Client)
 	if err != nil {
@@ -374,7 +382,7 @@ func startServices(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting beacon block proposal provider")
-	beaconBlockProposalProvider, err := selectBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime)
+	beaconBlockProposalProvider, err := selectBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to select beacon block proposal provider")
 	}
@@ -397,7 +405,7 @@ func startServices(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting attestation data provider")
-	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, eth2Client)
+	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, eth2Client, chainTime, cache)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to select attestation data provider")
 	}
@@ -728,6 +736,28 @@ func selectScheduler(ctx context.Context, monitor metrics.Service) (scheduler.Se
 	return scheduler, nil
 }
 
+// startCache starts the relevant cache given user input.
+func startCache(ctx context.Context,
+	monitor metrics.Service,
+	chainTime chaintime.Service,
+	scheduler scheduler.Service,
+	consensusClient eth2client.Service,
+) (cache.Service, error) {
+	log.Trace().Msg("Starting cache")
+	cache, err := standardcache.New(ctx,
+		standardcache.WithLogLevel(util.LogLevel("cache.standard")),
+		standardcache.WithMonitor(monitor),
+		standardcache.WithScheduler(scheduler),
+		standardcache.WithChainTime(chainTime),
+		standardcache.WithConsensusClient(consensusClient),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return cache, nil
+}
+
 // startFeeRecipientProvider starts the appropriate fee recipient provider given user input.
 func startFeeRecipientProvider(ctx context.Context, monitor metrics.Service, majordomo majordomo.Service) (feerecipientprovider.Service, error) {
 	addr := viper.GetString("feerecipient.default-address")
@@ -939,6 +969,8 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 func selectAttestationDataProvider(ctx context.Context,
 	monitor metrics.Service,
 	eth2Client eth2client.Service,
+	chainTime chaintime.Service,
+	cacheSvc cache.Service,
 ) (eth2client.AttestationDataProvider, error) {
 	var attestationDataProvider eth2client.AttestationDataProvider
 	var err error
@@ -959,6 +991,8 @@ func selectAttestationDataProvider(ctx context.Context,
 			bestattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.best")),
 			bestattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
 			bestattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.best")),
+			bestattestationdatastrategy.WithChainTime(chainTime),
+			bestattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start best attestation data strategy")
@@ -1053,6 +1087,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 	monitor metrics.Service,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
+	cacheSvc cache.Service,
 ) (eth2client.BeaconBlockProposalProvider, error) {
 	var beaconBlockProposalProvider eth2client.BeaconBlockProposalProvider
 	var err error
@@ -1077,6 +1112,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 			bestbeaconblockproposalstrategy.WithBeaconBlockProposalProviders(beaconBlockProposalProviders),
 			bestbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
 			bestbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.best")),
+			bestbeaconblockproposalstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start best beacon block proposal strategy")

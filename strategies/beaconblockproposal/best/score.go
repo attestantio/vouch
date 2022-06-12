@@ -30,7 +30,6 @@ import (
 // The score is relative to the reward expected by proposing the block.
 func (s *Service) scoreBeaconBlockProposal(ctx context.Context,
 	name string,
-	parentSlot phase0.Slot,
 	blockProposal *spec.VersionedBeaconBlock,
 ) float64 {
 	if blockProposal == nil {
@@ -38,6 +37,19 @@ func (s *Service) scoreBeaconBlockProposal(ctx context.Context,
 	}
 	if blockProposal.IsEmpty() {
 		return 0
+	}
+
+	// Obtain the slot of the block to which the proposal refers.
+	// We use this to allow the scorer to score blocks with earlier parents lower.
+	parentRoot, err := blockProposal.ParentRoot()
+	if err != nil {
+		log.Error().Str("version", blockProposal.Version.String()).Msg("Failed to obtain parent root")
+		return 0
+	}
+	parentSlot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, parentRoot)
+	if err != nil {
+		log.Debug().Str("root", fmt.Sprintf("%#x", parentRoot)).Err(err).Msg("Failed to obtain parent slot; assuming 0")
+		parentSlot = 0
 	}
 
 	switch blockProposal.Version {

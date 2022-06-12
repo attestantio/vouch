@@ -23,7 +23,7 @@ import (
 
 // scoreAttestationData generates a score for attestation data.
 // The score is relative to the reward expected from the contents of the attestation.
-func (*Service) scoreAttestationData(ctx context.Context,
+func (s *Service) scoreAttestationData(ctx context.Context,
 	provider eth2client.AttestationDataProvider,
 	name string,
 	attestationData *phase0.AttestationData,
@@ -32,38 +32,17 @@ func (*Service) scoreAttestationData(ctx context.Context,
 		return 0
 	}
 
-	var slot phase0.Slot
-	if headerProvider, isProvider := provider.(eth2client.BeaconBlockHeadersProvider); isProvider {
-		block, err := headerProvider.BeaconBlockHeader(ctx, fmt.Sprintf("%#x", attestationData.BeaconBlockRoot))
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to obtain block header")
-			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
-		}
-		if block == nil {
-			log.Debug().Msg("Obtained nil beacon block header")
-			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
-		}
-		slot = block.Header.Message.Slot
-	} else if blockProvider, isProvider := provider.(eth2client.SignedBeaconBlockProvider); isProvider {
-		block, err := blockProvider.SignedBeaconBlock(ctx, fmt.Sprintf("%#x", attestationData.BeaconBlockRoot))
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to obtain block")
-			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
-		}
-		if block == nil {
-			log.Warn().Str("block_root", fmt.Sprintf("%#x", attestationData.BeaconBlockRoot)).Msg("No block returned by provider")
-			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
-		}
-		slot, err = block.Slot()
-		if err != nil {
-			log.Warn().Str("block_root", fmt.Sprintf("%#x", attestationData.BeaconBlockRoot)).Msg("Empty block returned by provider")
-			return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
-		}
+	// Initial score is based on height of source and target epochs.
+	score := float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
+
+	// Increase score based on the nearness of the head slot.
+	slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, attestationData.BeaconBlockRoot)
+	if err != nil {
+		log.Warn().Str("root", fmt.Sprintf("%#x", attestationData.BeaconBlockRoot)).Err(err).Msg("Failed to obtain slot for block root")
+		slot = 0
 	} else {
-		log.Warn().Msg("Cannot score attestation")
-		return float64(attestationData.Source.Epoch + attestationData.Target.Epoch)
+		score += float64(1) / float64(1+attestationData.Slot-slot)
 	}
-	score := float64(attestationData.Source.Epoch+attestationData.Target.Epoch) + float64(1)/float64(1+attestationData.Slot-slot)
 
 	log.Trace().
 		Str("provider", name).
