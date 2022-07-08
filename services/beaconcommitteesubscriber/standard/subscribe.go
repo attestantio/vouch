@@ -53,6 +53,10 @@ func (s *Service) Subscribe(ctx context.Context,
 		s.monitor.BeaconCommitteeSubscriptionCompleted(started, "failed")
 		return nil, errors.Wrap(err, "failed to obtain attester duties")
 	}
+	if len(attesterDuties) == 0 {
+		s.monitor.BeaconCommitteeSubscriptionCompleted(started, "failed")
+		return nil, errors.Wrap(err, "obtained nil attester duties")
+	}
 
 	log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(validatorIndices)).Msg("Fetched attester duties")
 	duties, err := attester.MergeDuties(ctx, attesterDuties)

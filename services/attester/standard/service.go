@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -100,6 +100,10 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 	if err != nil {
 		s.monitor.AttestationsCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed")
 		return nil, errors.Wrap(err, "failed to obtain attestation data")
+	}
+	if attestationData == nil {
+		s.monitor.AttestationsCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed")
+		return nil, errors.Wrap(err, "obtained nil attestation data")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")
 
