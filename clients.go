@@ -82,7 +82,7 @@ func fetchMultiClient(ctx context.Context, addresses []string) (eth2client.Servi
 			multiclient.WithTimeout(util.Timeout("eth2client")),
 			multiclient.WithAddresses(addresses))
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to initiate client")
+			return nil, errors.Wrap(err, "failed to initiate multiclient")
 		}
 		clients[multiID] = client
 	}

@@ -77,7 +77,7 @@ func (s *Service) proposeBlock(ctx context.Context,
 		return errors.Wrap(err, "failed to obtain proposal data")
 	}
 	if proposal == nil {
-		return errors.New("provider did not return beacon block proposal")
+		return errors.New("obtained nil beacon block proposal")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained proposal")
 
