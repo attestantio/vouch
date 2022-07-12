@@ -12,6 +12,8 @@ RUN go build
 
 FROM debian:bullseye-slim
 
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt install -y ca-certificates && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY --from=builder /app/vouch /app
