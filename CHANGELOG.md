@@ -7,6 +7,7 @@
   - ensure that attestations are created for slot 0
   - poll more frequently for accounts if current set is empty
   - introduce a block root to slot cache to speed up scoring attestations and block proposals
+  - provide more useful error messages if Vouch's configuration is unavailable or corrupt
 
 1.4.0:
   - increase accuracy of beacon block proposal scorer by incorporating attestation history
