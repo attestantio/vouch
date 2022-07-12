@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -73,10 +73,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	stores := make([]e2wtypes.Store, 0, len(parameters.locations))
 	if len(parameters.locations) == 0 {
-		// Use default location.
+		log.Trace().Msg("No custom wallet locations provided; using wallet store with default location")
 		stores = append(stores, filesystem.New())
 	} else {
 		for _, location := range parameters.locations {
+			log.Trace().Str("location", location).Msg("Adding wallet store with user-supplied location")
 			stores = append(stores, filesystem.New(filesystem.WithLocation(location)))
 		}
 	}
@@ -129,28 +130,32 @@ func (s *Service) Refresh(ctx context.Context) {
 func (s *Service) refreshAccounts(ctx context.Context) error {
 	// Find the relevant wallets.
 	wallets := make(map[string]e2wtypes.Wallet)
-	pathsByWallet := make(map[string][]string)
 	for _, path := range s.accountPaths {
 		pathBits := strings.Split(path, "/")
 
-		var paths []string
-		var exists bool
-		if paths, exists = pathsByWallet[pathBits[0]]; !exists {
-			paths = make([]string, 0)
-		}
-		pathsByWallet[pathBits[0]] = append(paths, path)
 		// Try each store in turn.
 		found := false
 		for _, store := range s.stores {
+			log.Trace().Str("store", store.Name()).Str("wallet", pathBits[0]).Msg("Checking for wallet in store")
 			wallet, err := e2wallet.OpenWallet(pathBits[0], e2wallet.WithStore(store))
 			if err == nil {
+				log.Trace().Str("store", store.Name()).Str("wallet", pathBits[0]).Msg("Found wallet in store")
 				wallets[wallet.Name()] = wallet
 				found = true
 				break
+			} else {
+				log.Trace().Str("store", store.Name()).Str("wallet", pathBits[0]).Err(err).Msg("Failed to find wallet in store")
 			}
 		}
 		if !found {
 			log.Warn().Str("wallet", pathBits[0]).Msg("Failed to find wallet in any store")
+		}
+	}
+	if e := log.Trace(); e.Enabled() {
+		walletNames := make([]string, 0, len(wallets))
+		for walletName := range wallets {
+			walletNames = append(walletNames, walletName)
+			e.Strs("wallets", walletNames).Msg("Refreshing wallets")
 		}
 	}
 
@@ -158,11 +163,7 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 	// Fetch accounts for each wallet.
 	accounts := make(map[phase0.BLSPubKey]e2wtypes.Account)
 	for _, wallet := range wallets {
-		// if _, isProvider := wallet.(e2wtypes.WalletAccountsByPathProvider); isProvider {
-		// 	fmt.Printf("TODO: fetch accounts by path")
-		// } else {
 		s.fetchAccountsForWallet(ctx, wallet, accounts, verificationRegexes)
-		//}
 	}
 	log.Trace().Int("accounts", len(accounts)).Msg("Obtained accounts")
 
@@ -338,6 +339,7 @@ func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wa
 				log.Warn().Str("account", name).Msg("Failed to unlock account with any passphrase")
 				return
 			}
+			log.Trace().Str("account", name).Msg("Obtained and unlocked account")
 
 			// Set up account as unknown to beacon chain.
 			mu.Lock()
