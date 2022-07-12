@@ -14,6 +14,7 @@
 package best
 
 import (
+	"bytes"
 	"context"
 	"time"
 
@@ -46,7 +47,21 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 	errCh := make(chan error, len(s.beaconBlockProposalProviders))
 	// Kick off the requests.
 	for name, provider := range s.beaconBlockProposalProviders {
-		go s.beaconBlockProposal(ctx, started, name, provider, respCh, errCh, slot, randaoReveal, graffiti)
+		providerGraffiti := graffiti
+		if bytes.Contains(providerGraffiti, []byte("{{CLIENT}}")) {
+			if nodeClientProvider, isProvider := provider.(eth2client.NodeClientProvider); isProvider {
+				nodeClient, err := nodeClientProvider.NodeClient(ctx)
+				if err != nil {
+					log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
+				} else {
+					providerGraffiti = bytes.ReplaceAll(providerGraffiti, []byte("{{CLIENT}}"), []byte(nodeClient))
+				}
+			}
+		}
+		if len(providerGraffiti) > 32 {
+			providerGraffiti = providerGraffiti[0:32]
+		}
+		go s.beaconBlockProposal(ctx, started, name, provider, respCh, errCh, slot, randaoReveal, providerGraffiti)
 	}
 
 	// Wait for all responses (or context done).

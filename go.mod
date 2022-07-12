@@ -3,7 +3,7 @@ module github.com/attestantio/vouch
 go 1.17
 
 require (
-	github.com/attestantio/go-eth2-client v0.11.6
+	github.com/attestantio/go-eth2-client v0.11.7
 	github.com/aws/aws-sdk-go v1.44.42
 	github.com/herumi/bls-eth-go-binary v0.0.0-20220509081320-2d8ab06de53c // indirect
 	github.com/jackc/puddle v1.2.1 // indirect
