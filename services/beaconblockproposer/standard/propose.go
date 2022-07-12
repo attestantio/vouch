@@ -14,9 +14,11 @@
 package standard
 
 import (
+	"bytes"
 	"context"
 	"time"
 
+	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -53,6 +55,19 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 			log.Warn().Err(err).Msg("Failed to obtain graffiti")
 			graffiti = nil
 		}
+	}
+	if bytes.Contains(graffiti, []byte("{{CLIENT}}")) {
+		if nodeClientProvider, isProvider := s.proposalProvider.(consensusclient.NodeClientProvider); isProvider {
+			nodeClient, err := nodeClientProvider.NodeClient(ctx)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
+			} else {
+				graffiti = bytes.ReplaceAll(graffiti, []byte("{{CLIENT}}"), []byte(nodeClient))
+			}
+		}
+	}
+	if len(graffiti) > 32 {
+		graffiti = graffiti[0:32]
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained graffiti")
 
