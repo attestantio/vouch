@@ -100,7 +100,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.5.0-rc8"
+var ReleaseVersion = "1.5.0-rc9"
 
 func main() {
 	os.Exit(main2())
@@ -197,7 +197,7 @@ func fetchConfig() error {
 	pflag.String("log-file", "", "redirect log output to a file")
 	pflag.String("profile-address", "", "Address on which to run Go profile server")
 	pflag.String("tracing-address", "", "Address to which to send tracing data")
-	pflag.String("beacon-node-address", "localhost:4000", "Address on which to contact the beacon node")
+	pflag.String("beacon-node-address", "", "Address on which to contact the beacon node")
 	pflag.Bool("version", false, "show Vouch version and exit")
 	pflag.Parse()
 	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
@@ -234,8 +234,24 @@ func fetchConfig() error {
 	viper.SetDefault("controller.sync-committee-aggregation-delay", 8*time.Second)
 
 	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return errors.New("failed to read configuration file")
+		switch err.(type) {
+		case viper.ConfigFileNotFoundError:
+			// It is allowable for Vouch to not have a configuration file, but only if
+			// we have the information from elsewhere (e.g. environment variables).  Check
+			// to see if we have any beacon nodes configured, as if not we aren't going to
+			// get very far anyway.
+			if viper.GetString("beacon-node-address") == "" && len(viper.GetStringSlice("beacon-node-addresses")) == 0 {
+				// Assume the underlying issue is that the configuration file is missing.
+				return errors.Wrap(err, "could not find the configuration file")
+			}
+		case viper.ConfigParseError:
+			return errors.Wrap(err, "could not parse the configuration file")
+		case viper.RemoteConfigError:
+			return errors.Wrap(err, "could not find the remote configuration file")
+		case viper.UnsupportedConfigError:
+			return errors.Wrap(err, "unsupported configuration file format")
+		case viper.UnsupportedRemoteProviderError:
+			return errors.Wrap(err, "unsupported remote configuration provider")
 		}
 	}
 
