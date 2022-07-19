@@ -18,11 +18,11 @@ log-file: /home/me/vouch.log
 # information logged.
 log-level: Debug
 
-# beacon-node-address is the address of the beacon node.  Can be lighthouse, nimbus, prysm or teku
+# beacon-node-address is the address of the beacon node.  Can be lighthouse, nimbus, prysm or teku.
 # Overridden by beacon-node-addresses if present.
 beacon-node-address: localhost:4000
 
-# beacon-node-addresseses is the list of address of the beacon nodes.  Can be lighthouse, nimbus, prysm or teku
+# beacon-node-addresseses is the list of address of the beacon nodes.  Can be lighthouse, nimbus, prysm or teku.
 # If multiple addresses are supplied here it makes Vouch resilient in the situation where a beacon
 # node goes offline entirely.  If this occurs to the currently used node then the next in the list will
 # be used.  If a beacon node comes back online it is added to the end of the list of potential nodes to
@@ -30,10 +30,7 @@ beacon-node-address: localhost:4000
 #
 # Note that some beacon nodes have slightly different behavior in their events.  As such, users should
 # ensure they are happy with the event output of all beacon nodes in this list.
-beacon-node-addresses:
-  - localhost:4000
-  - localhost:5051
-  - localhost:5052
+beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052 ]
 
 # metrics is the module that logs metrics, in this case using prometheus.
 metrics:
@@ -55,13 +52,32 @@ scheduler:
 
 # submitter submits data to beacon nodes.  If not present the nodes in beacon-node-address above will be used.
 submitter:
-  # style can currently only be 'all'
-  style: all
-  # beacon-node-addresses is the list of addresses to which submit.  Submissions run in parallel
-  beacon-node-addresses:
-    - localhost:4000
-    - localhost:5051
-    - localhost:5052
+  # style can currently only be 'multinode'
+  style: multinode
+  aggregateattestation:
+    # beacon-node-addresses are the addresses to which to submit aggregate attestations.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
+  attestation:
+    # beacon-node-addresses are the addresses to which to submit attestations.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
+  beaconblock:
+    # beacon-node-addresses are the addresses to which to submit beacon blocks.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
+  beaconcommitteesubscription:
+    # beacon-node-addresses are the addresses to which to submit beacon committee subscriptions.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
+  proposalpreparation:
+    # beacon-node-addresses are the addresses to which to submit beacon proposal preparations.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
+  synccommitteecontribution:
+    # beacon-node-addresses are the addresses to which to submit beacon sync committee contributions.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
+  synccommitteemessage:
+    # beacon-node-addresses are the addresses to which to submit beacon sync committee messages.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
+  synccommitteesubscription:
+    # beacon-node-addresses are the addresses to which to submit beacon sync committee subscriptions.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
 
 # fee recipient provides information about the fee recipient for block proposals.  Advanced configuration
 # information is available in the documentation.
@@ -74,11 +90,8 @@ strategies:
   beaconblockproposal:
     # style can be 'best', which obtains blocks from all nodes and selects the best, or 'first', which uses the first returned
     style: best
-    # beacon-node-addresses are the addresses of beacon nodes to use for this strategy.
-    beacon-node-addresses:
-      - localhost:4000
-      - localhost:5051
-      - localhost:5052
+    # beacon-node-addresses are the addresses from which to receive beacon block proposals.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
     # timeout defines the maximum amount of time the strategy will wait for a response.  As soon as a response from all beacon
     # nodes has been obtained,the strategy will return with the best.  Half-way through the timeout period, Vouch will check to see
     # if there have been any responses from the beacon nodes, and if so will return with the best.
@@ -89,32 +102,57 @@ strategies:
   attestationdata:
     # style can be 'best', which obtains attestation data from all nodes and selects the best, or 'first', which uses the first returned
     style: best
-    # beacon-node-addresses are the addresses of beacon nodes to use for this strategy.
-    beacon-node-addresses:
-      - localhost:4000
-      - localhost:5051
-      - localhost:5052
+    # beacon-node-addresses are the addresses from which to receive attestation data.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
   # The aggregateattestation strategy obtains aggregate attestations from multiple sources.
   # Note that the list of nodes here must be a subset of those in the attestationdata strategy.  If not, the nodes will not have
   # been gathering the attestations to aggregate and will error when the aggregate request is made.
   aggregateattestation:
     # style can be 'best', which obtains aggregates from all nodes and selects the best, or 'first', which uses the first returned
     style: best
-    # beacon-node-addresses are the addresses of beacon nodes to use for this strategy.
+    # beacon-node-addresses are the addresses from which to receive aggregate attestations.
     # Note that prysm nodes are not supported at current in this strategy.
-    beacon-node-addresses:
-      - localhost:5051
-      - localhost:5052
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
   # The synccommitteecontribution strategy obtains sync committee contributions from multiple sources.
   synccommitteecontribution:
     # style can be 'best', which obtains contributions from all nodes and selects the best, or 'first', which uses the first returned
     style: best
-    # beacon-node-addresses are the addresses of beacon nodes to use for this strategy.
-    beacon-node-addresses:
-      - localhost:4000
-      - localhost:5051
-      - localhost:5052
+    # beacon-node-addresses are the addresses from which to receive sync committee contributions.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
 ```
+
+## Hierarchical configuration.
+A number of items in the configuration are hierarchical.  If not stated explicitly at a point in the configuration file, Vouch will move up the levels of configuration to attempt to find the relevant information.  For example, when searching for the value `submitter.attestation.multinode.beacon-node-addresses` the following points in the configuration will be checked:
+
+  - `submitter.attestation.multinode.beacon-node-addresses`
+  - `submitter.attestation.beacon-node-addresses`
+  - `submitter.beacon-node-addresses`
+  - `beacon-node-addresses`
+
+Vouch will use the first value obtained.  Continuing the example, if a configuration file is set up as follows:
+
+```
+beacon-node-addresses: [ localhost:4000, localhost:5051 ]
+strategies:
+  beacon-node-address: [ localhost: 5051 ]
+  beaconblockproposal:
+    style: best
+    beacon-node-addresses: [ localhost:4000 ]
+submitter:
+  style: multinode
+  beaconblock:
+    multinode:
+      beacon-node-addresses: [ localhost:4000, localhost:9000 ]
+```
+
+Then the configuration will resolve as follows:
+  - `beacon-node-addresses` resolves to `[ localhost:4000, localhost:5051 ]` with a direct match
+  - `strategies.attestationdata.best.beacon-node-addresses` resolves `[ localhost:5051 ]` at `strategies.beacon-node-addresses`
+  - `strategies.beaconblockproposal.best.beacon-node-addresses` resolves `[ localhost:4000 ]` at `strategies.beacon-node-addresses`
+  - `submitter.beaconblock.multinode.beacon-node-addresses` resolves `[ localhost:4000, localhost:9000 ]` with a direct match
+  - `submitter.attestation.multinode.beacon-node-addresses` resolves `[ localhost:4000, localhost:5051 ]` at `beacon-node-addresses`
+
+Hierarchical configuration provides a simple way of setting defaults and overrides, and is available for `beacon-node-addresses`, `log-level` and `process-concurrency` configuration values.
 
 ## Logging
 Vouch has a modular logging system that allows different modules to log at different levels.  The available log levels are:
