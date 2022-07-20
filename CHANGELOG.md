@@ -9,6 +9,7 @@
   - introduce a block root to slot cache to speed up scoring attestations and block proposals
   - provide more useful error messages if Vouch's configuration is unavailable or corrupt
   - add standard CA certificates to docker image
+  - add hierarchical configuration of beacon node addresses and other elements; see docs/configuration.md for details
 
 1.4.0:
   - increase accuracy of beacon block proposal scorer by incorporating attestation history

@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -24,8 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestProcessConcurrency(t *testing.T) {
-
+func TestBeaconNodeAddresses(t *testing.T) {
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 	viper.AutomaticEnv()
 
@@ -33,47 +32,64 @@ func TestProcessConcurrency(t *testing.T) {
 		name     string
 		path     string
 		env      map[string]string
-		expected int64
+		expected []string
 	}{
 		{
 			name: "Empty",
 			env: map[string]string{
-				"PROCESS_CONCURRENCY": "12345",
+				"BEACON_NODE_ADDRESSES": "1 2",
 			},
-			expected: 12345,
+			expected: []string{"1", "2"},
 		},
 		{
 			name: "MultilevelRoot",
 			env: map[string]string{
-				"PROCESS_CONCURRENCY": "12345",
+				"BEACON_NODE_ADDRESSES": "1 2",
 			},
 			path:     "a.b.c",
-			expected: 12345,
+			expected: []string{"1", "2"},
+		},
+		{
+			name: "TrailingDot",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESSES":     "1 2",
+				"A_B_BEACON_NODE_ADDRESSES": "3 4",
+			},
+			path:     "a.b.c.",
+			expected: []string{"3", "4"},
 		},
 		{
 			name: "MultilevelBranch",
 			env: map[string]string{
-				"PROCESS_CONCURRENCY":     "12345",
-				"A_B_PROCESS_CONCURRENCY": "54321",
+				"BEACON_NODE_ADDRESSES":     "1 2",
+				"A_B_BEACON_NODE_ADDRESSES": "3 4",
 			},
 			path:     "a.b.c",
-			expected: 54321,
+			expected: []string{"3", "4"},
 		},
 		{
 			name: "Unknown",
 			env: map[string]string{
-				"FOO": "12345",
+				"FOO": "1 2",
 			},
-			path:     "",
-			expected: 0,
+			path:     "beacon-node-addresses",
+			expected: nil,
 		},
 		{
 			name: "Fallback",
 			env: map[string]string{
-				"PROCESS_CONCURRENCY": "12345",
+				"BEACON_NODE_ADDRESSES": "1 2",
 			},
 			path:     "foo",
-			expected: 12345,
+			expected: []string{"1", "2"},
+		},
+		{
+			name: "SingleAddress",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESS": "1",
+			},
+			path:     "foo",
+			expected: []string{"1"},
 		},
 	}
 
@@ -84,7 +100,7 @@ func TestProcessConcurrency(t *testing.T) {
 				os.Setenv(fmt.Sprintf("%s_%s", prefix, k), v)
 			}
 			viper.SetEnvPrefix(prefix)
-			res := util.ProcessConcurrency(test.path)
+			res := util.BeaconNodeAddresses(test.path)
 			require.Equal(t, test.expected, res)
 		})
 	}
