@@ -17,6 +17,7 @@ package signer
 import (
 	"context"
 
+	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -150,6 +151,18 @@ type ContributionAndProofSigner interface {
 	SignContributionAndProof(ctx context.Context,
 		account e2wtypes.Account,
 		contributionAndProof *altair.ContributionAndProof,
+	) (
+		phase0.BLSSignature,
+		error,
+	)
+}
+
+// ValidatorRegistrationSigner provides methods to sign validator registrations.
+type ValidatorRegistrationSigner interface {
+	// SignValidatorRegistration signs a validator registration.
+	SignValidatorRegistration(ctx context.Context,
+		account e2wtypes.Account,
+		registration *api.VersionedValidatorRegistration,
 	) (
 		phase0.BLSSignature,
 		error,

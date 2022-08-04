@@ -566,8 +566,8 @@ func NewBeaconBlockProposalProvider() eth2client.BeaconBlockProposalProvider {
 // BeaconBlockProposal is a mock.
 func (*BeaconBlockProposalProvider) BeaconBlockProposal(_ context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*spec.VersionedBeaconBlock, error) {
 	// Graffiti should be 32 bytes.
-	fixedGraffiti := make([]byte, 32)
-	copy(fixedGraffiti, graffiti)
+	fixedGraffiti := [32]byte{}
+	copy(fixedGraffiti[:], graffiti)
 
 	// Build a beacon block.
 
@@ -974,6 +974,7 @@ func (*SpecProvider) Spec(_ context.Context) (map[string]interface{}, error) {
 		"DOMAIN_SYNC_COMMITTEE":                    phase0.DomainType{0x07, 0x00, 0x00, 0x00},
 		"DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF":    phase0.DomainType{0x08, 0x00, 0x00, 0x00},
 		"DOMAIN_VOLUNTARY_EXIT":                    phase0.DomainType{0x04, 0x00, 0x00, 0x00},
+		"DOMAIN_APPLICATION_BUILDER":               phase0.DomainType{0x00, 0x00, 0x00, 0x01},
 		"EPOCHS_PER_SYNC_COMMITTEE_PERIOD":         uint64(256),
 		"SECONDS_PER_SLOT":                         12 * time.Second,
 		"SLOTS_PER_EPOCH":                          uint64(32),

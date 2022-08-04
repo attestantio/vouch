@@ -19,6 +19,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/blockbuilder"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/feerecipientprovider"
 	"github.com/attestantio/vouch/services/metrics"
@@ -27,12 +28,13 @@ import (
 )
 
 type parameters struct {
-	logLevel                      zerolog.Level
-	monitor                       metrics.Service
-	chainTimeService              chaintime.Service
-	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
-	feeRecipientProvider          feerecipientprovider.Service
-	proposalPreparationsSubmitter eth2client.ProposalPreparationsSubmitter
+	logLevel                         zerolog.Level
+	monitor                          metrics.Service
+	chainTimeService                 chaintime.Service
+	validatingAccountsProvider       accountmanager.ValidatingAccountsProvider
+	feeRecipientProvider             feerecipientprovider.Service
+	proposalPreparationsSubmitter    eth2client.ProposalPreparationsSubmitter
+	validatorRegistrationsSubmitters []blockbuilder.ValidatorRegistrationsSubmitter
 }
 
 // Parameter is the interface for service parameters.
@@ -88,6 +90,13 @@ func WithProposalPreparationsSubmitter(submitter eth2client.ProposalPreparations
 	})
 }
 
+// WithValidatorRegistrationsSubmitters sets the validator registrations submitters.
+func WithValidatorRegistrationsSubmitters(submitters []blockbuilder.ValidatorRegistrationsSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.validatorRegistrationsSubmitters = submitters
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -115,6 +124,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.proposalPreparationsSubmitter == nil {
 		return nil, errors.New("no proposal preparations submitter specified")
 	}
+	// validatorRegistrationsSubmitter is optional.
 
 	return &parameters, nil
 }

@@ -16,8 +16,11 @@ package standard
 import (
 	"errors"
 
+	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/blockbuilder"
+	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/feerecipientprovider"
 	"github.com/attestantio/vouch/services/graffitiprovider"
@@ -31,8 +34,12 @@ type parameters struct {
 	logLevel                   zerolog.Level
 	monitor                    metrics.BeaconBlockProposalMonitor
 	chainTimeService           chaintime.Service
+	blockAuctioneer            blockauctioneer.BlockAuctioneer
 	proposalProvider           eth2client.BeaconBlockProposalProvider
+	blindedProposalProvider    eth2client.BlindedBeaconBlockProposalProvider
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
+	executionChainHeadProvider cache.ExecutionChainHeadProvider
+	builderBidProviders        map[string]blockbuilder.BuilderBidProvider
 	feeRecipientProvider       feerecipientprovider.Service
 	graffitiProvider           graffitiprovider.Service
 	beaconBlockSubmitter       submitter.BeaconBlockSubmitter
@@ -65,10 +72,24 @@ func WithChainTimeService(service chaintime.Service) Parameter {
 	})
 }
 
+// WithBlockAuctioneer sets the block auctioneer.
+func WithBlockAuctioneer(auctioneer blockauctioneer.BlockAuctioneer) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.blockAuctioneer = auctioneer
+	})
+}
+
 // WithProposalDataProvider sets the proposal data provider.
 func WithProposalDataProvider(provider eth2client.BeaconBlockProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalProvider = provider
+	})
+}
+
+// WithBlindedProposalDataProvider sets the proposal data provider.
+func WithBlindedProposalDataProvider(provider eth2client.BlindedBeaconBlockProposalProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.blindedProposalProvider = provider
 	})
 }
 
@@ -83,6 +104,20 @@ func WithMonitor(monitor metrics.BeaconBlockProposalMonitor) Parameter {
 func WithValidatingAccountsProvider(provider accountmanager.ValidatingAccountsProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.validatingAccountsProvider = provider
+	})
+}
+
+// WithExecutionChainHeadProvider sets the execution chain head provider.
+func WithExecutionChainHeadProvider(provider cache.ExecutionChainHeadProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.executionChainHeadProvider = provider
+	})
+}
+
+// WithBuilderBidProviders sets the builder bid providers.
+func WithBuilderBidProviders(providers map[string]blockbuilder.BuilderBidProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.builderBidProviders = providers
 	})
 }
 
@@ -132,18 +167,26 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
+	if parameters.monitor == nil {
+		return nil, errors.New("no monitor specified")
+	}
+	// Block auctioneer can be nil.
 	if parameters.proposalProvider == nil {
 		return nil, errors.New("no proposal data provider specified")
+	}
+	// Some items are required if the auctioneer is present.
+	if parameters.blockAuctioneer != nil {
+		if parameters.blindedProposalProvider == nil {
+			return nil, errors.New("no blinded proposal data provider specified")
+		}
 	}
 	if parameters.chainTimeService == nil {
 		return nil, errors.New("no chain time service specified")
 	}
-	if parameters.monitor == nil {
-		return nil, errors.New("no monitor specified")
-	}
 	if parameters.validatingAccountsProvider == nil {
 		return nil, errors.New("no validating accounts provider specified")
 	}
+	// builderBidProviders can be empty.
 	if parameters.feeRecipientProvider == nil {
 		return nil, errors.New("no fee recipient provider specified")
 	}

@@ -23,6 +23,8 @@ import (
 var blockRootToSlotProcessed *prometheus.CounterVec
 var blockRootToSlotEntries prometheus.Gauge
 
+var executionChainHeadHeight prometheus.Gauge
+
 func registerMetrics(ctx context.Context, monitor metrics.Service) error {
 	if blockRootToSlotProcessed != nil {
 		// Already registered.
@@ -55,7 +57,17 @@ func registerPrometheusMetrics(_ context.Context) error {
 		Name:      "blockroottoslot_entries",
 		Help:      "The number of entries in the block root to slot cache.",
 	})
-	return prometheus.Register(blockRootToSlotEntries)
+	if err := prometheus.Register(blockRootToSlotEntries); err != nil {
+		return err
+	}
+
+	executionChainHeadHeight = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "vouch",
+		Subsystem: "cache",
+		Name:      "executionchainhead_height",
+		Help:      "The height of the latest entry in the execution chain head cache.",
+	})
+	return prometheus.Register(executionChainHeadHeight)
 }
 
 func monitorBlockRootToSlotEntriesUpdated(entries int) {
@@ -70,4 +82,11 @@ func monitorBlockRootToSlot(source string) {
 		return
 	}
 	blockRootToSlotProcessed.WithLabelValues(source).Inc()
+}
+
+func monitorExecutionChainHeadUpdated(height uint64) {
+	if executionChainHeadHeight == nil {
+		return
+	}
+	executionChainHeadHeight.Set(float64(height))
 }

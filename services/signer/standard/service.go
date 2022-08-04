@@ -38,7 +38,9 @@ type Service struct {
 	syncCommitteeDomainType               *phase0.DomainType
 	syncCommitteeSelectionProofDomainType *phase0.DomainType
 	contributionAndProofDomainType        *phase0.DomainType
-	domainProvider                        eth2client.DomainProvider
+	// TODO
+	applicationBuilderDomainType *phase0.DomainType
+	domainProvider               eth2client.DomainProvider
 }
 
 // module-wide log.
@@ -112,6 +114,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		contributionAndProofDomainType = &tmp
 	}
 
+	var applicationBuilderDomainType *phase0.DomainType
+	if tmp, err := domainType(spec, "DOMAIN_APPLICATION_BUILDER"); err == nil {
+		applicationBuilderDomainType = &tmp
+	}
+
 	s := &Service{
 		monitor:                               parameters.monitor,
 		clientMonitor:                         parameters.clientMonitor,
@@ -124,6 +131,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeDomainType:               syncCommitteeDomainType,
 		syncCommitteeSelectionProofDomainType: syncCommitteeSelectionProofDomainType,
 		contributionAndProofDomainType:        contributionAndProofDomainType,
+		applicationBuilderDomainType:          applicationBuilderDomainType,
 		domainProvider:                        parameters.domainProvider,
 	}
 

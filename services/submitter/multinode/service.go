@@ -30,6 +30,7 @@ type Service struct {
 	timeout                               time.Duration
 	processConcurrency                    int64
 	beaconBlockSubmitters                 map[string]eth2client.BeaconBlockSubmitter
+	blindedBeaconBlockSubmitters          map[string]eth2client.BlindedBeaconBlockSubmitter
 	attestationsSubmitters                map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters       map[string]eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitters        map[string]eth2client.ProposalPreparationsSubmitter
@@ -60,6 +61,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		timeout:                               parameters.timeout,
 		processConcurrency:                    parameters.processConcurrency,
 		beaconBlockSubmitters:                 parameters.beaconBlockSubmitters,
+		blindedBeaconBlockSubmitters:          parameters.blindedBeaconBlockSubmitters,
 		attestationsSubmitters:                parameters.attestationsSubmitters,
 		aggregateAttestationsSubmitters:       parameters.aggregateAttestationsSubmitters,
 		proposalPreparationsSubmitters:        parameters.proposalPreparationsSubmitters,

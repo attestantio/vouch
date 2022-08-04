@@ -32,6 +32,7 @@ type parameters struct {
 	clientMonitor                          metrics.ClientMonitor
 	processConcurrency                     int64
 	beaconBlockSubmitters                  map[string]eth2client.BeaconBlockSubmitter
+	blindedBeaconBlockSubmitters           map[string]eth2client.BlindedBeaconBlockSubmitter
 	attestationsSubmitters                 map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters        map[string]eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitters         map[string]eth2client.ProposalPreparationsSubmitter
@@ -84,6 +85,13 @@ func WithProcessConcurrency(concurrency int64) Parameter {
 func WithBeaconBlockSubmitters(submitters map[string]eth2client.BeaconBlockSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.beaconBlockSubmitters = submitters
+	})
+}
+
+// WithBlindedBeaconBlockSubmitters sets the beacon block submitters.
+func WithBlindedBeaconBlockSubmitters(submitters map[string]eth2client.BlindedBeaconBlockSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.blindedBeaconBlockSubmitters = submitters
 	})
 }
 
@@ -159,6 +167,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if len(parameters.beaconBlockSubmitters) == 0 {
 		return nil, errors.New("no beacon block submitters specified")
+	}
+	if len(parameters.blindedBeaconBlockSubmitters) == 0 {
+		return nil, errors.New("no blinded beacon block submitters specified")
 	}
 	if len(parameters.attestationsSubmitters) == 0 {
 		return nil, errors.New("no attestations submitters specified")

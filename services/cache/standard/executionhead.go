@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cache
+package standard
 
 import (
 	"context"
@@ -19,17 +19,18 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
-// Service provides a cache for information.
-type Service interface{}
-
-// BlockRootToSlotProvider provides a mapping from block root to slot.
-type BlockRootToSlotProvider interface {
-	// BlockRootToSlot provides the slot for a given block root.
-	BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0.Slot, error)
+// ExecutionChainHead provides the execution chain head.
+func (s *Service) ExecutionChainHead(_ context.Context) (phase0.Hash32, uint64) {
+	s.executionChainHeadMu.RLock()
+	defer s.executionChainHeadMu.RUnlock()
+	return s.executionChainHeadRoot, s.executionChainHeadHeight
 }
 
-// ExecutionChainHeadProvider provides the current execution chain head.
-type ExecutionChainHeadProvider interface {
-	// ExecutionChainHead provides the current execution chain head.
-	ExecutionChainHead(ctx context.Context) (phase0.Hash32, uint64)
+// setExecutionChainHead sets the execution chain head.
+func (s *Service) setExecutionChainHead(root phase0.Hash32, height uint64) {
+	s.executionChainHeadMu.Lock()
+	s.executionChainHeadRoot = root
+	s.executionChainHeadHeight = height
+	monitorExecutionChainHeadUpdated(height)
+	s.executionChainHeadMu.Unlock()
 }

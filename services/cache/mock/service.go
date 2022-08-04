@@ -41,3 +41,8 @@ func (s *Service) BlockRootToSlot(_ context.Context, root phase0.Root) (phase0.S
 	}
 	return 0, errors.New("not found")
 }
+
+// ExecutionChainHead provides the current execution chain head.
+func (s *Service) ExecutionChainHead(ctx context.Context) (phase0.Hash32, uint64) {
+	return phase0.Hash32{}, 0
+}

@@ -18,10 +18,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	"github.com/attestantio/vouch/services/blockbuilder"
+	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/graffitiprovider"
 	"github.com/attestantio/vouch/services/metrics"
@@ -36,8 +39,12 @@ import (
 type Service struct {
 	monitor                    metrics.BeaconBlockProposalMonitor
 	chainTimeService           chaintime.Service
+	blockAuctioneer            blockauctioneer.BlockAuctioneer
 	proposalProvider           eth2client.BeaconBlockProposalProvider
+	blindedProposalProvider    eth2client.BlindedBeaconBlockProposalProvider
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
+	executionChainHeadProvider cache.ExecutionChainHeadProvider
+	builderBidProviders        map[string]blockbuilder.BuilderBidProvider
 	graffitiProvider           graffitiprovider.Service
 	beaconBlockSubmitter       submitter.BeaconBlockSubmitter
 	randaoRevealSigner         signer.RANDAORevealSigner
@@ -63,8 +70,12 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	s := &Service{
 		monitor:                    parameters.monitor,
 		chainTimeService:           parameters.chainTimeService,
+		blockAuctioneer:            parameters.blockAuctioneer,
 		proposalProvider:           parameters.proposalProvider,
+		blindedProposalProvider:    parameters.blindedProposalProvider,
 		validatingAccountsProvider: parameters.validatingAccountsProvider,
+		executionChainHeadProvider: parameters.executionChainHeadProvider,
+		builderBidProviders:        parameters.builderBidProviders,
 		graffitiProvider:           parameters.graffitiProvider,
 		beaconBlockSubmitter:       parameters.beaconBlockSubmitter,
 		randaoRevealSigner:         parameters.randaoRevealSigner,

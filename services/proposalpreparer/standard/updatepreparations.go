@@ -18,8 +18,11 @@ import (
 	"time"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/blockbuilder"
 	"github.com/pkg/errors"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // UpdatePreparations updates the preparations for validators on the beacon nodes.
@@ -65,6 +68,18 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted proposal preparations")
 	proposalPreparationCompleted(started, epoch, "succeeded")
+
+	// Also submit validator registrations if connected to builders.
+	for _, validatorRegistrationsSubmitter := range s.validatorRegistrationsSubmitters {
+		go func(ctx context.Context, submitter blockbuilder.ValidatorRegistrationsSubmitter, epoch phase0.Epoch, accounts map[phase0.ValidatorIndex]e2wtypes.Account, feeRecipients map[phase0.ValidatorIndex]bellatrix.ExecutionAddress) {
+			if err := submitter.SubmitValidatorRegistrations(ctx, accounts, feeRecipients); err != nil {
+				validatorRegistrationsCompleted("failed")
+				log.Error().Err(err).Msg("Failed to update builder validator registrations")
+				return
+			}
+			validatorRegistrationsCompleted("succeeded")
+		}(ctx, validatorRegistrationsSubmitter, epoch, accounts, feeRecipients)
+	}
 
 	return nil
 }

@@ -37,6 +37,12 @@ type BeaconBlockSubmitter interface {
 	SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error
 }
 
+// // BlindedBeaconBlockSubmitter is the interface for a submitter of blinded beacon blocks.
+// type BlindedBeaconBlockSubmitter interface {
+// 	// SubmitBlindedBeaconBlock submits a blinded block.
+// 	SubmitBlindedBeaconBlock(ctx context.Context, block *api.VersionedSignedBlindedBeaconBlock) error
+// }
+
 // BeaconCommitteeSubscriptionsSubmitter is the interface for a submitter of beacon committee subscriptions.
 type BeaconCommitteeSubscriptionsSubmitter interface {
 	// SubmitBeaconCommitteeSubscription submits a batch of beacon committee subscriptions.

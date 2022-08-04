@@ -11,25 +11,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cache
+package mevboost
 
 import (
 	"context"
 
+	"github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
-// Service provides a cache for information.
-type Service interface{}
-
-// BlockRootToSlotProvider provides a mapping from block root to slot.
-type BlockRootToSlotProvider interface {
-	// BlockRootToSlot provides the slot for a given block root.
-	BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0.Slot, error)
-}
-
-// ExecutionChainHeadProvider provides the current execution chain head.
-type ExecutionChainHeadProvider interface {
-	// ExecutionChainHead provides the current execution chain head.
-	ExecutionChainHead(ctx context.Context) (phase0.Hash32, uint64)
+// BuilderBid obtains a builder bid.
+func (s *Service) BuilderBid(ctx context.Context,
+	slot phase0.Slot,
+	parentHash phase0.Hash32,
+	pubKey phase0.BLSPubKey,
+) (
+	*spec.VersionedSignedBuilderBid,
+	error,
+) {
+	return s.builderBidProvider.BuilderBid(ctx, slot, parentHash, pubKey)
 }
