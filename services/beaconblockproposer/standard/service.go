@@ -23,7 +23,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
-	"github.com/attestantio/vouch/services/blockbuilder"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/graffitiprovider"
@@ -44,7 +43,6 @@ type Service struct {
 	blindedProposalProvider    eth2client.BlindedBeaconBlockProposalProvider
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	executionChainHeadProvider cache.ExecutionChainHeadProvider
-	builderBidProviders        map[string]blockbuilder.BuilderBidProvider
 	graffitiProvider           graffitiprovider.Service
 	beaconBlockSubmitter       submitter.BeaconBlockSubmitter
 	randaoRevealSigner         signer.RANDAORevealSigner
@@ -75,7 +73,6 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		blindedProposalProvider:    parameters.blindedProposalProvider,
 		validatingAccountsProvider: parameters.validatingAccountsProvider,
 		executionChainHeadProvider: parameters.executionChainHeadProvider,
-		builderBidProviders:        parameters.builderBidProviders,
 		graffitiProvider:           parameters.graffitiProvider,
 		beaconBlockSubmitter:       parameters.beaconBlockSubmitter,
 		randaoRevealSigner:         parameters.randaoRevealSigner,

@@ -115,3 +115,5 @@ require (
 )
 
 replace github.com/attestantio/go-eth2-client => ../go-eth2-client
+
+replace github.com/attestantio/go-builder-client => ../go-builder-client

@@ -27,8 +27,8 @@ import (
 var builders map[string]builder.Service
 var buildersMu sync.Mutex
 
-// fetchBlockBuilder fetches a builder service, instantiating it if required.
-func fetchBlockBuilder(ctx context.Context, address string, monitor metrics.Service) (builder.Service, error) {
+// fetchBuilderClient fetches a builder client, instantiating it if required.
+func fetchBuilderClient(ctx context.Context, address string, monitor metrics.Service) (builder.Service, error) {
 	if address == "" {
 		return nil, errors.New("no address supplied")
 	}
@@ -45,11 +45,11 @@ func fetchBlockBuilder(ctx context.Context, address string, monitor metrics.Serv
 		var err error
 		client, err = httpclient.New(ctx,
 			httpclient.WithMonitor(monitor),
-			httpclient.WithLogLevel(util.LogLevel("blockbuilder")),
-			httpclient.WithTimeout(util.Timeout("blockbuilder")),
+			httpclient.WithLogLevel(util.LogLevel("builderclient")),
+			httpclient.WithTimeout(util.Timeout("builderclient")),
 			httpclient.WithAddress(address))
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to initiate builder multiclient")
+			return nil, errors.Wrap(err, "failed to initiate builder client")
 		}
 		builders[address] = client
 	}

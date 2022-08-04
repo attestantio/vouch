@@ -19,7 +19,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
-	"github.com/attestantio/vouch/services/blockbuilder"
+	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/feerecipientprovider"
 	"github.com/attestantio/vouch/services/metrics"
@@ -34,7 +34,7 @@ type parameters struct {
 	validatingAccountsProvider       accountmanager.ValidatingAccountsProvider
 	feeRecipientProvider             feerecipientprovider.Service
 	proposalPreparationsSubmitter    eth2client.ProposalPreparationsSubmitter
-	validatorRegistrationsSubmitters []blockbuilder.ValidatorRegistrationsSubmitter
+	validatorRegistrationsSubmitters []blockrelay.ValidatorRegistrationsSubmitter
 }
 
 // Parameter is the interface for service parameters.
@@ -91,7 +91,7 @@ func WithProposalPreparationsSubmitter(submitter eth2client.ProposalPreparations
 }
 
 // WithValidatorRegistrationsSubmitters sets the validator registrations submitters.
-func WithValidatorRegistrationsSubmitters(submitters []blockbuilder.ValidatorRegistrationsSubmitter) Parameter {
+func WithValidatorRegistrationsSubmitters(submitters []blockrelay.ValidatorRegistrationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.validatorRegistrationsSubmitters = submitters
 	})

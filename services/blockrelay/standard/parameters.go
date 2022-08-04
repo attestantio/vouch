@@ -16,6 +16,7 @@ package standard
 import (
 	builderclient "github.com/attestantio/go-builder-client"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/signer"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -25,6 +26,8 @@ type parameters struct {
 	monitor                          metrics.Service
 	serverName                       string
 	listenAddress                    string
+	gasLimit                         uint64
+	validatorRegistrationSigner      signer.ValidatorRegistrationSigner
 	validatorRegistrationsSubmitters []builderclient.ValidatorRegistrationsSubmitter
 	builderBidProviders              []builderclient.BuilderBidProvider
 }
@@ -68,6 +71,20 @@ func WithListenAddress(address string) Parameter {
 	})
 }
 
+// WithGasLimit sets the gas limit for block proposers.
+func WithGasLimit(gasLimit uint64) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.gasLimit = gasLimit
+	})
+}
+
+// WithValidatorRegistrationSigner sets the validator registration signer.
+func WithValidatorRegistrationSigner(signer signer.ValidatorRegistrationSigner) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.validatorRegistrationSigner = signer
+	})
+}
+
 // WithValidatorRegistrationsSubmitters sets submitters to which to send validator registrations.
 func WithValidatorRegistrationsSubmitters(submitters []builderclient.ValidatorRegistrationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -99,6 +116,12 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.listenAddress == "" {
 		return nil, errors.New("no listen address specified")
+	}
+	if parameters.gasLimit == 0 {
+		return nil, errors.New("no gas limit specified")
+	}
+	if parameters.validatorRegistrationSigner == nil {
+		return nil, errors.New("no validator registration signer specified")
 	}
 	if parameters.validatorRegistrationsSubmitters == nil {
 		return nil, errors.New("no validator registrations submitters specified")

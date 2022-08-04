@@ -44,8 +44,7 @@ import (
 	standardattester "github.com/attestantio/vouch/services/attester/standard"
 	standardbeaconblockproposer "github.com/attestantio/vouch/services/beaconblockproposer/standard"
 	standardbeaconcommitteesubscriber "github.com/attestantio/vouch/services/beaconcommitteesubscriber/standard"
-	"github.com/attestantio/vouch/services/blockbuilder"
-	mevboostblockbuilder "github.com/attestantio/vouch/services/blockbuilder/mevboost"
+	"github.com/attestantio/vouch/services/blockrelay"
 	standardblockrelay "github.com/attestantio/vouch/services/blockrelay/standard"
 	"github.com/attestantio/vouch/services/cache"
 	standardcache "github.com/attestantio/vouch/services/cache/standard"
@@ -238,7 +237,7 @@ func fetchConfig() error {
 	viper.SetDefault("controller.max-sync-committee-message-delay", 4*time.Second)
 	viper.SetDefault("controller.attestation-aggregation-delay", 8*time.Second)
 	viper.SetDefault("controller.sync-committee-aggregation-delay", 8*time.Second)
-	viper.SetDefault("blockbuilder.gas-limit", uint64(30000000))
+	viper.SetDefault("blockrelay.gas-limit", uint64(30000000))
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch err.(type) {
@@ -426,38 +425,11 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to start fee recipient provider")
 	}
 
-	blockBuilders := make([]blockbuilder.Service, 0)
-	if bellatrixCapable {
-		if len(viper.GetStringSlice("blockbuilder.addresses")) != 0 {
-			log.Trace().Msg("Starting block builders")
-			for _, address := range viper.GetStringSlice("blockbuilder.addresses") {
-				builderClient, err := fetchBlockBuilder(ctx, address, monitor)
-				if err != nil {
-					return nil, nil, errors.Wrap(err, "failed to obtain builder client")
-				}
-
-				blockBuilder, err := mevboostblockbuilder.New(ctx,
-					mevboostblockbuilder.WithLogLevel(util.LogLevel("blockbuilder.mevboost")),
-					mevboostblockbuilder.WithMonitor(monitor),
-					mevboostblockbuilder.WithName(builderClient.Name()),
-					mevboostblockbuilder.WithGasLimit(viper.GetUint64("blockbuilder.gas-limit")),
-					mevboostblockbuilder.WithValidatorRegistrationsigner(signerSvc.(signer.ValidatorRegistrationSigner)),
-					mevboostblockbuilder.WithValidatorRegistrationsSubmitter(builderClient.(builderclient.ValidatorRegistrationsSubmitter)),
-					mevboostblockbuilder.WithBuilderBidProvider(builderClient.(builderclient.BuilderBidProvider)),
-				)
-				if err != nil {
-					return nil, nil, err
-				}
-				blockBuilders = append(blockBuilders, blockBuilder)
-			}
-		}
-	}
-
 	validatorRegistrationsSubmitters := make([]builderclient.ValidatorRegistrationsSubmitter, 0)
 	for _, address := range viper.GetStringSlice("blockrelay.addresses") {
-		builderClient, err := fetchBlockBuilder(ctx, address, monitor)
+		builderClient, err := fetchBuilderClient(ctx, address, monitor)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to obtain builder client")
+			return nil, nil, errors.Wrap(err, "failed to obtain block relay builder client")
 		}
 		submitter, isSubmitter := builderClient.(builderclient.ValidatorRegistrationsSubmitter)
 		if isSubmitter {
@@ -467,9 +439,9 @@ func startServices(ctx context.Context,
 
 	builderBidProviders := make([]builderclient.BuilderBidProvider, 0)
 	for _, address := range viper.GetStringSlice("blockrelay.addresses") {
-		builderClient, err := fetchBlockBuilder(ctx, address, monitor)
+		builderClient, err := fetchBuilderClient(ctx, address, monitor)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to obtain builder client")
+			return nil, nil, errors.Wrap(err, "failed to obtain block relay block server")
 		}
 		provider, isProvider := builderClient.(builderclient.BuilderBidProvider)
 		if isProvider {
@@ -482,6 +454,8 @@ func startServices(ctx context.Context,
 		standardblockrelay.WithMonitor(monitor),
 		standardblockrelay.WithServerName(viper.GetString("blockrelay.server-name")),
 		standardblockrelay.WithListenAddress(viper.GetString("blockrelay.listen-address")),
+		standardblockrelay.WithGasLimit(viper.GetUint64("blockrelay.gas-limit")),
+		standardblockrelay.WithValidatorRegistrationSigner(signerSvc.(signer.ValidatorRegistrationSigner)),
 		standardblockrelay.WithValidatorRegistrationsSubmitters(validatorRegistrationsSubmitters),
 		standardblockrelay.WithBuilderBidProviders(builderBidProviders),
 	)
@@ -501,16 +475,6 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to select blinded beacon block proposal provider")
 	}
 
-	log.Trace().Msg("Starting beacon block proposer")
-	builderBidProviders2 := make(map[string]blockbuilder.BuilderBidProvider, len(blockBuilders))
-	for _, blockBuilder := range blockBuilders {
-		provider, isProvider := blockBuilder.(blockbuilder.BuilderBidProvider)
-		if isProvider {
-			builderBidProviders2[blockBuilder.Name()] = provider
-		} else {
-			log.Warn().Msg("Block builder does not support execution payload header provision")
-		}
-	}
 	beaconBlockProposer, err := standardbeaconblockproposer.New(ctx,
 		standardbeaconblockproposer.WithLogLevel(util.LogLevel("beaconblockproposer")),
 		standardbeaconblockproposer.WithChainTimeService(chainTime),
@@ -647,15 +611,7 @@ func startServices(ctx context.Context,
 	if bellatrixCapable {
 		log.Trace().Msg("Starting proposals preparer")
 
-		validatorRegistrationsSubmitters := make([]blockbuilder.ValidatorRegistrationsSubmitter, 0, len(blockBuilders))
-		for _, blockBuilder := range blockBuilders {
-			validatorRegistrationsSubmitter, isSubmitter := blockBuilder.(blockbuilder.ValidatorRegistrationsSubmitter)
-			if isSubmitter {
-				validatorRegistrationsSubmitters = append(validatorRegistrationsSubmitters, validatorRegistrationsSubmitter)
-			} else {
-				log.Warn().Msg("Block builder does not support validator registration submission")
-			}
-		}
+		validatorRegistrationsSubmitters := []blockrelay.ValidatorRegistrationsSubmitter{blockRelay}
 		proposalPreparer, err = standardproposalpreparer.New(ctx,
 			standardproposalpreparer.WithLogLevel(util.LogLevel("proposalspreparor")),
 			standardproposalpreparer.WithMonitor(monitor),

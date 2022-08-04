@@ -13,5 +13,24 @@
 
 package blockrelay
 
+import (
+	"context"
+
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+)
+
 // Service is the block relay service.
 type Service interface{}
+
+// ValidatorRegistrationsSubmitter is the interface for a submitter of validator registrations.
+type ValidatorRegistrationsSubmitter interface {
+	Service
+
+	// SubmitValidatorRegistrations submits validator registrations.
+	SubmitValidatorRegistrations(ctx context.Context,
+		accounts map[phase0.ValidatorIndex]e2wtypes.Account,
+		feeRecipients map[phase0.ValidatorIndex]bellatrix.ExecutionAddress,
+	) error
+}

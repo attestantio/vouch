@@ -11,10 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mevboost
+package standard
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/attestantio/go-builder-client/api"
@@ -22,7 +23,6 @@ import (
 	"github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/pkg/errors"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -84,8 +84,19 @@ func (s *Service) SubmitValidatorRegistrations(ctx context.Context,
 		})
 	}
 
-	if err := s.validatorRegistrationsSubmitter.SubmitValidatorRegistrations(ctx, signedRegistrations); err != nil {
-		return errors.Wrap(err, "failed to submit validator registrations")
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(signedRegistrations)
+		if err == nil {
+			e.RawJSON("registrations", data).Msg("Generated registrations")
+		}
+	}
+
+	for _, validatorRegistrationsSubmitter := range s.validatorRegistrationsSubmitters {
+		if err := validatorRegistrationsSubmitter.SubmitValidatorRegistrations(ctx, signedRegistrations); err != nil {
+			// Log an error but continue.
+			log.Error().Err(err).Str("provider", validatorRegistrationsSubmitter.Address()).Msg("Failed to submit validator registrations")
+			continue
+		}
 	}
 
 	return nil

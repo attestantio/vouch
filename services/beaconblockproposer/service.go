@@ -17,8 +17,6 @@ import (
 	"context"
 	"fmt"
 
-	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -77,22 +75,6 @@ func (d *Duty) SetAccount(account e2wtypes.Account) {
 // Account provides the account.
 func (d *Duty) Account() e2wtypes.Account {
 	return d.account
-}
-
-// BeaconBlockSelection is the beacon block that has been selected for
-// proposal.
-type BeaconBlockSelection struct {
-	// TODO more fields.  Provider?  Value?
-	BeaconBlock        *bellatrix.BeaconBlock
-	BlindedBeaconBlock *apiv1.BlindedBeaconBlock
-}
-
-// ExecutionPayloadSelection is the execution payload that has been selected
-// for inclusion with a beacon block.
-type ExecutionPayloadSelection struct {
-	// TODO more fields.  Provider?  Value?
-	ExecutionPayload       *bellatrix.ExecutionPayload
-	ExecutionPayloadHeader *bellatrix.ExecutionPayloadHeader
 }
 
 // Service is the beacon block proposer service.

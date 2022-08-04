@@ -21,6 +21,7 @@ import (
 	builderclient "github.com/attestantio/go-builder-client"
 	"github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/signer"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -29,6 +30,8 @@ import (
 // Service is the builder service for Vouch.
 type Service struct {
 	monitor                          metrics.Service
+	gasLimit                         uint64
+	validatorRegistrationSigner      signer.ValidatorRegistrationSigner
 	validatorRegistrationsSubmitters []builderclient.ValidatorRegistrationsSubmitter
 	builderBidProviders              []builderclient.BuilderBidProvider
 	builderBidsCache                 map[string]map[string]*spec.VersionedSignedBuilderBid
@@ -53,6 +56,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	s := &Service{
 		monitor:                          parameters.monitor,
+		gasLimit:                         parameters.gasLimit,
+		validatorRegistrationSigner:      parameters.validatorRegistrationSigner,
 		validatorRegistrationsSubmitters: parameters.validatorRegistrationsSubmitters,
 		builderBidProviders:              parameters.builderBidProviders,
 		builderBidsCache:                 make(map[string]map[string]*spec.VersionedSignedBuilderBid),

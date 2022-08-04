@@ -184,9 +184,15 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		return canTryWithout, errors.Wrap(err, "failed to obtain state root of block")
 	}
 
-	// TODO make secure against nil.
-	log.Info().Str("proposal", fmt.Sprintf("%#x", proposal.Bellatrix.Body.ExecutionPayloadHeader.TransactionsRoot[:])).Str("auction", fmt.Sprintf("%#x", auctionResults.Bid.Data.Message.Header.TransactionsRoot[:])).Msg("Transaction roots")
-	if !bytes.Equal(proposal.Bellatrix.Body.ExecutionPayloadHeader.TransactionsRoot[:], auctionResults.Bid.Data.Message.Header.TransactionsRoot[:]) {
+	proposalTransactionsRoot, err := proposal.TransactionsRoot()
+	if err != nil {
+		return canTryWithout, errors.New("failed to obtain proposal transactions root")
+	}
+	auctionTransactionsRoot, err := auctionResults.Bid.TransactionsRoot()
+	if err != nil {
+		return canTryWithout, errors.New("failed to obtain auction results transactions root")
+	}
+	if !bytes.Equal(proposalTransactionsRoot[:], auctionTransactionsRoot[:]) {
 		// This is a mismatch, back out.
 		return canTryWithout, errors.New("transactions root mismatch")
 	}

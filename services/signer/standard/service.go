@@ -38,9 +38,8 @@ type Service struct {
 	syncCommitteeDomainType               *phase0.DomainType
 	syncCommitteeSelectionProofDomainType *phase0.DomainType
 	contributionAndProofDomainType        *phase0.DomainType
-	// TODO
-	applicationBuilderDomainType *phase0.DomainType
-	domainProvider               eth2client.DomainProvider
+	applicationBuilderDomainType          *phase0.DomainType
+	domainProvider                        eth2client.DomainProvider
 }
 
 // module-wide log.

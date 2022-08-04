@@ -19,7 +19,6 @@ import (
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
-	"github.com/attestantio/vouch/services/blockbuilder"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/feerecipientprovider"
@@ -39,7 +38,6 @@ type parameters struct {
 	blindedProposalProvider    eth2client.BlindedBeaconBlockProposalProvider
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	executionChainHeadProvider cache.ExecutionChainHeadProvider
-	builderBidProviders        map[string]blockbuilder.BuilderBidProvider
 	feeRecipientProvider       feerecipientprovider.Service
 	graffitiProvider           graffitiprovider.Service
 	beaconBlockSubmitter       submitter.BeaconBlockSubmitter
@@ -114,13 +112,6 @@ func WithExecutionChainHeadProvider(provider cache.ExecutionChainHeadProvider) P
 	})
 }
 
-// WithBuilderBidProviders sets the builder bid providers.
-func WithBuilderBidProviders(providers map[string]blockbuilder.BuilderBidProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.builderBidProviders = providers
-	})
-}
-
 // WithFeeRecipientProvider sets the fee recipient provider.
 func WithFeeRecipientProvider(provider feerecipientprovider.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -186,7 +177,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.validatingAccountsProvider == nil {
 		return nil, errors.New("no validating accounts provider specified")
 	}
-	// builderBidProviders can be empty.
 	if parameters.feeRecipientProvider == nil {
 		return nil, errors.New("no fee recipient provider specified")
 	}
