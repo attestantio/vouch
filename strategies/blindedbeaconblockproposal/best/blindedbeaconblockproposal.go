@@ -126,8 +126,7 @@ func (s *Service) blindedBeaconBlockProposal(ctx context.Context,
 	proposal, err := provider.BlindedBeaconBlockProposal(ctx, slot, randaoReveal, graffiti)
 	s.clientMonitor.ClientOperation(name, "blinded beacon block proposal", err == nil, time.Since(started))
 	if err != nil {
-		//errCh <- errors.Wrap(err, name)
-		errCh <- errors.Wrap(errors.Wrap(err, "************************************************"), name)
+		errCh <- errors.Wrap(err, name)
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")

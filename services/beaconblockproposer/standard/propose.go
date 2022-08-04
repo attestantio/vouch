@@ -141,7 +141,6 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 	if len(auctionResults.Values) == 0 {
 		return canTryWithout, errors.New("no bids obtained for block")
 	}
-	// TODO more checks on the auction results?
 	for provider, value := range auctionResults.Values {
 		log.Trace().Str("provider", provider).Stringer("value", value).Msg("Bid")
 	}
@@ -334,50 +333,3 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 
 	return nil
 }
-
-// TODO remove this
-// Fetch the beacon block proposal and the builder bid in parallel.
-// TODO move to blockrelay.
-// pubkey := duty.Account().PublicKey()
-// if provider, isProvider := duty.Account().(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
-// 	pubkey = provider.CompositePublicKey()
-// }
-// pubKey := phase0.BLSPubKey{}
-// copy(pubKey[:], pubkey.Marshal())
-// hash, height := s.executionChainHeadProvider.ExecutionChainHead(ctx)
-// log.Info().Str("hash", fmt.Sprintf("%#x", hash)).Uint64("height", height).Uint64("slot", uint64(duty.Slot())).Msg("Current execution chain state")
-// builderBid, err := s.builderBidProviders[0].BuilderBid(ctx, duty.Slot(), hash, pubKey)
-// if err != nil {
-// 	return errors.Wrap(err, "failed to obtain builder bid")
-// }
-// if builderBid == nil {
-// 	return errors.New("obtained nil builder bid")
-// }
-// log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained builder bid")
-
-//	// TODO temp.
-//	if true {
-//		pubkey := duty.Account().PublicKey()
-//		if provider, isProvider := duty.Account().(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
-//			pubkey = provider.CompositePublicKey()
-//		}
-//		pubKey := phase0.BLSPubKey{}
-//		copy(pubKey[:], pubkey.Marshal())
-//		hash, height := s.executionChainHeadProvider.ExecutionChainHead(ctx)
-//		log.Info().Str("hash", fmt.Sprintf("%#x", hash)).Uint64("height", height).Uint64("slot", uint64(duty.Slot())).Msg("Current execution chain state")
-//		go func() {
-//			for name, builderBidProvider := range s.builderBidProviders {
-//				builderBid, err := builderBidProvider.BuilderBid(ctx, duty.Slot(), hash, pubKey)
-//				if err != nil {
-//					log.Warn().Err(err).Msg("Failed to obtain builder bid")
-//					return
-//				}
-//				data, err := json.Marshal(builderBid)
-//				if err != nil {
-//					log.Warn().Err(err).Msg("Failed to marshal builder bid")
-//					return
-//				}
-//				log.Info().Str("builder", name).RawJSON("builder_bid", data).Msg("Obtained builder bid")
-//			}
-//		}()
-//	}
