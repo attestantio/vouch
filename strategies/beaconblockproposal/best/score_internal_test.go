@@ -840,7 +840,6 @@ func TestScore(t *testing.T) {
 		testutil.HexToRoot("0x0505050505050505050505050505050505050505050505050505050505050505"): phase0.Slot(12348),
 	})
 	blockToSlotCache := cacheSvc.(cache.BlockRootToSlotProvider)
-	executionChainHeadProvider := cacheSvc.(cache.ExecutionChainHeadProvider)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -857,7 +856,6 @@ func TestScore(t *testing.T) {
 				}),
 				WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				WithBlockRootToSlotCache(blockToSlotCache),
-				WithExecutionChainHeadProvider(executionChainHeadProvider),
 			)
 			require.NoError(t, err)
 			if test.priorBlocks != nil {

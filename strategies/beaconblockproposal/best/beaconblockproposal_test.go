@@ -50,7 +50,6 @@ func TestBeaconBlockProposal(t *testing.T) {
 	require.NoError(t, err)
 	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
 	blockToSlotCache := cacheSvc.(cache.BlockRootToSlotProvider)
-	executionChainHeadProvider := cacheSvc.(cache.ExecutionChainHeadProvider)
 
 	tests := []struct {
 		name           string
@@ -74,7 +73,6 @@ func TestBeaconBlockProposal(t *testing.T) {
 					"good": mock.NewBeaconBlockProposalProvider(),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -93,7 +91,6 @@ func TestBeaconBlockProposal(t *testing.T) {
 					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(5*time.Second, mock.NewBeaconBlockProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -113,7 +110,6 @@ func TestBeaconBlockProposal(t *testing.T) {
 					"nil": mock.NewNilBeaconBlockProposalProvider(),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -134,7 +130,6 @@ func TestBeaconBlockProposal(t *testing.T) {
 					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(time.Second, mock.NewBeaconBlockProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -154,7 +149,6 @@ func TestBeaconBlockProposal(t *testing.T) {
 					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(2*time.Second, mock.NewBeaconBlockProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -174,7 +168,6 @@ func TestBeaconBlockProposal(t *testing.T) {
 					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(2*time.Second, mock.NewBeaconBlockProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -195,7 +188,6 @@ func TestBeaconBlockProposal(t *testing.T) {
 					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(2*time.Second, mock.NewBeaconBlockProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			slot:           12345,
 			committeeIndex: 3,

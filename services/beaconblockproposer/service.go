@@ -79,9 +79,6 @@ func (d *Duty) Account() e2wtypes.Account {
 	return d.account
 }
 
-// TODO
-type ExecutionPayloadProvider interface{}
-
 // BeaconBlockSelection is the beacon block that has been selected for
 // proposal.
 type BeaconBlockSelection struct {

@@ -101,7 +101,7 @@ func TestUpdateBlockVotes(t *testing.T) {
 								DepositRoot: testutil.HexToRoot("0x1010101010101010101010101010101010101010101010101010101010101010"),
 								BlockHash:   testutil.HexToBytes("0x1111111111111111111111111111111111111111111111111111111111111111"),
 							},
-							Graffiti: testutil.HexToBytes("0x0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad"),
+							Graffiti: testutil.HexToBytes32("0x0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad"),
 							Attestations: []*phase0.Attestation{
 								{
 									AggregationBits: bitList(10, 128),
@@ -153,7 +153,6 @@ func TestUpdateBlockVotes(t *testing.T) {
 
 	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
 	blockToSlotCache := cacheSvc.(cache.BlockRootToSlotProvider)
-	executionChainHeadProvider := cacheSvc.(cache.ExecutionChainHeadProvider)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -166,12 +165,11 @@ func TestUpdateBlockVotes(t *testing.T) {
 				WithChainTimeService(chainTime),
 				WithSpecProvider(specProvider),
 				WithProcessConcurrency(6),
-				WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one": mock.NewBeaconBlockProposalProvider(),
+				WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"one": mock.NewBlindedBeaconBlockProposalProvider(),
 				}),
 				WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				WithBlockRootToSlotCache(blockToSlotCache),
-				WithExecutionChainHeadProvider(executionChainHeadProvider),
 			)
 			require.NoError(t, err)
 

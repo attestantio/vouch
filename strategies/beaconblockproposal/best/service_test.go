@@ -51,7 +51,6 @@ func TestService(t *testing.T) {
 
 	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
 	blockToSlotCache := cacheSvc.(cache.BlockRootToSlotProvider)
-	executionChainHeadProvider := cacheSvc.(cache.ExecutionChainHeadProvider)
 
 	tests := []struct {
 		name   string
@@ -75,7 +74,6 @@ func TestService(t *testing.T) {
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			err: "problem with parameters: no client monitor specified",
 		},
@@ -95,7 +93,6 @@ func TestService(t *testing.T) {
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			err: "problem with parameters: no timeout specified",
 		},
@@ -116,7 +113,6 @@ func TestService(t *testing.T) {
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			err: "problem with parameters: no timeout specified",
 		},
@@ -136,7 +132,6 @@ func TestService(t *testing.T) {
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			err: "problem with parameters: no events provider specified",
 		},
@@ -155,7 +150,6 @@ func TestService(t *testing.T) {
 					"three": mock.NewBeaconBlockProposalProvider(),
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			err: "problem with parameters: no chain time service specified",
 		},
@@ -175,7 +169,6 @@ func TestService(t *testing.T) {
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			err: "problem with parameters: no spec provider specified",
 		},
@@ -196,7 +189,6 @@ func TestService(t *testing.T) {
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			err: "problem with parameters: no process concurrency specified",
 		},
@@ -212,7 +204,6 @@ func TestService(t *testing.T) {
 				best.WithProcessConcurrency(1),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			err: "problem with parameters: no beacon block proposal providers specified",
 		},
@@ -229,7 +220,6 @@ func TestService(t *testing.T) {
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			err: "problem with parameters: no beacon block proposal providers specified",
 		},
@@ -249,7 +239,6 @@ func TestService(t *testing.T) {
 					"three": mock.NewBeaconBlockProposalProvider(),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			err: "problem with parameters: no signed beacon block provider specified",
 		},
@@ -270,7 +259,6 @@ func TestService(t *testing.T) {
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			err: "failed to obtain spec: error",
 		},
@@ -291,7 +279,6 @@ func TestService(t *testing.T) {
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 			err: "failed to add head event handler: error",
 		},
@@ -312,7 +299,6 @@ func TestService(t *testing.T) {
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
-				best.WithExecutionChainHeadProvider(executionChainHeadProvider),
 			},
 		},
 	}

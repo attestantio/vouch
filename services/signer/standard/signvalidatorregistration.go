@@ -24,7 +24,7 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
-// SignValdiatorRegistration signs a validator registration.
+// SignValidatorRegistration signs a validator registration.
 func (s *Service) SignValidatorRegistration(ctx context.Context,
 	account e2wtypes.Account,
 	registration *api.VersionedValidatorRegistration,
