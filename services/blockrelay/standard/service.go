@@ -16,6 +16,7 @@ package standard
 import (
 	"context"
 	"sync"
+	"time"
 
 	restdaemon "github.com/attestantio/go-block-relay/services/daemon/rest"
 	builderclient "github.com/attestantio/go-builder-client"
@@ -36,6 +37,7 @@ type Service struct {
 	builderBidProviders              []builderclient.BuilderBidProvider
 	builderBidsCache                 map[string]map[string]*spec.VersionedSignedBuilderBid
 	builderBidsCacheMu               sync.RWMutex
+	timeout                          time.Duration
 }
 
 // module-wide log.
@@ -54,16 +56,21 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
+	if err := registerMetrics(ctx, parameters.monitor); err != nil {
+		return nil, errors.New("failed to register metrics")
+	}
+
 	s := &Service{
 		monitor:                          parameters.monitor,
 		gasLimit:                         parameters.gasLimit,
 		validatorRegistrationSigner:      parameters.validatorRegistrationSigner,
 		validatorRegistrationsSubmitters: parameters.validatorRegistrationsSubmitters,
 		builderBidProviders:              parameters.builderBidProviders,
+		timeout:                          parameters.timeout,
 		builderBidsCache:                 make(map[string]map[string]*spec.VersionedSignedBuilderBid),
 	}
 
-	// Create the daemon.
+	// Create the API daemon.
 	_, err = restdaemon.New(ctx,
 		restdaemon.WithLogLevel(parameters.logLevel),
 		restdaemon.WithMonitor(parameters.monitor),
@@ -74,7 +81,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		restdaemon.WithBuilderBidProvider(s),
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create REST daemon")
+		return nil, errors.Wrap(err, "failed to create API daemon")
 	}
 
 	return s, nil

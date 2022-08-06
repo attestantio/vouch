@@ -14,6 +14,8 @@
 package standard
 
 import (
+	"time"
+
 	builderclient "github.com/attestantio/go-builder-client"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
@@ -30,6 +32,7 @@ type parameters struct {
 	validatorRegistrationSigner      signer.ValidatorRegistrationSigner
 	validatorRegistrationsSubmitters []builderclient.ValidatorRegistrationsSubmitter
 	builderBidProviders              []builderclient.BuilderBidProvider
+	timeout                          time.Duration
 }
 
 // Parameter is the interface for service parameters.
@@ -99,6 +102,13 @@ func WithBuilderBidProviders(providers []builderclient.BuilderBidProvider) Param
 	})
 }
 
+// WithTimeout sets the timeout for requests.
+func WithTimeout(timeout time.Duration) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.timeout = timeout
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -128,6 +138,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.builderBidProviders == nil {
 		return nil, errors.New("no builder bid providers specified")
+	}
+	if parameters.timeout == 0 {
+		return nil, errors.New("no timeout specified")
 	}
 
 	return &parameters, nil

@@ -16,8 +16,10 @@ package standard
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"time"
 
+	builderclient "github.com/attestantio/go-builder-client"
 	"github.com/attestantio/go-builder-client/api"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
@@ -32,6 +34,7 @@ func (s *Service) SubmitValidatorRegistrations(ctx context.Context,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 	feeRecipients map[phase0.ValidatorIndex]bellatrix.ExecutionAddress,
 ) error {
+	started := time.Now()
 	signedRegistrations := make([]*api.VersionedSignedValidatorRegistration, 0, len(accounts))
 
 	var pubkey phase0.BLSPubKey
@@ -91,13 +94,19 @@ func (s *Service) SubmitValidatorRegistrations(ctx context.Context,
 		}
 	}
 
+	// Submit registrations in parallel.
+	var wg sync.WaitGroup
 	for _, validatorRegistrationsSubmitter := range s.validatorRegistrationsSubmitters {
-		if err := validatorRegistrationsSubmitter.SubmitValidatorRegistrations(ctx, signedRegistrations); err != nil {
-			// Log an error but continue.
-			log.Error().Err(err).Str("provider", validatorRegistrationsSubmitter.Address()).Msg("Failed to submit validator registrations")
-			continue
-		}
+		wg.Add(1)
+		go func(ctx context.Context, submitter builderclient.ValidatorRegistrationsSubmitter, signedRegistrations []*api.VersionedSignedValidatorRegistration) {
+			defer wg.Done()
+			if err := submitter.SubmitValidatorRegistrations(ctx, signedRegistrations); err != nil {
+				log.Error().Err(err).Str("provider", submitter.Address()).Msg("Failed to submit validator registrations")
+			}
+		}(ctx, validatorRegistrationsSubmitter, signedRegistrations)
 	}
+	wg.Wait()
 
+	monitorValidatorRegistrations(time.Since(started))
 	return nil
 }

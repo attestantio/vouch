@@ -237,6 +237,7 @@ func fetchConfig() error {
 	viper.SetDefault("controller.max-sync-committee-message-delay", 4*time.Second)
 	viper.SetDefault("controller.attestation-aggregation-delay", 8*time.Second)
 	viper.SetDefault("controller.sync-committee-aggregation-delay", 8*time.Second)
+	viper.SetDefault("blockrelay.timeout", 4*time.Second)
 	viper.SetDefault("blockrelay.gas-limit", uint64(30000000))
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -458,6 +459,7 @@ func startServices(ctx context.Context,
 		standardblockrelay.WithValidatorRegistrationSigner(signerSvc.(signer.ValidatorRegistrationSigner)),
 		standardblockrelay.WithValidatorRegistrationsSubmitters(validatorRegistrationsSubmitters),
 		standardblockrelay.WithBuilderBidProviders(builderBidProviders),
+		standardblockrelay.WithTimeout(util.Timeout("blockrelay")),
 	)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to start block relay")
