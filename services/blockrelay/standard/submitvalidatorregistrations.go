@@ -63,9 +63,6 @@ func (s *Service) SubmitValidatorRegistrations(ctx context.Context,
 			Pubkey:       pubkey,
 		}
 
-		// TODO see if we have already submitted this registration, and if so do not re-send?
-		// TODO consider if we do want to resend, and how frequently.
-
 		sig, err := s.validatorRegistrationSigner.SignValidatorRegistration(ctx, account, &api.VersionedValidatorRegistration{
 			Version: spec.BuilderVersionV1,
 			V1:      registration,

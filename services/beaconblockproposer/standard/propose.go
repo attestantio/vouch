@@ -193,6 +193,7 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		return canTryWithout, errors.New("failed to obtain auction results transactions root")
 	}
 	if !bytes.Equal(proposalTransactionsRoot[:], auctionTransactionsRoot[:]) {
+		log.Debug().Str("proposal_transactions_root", fmt.Sprintf("%#x", proposalTransactionsRoot[:])).Str("auction_transactions_root", fmt.Sprintf("%#x", auctionTransactionsRoot[:])).Msg("Transactions root mismatch")
 		// This is a mismatch, back out.
 		return canTryWithout, errors.New("transactions root mismatch")
 	}
