@@ -1369,15 +1369,6 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			beaconBlockSubmitters[address] = client.(eth2client.BeaconBlockSubmitter)
 		}
 
-		blindedBeaconBlockSubmitters := make(map[string]eth2client.BlindedBeaconBlockSubmitter)
-		for _, address := range util.BeaconNodeAddresses("submitter.blindedbeaconblock.multinode") {
-			client, err := fetchClient(ctx, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block submitter strategy", address))
-			}
-			blindedBeaconBlockSubmitters[address] = client.(eth2client.BlindedBeaconBlockSubmitter)
-		}
-
 		beaconCommitteeSubscriptionsSubmitters := make(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter)
 		for _, address := range util.BeaconNodeAddresses("submitter.beaconcommitteesubscription.multinode") {
 			client, err := fetchClient(ctx, address)
@@ -1429,7 +1420,6 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			multinodesubmitter.WithLogLevel(util.LogLevel("submitter.multinode")),
 			multinodesubmitter.WithTimeout(util.Timeout("submitter.multinode")),
 			multinodesubmitter.WithBeaconBlockSubmitters(beaconBlockSubmitters),
-			multinodesubmitter.WithBlindedBeaconBlockSubmitters(blindedBeaconBlockSubmitters),
 			multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),
 			multinodesubmitter.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 			multinodesubmitter.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -1444,7 +1434,6 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			immediatesubmitter.WithLogLevel(util.LogLevel("submitter.immediate")),
 			immediatesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			immediatesubmitter.WithBeaconBlockSubmitter(eth2Client.(eth2client.BeaconBlockSubmitter)),
-			immediatesubmitter.WithBlindedBeaconBlockSubmitter(eth2Client.(eth2client.BlindedBeaconBlockSubmitter)),
 			immediatesubmitter.WithAttestationsSubmitter(eth2Client.(eth2client.AttestationsSubmitter)),
 			immediatesubmitter.WithSyncCommitteeMessagesSubmitter(eth2Client.(eth2client.SyncCommitteeMessagesSubmitter)),
 			immediatesubmitter.WithSyncCommitteeContributionsSubmitter(eth2Client.(eth2client.SyncCommitteeContributionsSubmitter)),

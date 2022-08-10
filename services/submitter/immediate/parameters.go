@@ -28,7 +28,6 @@ type parameters struct {
 	logLevel                              zerolog.Level
 	clientMonitor                         metrics.ClientMonitor
 	beaconBlockSubmitter                  eth2client.BeaconBlockSubmitter
-	blindedBeaconBlockSubmitter           eth2client.BlindedBeaconBlockSubmitter
 	attestationsSubmitter                 eth2client.AttestationsSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
@@ -67,13 +66,6 @@ func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
 func WithBeaconBlockSubmitter(submitter eth2client.BeaconBlockSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.beaconBlockSubmitter = submitter
-	})
-}
-
-// WithBlindedBeaconBlockSubmitter sets the blinded beacon block submitter.
-func WithBlindedBeaconBlockSubmitter(submitter eth2client.BlindedBeaconBlockSubmitter) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.blindedBeaconBlockSubmitter = submitter
 	})
 }
 
@@ -143,9 +135,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.beaconBlockSubmitter == nil {
 		return nil, errors.New("no beacon block submitter specified")
-	}
-	if parameters.blindedBeaconBlockSubmitter == nil {
-		return nil, errors.New("no blinded beacon block submitter specified")
 	}
 	if parameters.attestationsSubmitter == nil {
 		return nil, errors.New("no attestations submitter specified")

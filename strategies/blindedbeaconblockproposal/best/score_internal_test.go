@@ -83,353 +83,25 @@ func TestScore(t *testing.T) {
 							{
 								AggregationBits: bitList(1, 128),
 								Data: &phase0.AttestationData{
-									Slot: 12345,
+									Slot:            12345,
+									BeaconBlockRoot: testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
 									Target: &phase0.Checkpoint{
 										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
 										Epoch: 385,
 									},
 								},
 							},
+						},
+						SyncAggregate: &altair.SyncAggregate{
+							SyncCommitteeBits: bitfield.NewBitvector512(),
 						},
 					},
 				},
 			},
-			score: 1,
+			score: 0.84375,
 		},
 		{
-			name: "SingleAttestationParentRootDistance2",
-			block: &api.VersionedBlindedBeaconBlock{
-				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
-					Slot:       12346,
-					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-					Body: &apiv1.BlindedBeaconBlockBody{
-						Attestations: []*phase0.Attestation{
-							{
-								AggregationBits: bitList(1, 128),
-								Data: &phase0.AttestationData{
-									Slot: 12345,
-									Target: &phase0.Checkpoint{
-										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-										Epoch: 385,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			score: 0.5,
-		},
-		{
-			name: "SingleAttestationDistance2",
-			block: &api.VersionedBlindedBeaconBlock{
-				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
-					Slot:       12345,
-					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-					Body: &apiv1.BlindedBeaconBlockBody{
-						Attestations: []*phase0.Attestation{
-							{
-								AggregationBits: bitList(1, 128),
-								Data: &phase0.AttestationData{
-									Slot: 12343,
-									Target: &phase0.Checkpoint{
-										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-										Epoch: 385,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			score: 0.875,
-		},
-		{
-			name: "TwoAttestations",
-			block: &api.VersionedBlindedBeaconBlock{
-				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
-					Slot:       12345,
-					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-					Body: &apiv1.BlindedBeaconBlockBody{
-						Attestations: []*phase0.Attestation{
-							{
-								AggregationBits: bitList(2, 128),
-								Data: &phase0.AttestationData{
-									Slot: 12344,
-									Target: &phase0.Checkpoint{
-										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-										Epoch: 385,
-									},
-								},
-							},
-							{
-								AggregationBits: bitList(1, 128),
-								Data: &phase0.AttestationData{
-									Slot: 12341,
-									Target: &phase0.Checkpoint{
-										Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
-										Epoch: 385,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			score: 2.8125,
-		},
-		{
-			name: "AttesterSlashing",
-			block: &api.VersionedBlindedBeaconBlock{
-				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
-					Slot:       12345,
-					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-					Body: &apiv1.BlindedBeaconBlockBody{
-						Attestations: []*phase0.Attestation{
-							{
-								AggregationBits: bitList(50, 128),
-								Data: &phase0.AttestationData{
-									Slot: 12344,
-									Target: &phase0.Checkpoint{
-										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-										Epoch: 385,
-									},
-								},
-							},
-						},
-						AttesterSlashings: []*phase0.AttesterSlashing{
-							{
-								Attestation1: &phase0.IndexedAttestation{
-									AttestingIndices: []uint64{1, 2, 3},
-								},
-								Attestation2: &phase0.IndexedAttestation{
-									AttestingIndices: []uint64{2, 3, 4},
-								},
-							},
-						},
-					},
-				},
-			},
-			score: 5450,
-		},
-		{
-			name: "DuplicateAttestations",
-			block: &api.VersionedBlindedBeaconBlock{
-				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
-					Slot:       12345,
-					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-					Body: &apiv1.BlindedBeaconBlockBody{
-						Attestations: []*phase0.Attestation{
-							{
-								AggregationBits: specificAggregationBits([]uint64{1, 2, 3}, 128),
-								Data: &phase0.AttestationData{
-									Slot: 12344,
-									Target: &phase0.Checkpoint{
-										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-										Epoch: 385,
-									},
-								},
-							},
-							{
-								AggregationBits: specificAggregationBits([]uint64{2, 3, 4}, 128),
-								Data: &phase0.AttestationData{
-									Slot: 12344,
-									Target: &phase0.Checkpoint{
-										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-										Epoch: 385,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			score: 4,
-		},
-		{
-			name: "Full",
-			block: &api.VersionedBlindedBeaconBlock{
-				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
-					Slot:       12345,
-					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-					Body: &apiv1.BlindedBeaconBlockBody{
-						Attestations: []*phase0.Attestation{
-							{
-								AggregationBits: bitList(50, 128),
-								Data: &phase0.AttestationData{
-									Slot: 12344,
-									Target: &phase0.Checkpoint{
-										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-										Epoch: 385,
-									},
-								},
-							},
-						},
-						AttesterSlashings: []*phase0.AttesterSlashing{
-							{
-								Attestation1: &phase0.IndexedAttestation{
-									AttestingIndices: []uint64{1, 2, 3},
-								},
-								Attestation2: &phase0.IndexedAttestation{
-									AttestingIndices: []uint64{2, 3, 4},
-								},
-							},
-						},
-						ProposerSlashings: []*phase0.ProposerSlashing{
-							{
-								SignedHeader1: &phase0.SignedBeaconBlockHeader{
-									Message: &phase0.BeaconBlockHeader{
-										Slot:          10,
-										ProposerIndex: 1,
-										ParentRoot:    testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-										StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-										BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
-									},
-									Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
-								},
-								SignedHeader2: &phase0.SignedBeaconBlockHeader{
-									Message: &phase0.BeaconBlockHeader{
-										Slot:          10,
-										ProposerIndex: 1,
-										ParentRoot:    testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),
-										StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-										BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
-									},
-									Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
-								},
-							},
-						},
-					},
-				},
-			},
-			score: 8150,
-		},
-		{
-			name: "FullParentRootDistance2",
-			block: &api.VersionedBlindedBeaconBlock{
-				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
-					Slot:       12346,
-					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-					Body: &apiv1.BlindedBeaconBlockBody{
-						Attestations: []*phase0.Attestation{
-							{
-								AggregationBits: bitList(50, 128),
-								Data: &phase0.AttestationData{
-									Slot: 12345,
-									Target: &phase0.Checkpoint{
-										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-										Epoch: 385,
-									},
-								},
-							},
-						},
-						AttesterSlashings: []*phase0.AttesterSlashing{
-							{
-								Attestation1: &phase0.IndexedAttestation{
-									AttestingIndices: []uint64{1, 2, 3},
-								},
-								Attestation2: &phase0.IndexedAttestation{
-									AttestingIndices: []uint64{2, 3, 4},
-								},
-							},
-						},
-						ProposerSlashings: []*phase0.ProposerSlashing{
-							{
-								SignedHeader1: &phase0.SignedBeaconBlockHeader{
-									Message: &phase0.BeaconBlockHeader{
-										Slot:          10,
-										ProposerIndex: 1,
-										ParentRoot:    testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-										StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-										BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
-									},
-									Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
-								},
-								SignedHeader2: &phase0.SignedBeaconBlockHeader{
-									Message: &phase0.BeaconBlockHeader{
-										Slot:          10,
-										ProposerIndex: 1,
-										ParentRoot:    testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),
-										StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-										BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
-									},
-									Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
-								},
-							},
-						},
-					},
-				},
-			},
-			score: 8125,
-		},
-		{
-			name: "FullParentRootDistance4",
-			block: &api.VersionedBlindedBeaconBlock{
-				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
-					Slot:       12348,
-					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-					Body: &apiv1.BlindedBeaconBlockBody{
-						Attestations: []*phase0.Attestation{
-							{
-								AggregationBits: bitList(50, 128),
-								Data: &phase0.AttestationData{
-									Slot: 12347,
-									Target: &phase0.Checkpoint{
-										Root:  testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-										Epoch: 385,
-									},
-								},
-							},
-						},
-						AttesterSlashings: []*phase0.AttesterSlashing{
-							{
-								Attestation1: &phase0.IndexedAttestation{
-									AttestingIndices: []uint64{1, 2, 3},
-								},
-								Attestation2: &phase0.IndexedAttestation{
-									AttestingIndices: []uint64{2, 3, 4},
-								},
-							},
-						},
-						ProposerSlashings: []*phase0.ProposerSlashing{
-							{
-								SignedHeader1: &phase0.SignedBeaconBlockHeader{
-									Message: &phase0.BeaconBlockHeader{
-										Slot:          10,
-										ProposerIndex: 1,
-										ParentRoot:    testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-										StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-										BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
-									},
-									Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
-								},
-								SignedHeader2: &phase0.SignedBeaconBlockHeader{
-									Message: &phase0.BeaconBlockHeader{
-										Slot:          10,
-										ProposerIndex: 1,
-										ParentRoot:    testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"),
-										StateRoot:     testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-										BodyRoot:      testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
-									},
-									Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
-								},
-							},
-						},
-					},
-				},
-			},
-			score: 8112.5,
-		},
-		{
-			name: "AltairSingleAttestationDistance1",
+			name: "BellatrixSingleAttestationDistance1",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1.BlindedBeaconBlock{
@@ -458,7 +130,7 @@ func TestScore(t *testing.T) {
 			score: 0.84375,
 		},
 		{
-			name: "AltairSingleAttestationDistance1IncorrectHead",
+			name: "BellatrixSingleAttestationDistance1IncorrectHead",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1.BlindedBeaconBlock{
@@ -487,7 +159,7 @@ func TestScore(t *testing.T) {
 			score: 0.625,
 		},
 		{
-			name: "AltairSingleAttestationDistance2",
+			name: "BellatrixSingleAttestationDistance2",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1.BlindedBeaconBlock{
@@ -515,7 +187,7 @@ func TestScore(t *testing.T) {
 			score: 0.625,
 		},
 		{
-			name: "AltairSingleAttestationDistance5",
+			name: "BellatrixSingleAttestationDistance5",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1.BlindedBeaconBlock{
@@ -544,7 +216,7 @@ func TestScore(t *testing.T) {
 			score: 0.625,
 		},
 		{
-			name: "AltairSingleAttestationDistance6",
+			name: "BellatrixSingleAttestationDistance6",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1.BlindedBeaconBlock{
@@ -572,7 +244,7 @@ func TestScore(t *testing.T) {
 			score: 0.40625,
 		},
 		{
-			name: "AltairOverlappingAttestations",
+			name: "BellatrixOverlappingAttestations",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1.BlindedBeaconBlock{
@@ -610,7 +282,7 @@ func TestScore(t *testing.T) {
 			score: 1.25,
 		},
 		{
-			name: "AltairParentMissing",
+			name: "BellatrixParentMissing",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1.BlindedBeaconBlock{
