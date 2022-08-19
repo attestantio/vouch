@@ -65,17 +65,6 @@ func TestUpdatePreparations(t *testing.T) {
 			err: "failed to obtain validating accounts: error",
 		},
 		{
-			name: "ErroringFeeRecipientProvider",
-			params: []standard.Parameter{
-				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithChainTimeService(chainTime),
-				standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
-				standard.WithFeeRecipientProvider(mockfeerecipientprovider.NewErroring()),
-				standard.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
-			},
-			err: "failed to obtain fee recipients: error",
-		},
-		{
 			name: "Good",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
