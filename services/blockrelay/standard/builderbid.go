@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -32,6 +33,10 @@ func (s *Service) BuilderBid(ctx context.Context,
 	*spec.VersionedSignedBuilderBid,
 	error,
 ) {
+	started := time.Now()
+
+	log.Trace().Msg("Builder bid called")
+
 	// Fetch the matching header from the cache.
 	key := fmt.Sprintf("%d", slot)
 	subKey := fmt.Sprintf("%x:%x", parentHash, pubkey)
@@ -40,12 +45,14 @@ func (s *Service) BuilderBid(ctx context.Context,
 	if !exists {
 		s.builderBidsCacheMu.RUnlock()
 		log.Debug().Str("key", key).Msg("Builder bid not found (slot)")
+		monitorBuilderBid(time.Since(started), false)
 		return nil, errors.New("builder bid not known (slot)")
 	}
 	builderBid, exists := slotBuilderBids[subKey]
 	s.builderBidsCacheMu.RUnlock()
 	if !exists {
 		log.Debug().Str("key", key).Str("subkey", subKey).Msg("Builder bid not found (subkey)")
+		monitorBuilderBid(time.Since(started), false)
 		return nil, errors.New("builder bid not known (subkey)")
 	}
 
@@ -56,5 +63,6 @@ func (s *Service) BuilderBid(ctx context.Context,
 		}
 	}
 
+	monitorBuilderBid(time.Since(started), true)
 	return builderBid, nil
 }

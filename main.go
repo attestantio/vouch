@@ -32,7 +32,6 @@ import (
 	"syscall"
 	"time"
 
-	builderclient "github.com/attestantio/go-builder-client"
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -101,6 +100,7 @@ import (
 	directconfidant "github.com/wealdtech/go-majordomo/confidants/direct"
 	fileconfidant "github.com/wealdtech/go-majordomo/confidants/file"
 	gsmconfidant "github.com/wealdtech/go-majordomo/confidants/gsm"
+	httpconfidant "github.com/wealdtech/go-majordomo/confidants/http"
 	standardmajordomo "github.com/wealdtech/go-majordomo/standard"
 )
 
@@ -237,7 +237,7 @@ func fetchConfig() error {
 	viper.SetDefault("controller.max-sync-committee-message-delay", 4*time.Second)
 	viper.SetDefault("controller.attestation-aggregation-delay", 8*time.Second)
 	viper.SetDefault("controller.sync-committee-aggregation-delay", 8*time.Second)
-	viper.SetDefault("blockrelay.timeout", 4*time.Second)
+	viper.SetDefault("blockrelay.timeout", 1*time.Second)
 	viper.SetDefault("blockrelay.gas-limit", uint64(30000000))
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -426,39 +426,17 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to start fee recipient provider")
 	}
 
-	validatorRegistrationsSubmitters := make([]builderclient.ValidatorRegistrationsSubmitter, 0)
-	for _, address := range viper.GetStringSlice("blockrelay.addresses") {
-		builderClient, err := fetchBuilderClient(ctx, address, monitor)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to obtain block relay builder client")
-		}
-		submitter, isSubmitter := builderClient.(builderclient.ValidatorRegistrationsSubmitter)
-		if isSubmitter {
-			validatorRegistrationsSubmitters = append(validatorRegistrationsSubmitters, submitter)
-		}
-	}
-
-	builderBidProviders := make([]builderclient.BuilderBidProvider, 0)
-	for _, address := range viper.GetStringSlice("blockrelay.addresses") {
-		builderClient, err := fetchBuilderClient(ctx, address, monitor)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to obtain block relay block server")
-		}
-		provider, isProvider := builderClient.(builderclient.BuilderBidProvider)
-		if isProvider {
-			builderBidProviders = append(builderBidProviders, provider)
-		}
-	}
-
 	blockRelay, err := standardblockrelay.New(ctx,
 		standardblockrelay.WithLogLevel(util.LogLevel("blockrelay")),
 		standardblockrelay.WithMonitor(monitor),
+		standardblockrelay.WithMajordomo(majordomo),
+		standardblockrelay.WithScheduler(scheduler),
+		standardblockrelay.WithChainTime(chainTime),
+		standardblockrelay.WithConfigBaseUrl(viper.GetString("blockrelay.config.base-url")),
+		standardblockrelay.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardblockrelay.WithServerName(viper.GetString("blockrelay.server-name")),
 		standardblockrelay.WithListenAddress(viper.GetString("blockrelay.listen-address")),
-		standardblockrelay.WithGasLimit(viper.GetUint64("blockrelay.gas-limit")),
 		standardblockrelay.WithValidatorRegistrationSigner(signerSvc.(signer.ValidatorRegistrationSigner)),
-		standardblockrelay.WithValidatorRegistrationsSubmitters(validatorRegistrationsSubmitters),
-		standardblockrelay.WithBuilderBidProviders(builderBidProviders),
 		standardblockrelay.WithTimeout(util.Timeout("blockrelay")),
 	)
 	if err != nil {
@@ -758,6 +736,16 @@ func initMajordomo(ctx context.Context) (majordomo.Service, error) {
 		if err := majordomo.RegisterConfidant(ctx, gsmConfidant); err != nil {
 			return nil, errors.Wrap(err, "failed to register Google secret manager confidant")
 		}
+	}
+
+	httpConfidant, err := httpconfidant.New(ctx,
+		httpconfidant.WithLogLevel(util.LogLevel("majordomo.confidants.http")),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create HTTP confidant")
+	}
+	if err := majordomo.RegisterConfidant(ctx, httpConfidant); err != nil {
+		return nil, errors.Wrap(err, "failed to register HTTP confidant")
 	}
 
 	return majordomo, nil

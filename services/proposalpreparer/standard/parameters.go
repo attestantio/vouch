@@ -124,7 +124,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.proposalPreparationsSubmitter == nil {
 		return nil, errors.New("no proposal preparations submitter specified")
 	}
-	// validatorRegistrationsSubmitter is optional.
 
 	return &parameters, nil
 }

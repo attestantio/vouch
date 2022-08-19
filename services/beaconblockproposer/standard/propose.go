@@ -97,6 +97,7 @@ func (s *Service) proposeBlock(ctx context.Context,
 		// There is a block auctioneer specified, try to propose the block with auction.
 		canTryWithout, err := s.proposeBlockWithAuction(ctx, started, duty, graffiti)
 		if err == nil {
+			s.monitor.BeaconBlockProposalSource("auction")
 			return nil
 		}
 		if canTryWithout {
@@ -105,10 +106,17 @@ func (s *Service) proposeBlock(ctx context.Context,
 			return errors.Wrap(err, "failed to propose with auction, already signed so cannot fall back")
 		}
 	}
-	return s.proposeBlockWithoutAuction(ctx, started, duty, graffiti)
+
+	err := s.proposeBlockWithoutAuction(ctx, started, duty, graffiti)
+	if err != nil {
+		return err
+	}
+
+	s.monitor.BeaconBlockProposalSource("direct")
+	return nil
 }
 
-// proposeBlock proposes a block after going through an auction for the blockspace.
+// proposeBlockWithAuction proposes a block after going through an auction for the blockspace.
 func (s *Service) proposeBlockWithAuction(ctx context.Context,
 	started time.Time,
 	duty *beaconblockproposer.Duty,
@@ -127,7 +135,7 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		copy(pubkey[:], duty.Account().PublicKey().Marshal())
 	}
 	hash, height := s.executionChainHeadProvider.ExecutionChainHead(ctx)
-	log.Info().Str("hash", fmt.Sprintf("%#x", hash)).Uint64("height", height).Uint64("slot", uint64(duty.Slot())).Msg("Current execution chain state")
+	log.Trace().Str("hash", fmt.Sprintf("%#x", hash)).Uint64("height", height).Uint64("slot", uint64(duty.Slot())).Msg("Current execution chain state")
 	auctionResults, err := s.blockAuctioneer.AuctionBlock(ctx,
 		duty.Slot(),
 		hash,

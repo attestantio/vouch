@@ -16,23 +16,28 @@ package standard
 import (
 	"time"
 
-	builderclient "github.com/attestantio/go-builder-client"
+	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/scheduler"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/wealdtech/go-majordomo"
 )
 
 type parameters struct {
-	logLevel                         zerolog.Level
-	monitor                          metrics.Service
-	serverName                       string
-	listenAddress                    string
-	gasLimit                         uint64
-	validatorRegistrationSigner      signer.ValidatorRegistrationSigner
-	validatorRegistrationsSubmitters []builderclient.ValidatorRegistrationsSubmitter
-	builderBidProviders              []builderclient.BuilderBidProvider
-	timeout                          time.Duration
+	logLevel                    zerolog.Level
+	monitor                     metrics.Service
+	majordomo                   majordomo.Service
+	scheduler                   scheduler.Service
+	serverName                  string
+	listenAddress               string
+	chainTime                   chaintime.Service
+	configBaseUrl               string
+	validatingAccountsProvider  accountmanager.ValidatingAccountsProvider
+	validatorRegistrationSigner signer.ValidatorRegistrationSigner
+	timeout                     time.Duration
 }
 
 // Parameter is the interface for service parameters.
@@ -60,6 +65,20 @@ func WithMonitor(monitor metrics.Service) Parameter {
 	})
 }
 
+// WithMajordomo sets majordomo for the module.
+func WithMajordomo(majordomo majordomo.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.majordomo = majordomo
+	})
+}
+
+// WithScheduler provides the scheduler service.
+func WithScheduler(scheduler scheduler.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.scheduler = scheduler
+	})
+}
+
 // WithServerName sets the server name for the HTTP REST daemon.
 func WithServerName(serverName string) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -74,10 +93,24 @@ func WithListenAddress(address string) Parameter {
 	})
 }
 
-// WithGasLimit sets the gas limit for block proposers.
-func WithGasLimit(gasLimit uint64) Parameter {
+// WithChainTime sets the chaintime service.
+func WithChainTime(service chaintime.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.gasLimit = gasLimit
+		p.chainTime = service
+	})
+}
+
+// WithConfigBaseUrl sets the base URL for the config server.
+func WithConfigBaseUrl(url string) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.configBaseUrl = url
+	})
+}
+
+// WithValidatingAccountsProvider sets the account manager.
+func WithValidatingAccountsProvider(provider accountmanager.ValidatingAccountsProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.validatingAccountsProvider = provider
 	})
 }
 
@@ -85,20 +118,6 @@ func WithGasLimit(gasLimit uint64) Parameter {
 func WithValidatorRegistrationSigner(signer signer.ValidatorRegistrationSigner) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.validatorRegistrationSigner = signer
-	})
-}
-
-// WithValidatorRegistrationsSubmitters sets submitters to which to send validator registrations.
-func WithValidatorRegistrationsSubmitters(submitters []builderclient.ValidatorRegistrationsSubmitter) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.validatorRegistrationsSubmitters = submitters
-	})
-}
-
-// WithBuilderBidProviders sets the providers from which to obtain builder bids.
-func WithBuilderBidProviders(providers []builderclient.BuilderBidProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.builderBidProviders = providers
 	})
 }
 
@@ -121,23 +140,29 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")
 	}
+	if parameters.majordomo == nil {
+		return nil, errors.New("no majordomo specified")
+	}
+	if parameters.scheduler == nil {
+		return nil, errors.New("no scheduler specified")
+	}
 	if parameters.serverName == "" {
 		return nil, errors.New("no server name specified")
 	}
 	if parameters.listenAddress == "" {
 		return nil, errors.New("no listen address specified")
 	}
-	if parameters.gasLimit == 0 {
-		return nil, errors.New("no gas limit specified")
+	if parameters.chainTime == nil {
+		return nil, errors.New("no chaintime specified")
+	}
+	if parameters.configBaseUrl == "" {
+		return nil, errors.New("no configuration base URL specified")
+	}
+	if parameters.validatingAccountsProvider == nil {
+		return nil, errors.New("no validating accounts provider specified")
 	}
 	if parameters.validatorRegistrationSigner == nil {
 		return nil, errors.New("no validator registration signer specified")
-	}
-	if parameters.validatorRegistrationsSubmitters == nil {
-		return nil, errors.New("no validator registrations submitters specified")
-	}
-	if parameters.builderBidProviders == nil {
-		return nil, errors.New("no builder bid providers specified")
 	}
 	if parameters.timeout == 0 {
 		return nil, errors.New("no timeout specified")

@@ -15,29 +15,37 @@ package standard
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
 	restdaemon "github.com/attestantio/go-block-relay/services/daemon/rest"
-	builderclient "github.com/attestantio/go-builder-client"
 	"github.com/attestantio/go-builder-client/spec"
+	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/blockrelay"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
+	"github.com/wealdtech/go-majordomo"
 )
 
 // Service is the builder service for Vouch.
 type Service struct {
-	monitor                          metrics.Service
-	gasLimit                         uint64
-	validatorRegistrationSigner      signer.ValidatorRegistrationSigner
-	validatorRegistrationsSubmitters []builderclient.ValidatorRegistrationsSubmitter
-	builderBidProviders              []builderclient.BuilderBidProvider
-	builderBidsCache                 map[string]map[string]*spec.VersionedSignedBuilderBid
-	builderBidsCacheMu               sync.RWMutex
-	timeout                          time.Duration
+	monitor                     metrics.Service
+	majordomo                   majordomo.Service
+	chainTime                   chaintime.Service
+	configBaseUrl               string
+	validatingAccountsProvider  accountmanager.ValidatingAccountsProvider
+	validatorRegistrationSigner signer.ValidatorRegistrationSigner
+	builderBidsCache            map[string]map[string]*spec.VersionedSignedBuilderBid
+	builderBidsCacheMu          sync.RWMutex
+	timeout                     time.Duration
+
+	boostConfig   *blockrelay.BoostConfig
+	boostConfigMu sync.RWMutex
 }
 
 // module-wide log.
@@ -61,13 +69,55 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		monitor:                          parameters.monitor,
-		gasLimit:                         parameters.gasLimit,
-		validatorRegistrationSigner:      parameters.validatorRegistrationSigner,
-		validatorRegistrationsSubmitters: parameters.validatorRegistrationsSubmitters,
-		builderBidProviders:              parameters.builderBidProviders,
-		timeout:                          parameters.timeout,
-		builderBidsCache:                 make(map[string]map[string]*spec.VersionedSignedBuilderBid),
+		monitor:                     parameters.monitor,
+		majordomo:                   parameters.majordomo,
+		chainTime:                   parameters.chainTime,
+		configBaseUrl:               parameters.configBaseUrl,
+		validatingAccountsProvider:  parameters.validatingAccountsProvider,
+		validatorRegistrationSigner: parameters.validatorRegistrationSigner,
+		timeout:                     parameters.bidTimeout,
+		builderBidsCache:            make(map[string]map[string]*spec.VersionedSignedBuilderBid),
+	}
+
+	// Remove trailing / from base URL.
+	s.configBaseUrl = strings.TrimSuffix(s.configBaseUrl, "/")
+
+	// Carry out initial fetch of proposer configuration.
+	// Run this in a goroutine as it can take a while to complete, and we don't want to miss attestations
+	// in the meantime.
+	go func(ctx context.Context) {
+		s.fetchBoostConfig(ctx, nil)
+
+		if s.boostConfig == nil {
+			log.Error().Msg("Failed to obtain boost configuration, will retry but blocks cannot be proposed in the meantime")
+		} else {
+			// Carry out initial submission of validator registrations.
+			s.submitValidatorRegistrations(ctx, nil)
+		}
+	}(ctx)
+
+	// Periodically fetch the proposer configuration.
+	if err := parameters.scheduler.SchedulePeriodicJob(ctx,
+		"blockrelay",
+		"Fetch proposer configuration",
+		s.fetchBoostConfigRuntime,
+		nil,
+		s.fetchBoostConfig,
+		nil,
+	); err != nil {
+		return nil, errors.Wrap(err, "failed to start proposer config fetcher")
+	}
+
+	// Periodically submit the validator registrations.
+	if err := parameters.scheduler.SchedulePeriodicJob(ctx,
+		"blockrelay",
+		"Submit validator registrations",
+		s.submitValidatorRegistrationsRuntime,
+		nil,
+		s.submitValidatorRegistrations,
+		nil,
+	); err != nil {
+		return nil, errors.Wrap(err, "failed to start validator registration submitter")
 	}
 
 	// Create the API daemon.
@@ -81,7 +131,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		restdaemon.WithBuilderBidProvider(s),
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create API daemon")
+		return nil, errors.Wrap(err, "failed to create REST API daemon")
 	}
 
 	return s, nil

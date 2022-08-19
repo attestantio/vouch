@@ -14,6 +14,7 @@
 package standard
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -25,10 +26,14 @@ import (
 	builderclient "github.com/attestantio/go-builder-client"
 	builderspec "github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 )
+
+// zeroExecutionAddress is used for comparison purposes.
+var zeroExecutionAddress bellatrix.ExecutionAddress
 
 // AuctionBlock obtains the best available use of the block space.
 func (s *Service) AuctionBlock(ctx context.Context,
@@ -42,6 +47,13 @@ func (s *Service) AuctionBlock(ctx context.Context,
 	res, err := s.bestBuilderBid(ctx, slot, parentHash, pubkey)
 	if err != nil {
 		return nil, err
+	}
+
+	if e := log.Trace(); e.Enabled() {
+		for relay, score := range res.Values {
+			// TODO trace.  Anything else we can do here?
+			log.Info().Uint64("slot", uint64(slot)).Str("relay", relay).Str("score", score.String()).Msg("Auction participant")
+		}
 	}
 
 	if res.Bid != nil {
@@ -83,14 +95,35 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
 
+	s.boostConfigMu.RLock()
+	proposerConfig, exists := s.boostConfig.ProposerConfigs[pubkey]
+	if !exists {
+		proposerConfig = s.boostConfig.DefaultConfig
+	}
+	s.boostConfigMu.RUnlock()
+
 	res := &blockauctioneer.Results{
 		Values: make(map[string]*big.Int),
 	}
 
-	respCh := make(chan *builderBidResponse, len(s.builderBidProviders))
-	errCh := make(chan error, len(s.builderBidProviders))
+	requests := len(proposerConfig.Builder.Relays)
+
+	respCh := make(chan *builderBidResponse, requests)
+	errCh := make(chan error, requests)
 	// Kick off the requests.
-	for _, provider := range s.builderBidProviders {
+	for _, relay := range proposerConfig.Builder.Relays {
+		builderClient, err := util.FetchBuilderClient(ctx, relay, s.monitor)
+		if err != nil {
+			// Error but continue.
+			log.Error().Err(err).Msg("Failed to obtain builder client for block auction")
+			continue
+		}
+		provider, isProvider := builderClient.(builderclient.BuilderBidProvider)
+		if !isProvider {
+			// Error but continue.
+			log.Error().Err(err).Msg("Builder client does not supply builder bids")
+			continue
+		}
 		go s.builderBid(ctx, started, provider, respCh, errCh, slot, parentHash, pubkey)
 	}
 
@@ -101,25 +134,28 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	bestScore := new(big.Int)
 	bidsMu := new(sync.Mutex)
 
-	for responded+errored+timedOut != len(s.builderBidProviders) {
+	// Loop 1: prior to soft timeout.
+	for responded+errored+timedOut != requests {
 		select {
 		case <-softCtx.Done():
 			// If we have any responses at this point we consider the non-responders timed out.
 			if responded > 0 {
-				timedOut = len(s.builderBidProviders) - responded - errored
+				timedOut = requests - responded - errored
 				log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Msg("Soft timeout reached with responses")
 			} else {
 				log.Debug().Dur("elapsed", time.Since(started)).Int("errored", errored).Msg("Soft timeout reached with no responses")
 			}
+			break
 		case <-ctx.Done():
 			// Anyone not responded by now is considered errored.
-			timedOut = len(s.builderBidProviders) - responded - errored
+			timedOut = requests - responded - errored
 			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
 		case err := <-errCh:
 			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Responded with error")
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
 		case resp := <-respCh:
 			responded++
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
 			if res.Bid == nil || resp.score.Cmp(bestScore) > 0 {
 				res.Bid = resp.bid
 				bestScore = resp.score
@@ -131,8 +167,33 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 		}
 	}
 	softCancel()
+
+	// Loop 2: after soft timeout.
+	for responded+errored+timedOut != requests {
+		select {
+		case <-ctx.Done():
+			// Anyone not responded by now is considered errored.
+			timedOut = requests - responded - errored
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
+		case err := <-errCh:
+			errored++
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+		case resp := <-respCh:
+			responded++
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			if res.Bid == nil || resp.score.Cmp(bestScore) > 0 {
+				res.Bid = resp.bid
+				bestScore = resp.score
+				res.Provider = resp.provider
+			}
+			bidsMu.Lock()
+			res.Values[resp.provider.Address()] = resp.score
+			bidsMu.Unlock()
+		}
+	}
 	cancel()
-	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Responses")
+
+	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Results")
 
 	if res.Bid == nil {
 		monitorAuctionBlock("", false, time.Since(started))
@@ -183,6 +244,10 @@ func (s *Service) builderBid(ctx context.Context,
 		}
 		if builderBid.Data.Message.Header == nil {
 			errCh <- fmt.Errorf("%s: data message header missing", provider.Address())
+			return
+		}
+		if bytes.Equal(builderBid.Data.Message.Header.FeeRecipient[:], zeroExecutionAddress[:]) {
+			errCh <- fmt.Errorf("%s: zero fee recipient", provider.Address())
 			return
 		}
 	default:

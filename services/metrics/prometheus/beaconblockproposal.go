@@ -77,7 +77,17 @@ func (s *Service) setupBeaconBlockProposalMetrics() error {
 		Name:      "requests_total",
 		Help:      "The number of beacon block proposal processes.",
 	}, []string{"result"})
-	return prometheus.Register(s.beaconBlockProposalProcessRequests)
+	if err := prometheus.Register(s.beaconBlockProposalProcessRequests); err != nil {
+		return err
+	}
+
+	s.beaconBlockProposalSource = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "vouch",
+		Subsystem: "beaconblockproposal_process",
+		Name:      "blocks_total",
+		Help:      "The number of beacon block proposals.",
+	}, []string{"method"})
+	return prometheus.Register(s.beaconBlockProposalSource)
 }
 
 // BeaconBlockProposalCompleted is called when a block proposal process has completed.
@@ -90,4 +100,9 @@ func (s *Service) BeaconBlockProposalCompleted(started time.Time, slot phase0.Sl
 		s.beaconBlockProposalProcessLatestSlot.Set(float64(slot))
 	}
 	s.beaconBlockProposalProcessRequests.WithLabelValues(result).Inc()
+}
+
+// BeaconBlockProposalSource is called to tag the source of a beacon block proposal.
+func (s *Service) BeaconBlockProposalSource(source string) {
+	s.beaconBlockProposalSource.WithLabelValues(source).Inc()
 }

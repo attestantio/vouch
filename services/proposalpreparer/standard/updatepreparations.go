@@ -18,7 +18,6 @@ import (
 	"time"
 
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/pkg/errors"
@@ -31,13 +30,21 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 
 	epoch := s.chainTimeService.CurrentEpoch()
 
-	// ValidatingAccountsForEpoch obtains the validating accounts for a given epoch.
-	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpoch(ctx, epoch)
+	// Fetch the validating accounts for the next epoch, to ensure that we capture any validators
+	// that are going to start proposing soon.
+	// Note that this will result in us not obtaining a validator that is on its last validating
+	// epoch, however preparations linger for a couple of epochs after registration so this is safe.
+	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpoch(ctx, epoch+1)
 	if err != nil {
 		proposalPreparationCompleted(started, epoch, "failed")
 		return errors.Wrap(err, "failed to obtain validating accounts")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
+
+	if len(accounts) == 0 {
+		log.Trace().Msg("No validating accounts; not preparing")
+		return nil
+	}
 
 	indices := make([]phase0.ValidatorIndex, len(accounts))
 	i := 0
@@ -62,27 +69,26 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 	}
 
 	go s.updateProposalPreparations(ctx, started, epoch, proposalPreparations)
-	go s.updateValidatorRegistrations(ctx, started, epoch, accounts, feeRecipients)
+	go s.updateValidatorRegistrations(ctx, started, accounts)
 
 	return nil
 }
 
 func (s *Service) updateValidatorRegistrations(ctx context.Context,
 	started time.Time,
-	epoch phase0.Epoch,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
-	feeRecipients map[phase0.ValidatorIndex]bellatrix.ExecutionAddress,
 ) {
 	for _, validatorRegistrationsSubmitter := range s.validatorRegistrationsSubmitters {
-		go func(ctx context.Context, submitter blockrelay.ValidatorRegistrationsSubmitter, epoch phase0.Epoch, accounts map[phase0.ValidatorIndex]e2wtypes.Account, feeRecipients map[phase0.ValidatorIndex]bellatrix.ExecutionAddress) {
-			if err := submitter.SubmitValidatorRegistrations(ctx, accounts, feeRecipients); err != nil {
+		go func(ctx context.Context, submitter blockrelay.ValidatorRegistrationsSubmitter, accounts map[phase0.ValidatorIndex]e2wtypes.Account) {
+			if err := submitter.SubmitValidatorRegistrations(ctx, accounts); err != nil {
 				validatorRegistrationsCompleted("failed")
-				log.Error().Err(err).Msg("Failed to update builder validator registrations")
+				log.Error().Err(err).Msg("Failed to update validator registrations")
 				return
 			}
 			validatorRegistrationsCompleted("succeeded")
-		}(ctx, validatorRegistrationsSubmitter, epoch, accounts, feeRecipients)
+		}(ctx, validatorRegistrationsSubmitter, accounts)
 	}
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("updated validator registrations")
 
 	return
 }

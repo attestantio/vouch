@@ -50,6 +50,9 @@ type ControllerMonitor interface {
 type BeaconBlockProposalMonitor interface {
 	// BeaconBlockProposalCompleted is called when a block proposal process has completed.
 	BeaconBlockProposalCompleted(started time.Time, slot phase0.Slot, result string)
+
+	// BeaconBlockProposalSource is called to tag the source of a beacon block proposal.
+	BeaconBlockProposalSource(source string)
 }
 
 // AttestationMonitor provides methods to monitor the attestation process.

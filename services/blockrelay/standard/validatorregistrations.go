@@ -15,13 +15,10 @@ package standard
 
 import (
 	"context"
-	"errors"
 	"io"
 )
 
 // ValidatorRegistrationsPassthrough handles validator registrations directly.
 func (s *Service) ValidatorRegistrationsPassthrough(ctx context.Context, reader io.ReadCloser) error {
-	// TODO forward the registrations to the relevant endpoints?
-
-	return errors.New("validator registrations passthrough not implemented")
+	log.Debug().Msg("Validator registrations called; ignoring")
 }

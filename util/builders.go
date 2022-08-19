@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package util
 
 import (
 	"context"
@@ -20,15 +20,14 @@ import (
 	builder "github.com/attestantio/go-builder-client"
 	httpclient "github.com/attestantio/go-builder-client/http"
 	"github.com/attestantio/go-eth2-client/metrics"
-	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 )
 
 var builders map[string]builder.Service
 var buildersMu sync.Mutex
 
-// fetchBuilderClient fetches a builder client, instantiating it if required.
-func fetchBuilderClient(ctx context.Context, address string, monitor metrics.Service) (builder.Service, error) {
+// FetchBuilderClient fetches a builder client, instantiating it if required.
+func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Service) (builder.Service, error) {
 	if address == "" {
 		return nil, errors.New("no address supplied")
 	}
@@ -45,8 +44,8 @@ func fetchBuilderClient(ctx context.Context, address string, monitor metrics.Ser
 		var err error
 		client, err = httpclient.New(ctx,
 			httpclient.WithMonitor(monitor),
-			httpclient.WithLogLevel(util.LogLevel("builderclient")),
-			httpclient.WithTimeout(util.Timeout("builderclient")),
+			httpclient.WithLogLevel(LogLevel("builderclient")),
+			httpclient.WithTimeout(Timeout("builderclient")),
 			httpclient.WithAddress(address))
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate builder client")

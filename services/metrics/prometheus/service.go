@@ -40,6 +40,7 @@ type Service struct {
 	beaconBlockProposalProcessRequests   *prometheus.CounterVec
 	beaconBlockProposalMarkTimer         prometheus.Histogram
 	beaconBlockProposalProcessLatestSlot prometheus.Gauge
+	beaconBlockProposalSource            *prometheus.CounterVec
 
 	attestationProcessTimer      prometheus.Histogram
 	attestationProcessRequests   *prometheus.CounterVec
