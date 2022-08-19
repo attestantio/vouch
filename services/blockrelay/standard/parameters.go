@@ -34,7 +34,7 @@ type parameters struct {
 	serverName                  string
 	listenAddress               string
 	chainTime                   chaintime.Service
-	configBaseUrl               string
+	configBaseURL               string
 	validatingAccountsProvider  accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner signer.ValidatorRegistrationSigner
 	timeout                     time.Duration
@@ -100,10 +100,10 @@ func WithChainTime(service chaintime.Service) Parameter {
 	})
 }
 
-// WithConfigBaseUrl sets the base URL for the config server.
-func WithConfigBaseUrl(url string) Parameter {
+// WithConfigBaseURL sets the base URL for the config server.
+func WithConfigBaseURL(url string) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.configBaseUrl = url
+		p.configBaseURL = url
 	})
 }
 
@@ -155,7 +155,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.chainTime == nil {
 		return nil, errors.New("no chaintime specified")
 	}
-	if parameters.configBaseUrl == "" {
+	if parameters.configBaseURL == "" {
 		return nil, errors.New("no configuration base URL specified")
 	}
 	if parameters.validatingAccountsProvider == nil {

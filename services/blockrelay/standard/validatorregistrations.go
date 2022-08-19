@@ -21,4 +21,6 @@ import (
 // ValidatorRegistrationsPassthrough handles validator registrations directly.
 func (s *Service) ValidatorRegistrationsPassthrough(ctx context.Context, reader io.ReadCloser) error {
 	log.Debug().Msg("Validator registrations called; ignoring")
+
+	return nil
 }

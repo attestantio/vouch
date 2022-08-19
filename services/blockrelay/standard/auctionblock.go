@@ -251,7 +251,7 @@ func (s *Service) builderBid(ctx context.Context,
 			return
 		}
 	default:
-		errCh <- fmt.Errorf("%s: unhandled builder bid data verison %v", provider.Address(), builderBid.Version)
+		errCh <- fmt.Errorf("%s: unhandled builder bid data version %v", provider.Address(), builderBid.Version)
 	}
 
 	respCh <- &builderBidResponse{

@@ -330,31 +330,10 @@ func startServices(ctx context.Context,
 	*standardcontroller.Service,
 	error,
 ) {
-	eth2Client, err := startClient(ctx)
+	eth2Client, chainTime, monitor, err := startBasicServices(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	log.Trace().Msg("Starting chain time service")
-	chainTime, err := standardchaintime.New(ctx,
-		standardchaintime.WithLogLevel(util.LogLevel("chaintime")),
-		standardchaintime.WithGenesisTimeProvider(eth2Client.(eth2client.GenesisTimeProvider)),
-		standardchaintime.WithSlotDurationProvider(eth2Client.(eth2client.SlotDurationProvider)),
-		standardchaintime.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
-	)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start chain time service")
-	}
-
-	log.Trace().Msg("Starting metrics service")
-	monitor, err := startMonitor(ctx, chainTime)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start metrics service")
-	}
-	if err := registerMetrics(monitor); err != nil {
-		return nil, nil, errors.Wrap(err, "failed to register metrics")
-	}
-	setRelease(ReleaseVersion)
-	setReady(false)
 
 	// Decide if the ETH2 client is capable of Altair.
 	altairCapable := false
@@ -432,7 +411,7 @@ func startServices(ctx context.Context,
 		standardblockrelay.WithMajordomo(majordomo),
 		standardblockrelay.WithScheduler(scheduler),
 		standardblockrelay.WithChainTime(chainTime),
-		standardblockrelay.WithConfigBaseUrl(viper.GetString("blockrelay.config.base-url")),
+		standardblockrelay.WithConfigBaseURL(viper.GetString("blockrelay.config.base-url")),
 		standardblockrelay.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardblockrelay.WithServerName(viper.GetString("blockrelay.server-name")),
 		standardblockrelay.WithListenAddress(viper.GetString("blockrelay.listen-address")),
@@ -642,6 +621,42 @@ func startServices(ctx context.Context,
 	}
 
 	return chainTime, controller, nil
+}
+
+func startBasicServices(ctx context.Context,
+) (
+	eth2client.Service,
+	chaintime.Service,
+	metrics.Service,
+	error,
+) {
+	eth2Client, err := startClient(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	log.Trace().Msg("Starting chain time service")
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(util.LogLevel("chaintime")),
+		standardchaintime.WithGenesisTimeProvider(eth2Client.(eth2client.GenesisTimeProvider)),
+		standardchaintime.WithSlotDurationProvider(eth2Client.(eth2client.SlotDurationProvider)),
+		standardchaintime.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
+	)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to start chain time service")
+	}
+
+	log.Trace().Msg("Starting metrics service")
+	monitor, err := startMonitor(ctx, chainTime)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to start metrics service")
+	}
+	if err := registerMetrics(monitor); err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to register metrics")
+	}
+	setRelease(ReleaseVersion)
+	setReady(false)
+
+	return eth2Client, chainTime, monitor, nil
 }
 
 // logModules logs a list of modules with their versions.

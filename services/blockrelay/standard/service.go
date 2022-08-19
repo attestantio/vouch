@@ -37,7 +37,7 @@ type Service struct {
 	monitor                     metrics.Service
 	majordomo                   majordomo.Service
 	chainTime                   chaintime.Service
-	configBaseUrl               string
+	configBaseURL               string
 	validatingAccountsProvider  accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner signer.ValidatorRegistrationSigner
 	builderBidsCache            map[string]map[string]*spec.VersionedSignedBuilderBid
@@ -72,15 +72,15 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		monitor:                     parameters.monitor,
 		majordomo:                   parameters.majordomo,
 		chainTime:                   parameters.chainTime,
-		configBaseUrl:               parameters.configBaseUrl,
+		configBaseURL:               parameters.configBaseURL,
 		validatingAccountsProvider:  parameters.validatingAccountsProvider,
 		validatorRegistrationSigner: parameters.validatorRegistrationSigner,
-		timeout:                     parameters.bidTimeout,
+		timeout:                     parameters.timeout,
 		builderBidsCache:            make(map[string]map[string]*spec.VersionedSignedBuilderBid),
 	}
 
 	// Remove trailing / from base URL.
-	s.configBaseUrl = strings.TrimSuffix(s.configBaseUrl, "/")
+	s.configBaseURL = strings.TrimSuffix(s.configBaseURL, "/")
 
 	// Carry out initial fetch of proposer configuration.
 	// Run this in a goroutine as it can take a while to complete, and we don't want to miss attestations

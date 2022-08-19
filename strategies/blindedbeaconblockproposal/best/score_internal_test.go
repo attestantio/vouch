@@ -44,14 +44,6 @@ func bitList(set uint64, total uint64) bitfield.Bitlist {
 	return bits
 }
 
-func specificAggregationBits(set []uint64, total uint64) bitfield.Bitlist {
-	bits := bitfield.NewBitlist(total)
-	for _, pos := range set {
-		bits.SetBitAt(pos, true)
-	}
-	return bits
-}
-
 func TestScore(t *testing.T) {
 	tests := []struct {
 		name        string

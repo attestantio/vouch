@@ -22,7 +22,6 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prysmaticlabs/go-bitfield"
 )
@@ -224,13 +223,7 @@ func (s *Service) priorVotesForAttestation(_ context.Context,
 	return res, nil
 }
 
-// altairHeadCorrect calculates if the head of an Altair attestation is correct.
-func altairHeadCorrect(blockProposal *altair.BeaconBlock, attestation *phase0.Attestation) bool {
-	return bytes.Equal(blockProposal.ParentRoot[:], attestation.Data.BeaconBlockRoot[:])
-}
-
-// altairTargetCorrect calculates if the target of an Altair attestation is correct.
-func (s *Service) altairTargetCorrect(_ context.Context,
+func (s *Service) bellatrixTargetCorrect(_ context.Context,
 	attestation *phase0.Attestation,
 ) bool {
 	s.priorBlocksVotesMu.RLock()
@@ -256,14 +249,6 @@ func (s *Service) altairTargetCorrect(_ context.Context,
 // bellatrixHeadCorrect calculates if the head of a Bellatrix attestation is correct.
 func bellatrixHeadCorrect(blockProposal *apiv1.BlindedBeaconBlock, attestation *phase0.Attestation) bool {
 	return bytes.Equal(blockProposal.ParentRoot[:], attestation.Data.BeaconBlockRoot[:])
-}
-
-// bellatrixTargetCorrect calculates if the target of a Bellatrix attestation is correct.
-func (s *Service) bellatrixTargetCorrect(ctx context.Context,
-	attestation *phase0.Attestation,
-) bool {
-	// Same as Altair.
-	return s.altairTargetCorrect(ctx, attestation)
 }
 
 // intersection returns a list of items common between the two sets.

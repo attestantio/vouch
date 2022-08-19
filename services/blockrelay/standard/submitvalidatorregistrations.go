@@ -90,8 +90,6 @@ func (s *Service) submitValidatorRegistrations(ctx context.Context,
 	}
 
 	monitorValidatorRegistrations(true, time.Since(started))
-
-	return
 }
 
 func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
@@ -99,16 +97,6 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 ) error {
 	if s.boostConfig == nil {
 		return errors.New("no boost configuration; cannot submit validator registrations at current")
-	}
-
-	// Build list of public keys.
-	pubkeys := make([][]byte, 0, len(accounts))
-	for _, account := range accounts {
-		if provider, isProvider := account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
-			pubkeys = append(pubkeys, provider.CompositePublicKey().Marshal())
-		} else {
-			pubkeys = append(pubkeys, account.PublicKey().Marshal())
-		}
 	}
 
 	signedRegistrations := make(map[string][]*api.VersionedSignedValidatorRegistration)

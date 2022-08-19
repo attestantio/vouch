@@ -89,8 +89,6 @@ func (s *Service) updateValidatorRegistrations(ctx context.Context,
 		}(ctx, validatorRegistrationsSubmitter, accounts)
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("updated validator registrations")
-
-	return
 }
 
 func (s *Service) updateProposalPreparations(ctx context.Context,

@@ -141,7 +141,7 @@ func (s *Service) obtainBoostConfig(ctx context.Context,
 	}
 	ctx = context.WithValue(ctx, &httpconfidant.Body{}, fmt.Sprintf(`["%s"]`, strings.Join(pubkeyStrs, `","`)))
 
-	res, err := s.majordomo.Fetch(ctx, fmt.Sprintf("%s/config", s.configBaseUrl))
+	res, err := s.majordomo.Fetch(ctx, fmt.Sprintf("%s/config", s.configBaseURL))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain boost configuration")
 	}
