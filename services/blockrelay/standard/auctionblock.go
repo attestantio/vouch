@@ -51,8 +51,7 @@ func (s *Service) AuctionBlock(ctx context.Context,
 
 	if e := log.Trace(); e.Enabled() {
 		for relay, score := range res.Values {
-			// TODO trace.  Anything else we can do here?
-			log.Info().Uint64("slot", uint64(slot)).Str("relay", relay).Str("score", score.String()).Msg("Auction participant")
+			log.Trace().Uint64("slot", uint64(slot)).Str("relay", relay).Str("score", score.String()).Msg("Auction participant")
 		}
 	}
 
@@ -86,14 +85,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	error,
 ) {
 	started := time.Now()
-	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(slot)).Logger()
-
-	// We have two timeouts: a soft timeout and a hard timeout.
-	// At the soft timeout, we return if we have any responses so far.
-	// At the hard timeout, we return unconditionally.
-	// The soft timeout is half the duration of the hard timeout.
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
-	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
+	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(slot)).Str("pubkey", fmt.Sprintf("%#x", pubkey)).Logger()
 
 	s.boostConfigMu.RLock()
 	proposerConfig, exists := s.boostConfig.ProposerConfigs[pubkey]
@@ -102,11 +94,21 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	}
 	s.boostConfigMu.RUnlock()
 
+	if !proposerConfig.Builder.Enabled {
+		return nil, errors.New("auction disabled in proposer configuration")
+	}
+
 	res := &blockauctioneer.Results{
 		Values: make(map[string]*big.Int),
 	}
-
 	requests := len(proposerConfig.Builder.Relays)
+
+	// We have two timeouts: a soft timeout and a hard timeout.
+	// At the soft timeout, we return if we have any responses so far.
+	// At the hard timeout, we return unconditionally.
+	// The soft timeout is half the duration of the hard timeout.
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
 
 	respCh := make(chan *builderBidResponse, requests)
 	errCh := make(chan error, requests)
