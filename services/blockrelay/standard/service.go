@@ -15,7 +15,6 @@ package standard
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -38,7 +37,10 @@ type Service struct {
 	monitor                                   metrics.Service
 	majordomo                                 majordomo.Service
 	chainTime                                 chaintime.Service
-	configBaseURL                             string
+	configURL                                 string
+	clientCertURL                             string
+	clientKeyURL                              string
+	caCertURL                                 string
 	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	builderBidsCache                          map[string]map[string]*spec.VersionedSignedBuilderBid
@@ -74,16 +76,16 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		monitor:                     parameters.monitor,
 		majordomo:                   parameters.majordomo,
 		chainTime:                   parameters.chainTime,
-		configBaseURL:               parameters.configBaseURL,
+		configURL:                   parameters.configURL,
+		clientCertURL:               parameters.clientCertURL,
+		clientKeyURL:                parameters.clientKeyURL,
+		caCertURL:                   parameters.caCertURL,
 		validatingAccountsProvider:  parameters.validatingAccountsProvider,
 		validatorRegistrationSigner: parameters.validatorRegistrationSigner,
 		timeout:                     parameters.timeout,
 		secondaryValidatorRegistrationsSubmitters: parameters.secondaryValidatorRegistrationsSubmitters,
 		builderBidsCache: make(map[string]map[string]*spec.VersionedSignedBuilderBid),
 	}
-
-	// Remove trailing / from base URL.
-	s.configBaseURL = strings.TrimSuffix(s.configBaseURL, "/")
 
 	// Carry out initial fetch of proposer configuration.
 	// Run this in a goroutine as it can take a while to complete, and we don't want to miss attestations
@@ -127,7 +129,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	_, err = restdaemon.New(ctx,
 		restdaemon.WithLogLevel(parameters.logLevel),
 		restdaemon.WithMonitor(parameters.monitor),
-		restdaemon.WithServerName(parameters.serverName),
 		restdaemon.WithListenAddress(parameters.listenAddress),
 		restdaemon.WithValidatorRegistrar(s),
 		restdaemon.WithBlockAuctioneer(s),

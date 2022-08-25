@@ -77,6 +77,10 @@ func (s *Service) updateValidatorRegistrations(ctx context.Context,
 	started time.Time,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 ) {
+	if s.validatorRegistrationsSubmitter == nil {
+		return
+	}
+
 	if err := s.validatorRegistrationsSubmitter.SubmitValidatorRegistrations(ctx, accounts); err != nil {
 		validatorRegistrationsCompleted("failed")
 		log.Error().Err(err).Msg("Failed to update validator registrations")

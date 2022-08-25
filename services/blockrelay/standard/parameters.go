@@ -32,10 +32,12 @@ type parameters struct {
 	monitor                                   metrics.Service
 	majordomo                                 majordomo.Service
 	scheduler                                 scheduler.Service
-	serverName                                string
 	listenAddress                             string
 	chainTime                                 chaintime.Service
-	configBaseURL                             string
+	configURL                                 string
+	clientCertURL                             string
+	clientKeyURL                              string
+	caCertURL                                 string
 	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
@@ -81,13 +83,6 @@ func WithScheduler(scheduler scheduler.Service) Parameter {
 	})
 }
 
-// WithServerName sets the server name for the HTTP REST daemon.
-func WithServerName(serverName string) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.serverName = serverName
-	})
-}
-
 // WithListenAddress sets the listen address for the module.
 func WithListenAddress(address string) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -102,10 +97,31 @@ func WithChainTime(service chaintime.Service) Parameter {
 	})
 }
 
-// WithConfigBaseURL sets the base URL for the config server.
-func WithConfigBaseURL(url string) Parameter {
+// WithConfigURL sets the URL for the config server.
+func WithConfigURL(url string) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.configBaseURL = url
+		p.configURL = url
+	})
+}
+
+// WithClientCertURL sets the URL for the client certificate when carrying out dynamic requests.
+func WithClientCertURL(url string) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.clientCertURL = url
+	})
+}
+
+// WithClientKeyURL sets the URL for the client key when carrying out dynamic requests.
+func WithClientKeyURL(url string) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.clientKeyURL = url
+	})
+}
+
+// WithCACertURL sets the URL for the CA certificate when carrying out dynamic requests.
+func WithCACertURL(url string) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.caCertURL = url
 	})
 }
 
@@ -155,17 +171,14 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.scheduler == nil {
 		return nil, errors.New("no scheduler specified")
 	}
-	if parameters.serverName == "" {
-		return nil, errors.New("no server name specified")
-	}
 	if parameters.listenAddress == "" {
 		return nil, errors.New("no listen address specified")
 	}
 	if parameters.chainTime == nil {
 		return nil, errors.New("no chaintime specified")
 	}
-	if parameters.configBaseURL == "" {
-		return nil, errors.New("no configuration base URL specified")
+	if parameters.configURL == "" {
+		return nil, errors.New("no configuration URL specified")
 	}
 	if parameters.validatingAccountsProvider == nil {
 		return nil, errors.New("no validating accounts provider specified")

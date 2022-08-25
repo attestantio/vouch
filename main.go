@@ -32,6 +32,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -43,6 +44,7 @@ import (
 	standardattester "github.com/attestantio/vouch/services/attester/standard"
 	standardbeaconblockproposer "github.com/attestantio/vouch/services/beaconblockproposer/standard"
 	standardbeaconcommitteesubscriber "github.com/attestantio/vouch/services/beaconcommitteesubscriber/standard"
+	"github.com/attestantio/vouch/services/blockrelay"
 	standardblockrelay "github.com/attestantio/vouch/services/blockrelay/standard"
 	"github.com/attestantio/vouch/services/cache"
 	standardcache "github.com/attestantio/vouch/services/cache/standard"
@@ -427,22 +429,27 @@ func startServices(ctx context.Context,
 		}
 	}
 
-	blockRelay, err := standardblockrelay.New(ctx,
-		standardblockrelay.WithLogLevel(util.LogLevel("blockrelay")),
-		standardblockrelay.WithMonitor(monitor),
-		standardblockrelay.WithMajordomo(majordomo),
-		standardblockrelay.WithScheduler(scheduler),
-		standardblockrelay.WithChainTime(chainTime),
-		standardblockrelay.WithConfigBaseURL(viper.GetString("blockrelay.config.base-url")),
-		standardblockrelay.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-		standardblockrelay.WithServerName(viper.GetString("blockrelay.server-name")),
-		standardblockrelay.WithListenAddress(viper.GetString("blockrelay.listen-address")),
-		standardblockrelay.WithValidatorRegistrationSigner(signerSvc.(signer.ValidatorRegistrationSigner)),
-		standardblockrelay.WithTimeout(util.Timeout("blockrelay")),
-		standardblockrelay.WithSecondaryValidatorRegistrationsSubmitters(secondaryValidatorRegistrationsSubmitters),
-	)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start block relay")
+	var blockRelay blockrelay.Service
+	if viper.GetString("blockrelay.listen-address") != "" {
+		blockRelay, err = standardblockrelay.New(ctx,
+			standardblockrelay.WithLogLevel(util.LogLevel("blockrelay")),
+			standardblockrelay.WithMonitor(monitor),
+			standardblockrelay.WithMajordomo(majordomo),
+			standardblockrelay.WithScheduler(scheduler),
+			standardblockrelay.WithChainTime(chainTime),
+			standardblockrelay.WithConfigURL(viper.GetString("blockrelay.config.url")),
+			standardblockrelay.WithClientCertURL(viper.GetString("blockrelay.config.client-cert")),
+			standardblockrelay.WithClientKeyURL(viper.GetString("blockrelay.config.client-key")),
+			standardblockrelay.WithCACertURL(viper.GetString("blockrelay.config.ca-cert")),
+			standardblockrelay.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+			standardblockrelay.WithListenAddress(viper.GetString("blockrelay.listen-address")),
+			standardblockrelay.WithValidatorRegistrationSigner(signerSvc.(signer.ValidatorRegistrationSigner)),
+			standardblockrelay.WithTimeout(util.Timeout("blockrelay")),
+			standardblockrelay.WithSecondaryValidatorRegistrationsSubmitters(secondaryValidatorRegistrationsSubmitters),
+		)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "failed to start block relay")
+		}
 	}
 
 	log.Trace().Msg("Selecting beacon block proposal provider")
@@ -462,7 +469,7 @@ func startServices(ctx context.Context,
 		standardbeaconblockproposer.WithChainTimeService(chainTime),
 		standardbeaconblockproposer.WithProposalDataProvider(beaconBlockProposalProvider),
 		standardbeaconblockproposer.WithBlindedProposalDataProvider(blindedBeaconBlockProposalProvider),
-		standardbeaconblockproposer.WithBlockAuctioneer(blockRelay),
+		standardbeaconblockproposer.WithBlockAuctioneer(blockRelay.(blockauctioneer.BlockAuctioneer)),
 		standardbeaconblockproposer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardbeaconblockproposer.WithExecutionChainHeadProvider(cacheSvc.(cache.ExecutionChainHeadProvider)),
 		standardbeaconblockproposer.WithFeeRecipientProvider(feeRecipientProvider),
@@ -600,7 +607,7 @@ func startServices(ctx context.Context,
 			standardproposalpreparer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 			standardproposalpreparer.WithFeeRecipientProvider(feeRecipientProvider),
 			standardproposalpreparer.WithProposalPreparationsSubmitter(submitterStrategy.(eth2client.ProposalPreparationsSubmitter)),
-			standardproposalpreparer.WithValidatorRegistrationsSubmitter(blockRelay),
+			standardproposalpreparer.WithValidatorRegistrationsSubmitter(blockRelay.(blockrelay.ValidatorRegistrationsSubmitter)),
 		)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "failed to start proposal preparer service")

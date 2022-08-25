@@ -23,7 +23,6 @@ import (
 
 	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	httpconfidant "github.com/wealdtech/go-majordomo/confidants/http"
 )
@@ -81,11 +80,21 @@ func (s *Service) fetchBoostConfig(ctx context.Context,
 
 	boostConfig, err := s.obtainBoostConfig(ctx, pubkeys)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to obtain boost configuration")
+		monitorBoostConfig(time.Since(started), false)
+		if s.boostConfig == nil {
+			log.Error().Err(err).Msg("Failed to obtain boost configuration; no configuration available")
+		} else {
+			log.Warn().Err(err).Msg("Failed to obtain updated boost configuration; retaining current configuration")
+		}
+		return
 	}
 	if boostConfig == nil {
 		monitorBoostConfig(time.Since(started), false)
-		log.Error().Msg("Obtained nil boost configuration")
+		if s.boostConfig == nil {
+			log.Error().Err(err).Msg("Obtained nil boost configuration; no configuration available")
+		} else {
+			log.Warn().Err(err).Msg("Obtained nil updated boost configuration; retaining current configuration")
+		}
 		return
 	}
 
@@ -106,47 +115,56 @@ func (s *Service) obtainBoostConfig(ctx context.Context,
 	*blockrelay.BoostConfig,
 	error,
 ) {
-	log.Info().Msg("Obtaining boost configuration")
+	log.Trace().Msg("Obtaining boost configuration")
 
-	if len(pubkeys) == 0 {
-		// No results, but no error.
-		log.Trace().Msg("no public keys supplied; cannot fetch boost configuation")
-		return nil, nil
-	}
-
-	certPEMBlock, err := s.majordomo.Fetch(ctx, viper.GetString("blockrelay.config.client-cert"))
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain server certificate")
-	}
-	ctx = context.WithValue(ctx, &httpconfidant.ClientCert{}, certPEMBlock)
-	keyPEMBlock, err := s.majordomo.Fetch(ctx, viper.GetString("blockrelay.config.client-key"))
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain server key")
-	}
-	ctx = context.WithValue(ctx, &httpconfidant.ClientKey{}, keyPEMBlock)
-	var caPEMBlock []byte
-	if viper.GetString("blockrelay.config.ca-cert") != "" {
-		caPEMBlock, err = s.majordomo.Fetch(ctx, viper.GetString("blockrelay.config.ca-cert"))
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to obtain client CA certificate")
+	var res []byte
+	var err error
+	if !strings.HasPrefix(s.configURL, "http") {
+		// We are fetching from a static source.
+		res, err = s.majordomo.Fetch(ctx, s.configURL)
+	} else {
+		// We are fetching from a dynamic source, need to provide additional parameters.
+		if len(pubkeys) == 0 {
+			// No results, but no error.
+			log.Trace().Msg("no public keys supplied; cannot fetch boost configuation")
+			return nil, nil
 		}
-		ctx = context.WithValue(ctx, &httpconfidant.CACert{}, caPEMBlock)
+
+		if s.clientCertURL != "" {
+			certPEMBlock, err := s.majordomo.Fetch(ctx, s.clientCertURL)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to obtain client certificate")
+			}
+			ctx = context.WithValue(ctx, &httpconfidant.ClientCert{}, certPEMBlock)
+			keyPEMBlock, err := s.majordomo.Fetch(ctx, s.clientKeyURL)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to obtain client key")
+			}
+			ctx = context.WithValue(ctx, &httpconfidant.ClientKey{}, keyPEMBlock)
+			var caPEMBlock []byte
+			if s.caCertURL != "" {
+				caPEMBlock, err = s.majordomo.Fetch(ctx, s.caCertURL)
+				if err != nil {
+					return nil, errors.Wrap(err, "failed to obtain client CA certificate")
+				}
+				ctx = context.WithValue(ctx, &httpconfidant.CACert{}, caPEMBlock)
+			}
+		}
+
+		ctx = context.WithValue(ctx, &httpconfidant.HTTPMethod{}, http.MethodPost)
+		pubkeyStrs := make([]string, 0, len(pubkeys))
+		for _, pubkey := range pubkeys {
+			pubkeyStrs = append(pubkeyStrs, fmt.Sprintf("%#x", pubkey))
+		}
+		ctx = context.WithValue(ctx, &httpconfidant.Body{}, []byte(fmt.Sprintf(`["%s"]`, strings.Join(pubkeyStrs, `","`))))
+
+		res, err = s.majordomo.Fetch(ctx, s.configURL)
 	}
-
-	ctx = context.WithValue(ctx, &httpconfidant.HTTPMethod{}, http.MethodPost)
-
-	pubkeyStrs := make([]string, 0, len(pubkeys))
-	for _, pubkey := range pubkeys {
-		pubkeyStrs = append(pubkeyStrs, fmt.Sprintf("%#x", pubkey))
-	}
-	ctx = context.WithValue(ctx, &httpconfidant.Body{}, []byte(fmt.Sprintf(`["%s"]`, strings.Join(pubkeyStrs, `","`))))
-
-	res, err := s.majordomo.Fetch(ctx, fmt.Sprintf("%s/config", s.configBaseURL))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain boost configuration")
 	}
 
-	log.Info().Str("res", string(res)).Msg("Received response")
+	log.Trace().Str("res", string(res)).Msg("Received response")
 
 	boostConfig := &blockrelay.BoostConfig{}
 	if err := json.Unmarshal(res, boostConfig); err != nil {
