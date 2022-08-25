@@ -76,6 +76,7 @@ func (s *Service) BlindedBeaconBlockProposal(ctx context.Context, slot phase0.Sl
 	bestProvider := ""
 
 	for responded+errored+timedOut != len(s.blindedBeaconBlockProposalProviders) {
+		// First loop runs prior to the soft timeout.
 		select {
 		case <-softCtx.Done():
 			// If we have any responses at this point we consider the non-responders timed out.
@@ -85,6 +86,7 @@ func (s *Service) BlindedBeaconBlockProposal(ctx context.Context, slot phase0.Sl
 			} else {
 				log.Debug().Dur("elapsed", time.Since(started)).Int("errored", errored).Msg("Soft timeout reached with no responses")
 			}
+			break
 		case <-ctx.Done():
 			// Anyone not responded by now is considered errored.
 			timedOut = len(s.blindedBeaconBlockProposalProviders) - responded - errored
@@ -102,6 +104,25 @@ func (s *Service) BlindedBeaconBlockProposal(ctx context.Context, slot phase0.Sl
 		}
 	}
 	softCancel()
+	for responded+errored+timedOut != len(s.blindedBeaconBlockProposalProviders) {
+		// First loop runs after the soft timeout.
+		select {
+		case <-ctx.Done():
+			// Anyone not responded by now is considered errored.
+			timedOut = len(s.blindedBeaconBlockProposalProviders) - responded - errored
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
+		case err := <-errCh:
+			errored++
+			log.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Responded with error")
+		case resp := <-respCh:
+			responded++
+			if bestProposal == nil || resp.score > bestScore {
+				bestProposal = resp.proposal
+				bestScore = resp.score
+				bestProvider = resp.provider
+			}
+		}
+	}
 	cancel()
 	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Responses")
 
@@ -137,7 +158,12 @@ func (s *Service) blindedBeaconBlockProposal(ctx context.Context,
 		errCh <- errors.New("empty blinded beacon block response")
 		return
 	}
-	if bytes.Equal(proposal.Bellatrix.Body.ExecutionPayloadHeader.FeeRecipient[:], zeroFeeRecipient[:]) {
+	feeRecipient, err := proposal.FeeRecipient()
+	if err != nil {
+		errCh <- errors.Wrap(err, "failed to obtain blinded beacon block fee recipient")
+		return
+	}
+	if bytes.Equal(feeRecipient[:], zeroFeeRecipient[:]) {
 		errCh <- errors.New("blinded beacon block response has 0 fee recipient")
 		return
 	}

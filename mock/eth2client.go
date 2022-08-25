@@ -25,6 +25,7 @@ import (
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prysmaticlabs/go-bitfield"
 )
@@ -799,8 +800,16 @@ func (*BlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ context.
 		}
 	}
 
+	// Create an execution payload header.
+	executionPayloadHeader := &bellatrix.ExecutionPayloadHeader{
+		FeeRecipient: bellatrix.ExecutionAddress{
+			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+			0x10, 0x11, 0x12, 0x13,
+		},
+	}
+
 	block := &api.VersionedBlindedBeaconBlock{
-		Version: spec.DataVersionPhase0,
+		Version: spec.DataVersionBellatrix,
 		Bellatrix: &apiv1.BlindedBeaconBlock{
 			Slot:          slot,
 			ProposerIndex: 1,
@@ -831,6 +840,10 @@ func (*BlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ context.
 				Attestations:      attestations,
 				Deposits:          []*phase0.Deposit{},
 				VoluntaryExits:    []*phase0.SignedVoluntaryExit{},
+				SyncAggregate: &altair.SyncAggregate{
+					SyncCommitteeBits: bitfield.NewBitvector512(),
+				},
+				ExecutionPayloadHeader: executionPayloadHeader,
 			},
 		},
 	}

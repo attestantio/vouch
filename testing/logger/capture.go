@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,8 +14,7 @@
 package logger
 
 import (
-	"fmt"
-	"strings"
+	"encoding/json"
 	"sync"
 	"testing"
 
@@ -27,45 +26,134 @@ import (
 // LogCapture allows testing code to query log output.
 type LogCapture struct {
 	mu      sync.Mutex
-	entries []string
+	entries []map[string]interface{}
+}
+
+// Write captures an individual log message.
+func (c *LogCapture) Write(p []byte) (int, error) {
+	entry := make(map[string]interface{})
+	err := json.Unmarshal(p, &entry)
+	if err != nil {
+		return -1, err
+	}
+	c.mu.Lock()
+	c.entries = append(c.entries, entry)
+	c.mu.Unlock()
+	return len(p), nil
 }
 
 // NewLogCapture captures logs for querying.
+// Logs are created in JSON format and without timestamps.
 func NewLogCapture() *LogCapture {
 	c := &LogCapture{
-		//entries: make([]*LogEntry, 0),
-		entries: make([]string, 0),
+		entries: make([]map[string]interface{}, 0),
 	}
-	zerologger.Logger = zerologger.Logger.Hook(c)
+	logger := zerolog.New(c)
+	zerologger.Logger = logger
 	return c
-}
-
-// Run is the hook to capture log entries.  It also stops the entry from being printed.
-func (c *LogCapture) Run(e *zerolog.Event, level zerolog.Level, msg string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.entries = append(c.entries, msg)
-	e.Discard()
 }
 
 // AssertHasEntry checks if there is a log entry with the given string.
 func (c *LogCapture) AssertHasEntry(t *testing.T, msg string) {
+	assert.True(t, c.HasLog(map[string]interface{}{
+		"message": msg,
+	}))
+}
+
+// HasLog returns true if there is a log entry with the matching fields.
+func (c *LogCapture) HasLog(fields map[string]interface{}) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	var matched bool
 	for i := range c.entries {
-		if c.entries[i] == msg {
-			return
+		matches := 0
+		for key, value := range fields {
+			if c.hasField(c.entries[i], key, value) {
+				matches++
+			}
+		}
+		if matches == len(fields) {
+			matched = true
+			break
 		}
 	}
-	assert.Fail(t, fmt.Sprintf("Missing log message %q", msg), strings.Join(c.entries, "\n"))
+	return matched
 }
 
-// Entries returns all log entries.
-func (c *LogCapture) Entries() []string {
+// hasField returns true if the entry has a matching field.
+// nolint:gocyclo
+func (c *LogCapture) hasField(entry map[string]interface{}, key string, value interface{}) bool {
+	for entryKey, entryValue := range entry {
+		if entryKey != key {
+			continue
+		}
+		switch v := value.(type) {
+		case bool:
+			if entryValue == v {
+				return true
+			}
+		case string:
+			if entryValue == value.(string) {
+				return true
+			}
+		case int:
+			if int(entryValue.(float64)) == v {
+				return true
+			}
+		case int8:
+			if int8(entryValue.(float64)) == v {
+				return true
+			}
+		case int16:
+			if int16(entryValue.(float64)) == v {
+				return true
+			}
+		case int32:
+			if int32(entryValue.(float64)) == v {
+				return true
+			}
+		case int64:
+			if int64(entryValue.(float64)) == v {
+				return true
+			}
+		case uint:
+			if uint(entryValue.(float64)) == v {
+				return true
+			}
+		case uint8:
+			if uint8(entryValue.(float64)) == v {
+				return true
+			}
+		case uint16:
+			if uint16(entryValue.(float64)) == v {
+				return true
+			}
+		case uint32:
+			if uint32(entryValue.(float64)) == v {
+				return true
+			}
+		case uint64:
+			if uint64(entryValue.(float64)) == v {
+				return true
+			}
+		case float32:
+			if float32(entryValue.(float64)) == v {
+				return true
+			}
+		case float64:
+			if entryValue.(float64) == v {
+				return true
+			}
+		default:
+			panic("unhandled type")
+		}
+	}
+
+	return false
+}
+
+// Entries returns all captures log entries.
+func (c *LogCapture) Entries() []map[string]interface{} {
 	return c.entries
-}
-
-// ClearEntries removes all log entries.
-func (c *LogCapture) ClearEntries() {
-	c.entries = make([]string, 0)
 }
