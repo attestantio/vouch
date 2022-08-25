@@ -23,6 +23,10 @@ import (
 	"github.com/attestantio/go-builder-client/api"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
+	eth2client "github.com/attestantio/go-eth2-client"
+	consensusclientapi "github.com/attestantio/go-eth2-client/api"
+	consensusclientapiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	consensusclientspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/util"
@@ -53,7 +57,6 @@ func (s *Service) SubmitValidatorRegistrations(ctx context.Context,
 	return s.submitValidatorRegistrationsForAccounts(ctx, accounts)
 }
 
-// submitValidatorRegistrationsRuntime sets the runtime for the next validator registrations call.
 // submitValidatorRegistrations submits validator registrations.
 func (s *Service) submitValidatorRegistrations(ctx context.Context,
 	_ interface{},
@@ -99,6 +102,7 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 		return errors.New("no boost configuration; cannot submit validator registrations at current")
 	}
 
+	consensusRegistrations := make([]*consensusclientapi.VersionedSignedValidatorRegistration, 0, len(accounts))
 	signedRegistrations := make(map[string][]*api.VersionedSignedValidatorRegistration)
 	var pubkey phase0.BLSPubKey
 	for index, account := range accounts {
@@ -147,12 +151,28 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 			}
 			signedRegistrations[relay] = append(signedRegistrations[relay], versionedSignedRegistration)
 		}
+		consensusRegistrations = append(consensusRegistrations, &consensusclientapi.VersionedSignedValidatorRegistration{
+			Version: consensusclientspec.BuilderVersionV1,
+			V1: &consensusclientapiv1.SignedValidatorRegistration{
+				Message: &consensusclientapiv1.ValidatorRegistration{
+					FeeRecipient: registration.FeeRecipient,
+					GasLimit:     registration.GasLimit,
+					Timestamp:    registration.Timestamp,
+					Pubkey:       registration.Pubkey,
+				},
+				Signature: signedRegistration.Signature,
+			},
+		})
 	}
 
 	if e := log.Trace(); e.Enabled() {
 		data, err := json.Marshal(signedRegistrations)
 		if err == nil {
 			e.RawJSON("registrations", data).Msg("Generated registrations")
+		}
+		data, err = json.Marshal(consensusRegistrations)
+		if err == nil {
+			e.RawJSON("registrations", data).Msg("Generated consensus registrations")
 		}
 	}
 
@@ -178,23 +198,19 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 			}
 		}(ctx, builder, providerRegistrations, s.monitor)
 	}
+	// Submit secondary registrations as well.
+	for _, submitter := range s.secondaryValidatorRegistrationsSubmitters {
+		wg.Add(1)
+		go func(ctx context.Context, submitter eth2client.ValidatorRegistrationsSubmitter, registrations []*consensusclientapi.VersionedSignedValidatorRegistration) {
+			defer wg.Done()
+			log.Warn().Str("client", submitter.(eth2client.Service).Address()).Msg("jgm Submitting secondary validator registration")
+			if err := submitter.SubmitValidatorRegistrations(ctx, consensusRegistrations); err != nil {
+				log.Error().Err(err).Str("client", submitter.(eth2client.Service).Address()).Msg("Failed to submit secondary validator registrations")
+				return
+			}
+		}(ctx, submitter, consensusRegistrations)
+	}
 
-	//	// Submit registrations in parallel to the builders.
-	//	var wg sync.WaitGroup
-	//	for _, validatorRegistrationsSubmitter := range s.validatorRegistrationsSubmitters {
-	//		if _, exists := signedRegistrations[validatorRegistrationsSubmitter.Address()]; !exists {
-	//			log.Debug().Str("address", validatorRegistrationsSubmitter.Address()).Msg("No registrations for relay")
-	//			continue
-	//		}
-	//
-	//		wg.Add(1)
-	//		go func(ctx context.Context, submitter builderclient.ValidatorRegistrationsSubmitter, signedRegistrations []*api.VersionedSignedValidatorRegistration) {
-	//			defer wg.Done()
-	//			if err := submitter.SubmitValidatorRegistrations(ctx, signedRegistrations); err != nil {
-	//				log.Error().Err(err).Str("provider", submitter.Address()).Msg("Failed to submit validator registrations")
-	//			}
-	//		}(ctx, validatorRegistrationsSubmitter, signedRegistrations[validatorRegistrationsSubmitter.Address()])
-	//	}
 	wg.Wait()
 
 	return nil

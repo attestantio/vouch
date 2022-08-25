@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -33,6 +33,7 @@ type LogCapture struct {
 // NewLogCapture captures logs for querying.
 func NewLogCapture() *LogCapture {
 	c := &LogCapture{
+		//entries: make([]*LogEntry, 0),
 		entries: make([]string, 0),
 	}
 	zerologger.Logger = zerologger.Logger.Hook(c)
@@ -40,7 +41,7 @@ func NewLogCapture() *LogCapture {
 }
 
 // Run is the hook to capture log entries.  It also stops the entry from being printed.
-func (c *LogCapture) Run(e *zerolog.Event, _ zerolog.Level, msg string) {
+func (c *LogCapture) Run(e *zerolog.Event, level zerolog.Level, msg string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.entries = append(c.entries, msg)
@@ -59,7 +60,12 @@ func (c *LogCapture) AssertHasEntry(t *testing.T, msg string) {
 	assert.Fail(t, fmt.Sprintf("Missing log message %q", msg), strings.Join(c.entries, "\n"))
 }
 
-// Entries returns all captures log entries.
+// Entries returns all log entries.
 func (c *LogCapture) Entries() []string {
 	return c.entries
+}
+
+// ClearEntries removes all log entries.
+func (c *LogCapture) ClearEntries() {
+	c.entries = make([]string, 0)
 }

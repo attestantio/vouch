@@ -35,7 +35,7 @@ func (s *Service) BuilderBid(ctx context.Context,
 ) {
 	started := time.Now()
 
-	log.Trace().Msg("Builder bid called")
+	log.Trace().Uint64("slot", uint64(slot)).Str("parent_hash", fmt.Sprintf("%#x", parentHash)).Str("pubkey", fmt.Sprintf("%#x", pubkey)).Msg("Builder bid called")
 
 	// Fetch the matching header from the cache.
 	key := fmt.Sprintf("%d", slot)

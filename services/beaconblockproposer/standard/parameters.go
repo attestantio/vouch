@@ -170,6 +170,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		if parameters.blindedProposalProvider == nil {
 			return nil, errors.New("no blinded proposal data provider specified")
 		}
+		if parameters.executionChainHeadProvider == nil {
+			return nil, errors.New("no execution chain head provider specified")
+		}
 	}
 	if parameters.chainTimeService == nil {
 		return nil, errors.New("no chain time service specified")

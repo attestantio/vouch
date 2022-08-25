@@ -19,7 +19,6 @@ import (
 
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -78,16 +77,12 @@ func (s *Service) updateValidatorRegistrations(ctx context.Context,
 	started time.Time,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 ) {
-	for _, validatorRegistrationsSubmitter := range s.validatorRegistrationsSubmitters {
-		go func(ctx context.Context, submitter blockrelay.ValidatorRegistrationsSubmitter, accounts map[phase0.ValidatorIndex]e2wtypes.Account) {
-			if err := submitter.SubmitValidatorRegistrations(ctx, accounts); err != nil {
-				validatorRegistrationsCompleted("failed")
-				log.Error().Err(err).Msg("Failed to update validator registrations")
-				return
-			}
-			validatorRegistrationsCompleted("succeeded")
-		}(ctx, validatorRegistrationsSubmitter, accounts)
+	if err := s.validatorRegistrationsSubmitter.SubmitValidatorRegistrations(ctx, accounts); err != nil {
+		validatorRegistrationsCompleted("failed")
+		log.Error().Err(err).Msg("Failed to update validator registrations")
+		return
 	}
+	validatorRegistrationsCompleted("succeeded")
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("updated validator registrations")
 }
 

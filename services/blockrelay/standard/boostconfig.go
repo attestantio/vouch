@@ -139,7 +139,7 @@ func (s *Service) obtainBoostConfig(ctx context.Context,
 	for _, pubkey := range pubkeys {
 		pubkeyStrs = append(pubkeyStrs, fmt.Sprintf("%#x", pubkey))
 	}
-	ctx = context.WithValue(ctx, &httpconfidant.Body{}, fmt.Sprintf(`["%s"]`, strings.Join(pubkeyStrs, `","`)))
+	ctx = context.WithValue(ctx, &httpconfidant.Body{}, []byte(fmt.Sprintf(`["%s"]`, strings.Join(pubkeyStrs, `","`))))
 
 	res, err := s.majordomo.Fetch(ctx, fmt.Sprintf("%s/config", s.configBaseURL))
 	if err != nil {

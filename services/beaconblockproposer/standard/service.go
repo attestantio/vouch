@@ -91,6 +91,10 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 	if !ok {
 		return errors.New("passed invalid data structure")
 	}
+	if duty == nil {
+		return errors.New("passed nil data structure")
+	}
+
 	log := log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Preparing")
 

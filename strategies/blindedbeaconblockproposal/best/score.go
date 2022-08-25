@@ -147,7 +147,7 @@ func (s *Service) scoreBellatrixBlindedBeaconBlockProposal(ctx context.Context,
 		Float64("attester_slashings", attesterSlashingScore).
 		Float64("sync_committee", syncCommitteeScore).
 		Float64("total", attestationScore+proposerSlashingScore+attesterSlashingScore+syncCommitteeScore).
-		Msg("Scored Altair block")
+		Msg("Scored Bellatrix block")
 
 	return attestationScore + proposerSlashingScore + attesterSlashingScore + syncCommitteeScore
 }

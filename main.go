@@ -43,7 +43,6 @@ import (
 	standardattester "github.com/attestantio/vouch/services/attester/standard"
 	standardbeaconblockproposer "github.com/attestantio/vouch/services/beaconblockproposer/standard"
 	standardbeaconcommitteesubscriber "github.com/attestantio/vouch/services/beaconcommitteesubscriber/standard"
-	"github.com/attestantio/vouch/services/blockrelay"
 	standardblockrelay "github.com/attestantio/vouch/services/blockrelay/standard"
 	"github.com/attestantio/vouch/services/cache"
 	standardcache "github.com/attestantio/vouch/services/cache/standard"
@@ -405,6 +404,30 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to start fee recipient provider")
 	}
 
+	// We also need to submit validator registrations to all nodes that are acting as blinded beacon block proposers, as
+	// some of them use the registration as part of the condition to decide if the blinded block should be called or not.
+	secondaryValidatorRegistrationsSubmitters := []eth2client.ValidatorRegistrationsSubmitter{}
+	clients := make(map[string]struct{})
+	for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best") {
+		client, err := fetchClient(ctx, address)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
+		}
+		secondaryValidatorRegistrationsSubmitters = append(secondaryValidatorRegistrationsSubmitters, client.(eth2client.ValidatorRegistrationsSubmitter))
+		clients[address] = struct{}{}
+	}
+	for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first") {
+		if _, exists := clients[address]; !exists {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				return nil, nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
+			}
+			secondaryValidatorRegistrationsSubmitters = append(secondaryValidatorRegistrationsSubmitters, client.(eth2client.ValidatorRegistrationsSubmitter))
+			clients[address] = struct{}{}
+		}
+	}
+	fmt.Printf("***************************jgm %d\n", len(secondaryValidatorRegistrationsSubmitters))
+
 	blockRelay, err := standardblockrelay.New(ctx,
 		standardblockrelay.WithLogLevel(util.LogLevel("blockrelay")),
 		standardblockrelay.WithMonitor(monitor),
@@ -417,6 +440,7 @@ func startServices(ctx context.Context,
 		standardblockrelay.WithListenAddress(viper.GetString("blockrelay.listen-address")),
 		standardblockrelay.WithValidatorRegistrationSigner(signerSvc.(signer.ValidatorRegistrationSigner)),
 		standardblockrelay.WithTimeout(util.Timeout("blockrelay")),
+		standardblockrelay.WithSecondaryValidatorRegistrationsSubmitters(secondaryValidatorRegistrationsSubmitters),
 	)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to start block relay")
@@ -570,7 +594,6 @@ func startServices(ctx context.Context,
 	if bellatrixCapable {
 		log.Trace().Msg("Starting proposals preparer")
 
-		validatorRegistrationsSubmitters := []blockrelay.ValidatorRegistrationsSubmitter{blockRelay}
 		proposalPreparer, err = standardproposalpreparer.New(ctx,
 			standardproposalpreparer.WithLogLevel(util.LogLevel("proposalspreparor")),
 			standardproposalpreparer.WithMonitor(monitor),
@@ -578,7 +601,7 @@ func startServices(ctx context.Context,
 			standardproposalpreparer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 			standardproposalpreparer.WithFeeRecipientProvider(feeRecipientProvider),
 			standardproposalpreparer.WithProposalPreparationsSubmitter(submitterStrategy.(eth2client.ProposalPreparationsSubmitter)),
-			standardproposalpreparer.WithValidatorRegistrationsSubmitters(validatorRegistrationsSubmitters),
+			standardproposalpreparer.WithValidatorRegistrationsSubmitter(blockRelay),
 		)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "failed to start proposal preparer service")

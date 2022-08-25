@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"time"
 
 	builderclient "github.com/attestantio/go-builder-client"
@@ -43,12 +44,23 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 		s.monitor.BeaconBlockProposalCompleted(started, 0, "failed")
 		return
 	}
+	if duty == nil {
+		log.Error().Msg("Passed nil data structure")
+		s.monitor.BeaconBlockProposalCompleted(started, 0, "failed")
+		return
+	}
 	log := log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Proposing")
 
 	var zeroSig phase0.BLSSignature
 	if duty.RANDAOReveal() == zeroSig {
 		log.Error().Msg("Missing RANDAO reveal")
+		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
+		return
+	}
+
+	if duty.Account() == nil {
+		log.Error().Msg("Missing account")
 		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
 		return
 	}
@@ -150,12 +162,13 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		return canTryWithout, errors.New("no bids obtained for block")
 	}
 	for provider, value := range auctionResults.Values {
-		log.Trace().Str("provider", provider).Stringer("value", value).Msg("Bid")
+		delta := new(big.Int).Sub(value, auctionResults.Bid.Data.Message.Value.ToBig())
+		log.Trace().Uint64("slot", uint64(duty.Slot())).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Msg("Auction participant")
 	}
 	if e := log.Trace(); e.Enabled() {
 		data, err := json.Marshal(auctionResults.Bid)
 		if err == nil {
-			e.RawJSON("header", data).Msg("Obtained bid")
+			e.RawJSON("header", data).Msg("Obtained best bid; using as header for beacon block proposals")
 		}
 	}
 
@@ -209,7 +222,7 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 	if e := log.Trace(); e.Enabled() {
 		data, err := json.Marshal(proposal)
 		if err == nil {
-			e.RawJSON("proposal", data).Msg("Obtained proposal")
+			e.RawJSON("proposal", data).Msg("Obtained blinded proposal")
 		}
 	}
 

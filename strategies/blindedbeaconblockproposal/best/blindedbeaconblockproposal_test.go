@@ -24,7 +24,7 @@ import (
 	"github.com/attestantio/vouch/services/cache"
 	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
-	"github.com/attestantio/vouch/strategies/beaconblockproposal/best"
+	"github.com/attestantio/vouch/strategies/blindedbeaconblockproposal/best"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -69,8 +69,8 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"good": mock.NewBeaconBlockProposalProvider(),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"good": mock.NewBlindedBeaconBlockProposalProvider(),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -87,8 +87,8 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(5*time.Second, mock.NewBeaconBlockProposalProvider()),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(5*time.Second, mock.NewBlindedBeaconBlockProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -106,8 +106,8 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"nil": mock.NewNilBeaconBlockProposalProvider(),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"nil": mock.NewNilBlindedBeaconBlockProposalProvider(),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -125,9 +125,9 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"error":  mock.NewErroringBeaconBlockProposalProvider(),
-					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(time.Second, mock.NewBeaconBlockProposalProvider()),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"error":  mock.NewErroringBlindedBeaconBlockProposalProvider(),
+					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(time.Second, mock.NewBlindedBeaconBlockProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -144,9 +144,9 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"good":   mock.NewBeaconBlockProposalProvider(),
-					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(2*time.Second, mock.NewBeaconBlockProposalProvider()),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"good":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(2*time.Second, mock.NewBlindedBeaconBlockProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -164,8 +164,8 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(2*time.Second, mock.NewBeaconBlockProposalProvider()),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(2*time.Second, mock.NewBlindedBeaconBlockProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -183,9 +183,9 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"error":  mock.NewErroringBeaconBlockProposalProvider(),
-					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(2*time.Second, mock.NewBeaconBlockProposalProvider()),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"error":  mock.NewErroringBlindedBeaconBlockProposalProvider(),
+					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(2*time.Second, mock.NewBlindedBeaconBlockProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -200,7 +200,7 @@ func TestBeaconBlockProposal(t *testing.T) {
 			capture := logger.NewLogCapture()
 			s, err := best.New(context.Background(), test.params...)
 			require.NoError(t, err)
-			proposal, err := s.BeaconBlockProposal(context.Background(),
+			proposal, err := s.BlindedBeaconBlockProposal(context.Background(),
 				12345,
 				phase0.BLSSignature([96]byte{
 					0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,

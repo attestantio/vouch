@@ -21,6 +21,7 @@ import (
 
 	restdaemon "github.com/attestantio/go-block-relay/services/daemon/rest"
 	"github.com/attestantio/go-builder-client/spec"
+	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/services/chaintime"
@@ -34,15 +35,16 @@ import (
 
 // Service is the builder service for Vouch.
 type Service struct {
-	monitor                     metrics.Service
-	majordomo                   majordomo.Service
-	chainTime                   chaintime.Service
-	configBaseURL               string
-	validatingAccountsProvider  accountmanager.ValidatingAccountsProvider
-	validatorRegistrationSigner signer.ValidatorRegistrationSigner
-	builderBidsCache            map[string]map[string]*spec.VersionedSignedBuilderBid
-	builderBidsCacheMu          sync.RWMutex
-	timeout                     time.Duration
+	monitor                                   metrics.Service
+	majordomo                                 majordomo.Service
+	chainTime                                 chaintime.Service
+	configBaseURL                             string
+	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
+	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
+	builderBidsCache                          map[string]map[string]*spec.VersionedSignedBuilderBid
+	builderBidsCacheMu                        sync.RWMutex
+	timeout                                   time.Duration
+	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 
 	boostConfig   *blockrelay.BoostConfig
 	boostConfigMu sync.RWMutex
@@ -76,7 +78,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		validatingAccountsProvider:  parameters.validatingAccountsProvider,
 		validatorRegistrationSigner: parameters.validatorRegistrationSigner,
 		timeout:                     parameters.timeout,
-		builderBidsCache:            make(map[string]map[string]*spec.VersionedSignedBuilderBid),
+		secondaryValidatorRegistrationsSubmitters: parameters.secondaryValidatorRegistrationsSubmitters,
+		builderBidsCache: make(map[string]map[string]*spec.VersionedSignedBuilderBid),
 	}
 
 	// Remove trailing / from base URL.

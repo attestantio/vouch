@@ -16,6 +16,7 @@ package standard
 import (
 	"time"
 
+	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
@@ -27,17 +28,18 @@ import (
 )
 
 type parameters struct {
-	logLevel                    zerolog.Level
-	monitor                     metrics.Service
-	majordomo                   majordomo.Service
-	scheduler                   scheduler.Service
-	serverName                  string
-	listenAddress               string
-	chainTime                   chaintime.Service
-	configBaseURL               string
-	validatingAccountsProvider  accountmanager.ValidatingAccountsProvider
-	validatorRegistrationSigner signer.ValidatorRegistrationSigner
-	timeout                     time.Duration
+	logLevel                                  zerolog.Level
+	monitor                                   metrics.Service
+	majordomo                                 majordomo.Service
+	scheduler                                 scheduler.Service
+	serverName                                string
+	listenAddress                             string
+	chainTime                                 chaintime.Service
+	configBaseURL                             string
+	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
+	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
+	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
+	timeout                                   time.Duration
 }
 
 // Parameter is the interface for service parameters.
@@ -125,6 +127,13 @@ func WithValidatorRegistrationSigner(signer signer.ValidatorRegistrationSigner) 
 func WithTimeout(timeout time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.timeout = timeout
+	})
+}
+
+// WithSecondaryValidatorRegistrationsSubmitters sets the secondary validator registrations submitters.
+func WithSecondaryValidatorRegistrationsSubmitters(submitters []consensusclient.ValidatorRegistrationsSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.secondaryValidatorRegistrationsSubmitters = submitters
 	})
 }
 

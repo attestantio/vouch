@@ -29,11 +29,15 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
+	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 )
 
 // zeroExecutionAddress is used for comparison purposes.
 var zeroExecutionAddress bellatrix.ExecutionAddress
+
+// zeroValue is used for comparison purposes.
+var zeroValue uint256.Int
 
 // AuctionBlock obtains the best available use of the block space.
 func (s *Service) AuctionBlock(ctx context.Context,
@@ -47,12 +51,6 @@ func (s *Service) AuctionBlock(ctx context.Context,
 	res, err := s.bestBuilderBid(ctx, slot, parentHash, pubkey)
 	if err != nil {
 		return nil, err
-	}
-
-	if e := log.Trace(); e.Enabled() {
-		for relay, score := range res.Values {
-			log.Trace().Uint64("slot", uint64(slot)).Str("relay", relay).Str("score", score.String()).Msg("Auction participant")
-		}
 	}
 
 	if res.Bid != nil {
@@ -201,6 +199,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 		monitorAuctionBlock("", false, time.Since(started))
 		return nil, errors.New("no bids received")
 	}
+
 	log.Trace().Stringer("bid", res.Bid).Msg("Selected best bid")
 	monitorAuctionBlock(res.Provider.Address(), true, time.Since(started))
 
@@ -250,6 +249,10 @@ func (s *Service) builderBid(ctx context.Context,
 		}
 		if bytes.Equal(builderBid.Data.Message.Header.FeeRecipient[:], zeroExecutionAddress[:]) {
 			errCh <- fmt.Errorf("%s: zero fee recipient", provider.Address())
+			return
+		}
+		if zeroValue.Cmp(builderBid.Data.Message.Value) == 0 {
+			errCh <- fmt.Errorf("%s: zero value", provider.Address())
 			return
 		}
 	default:

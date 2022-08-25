@@ -25,7 +25,7 @@ import (
 	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	"github.com/attestantio/vouch/services/metrics/null"
-	"github.com/attestantio/vouch/strategies/beaconblockproposal/best"
+	"github.com/attestantio/vouch/strategies/blindedbeaconblockproposal/best"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
@@ -67,10 +67,10 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one":   mock.NewBeaconBlockProposalProvider(),
-					"two":   mock.NewBeaconBlockProposalProvider(),
-					"three": mock.NewBeaconBlockProposalProvider(),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"one":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"two":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"three": mock.NewBlindedBeaconBlockProposalProvider(),
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
@@ -86,10 +86,10 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one":   mock.NewBeaconBlockProposalProvider(),
-					"two":   mock.NewBeaconBlockProposalProvider(),
-					"three": mock.NewBeaconBlockProposalProvider(),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"one":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"two":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"three": mock.NewBlindedBeaconBlockProposalProvider(),
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
@@ -106,10 +106,10 @@ func TestService(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithTimeout(0),
 				best.WithProcessConcurrency(1),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one":   mock.NewBeaconBlockProposalProvider(),
-					"two":   mock.NewBeaconBlockProposalProvider(),
-					"three": mock.NewBeaconBlockProposalProvider(),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"one":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"two":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"three": mock.NewBlindedBeaconBlockProposalProvider(),
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
@@ -125,10 +125,10 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one":   mock.NewBeaconBlockProposalProvider(),
-					"two":   mock.NewBeaconBlockProposalProvider(),
-					"three": mock.NewBeaconBlockProposalProvider(),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"one":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"two":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"three": mock.NewBlindedBeaconBlockProposalProvider(),
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
@@ -144,10 +144,10 @@ func TestService(t *testing.T) {
 				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one":   mock.NewBeaconBlockProposalProvider(),
-					"two":   mock.NewBeaconBlockProposalProvider(),
-					"three": mock.NewBeaconBlockProposalProvider(),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"one":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"two":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"three": mock.NewBlindedBeaconBlockProposalProvider(),
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 			},
@@ -162,10 +162,10 @@ func TestService(t *testing.T) {
 				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithProcessConcurrency(1),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one":   mock.NewBeaconBlockProposalProvider(),
-					"two":   mock.NewBeaconBlockProposalProvider(),
-					"three": mock.NewBeaconBlockProposalProvider(),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"one":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"two":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"three": mock.NewBlindedBeaconBlockProposalProvider(),
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
@@ -182,10 +182,10 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(0),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one":   mock.NewBeaconBlockProposalProvider(),
-					"two":   mock.NewBeaconBlockProposalProvider(),
-					"three": mock.NewBeaconBlockProposalProvider(),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"one":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"two":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"three": mock.NewBlindedBeaconBlockProposalProvider(),
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
@@ -193,7 +193,7 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: no process concurrency specified",
 		},
 		{
-			name: "BeaconBlockProposalProvidersMissing",
+			name: "BlindedBeaconBlockProposalProvidersMissing",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
@@ -205,10 +205,10 @@ func TestService(t *testing.T) {
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
-			err: "problem with parameters: no beacon block proposal providers specified",
+			err: "problem with parameters: no blinded beacon block proposal providers specified",
 		},
 		{
-			name: "BeaconBlockProposalProvidersEmpty",
+			name: "BlindedBeaconBlockProposalProvidersEmpty",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
@@ -217,11 +217,11 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{}),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
-			err: "problem with parameters: no beacon block proposal providers specified",
+			err: "problem with parameters: no blinded beacon block proposal providers specified",
 		},
 		{
 			name: "SignedBeaconBlockProviderMissing",
@@ -233,10 +233,10 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one":   mock.NewBeaconBlockProposalProvider(),
-					"two":   mock.NewBeaconBlockProposalProvider(),
-					"three": mock.NewBeaconBlockProposalProvider(),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"one":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"two":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"three": mock.NewBlindedBeaconBlockProposalProvider(),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -252,10 +252,10 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(mock.NewErroringSpecProvider()),
 				best.WithProcessConcurrency(1),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one":   mock.NewBeaconBlockProposalProvider(),
-					"two":   mock.NewBeaconBlockProposalProvider(),
-					"three": mock.NewBeaconBlockProposalProvider(),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"one":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"two":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"three": mock.NewBlindedBeaconBlockProposalProvider(),
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
@@ -272,10 +272,10 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one":   mock.NewBeaconBlockProposalProvider(),
-					"two":   mock.NewBeaconBlockProposalProvider(),
-					"three": mock.NewBeaconBlockProposalProvider(),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"one":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"two":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"three": mock.NewBlindedBeaconBlockProposalProvider(),
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
@@ -292,10 +292,10 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one":   mock.NewBeaconBlockProposalProvider(),
-					"two":   mock.NewBeaconBlockProposalProvider(),
-					"three": mock.NewBeaconBlockProposalProvider(),
+				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
+					"one":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"two":   mock.NewBlindedBeaconBlockProposalProvider(),
+					"three": mock.NewBlindedBeaconBlockProposalProvider(),
 				}),
 				best.WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				best.WithBlockRootToSlotCache(blockToSlotCache),

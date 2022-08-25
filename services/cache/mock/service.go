@@ -43,6 +43,6 @@ func (s *Service) BlockRootToSlot(_ context.Context, root phase0.Root) (phase0.S
 }
 
 // ExecutionChainHead provides the current execution chain head.
-func (s *Service) ExecutionChainHead(ctx context.Context) (phase0.Hash32, uint64) {
+func (*Service) ExecutionChainHead(_ context.Context) (phase0.Hash32, uint64) {
 	return phase0.Hash32{}, 0
 }
