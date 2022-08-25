@@ -21,7 +21,6 @@ import (
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
-	"github.com/attestantio/vouch/services/feerecipientprovider"
 	"github.com/attestantio/vouch/services/graffitiprovider"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
@@ -38,7 +37,6 @@ type parameters struct {
 	blindedProposalProvider    eth2client.BlindedBeaconBlockProposalProvider
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	executionChainHeadProvider cache.ExecutionChainHeadProvider
-	feeRecipientProvider       feerecipientprovider.Service
 	graffitiProvider           graffitiprovider.Service
 	beaconBlockSubmitter       submitter.BeaconBlockSubmitter
 	randaoRevealSigner         signer.RANDAORevealSigner
@@ -112,13 +110,6 @@ func WithExecutionChainHeadProvider(provider cache.ExecutionChainHeadProvider) P
 	})
 }
 
-// WithFeeRecipientProvider sets the fee recipient provider.
-func WithFeeRecipientProvider(provider feerecipientprovider.Service) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.feeRecipientProvider = provider
-	})
-}
-
 // WithGraffitiProvider sets the graffiti provider.
 func WithGraffitiProvider(provider graffitiprovider.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -179,9 +170,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.validatingAccountsProvider == nil {
 		return nil, errors.New("no validating accounts provider specified")
-	}
-	if parameters.feeRecipientProvider == nil {
-		return nil, errors.New("no fee recipient provider specified")
 	}
 	if parameters.beaconBlockSubmitter == nil {
 		return nil, errors.New("no beacon block submitter specified")

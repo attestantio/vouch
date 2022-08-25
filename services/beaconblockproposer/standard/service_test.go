@@ -29,7 +29,6 @@ import (
 	"github.com/attestantio/vouch/services/cache"
 	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
-	mockfeerecipientprovider "github.com/attestantio/vouch/services/feerecipientprovider/mock"
 	staticgraffitiprovider "github.com/attestantio/vouch/services/graffitiprovider/static"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	mocksigner "github.com/attestantio/vouch/services/signer/mock"
@@ -60,7 +59,6 @@ func TestService(t *testing.T) {
 
 	consensusClient, err := mockconsensusclient.New(ctx)
 	require.NoError(t, err)
-	feeRecipientsProvider := mockfeerecipientprovider.New()
 	graffitiProvider, err := staticgraffitiprovider.New(ctx)
 	require.NoError(t, err)
 	blockAuctioneer := mockblockauctioneer.New()
@@ -79,7 +77,6 @@ func TestService(t *testing.T) {
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithFeeRecipientProvider(feeRecipientsProvider),
 				standard.WithBeaconBlockSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithBeaconBlockSigner(signer),
@@ -93,7 +90,6 @@ func TestService(t *testing.T) {
 				standard.WithMonitor(nullmetrics.New(context.Background())),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithFeeRecipientProvider(feeRecipientsProvider),
 				standard.WithBeaconBlockSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithBeaconBlockSigner(signer),
@@ -107,7 +103,6 @@ func TestService(t *testing.T) {
 				standard.WithMonitor(nullmetrics.New(context.Background())),
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithFeeRecipientProvider(feeRecipientsProvider),
 				standard.WithBeaconBlockSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithBeaconBlockSigner(signer),
@@ -121,26 +116,11 @@ func TestService(t *testing.T) {
 				standard.WithMonitor(nullmetrics.New(context.Background())),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposalDataProvider(consensusClient),
-				standard.WithFeeRecipientProvider(feeRecipientsProvider),
 				standard.WithBeaconBlockSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithBeaconBlockSigner(signer),
 			},
 			err: "problem with parameters: no validating accounts provider specified",
-		},
-		{
-			name: "FeeRecipientProviderMissing",
-			params: []standard.Parameter{
-				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
-				standard.WithProposalDataProvider(consensusClient),
-				standard.WithChainTimeService(chainTime),
-				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithBeaconBlockSubmitter(consensusClient),
-				standard.WithRANDAORevealSigner(signer),
-				standard.WithBeaconBlockSigner(signer),
-			},
-			err: "problem with parameters: no fee recipient provider specified",
 		},
 		{
 			name: "BeaconBlockSubmitterMissing",
@@ -150,7 +130,6 @@ func TestService(t *testing.T) {
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithFeeRecipientProvider(feeRecipientsProvider),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithBeaconBlockSigner(signer),
 			},
@@ -164,7 +143,6 @@ func TestService(t *testing.T) {
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithFeeRecipientProvider(feeRecipientsProvider),
 				standard.WithBeaconBlockSubmitter(consensusClient),
 				standard.WithBeaconBlockSigner(signer),
 			},
@@ -178,7 +156,6 @@ func TestService(t *testing.T) {
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithFeeRecipientProvider(feeRecipientsProvider),
 				standard.WithBeaconBlockSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 			},
@@ -192,7 +169,6 @@ func TestService(t *testing.T) {
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithFeeRecipientProvider(feeRecipientsProvider),
 				standard.WithBeaconBlockSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithBeaconBlockSigner(signer),
@@ -207,7 +183,6 @@ func TestService(t *testing.T) {
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithFeeRecipientProvider(feeRecipientsProvider),
 				standard.WithBeaconBlockSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithBeaconBlockSigner(signer),
@@ -224,7 +199,6 @@ func TestService(t *testing.T) {
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithFeeRecipientProvider(feeRecipientsProvider),
 				standard.WithBeaconBlockSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithBeaconBlockSigner(signer),
@@ -241,7 +215,6 @@ func TestService(t *testing.T) {
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithFeeRecipientProvider(feeRecipientsProvider),
 				standard.WithBeaconBlockSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithBeaconBlockSigner(signer),
@@ -281,7 +254,6 @@ func TestProposeNoRANDAOReveal(t *testing.T) {
 		standard.WithProposalDataProvider(mock.NewBeaconBlockProposalProvider()),
 		standard.WithChainTimeService(chainTime),
 		standard.WithValidatingAccountsProvider(mockaccountsprovider.NewValidatingAccountsProvider()),
-		standard.WithFeeRecipientProvider(mockfeerecipientprovider.New()),
 		standard.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 		standard.WithRANDAORevealSigner(mocksigner.New()),
 		standard.WithBeaconBlockSigner(mocksigner.New()),

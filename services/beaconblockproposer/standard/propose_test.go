@@ -28,7 +28,6 @@ import (
 	"github.com/attestantio/vouch/services/cache"
 	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
-	mockfeerecipientprovider "github.com/attestantio/vouch/services/feerecipientprovider/mock"
 	staticgraffitiprovider "github.com/attestantio/vouch/services/graffitiprovider/static"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	mocksigner "github.com/attestantio/vouch/services/signer/mock"
@@ -71,7 +70,6 @@ func TestPropose(t *testing.T) {
 
 	consensusClient, err := mockconsensusclient.New(ctx)
 	require.NoError(t, err)
-	feeRecipientsProvider := mockfeerecipientprovider.New()
 	graffitiProvider, err := staticgraffitiprovider.New(ctx)
 	require.NoError(t, err)
 	blockAuctioneer := mockblockauctioneer.New()
@@ -129,7 +127,6 @@ func TestPropose(t *testing.T) {
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithFeeRecipientProvider(feeRecipientsProvider),
 				standard.WithBeaconBlockSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithGraffitiProvider(graffitiProvider),
