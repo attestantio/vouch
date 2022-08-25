@@ -48,8 +48,8 @@ type Service struct {
 	timeout                                   time.Duration
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 
-	boostConfig   *blockrelay.BoostConfig
-	boostConfigMu sync.RWMutex
+	executionConfig   *blockrelay.ExecutionConfig
+	executionConfigMu sync.RWMutex
 }
 
 // module-wide log.
@@ -91,10 +91,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	// Run this in a goroutine as it can take a while to complete, and we don't want to miss attestations
 	// in the meantime.
 	go func(ctx context.Context) {
-		s.fetchBoostConfig(ctx, nil)
+		s.fetchExecutionConfig(ctx, nil)
 
-		if s.boostConfig == nil {
-			log.Error().Msg("Failed to obtain boost configuration, will retry but blocks cannot be proposed in the meantime")
+		if s.executionConfig == nil {
+			log.Error().Msg("Failed to obtain execution configuration, will retry but blocks cannot be proposed in the meantime")
 		} else {
 			// Carry out initial submission of validator registrations.
 			s.submitValidatorRegistrations(ctx, nil)
@@ -104,10 +104,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	// Periodically fetch the proposer configuration.
 	if err := parameters.scheduler.SchedulePeriodicJob(ctx,
 		"blockrelay",
-		"Fetch proposer configuration",
-		s.fetchBoostConfigRuntime,
+		"Fetch execution configuration",
+		s.fetchExecutionConfigRuntime,
 		nil,
-		s.fetchBoostConfig,
+		s.fetchExecutionConfig,
 		nil,
 	); err != nil {
 		return nil, errors.Wrap(err, "failed to start proposer config fetcher")

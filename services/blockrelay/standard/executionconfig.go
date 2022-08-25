@@ -27,8 +27,8 @@ import (
 	httpconfidant "github.com/wealdtech/go-majordomo/confidants/http"
 )
 
-// fetchBoostConfigRuntime sets the runtime for the next boost configuration call.
-func (s *Service) fetchBoostConfigRuntime(_ context.Context,
+// fetchExecutionConfigRuntime sets the runtime for the next execution configuration call.
+func (s *Service) fetchExecutionConfigRuntime(_ context.Context,
 	_ interface{},
 ) (
 	time.Time,
@@ -43,8 +43,8 @@ func (s *Service) fetchBoostConfigRuntime(_ context.Context,
 	return s.chainTime.StartOfEpoch(s.chainTime.CurrentEpoch() + 1).Add(time.Duration(offset) * time.Second), nil
 }
 
-// fetchBoostConfig fetches the boost configuration.
-func (s *Service) fetchBoostConfig(ctx context.Context,
+// fetchExecutionConfig fetches the execution configuration.
+func (s *Service) fetchExecutionConfig(ctx context.Context,
 	_ interface{},
 ) {
 	started := time.Now()
@@ -57,15 +57,15 @@ func (s *Service) fetchBoostConfig(ctx context.Context,
 	// epoch, however preparations linger for a couple of epochs after registration so this is safe.
 	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpoch(ctx, epoch+1)
 	if err != nil {
-		monitorBoostConfig(time.Since(started), false)
+		monitorExecutionConfig(time.Since(started), false)
 		log.Error().Err(err).Msg("Failed to obtain validating accounts")
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
 
 	if len(accounts) == 0 {
-		monitorBoostConfig(time.Since(started), false)
-		log.Debug().Msg("No validating accounts; not fetching boost config")
+		monitorExecutionConfig(time.Since(started), false)
+		log.Debug().Msg("No validating accounts; not fetching execution config")
 	}
 
 	// Build list of public keys.
@@ -78,44 +78,44 @@ func (s *Service) fetchBoostConfig(ctx context.Context,
 		}
 	}
 
-	boostConfig, err := s.obtainBoostConfig(ctx, pubkeys)
+	executionConfig, err := s.obtainExecutionConfig(ctx, pubkeys)
 	if err != nil {
-		monitorBoostConfig(time.Since(started), false)
-		if s.boostConfig == nil {
-			log.Error().Err(err).Msg("Failed to obtain boost configuration; no configuration available")
+		monitorExecutionConfig(time.Since(started), false)
+		if s.executionConfig == nil {
+			log.Error().Err(err).Msg("Failed to obtain execution configuration; no configuration available")
 		} else {
-			log.Warn().Err(err).Msg("Failed to obtain updated boost configuration; retaining current configuration")
+			log.Warn().Err(err).Msg("Failed to obtain updated execution configuration; retaining current configuration")
 		}
 		return
 	}
-	if boostConfig == nil {
-		monitorBoostConfig(time.Since(started), false)
-		if s.boostConfig == nil {
-			log.Error().Err(err).Msg("Obtained nil boost configuration; no configuration available")
+	if executionConfig == nil {
+		monitorExecutionConfig(time.Since(started), false)
+		if s.executionConfig == nil {
+			log.Error().Err(err).Msg("Obtained nil execution configuration; no configuration available")
 		} else {
-			log.Warn().Err(err).Msg("Obtained nil updated boost configuration; retaining current configuration")
+			log.Warn().Err(err).Msg("Obtained nil updated execution configuration; retaining current configuration")
 		}
 		return
 	}
 
-	log.Trace().Stringer("boost_config", boostConfig).Msg("Obtained configuration")
+	log.Trace().Stringer("execution_config", executionConfig).Msg("Obtained configuration")
 
-	s.boostConfigMu.Lock()
-	s.boostConfig = boostConfig
-	s.boostConfigMu.Unlock()
+	s.executionConfigMu.Lock()
+	s.executionConfig = executionConfig
+	s.executionConfigMu.Unlock()
 
-	monitorBoostConfig(time.Since(started), true)
+	monitorExecutionConfig(time.Since(started), true)
 
-	log.Trace().Int("proposer configs", len(s.boostConfig.ProposerConfigs)).Msg("Obtained boost configuration")
+	log.Trace().Int("execution configs", len(s.executionConfig.ProposerConfigs)).Msg("Obtained execution configuration")
 }
 
-func (s *Service) obtainBoostConfig(ctx context.Context,
+func (s *Service) obtainExecutionConfig(ctx context.Context,
 	pubkeys [][]byte,
 ) (
-	*blockrelay.BoostConfig,
+	*blockrelay.ExecutionConfig,
 	error,
 ) {
-	log.Trace().Msg("Obtaining boost configuration")
+	log.Trace().Msg("Obtaining execution configuration")
 
 	var res []byte
 	var err error
@@ -126,7 +126,7 @@ func (s *Service) obtainBoostConfig(ctx context.Context,
 		// We are fetching from a dynamic source, need to provide additional parameters.
 		if len(pubkeys) == 0 {
 			// No results, but no error.
-			log.Trace().Msg("no public keys supplied; cannot fetch boost configuation")
+			log.Trace().Msg("no public keys supplied; cannot fetch execution configuation")
 			return nil, nil
 		}
 
@@ -161,15 +161,15 @@ func (s *Service) obtainBoostConfig(ctx context.Context,
 		res, err = s.majordomo.Fetch(ctx, s.configURL)
 	}
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain boost configuration")
+		return nil, errors.Wrap(err, "failed to obtain execution configuration")
 	}
 
 	log.Trace().Str("res", string(res)).Msg("Received response")
 
-	boostConfig := &blockrelay.BoostConfig{}
-	if err := json.Unmarshal(res, boostConfig); err != nil {
-		return nil, errors.Wrap(err, "failed to unmarshal boost config")
+	executionConfig := &blockrelay.ExecutionConfig{}
+	if err := json.Unmarshal(res, executionConfig); err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal execution config")
 	}
 
-	return boostConfig, nil
+	return executionConfig, nil
 }

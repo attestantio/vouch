@@ -20,10 +20,13 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 )
+
+var zeroFeeRecipient bellatrix.ExecutionAddress
 
 type beaconBlockResponse struct {
 	provider string
@@ -129,8 +132,13 @@ func (s *Service) blindedBeaconBlockProposal(ctx context.Context,
 		errCh <- errors.Wrap(err, name)
 		return
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained blinded beacon block proposal")
 	if proposal == nil {
+		errCh <- errors.New("empty blinded beacon block response")
+		return
+	}
+	if bytes.Equal(proposal.Bellatrix.Body.ExecutionPayloadHeader.FeeRecipient[:], zeroFeeRecipient[:]) {
+		errCh <- errors.New("blinded beacon block response has 0 fee recipient")
 		return
 	}
 

@@ -85,12 +85,12 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	started := time.Now()
 	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(slot)).Str("pubkey", fmt.Sprintf("%#x", pubkey)).Logger()
 
-	s.boostConfigMu.RLock()
-	proposerConfig, exists := s.boostConfig.ProposerConfigs[pubkey]
+	s.executionConfigMu.RLock()
+	proposerConfig, exists := s.executionConfig.ProposerConfigs[pubkey]
 	if !exists {
-		proposerConfig = s.boostConfig.DefaultConfig
+		proposerConfig = s.executionConfig.DefaultConfig
 	}
-	s.boostConfigMu.RUnlock()
+	s.executionConfigMu.RUnlock()
 
 	if !proposerConfig.Builder.Enabled {
 		return nil, errors.New("auction disabled in proposer configuration")

@@ -82,9 +82,9 @@ func (s *Service) submitValidatorRegistrations(ctx context.Context,
 		log.Debug().Msg("No validating accounts; not submiting validator registrations")
 		return
 	}
-	if s.boostConfig == nil {
+	if s.executionConfig == nil {
 		monitorValidatorRegistrations(false, time.Since(started))
-		log.Debug().Msg("No boost config; not submiting validator registrations")
+		log.Debug().Msg("No execution config; not submiting validator registrations")
 		return
 	}
 
@@ -98,8 +98,8 @@ func (s *Service) submitValidatorRegistrations(ctx context.Context,
 func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 ) error {
-	if s.boostConfig == nil {
-		return errors.New("no boost configuration; cannot submit validator registrations at current")
+	if s.executionConfig == nil {
+		return errors.New("no execution configuration; cannot submit validator registrations at current")
 	}
 
 	consensusRegistrations := make([]*consensusclientapi.VersionedSignedValidatorRegistration, 0, len(accounts))
@@ -114,9 +114,9 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 		}
 		copy(pubkey[:], accountPubkey.Marshal())
 
-		proposerConfig, exists := s.boostConfig.ProposerConfigs[pubkey]
+		proposerConfig, exists := s.executionConfig.ProposerConfigs[pubkey]
 		if !exists {
-			proposerConfig = s.boostConfig.DefaultConfig
+			proposerConfig = s.executionConfig.DefaultConfig
 		}
 
 		registration := &apiv1.ValidatorRegistration{
