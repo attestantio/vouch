@@ -203,7 +203,7 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 		wg.Add(1)
 		go func(ctx context.Context, submitter eth2client.ValidatorRegistrationsSubmitter, registrations []*consensusclientapi.VersionedSignedValidatorRegistration) {
 			defer wg.Done()
-			log.Warn().Str("client", submitter.(eth2client.Service).Address()).Msg("jgm Submitting secondary validator registration")
+			log.Trace().Str("client", submitter.(eth2client.Service).Address()).Msg("Submitting secondary validator registrations")
 			if err := submitter.SubmitValidatorRegistrations(ctx, consensusRegistrations); err != nil {
 				log.Error().Err(err).Str("client", submitter.(eth2client.Service).Address()).Msg("Failed to submit secondary validator registrations")
 				return

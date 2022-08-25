@@ -426,7 +426,6 @@ func startServices(ctx context.Context,
 			clients[address] = struct{}{}
 		}
 	}
-	fmt.Printf("***************************jgm %d\n", len(secondaryValidatorRegistrationsSubmitters))
 
 	blockRelay, err := standardblockrelay.New(ctx,
 		standardblockrelay.WithLogLevel(util.LogLevel("blockrelay")),
