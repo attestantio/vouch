@@ -32,3 +32,11 @@ type ValidatorRegistrationsSubmitter interface {
 		accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 	) error
 }
+
+// ExecutionConfigProvider is the interface for providing execution configuration.
+type ExecutionConfigProvider interface {
+	Service
+
+	// ExecutionConfig provides the current execution configuration.
+	ExecutionConfig(ctx context.Context) (*ExecutionConfig, error)
+}

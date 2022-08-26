@@ -83,7 +83,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	error,
 ) {
 	started := time.Now()
-	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(slot)).Str("pubkey", fmt.Sprintf("%#x", pubkey)).Logger()
+	log := util.LogWithID(ctx, log, "strategy_id").With().Str("operation", "builderbid").Uint64("slot", uint64(slot)).Str("pubkey", fmt.Sprintf("%#x", pubkey)).Logger()
 
 	s.executionConfigMu.RLock()
 	proposerConfig, exists := s.executionConfig.ProposerConfigs[pubkey]
@@ -131,31 +131,16 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	responded := 0
 	errored := 0
 	timedOut := 0
+	softTimedOut := 0
 	bestScore := new(big.Int)
 	bidsMu := new(sync.Mutex)
 
 	// Loop 1: prior to soft timeout.
-	for responded+errored+timedOut != requests {
+	for responded+errored+timedOut+softTimedOut != requests {
 		select {
-		case <-softCtx.Done():
-			// If we have any responses at this point we consider the non-responders timed out.
-			if responded > 0 {
-				timedOut = requests - responded - errored
-				log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Msg("Soft timeout reached with responses")
-			} else {
-				log.Debug().Dur("elapsed", time.Since(started)).Int("errored", errored).Msg("Soft timeout reached with no responses")
-			}
-			break
-		case <-ctx.Done():
-			// Anyone not responded by now is considered errored.
-			timedOut = requests - responded - errored
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
-		case err := <-errCh:
-			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
 		case resp := <-respCh:
 			responded++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
 			if res.Bid == nil || resp.score.Cmp(bestScore) > 0 {
 				res.Bid = resp.bid
 				bestScore = resp.score
@@ -164,6 +149,19 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 			bidsMu.Lock()
 			res.Values[resp.provider.Address()] = resp.score
 			bidsMu.Unlock()
+		case err := <-errCh:
+			errored++
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+		case <-softCtx.Done():
+			// If we have any responses at this point we consider the non-responders timed out.
+			if responded > 0 {
+				timedOut = requests - responded - errored
+				log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Soft timeout reached with responses")
+			} else {
+				log.Debug().Dur("elapsed", time.Since(started)).Int("errored", errored).Msg("Soft timeout reached with no responses")
+			}
+			// Set the number of requests that have soft timed out.
+			softTimedOut = requests - responded - errored - timedOut
 		}
 	}
 	softCancel()
@@ -171,16 +169,9 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	// Loop 2: after soft timeout.
 	for responded+errored+timedOut != requests {
 		select {
-		case <-ctx.Done():
-			// Anyone not responded by now is considered errored.
-			timedOut = requests - responded - errored
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
-		case err := <-errCh:
-			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
 		case resp := <-respCh:
 			responded++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
 			if res.Bid == nil || resp.score.Cmp(bestScore) > 0 {
 				res.Bid = resp.bid
 				bestScore = resp.score
@@ -189,10 +180,16 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 			bidsMu.Lock()
 			res.Values[resp.provider.Address()] = resp.score
 			bidsMu.Unlock()
+		case err := <-errCh:
+			errored++
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+		case <-ctx.Done():
+			// Anyone not responded by now is considered errored.
+			timedOut = requests - responded - errored
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
 		}
 	}
 	cancel()
-
 	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Results")
 
 	if res.Bid == nil {

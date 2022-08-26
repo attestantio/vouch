@@ -11,35 +11,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package static
+package mock
 
 import (
 	"context"
-	"time"
 
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/blockrelay"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
-// FeeRecipients returns the fee recipients for the given validators.
-func (s *Service) FeeRecipients(_ context.Context,
-	indices []phase0.ValidatorIndex,
-) (
-	map[phase0.ValidatorIndex]bellatrix.ExecutionAddress,
-	error,
-) {
-	started := time.Now()
+// Service is a mock block relay.
+type Service struct{}
 
-	res := make(map[phase0.ValidatorIndex]bellatrix.ExecutionAddress, len(indices))
-	for _, index := range indices {
-		feeRecipient, exists := s.feeRecipients[index]
-		if exists {
-			res[index] = feeRecipient
-		} else {
-			res[index] = s.defaultFeeRecipient
-		}
-	}
+// New creates a new mock block relay.
+func New() *Service {
+	return &Service{}
+}
 
-	feeRecipientsCompleted(started, "succeeded")
-	return res, nil
+// ExecutionConfig provides the current execution configuration.
+func (s *Service) ExecutionConfig(ctx context.Context) (*blockrelay.ExecutionConfig, error) {
+	return nil, nil
+}
+
+// SubmitValidatorRegistrations submits validator registrations for the given accounts.
+func (s *Service) SubmitValidatorRegistrations(ctx context.Context, accounts map[phase0.ValidatorIndex]e2wtypes.Account) error {
+	return nil
 }

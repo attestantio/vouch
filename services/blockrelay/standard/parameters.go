@@ -35,6 +35,8 @@ type parameters struct {
 	listenAddress                             string
 	chainTime                                 chaintime.Service
 	configURL                                 string
+	fallbackFeeRecipient                      string
+	fallbackGasLimit                          uint64
 	clientCertURL                             string
 	clientKeyURL                              string
 	caCertURL                                 string
@@ -101,6 +103,20 @@ func WithChainTime(service chaintime.Service) Parameter {
 func WithConfigURL(url string) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.configURL = url
+	})
+}
+
+// WithFallbackFeeRecipient sets the fallback fee recipient for all validators.
+func WithFallbackFeeRecipient(feeRecipient string) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.fallbackFeeRecipient = feeRecipient
+	})
+}
+
+// WithFallbackGasLimit sets the fallback gas limit for all validators.
+func WithFallbackGasLimit(gasLimit uint64) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.fallbackGasLimit = gasLimit
 	})
 }
 
@@ -171,14 +187,14 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.scheduler == nil {
 		return nil, errors.New("no scheduler specified")
 	}
-	if parameters.listenAddress == "" {
-		return nil, errors.New("no listen address specified")
-	}
 	if parameters.chainTime == nil {
 		return nil, errors.New("no chaintime specified")
 	}
-	if parameters.configURL == "" {
-		return nil, errors.New("no configuration URL specified")
+	if parameters.fallbackFeeRecipient == "" {
+		return nil, errors.New("no fallback fee recipient specified")
+	}
+	if parameters.fallbackGasLimit == 0 {
+		return nil, errors.New("no fallback gas limit specified")
 	}
 	if parameters.validatingAccountsProvider == nil {
 		return nil, errors.New("no validating accounts provider specified")
@@ -188,6 +204,12 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.timeout == 0 {
 		return nil, errors.New("no timeout specified")
+	}
+	if parameters.listenAddress == "" {
+		return nil, errors.New("no listen address specified")
+	}
+	if parameters.configURL == "" {
+		return nil, errors.New("no configuration URL specified")
 	}
 
 	return &parameters, nil

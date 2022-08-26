@@ -21,7 +21,6 @@ import (
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/services/chaintime"
-	"github.com/attestantio/vouch/services/feerecipientprovider"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/rs/zerolog"
@@ -32,8 +31,8 @@ type parameters struct {
 	monitor                         metrics.Service
 	chainTimeService                chaintime.Service
 	validatingAccountsProvider      accountmanager.ValidatingAccountsProvider
-	feeRecipientProvider            feerecipientprovider.Service
 	proposalPreparationsSubmitter   eth2client.ProposalPreparationsSubmitter
+	executionConfigProvider         blockrelay.ExecutionConfigProvider
 	validatorRegistrationsSubmitter blockrelay.ValidatorRegistrationsSubmitter
 }
 
@@ -76,17 +75,17 @@ func WithValidatingAccountsProvider(provider accountmanager.ValidatingAccountsPr
 	})
 }
 
-// WithFeeRecipientProvider sets the fee recipient provider.
-func WithFeeRecipientProvider(provider feerecipientprovider.Service) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.feeRecipientProvider = provider
-	})
-}
-
 // WithProposalPreparationsSubmitter sets the proposal preparations submitter.
 func WithProposalPreparationsSubmitter(submitter eth2client.ProposalPreparationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalPreparationsSubmitter = submitter
+	})
+}
+
+// WithExecutionConfigProvider sets the execution configuration provider.
+func WithExecutionConfigProvider(provider blockrelay.ExecutionConfigProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.executionConfigProvider = provider
 	})
 }
 
@@ -118,11 +117,11 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.validatingAccountsProvider == nil {
 		return nil, errors.New("no validating accounts provider specified")
 	}
-	if parameters.feeRecipientProvider == nil {
-		return nil, errors.New("no fee recipient provider specified")
-	}
 	if parameters.proposalPreparationsSubmitter == nil {
 		return nil, errors.New("no proposal preparations submitter specified")
+	}
+	if parameters.executionConfigProvider == nil {
+		return nil, errors.New("no execution configuration provider specified")
 	}
 
 	return &parameters, nil

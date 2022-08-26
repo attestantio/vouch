@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -58,7 +59,7 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpoch(ctx, epoch+1)
 	if err != nil {
 		monitorExecutionConfig(time.Since(started), false)
-		log.Error().Err(err).Msg("Failed to obtain validating accounts")
+		log.Error().Err(err).Msg("Failed to obtain validating accounts; falling back")
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
@@ -82,7 +83,18 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 	if err != nil {
 		monitorExecutionConfig(time.Since(started), false)
 		if s.executionConfig == nil {
-			log.Error().Err(err).Msg("Failed to obtain execution configuration; no configuration available")
+			log.Error().Err(err).Msg("Failed to obtain execution configuration; setting default configuration with fallback")
+			s.executionConfigMu.Lock()
+			s.executionConfig = &blockrelay.ExecutionConfig{
+				ProposerConfigs: make(map[phase0.BLSPubKey]*blockrelay.ProposerConfig),
+				DefaultConfig: &blockrelay.ProposerConfig{
+					FeeRecipient: s.fallbackFeeRecipient,
+					Builder: &blockrelay.BuilderConfig{
+						GasLimit: s.fallbackGasLimit,
+					},
+				},
+			}
+			s.executionConfigMu.Unlock()
 		} else {
 			log.Warn().Err(err).Msg("Failed to obtain updated execution configuration; retaining current configuration")
 		}
@@ -91,7 +103,18 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 	if executionConfig == nil {
 		monitorExecutionConfig(time.Since(started), false)
 		if s.executionConfig == nil {
-			log.Error().Err(err).Msg("Obtained nil execution configuration; no configuration available")
+			log.Error().Err(err).Msg("Obtained nil execution configuration; setting default configuration with fallback")
+			s.executionConfigMu.Lock()
+			s.executionConfig = &blockrelay.ExecutionConfig{
+				ProposerConfigs: make(map[phase0.BLSPubKey]*blockrelay.ProposerConfig),
+				DefaultConfig: &blockrelay.ProposerConfig{
+					FeeRecipient: s.fallbackFeeRecipient,
+					Builder: &blockrelay.BuilderConfig{
+						GasLimit: s.fallbackGasLimit,
+					},
+				},
+			}
+			s.executionConfigMu.Unlock()
 		} else {
 			log.Warn().Err(err).Msg("Obtained nil updated execution configuration; retaining current configuration")
 		}
@@ -172,4 +195,14 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 	}
 
 	return executionConfig, nil
+}
+
+// ExecutionConfig provides the current execution configuration.
+func (s *Service) ExecutionConfig(ctx context.Context) (*blockrelay.ExecutionConfig, error) {
+	s.executionConfigMu.RLock()
+	defer s.executionConfigMu.RUnlock()
+	if s.executionConfig == nil {
+		return nil, errors.New("no execution config available at current")
+	}
+	return s.executionConfig, nil
 }

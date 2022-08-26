@@ -35,20 +35,20 @@ type executionConfigJSON struct {
 }
 
 // MarshalJSON implements json.Marshaler.
-func (b *ExecutionConfig) MarshalJSON() ([]byte, error) {
+func (e *ExecutionConfig) MarshalJSON() ([]byte, error) {
 	proposerConfigs := make(map[string]*ProposerConfig)
-	for addr, proposerConfig := range b.ProposerConfigs {
+	for addr, proposerConfig := range e.ProposerConfigs {
 		proposerConfigs[fmt.Sprintf("%#x", addr)] = proposerConfig
 	}
 
 	return json.Marshal(&executionConfigJSON{
 		ProposerConfigs: proposerConfigs,
-		DefaultConfig:   b.DefaultConfig,
+		DefaultConfig:   e.DefaultConfig,
 	})
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
-func (b *ExecutionConfig) UnmarshalJSON(input []byte) error {
+func (e *ExecutionConfig) UnmarshalJSON(input []byte) error {
 	var data executionConfigJSON
 	if err := json.Unmarshal(input, &data); err != nil {
 		return errors.Wrap(err, "invalid JSON")
@@ -64,16 +64,25 @@ func (b *ExecutionConfig) UnmarshalJSON(input []byte) error {
 		copy(pubKey[:], pubkey)
 		proposerConfigs[pubKey] = config
 	}
-	b.ProposerConfigs = proposerConfigs
+	e.ProposerConfigs = proposerConfigs
 
-	b.DefaultConfig = data.DefaultConfig
+	e.DefaultConfig = data.DefaultConfig
 
 	return nil
 }
 
+// ProposerConfig provides the proposer configuration for a given public key.
+func (e *ExecutionConfig) ProposerConfig(pubkey phase0.BLSPubKey,
+) *ProposerConfig {
+	if _, exists := e.ProposerConfigs[pubkey]; exists {
+		return e.ProposerConfigs[pubkey]
+	}
+	return e.DefaultConfig
+}
+
 // String provides a string representation of the struct.
-func (b *ExecutionConfig) String() string {
-	data, err := json.Marshal(b)
+func (e *ExecutionConfig) String() string {
+	data, err := json.Marshal(e)
 	if err != nil {
 		return fmt.Sprintf("ERR: %v\n", err)
 	}

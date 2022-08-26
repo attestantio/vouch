@@ -31,7 +31,6 @@ import (
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
-	e2types "github.com/wealdtech/go-eth2-types/v2"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
@@ -106,18 +105,12 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 	signedRegistrations := make(map[string][]*api.VersionedSignedValidatorRegistration)
 	var pubkey phase0.BLSPubKey
 	for index, account := range accounts {
-		var accountPubkey e2types.PublicKey
 		if provider, isProvider := account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
-			accountPubkey = provider.CompositePublicKey()
+			copy(pubkey[:], provider.CompositePublicKey().Marshal())
 		} else {
-			accountPubkey = account.(e2wtypes.AccountPublicKeyProvider).PublicKey()
+			copy(pubkey[:], account.PublicKey().Marshal())
 		}
-		copy(pubkey[:], accountPubkey.Marshal())
-
-		proposerConfig, exists := s.executionConfig.ProposerConfigs[pubkey]
-		if !exists {
-			proposerConfig = s.executionConfig.DefaultConfig
-		}
+		proposerConfig := s.executionConfig.ProposerConfig(pubkey)
 
 		registration := &apiv1.ValidatorRegistration{
 			FeeRecipient: proposerConfig.FeeRecipient,
@@ -170,7 +163,9 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 		if err == nil {
 			e.RawJSON("registrations", data).Msg("Generated registrations")
 		}
-		data, err = json.Marshal(consensusRegistrations)
+	}
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(consensusRegistrations)
 		if err == nil {
 			e.RawJSON("registrations", data).Msg("Generated consensus registrations")
 		}

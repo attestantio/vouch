@@ -15,6 +15,7 @@ package best_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBeaconBlockProposal(t *testing.T) {
+func TestBlindedBeaconBlockProposal(t *testing.T) {
 	ctx := context.Background()
 
 	genesisTime := time.Now()
@@ -213,6 +214,9 @@ func TestBeaconBlockProposal(t *testing.T) {
 				nil,
 			)
 			if test.err != "" {
+				for k, v := range capture.Entries() {
+					fmt.Printf("%v: %v\n", k, v)
+				}
 				require.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)

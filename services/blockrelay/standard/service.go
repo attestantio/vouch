@@ -15,12 +15,15 @@ package standard
 
 import (
 	"context"
+	"encoding/hex"
+	"strings"
 	"sync"
 	"time"
 
 	restdaemon "github.com/attestantio/go-block-relay/services/daemon/rest"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusclient "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/services/chaintime"
@@ -38,6 +41,8 @@ type Service struct {
 	majordomo                                 majordomo.Service
 	chainTime                                 chaintime.Service
 	configURL                                 string
+	fallbackFeeRecipient                      bellatrix.ExecutionAddress
+	fallbackGasLimit                          uint64
 	clientCertURL                             string
 	clientKeyURL                              string
 	caCertURL                                 string
@@ -80,6 +85,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		clientCertURL:               parameters.clientCertURL,
 		clientKeyURL:                parameters.clientKeyURL,
 		caCertURL:                   parameters.caCertURL,
+		fallbackGasLimit:            parameters.fallbackGasLimit,
 		validatingAccountsProvider:  parameters.validatingAccountsProvider,
 		validatorRegistrationSigner: parameters.validatorRegistrationSigner,
 		timeout:                     parameters.timeout,
@@ -87,21 +93,25 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		builderBidsCache: make(map[string]map[string]*spec.VersionedSignedBuilderBid),
 	}
 
-	// Carry out initial fetch of proposer configuration.
-	// Run this in a goroutine as it can take a while to complete, and we don't want to miss attestations
-	// in the meantime.
-	go func(ctx context.Context) {
-		s.fetchExecutionConfig(ctx, nil)
+	feeRecipient, err := hex.DecodeString(strings.TrimPrefix(parameters.fallbackFeeRecipient, "0x"))
+	if err != nil {
+		return nil, errors.New("invalid fallback fee recipient")
+	}
+	if len(feeRecipient) != len(s.fallbackFeeRecipient) {
+		return nil, errors.New("incorrect length for fallback fee recipient")
+	}
+	copy(s.fallbackFeeRecipient[:], feeRecipient)
 
-		if s.executionConfig == nil {
-			log.Error().Msg("Failed to obtain execution configuration, will retry but blocks cannot be proposed in the meantime")
-		} else {
-			// Carry out initial submission of validator registrations.
-			s.submitValidatorRegistrations(ctx, nil)
-		}
+	// Carry out initial fetch of execution configuration.
+	// Need to run this inline, as other modules need this information.
+	s.fetchExecutionConfig(ctx, nil)
+	// Carry out initial submission of validator registrations.
+	// Can run this in a separate goroutine to avoid blocking.
+	go func(ctx context.Context) {
+		s.submitValidatorRegistrations(ctx, nil)
 	}(ctx)
 
-	// Periodically fetch the proposer configuration.
+	// Periodically fetch the execution configuration.
 	if err := parameters.scheduler.SchedulePeriodicJob(ctx,
 		"blockrelay",
 		"Fetch execution configuration",
@@ -110,7 +120,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		s.fetchExecutionConfig,
 		nil,
 	); err != nil {
-		return nil, errors.Wrap(err, "failed to start proposer config fetcher")
+		return nil, errors.Wrap(err, "failed to start execution config fetcher")
 	}
 
 	// Periodically submit the validator registrations.

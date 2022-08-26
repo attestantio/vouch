@@ -15,6 +15,7 @@ package standard
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
@@ -52,19 +53,29 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 		i++
 	}
 
-	feeRecipients, err := s.feeRecipientProvider.FeeRecipients(ctx, indices)
+	execConfig, err := s.executionConfigProvider.ExecutionConfig(ctx)
 	if err != nil {
-		return errors.Wrap(err, "failed to obtain fee recipients")
+		return errors.Wrap(err, "failed to obtain execution configuration")
 	}
 
-	proposalPreparations := make([]*apiv1.ProposalPreparation, len(feeRecipients))
-	i = 0
-	for index, feeRecipient := range feeRecipients {
-		proposalPreparations[i] = &apiv1.ProposalPreparation{
-			ValidatorIndex: index,
-			FeeRecipient:   feeRecipient,
+	proposalPreparations := make([]*apiv1.ProposalPreparation, 0, len(accounts))
+	for index, account := range accounts {
+		pubkey := phase0.BLSPubKey{}
+		if distributedAccount, isDistributedAccount := account.(e2wtypes.AccountCompositePublicKeyProvider); isDistributedAccount {
+			copy(pubkey[:], distributedAccount.CompositePublicKey().Marshal())
+		} else {
+			copy(pubkey[:], account.PublicKey().Marshal())
 		}
-		i++
+		proposerConfig := execConfig.ProposerConfig(pubkey)
+		if proposerConfig == nil {
+			// Error but keep going, as we want to provide as many preparations as possible.
+			log.Error().Str("pubkey", fmt.Sprintf("%#x", pubkey)).Err(err).Msg("Obtained nil propopser configuration")
+			continue
+		}
+		proposalPreparations = append(proposalPreparations, &apiv1.ProposalPreparation{
+			ValidatorIndex: index,
+			FeeRecipient:   proposerConfig.FeeRecipient,
+		})
 	}
 
 	go s.updateProposalPreparations(ctx, started, epoch, proposalPreparations)
