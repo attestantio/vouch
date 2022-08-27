@@ -23,7 +23,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
-	mockaccountsprovider "github.com/attestantio/vouch/services/accountmanager/mock"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/beaconblockproposer/standard"
 	"github.com/attestantio/vouch/services/cache"
@@ -56,6 +55,7 @@ func TestService(t *testing.T) {
 		standardchaintime.WithSlotDurationProvider(slotDurationProvider),
 		standardchaintime.WithSlotsPerEpochProvider(slotsPerEpochProvider),
 	)
+	require.NoError(t, err)
 
 	consensusClient, err := mockconsensusclient.New(ctx)
 	require.NoError(t, err)
@@ -253,7 +253,7 @@ func TestProposeNoRANDAOReveal(t *testing.T) {
 		standard.WithMonitor(nullmetrics.New(ctx)),
 		standard.WithProposalDataProvider(mock.NewBeaconBlockProposalProvider()),
 		standard.WithChainTimeService(chainTime),
-		standard.WithValidatingAccountsProvider(mockaccountsprovider.NewValidatingAccountsProvider()),
+		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
 		standard.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
 		standard.WithRANDAORevealSigner(mocksigner.New()),
 		standard.WithBeaconBlockSigner(mocksigner.New()),

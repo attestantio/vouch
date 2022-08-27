@@ -22,27 +22,44 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
-type validatingAccountsProvider struct{}
+type validatingAccountsProvider struct {
+	validatingAccounts map[phase0.ValidatorIndex]e2wtypes.Account
+}
 
 // NewValidatingAccountsProvider is a mock.
-func NewValidatingAccountsProvider() accountmanager.ValidatingAccountsProvider {
-	return &validatingAccountsProvider{}
+// nolint
+func NewValidatingAccountsProvider() *validatingAccountsProvider {
+	return &validatingAccountsProvider{
+		validatingAccounts: make(map[phase0.ValidatorIndex]e2wtypes.Account),
+	}
+}
+
+// AddAccount adds an account to the mock provider.
+func (s *validatingAccountsProvider) AddAccount(index phase0.ValidatorIndex, account e2wtypes.Account) {
+	s.validatingAccounts[index] = account
 }
 
 // ValidatingAccountsForEpoch is a mock.
-func (*validatingAccountsProvider) ValidatingAccountsForEpoch(_ context.Context, _ phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
-	return make(map[phase0.ValidatorIndex]e2wtypes.Account), nil
+func (s *validatingAccountsProvider) ValidatingAccountsForEpoch(_ context.Context, _ phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	return s.validatingAccounts, nil
 }
 
 // ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
-func (*validatingAccountsProvider) ValidatingAccountsForEpochByIndex(_ context.Context,
+func (s *validatingAccountsProvider) ValidatingAccountsForEpochByIndex(_ context.Context,
 	_ phase0.Epoch,
-	_ []phase0.ValidatorIndex,
+	indices []phase0.ValidatorIndex,
 ) (
 	map[phase0.ValidatorIndex]e2wtypes.Account,
 	error,
 ) {
-	return make(map[phase0.ValidatorIndex]e2wtypes.Account), nil
+	accounts := make(map[phase0.ValidatorIndex]e2wtypes.Account)
+	for _, index := range indices {
+		if account, exists := s.validatingAccounts[index]; exists {
+			accounts[index] = account
+		}
+	}
+
+	return accounts, nil
 }
 
 type refresher struct{}

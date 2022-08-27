@@ -67,6 +67,7 @@ func TestPropose(t *testing.T) {
 		standardchaintime.WithSlotDurationProvider(slotDurationProvider),
 		standardchaintime.WithSlotsPerEpochProvider(slotsPerEpochProvider),
 	)
+	require.NoError(t, err)
 
 	consensusClient, err := mockconsensusclient.New(ctx)
 	require.NoError(t, err)

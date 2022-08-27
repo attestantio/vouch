@@ -14,9 +14,12 @@
 package standard
 
 import (
+	"bytes"
+	"net"
 	"time"
 
 	consensusclient "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
@@ -35,7 +38,7 @@ type parameters struct {
 	listenAddress                             string
 	chainTime                                 chaintime.Service
 	configURL                                 string
-	fallbackFeeRecipient                      string
+	fallbackFeeRecipient                      bellatrix.ExecutionAddress
 	fallbackGasLimit                          uint64
 	clientCertURL                             string
 	clientKeyURL                              string
@@ -107,7 +110,7 @@ func WithConfigURL(url string) Parameter {
 }
 
 // WithFallbackFeeRecipient sets the fallback fee recipient for all validators.
-func WithFallbackFeeRecipient(feeRecipient string) Parameter {
+func WithFallbackFeeRecipient(feeRecipient bellatrix.ExecutionAddress) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.fallbackFeeRecipient = feeRecipient
 	})
@@ -190,7 +193,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.chainTime == nil {
 		return nil, errors.New("no chaintime specified")
 	}
-	if parameters.fallbackFeeRecipient == "" {
+	if bytes.Equal(parameters.fallbackFeeRecipient[:], zeroExecutionAddress[:]) {
 		return nil, errors.New("no fallback fee recipient specified")
 	}
 	if parameters.fallbackGasLimit == 0 {
@@ -208,9 +211,10 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.listenAddress == "" {
 		return nil, errors.New("no listen address specified")
 	}
-	if parameters.configURL == "" {
-		return nil, errors.New("no configuration URL specified")
+	if _, _, err := net.SplitHostPort(parameters.listenAddress); err != nil {
+		return nil, errors.New("listen address malformed")
 	}
+	// config URL can be empty.
 
 	return &parameters, nil
 }

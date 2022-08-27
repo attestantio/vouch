@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,6 +33,7 @@ import (
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/vouch/loggers"
 	"github.com/attestantio/vouch/services/accountmanager"
 	dirkaccountmanager "github.com/attestantio/vouch/services/accountmanager/dirk"
@@ -99,7 +101,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.5.1-dev"
+var ReleaseVersion = "1.6.0-dev"
 
 func main() {
 	os.Exit(main2())
@@ -232,6 +234,7 @@ func fetchConfig() error {
 	viper.SetDefault("controller.attestation-aggregation-delay", 8*time.Second)
 	viper.SetDefault("controller.sync-committee-aggregation-delay", 8*time.Second)
 	viper.SetDefault("blockrelay.timeout", 1*time.Second)
+	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(30000000))
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -329,26 +332,9 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	// Decide if the ETH2 client is capable of Altair.
-	altairCapable := false
-	spec, err := eth2Client.(eth2client.SpecProvider).Spec(ctx)
+	altairCapable, bellatrixCapable, err := consensusClientCapabilities(ctx, eth2Client)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to obtain spec")
-	}
-	if _, exists := spec["INACTIVITY_PENALTY_QUOTIENT_ALTAIR"]; exists {
-		altairCapable = true
-		log.Info().Msg("Client is Altair-capable")
-	} else {
-		log.Info().Msg("Client is not Altair-capable")
-	}
-
-	// Decide if the ETH2 client is capabale of Bellatrix.
-	bellatrixCapable := false
-	if _, exists := spec["BELLATRIX_FORK_EPOCH"]; exists {
-		bellatrixCapable = true
-		log.Info().Msg("Client is Bellatrix-capable")
-	} else {
-		log.Info().Msg("Client is not Bellatrix-capable")
+		return nil, nil, err
 	}
 
 	log.Trace().Msg("Selecting scheduler")
@@ -393,52 +379,10 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to start graffiti provider")
 	}
 
-	// We also need to submit validator registrations to all nodes that are acting as blinded beacon block proposers, as
-	// some of them use the registration as part of the condition to decide if the blinded block should be called or not.
-	secondaryValidatorRegistrationsSubmitters := []eth2client.ValidatorRegistrationsSubmitter{}
-	clients := make(map[string]struct{})
-	for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best") {
-		client, err := fetchClient(ctx, address)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
-		}
-		secondaryValidatorRegistrationsSubmitters = append(secondaryValidatorRegistrationsSubmitters, client.(eth2client.ValidatorRegistrationsSubmitter))
-		clients[address] = struct{}{}
-	}
-	for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first") {
-		if _, exists := clients[address]; !exists {
-			client, err := fetchClient(ctx, address)
-			if err != nil {
-				return nil, nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
-			}
-			secondaryValidatorRegistrationsSubmitters = append(secondaryValidatorRegistrationsSubmitters, client.(eth2client.ValidatorRegistrationsSubmitter))
-			clients[address] = struct{}{}
-		}
-	}
-
-	var blockRelay blockrelay.Service
-	blockRelay, err = standardblockrelay.New(ctx,
-		standardblockrelay.WithLogLevel(util.LogLevel("blockrelay")),
-		standardblockrelay.WithMonitor(monitor),
-		standardblockrelay.WithMajordomo(majordomo),
-		standardblockrelay.WithScheduler(scheduler),
-		standardblockrelay.WithChainTime(chainTime),
-		standardblockrelay.WithConfigURL(viper.GetString("blockrelay.config.url")),
-		standardblockrelay.WithFallbackFeeRecipient(viper.GetString("blockrelay.fallback-fee-recipient")),
-		standardblockrelay.WithFallbackGasLimit(viper.GetUint64("blockrelay.fallback-gas-limit")),
-		standardblockrelay.WithClientCertURL(viper.GetString("blockrelay.config.client-cert")),
-		standardblockrelay.WithClientKeyURL(viper.GetString("blockrelay.config.client-key")),
-		standardblockrelay.WithCACertURL(viper.GetString("blockrelay.config.ca-cert")),
-		standardblockrelay.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-		standardblockrelay.WithListenAddress(viper.GetString("blockrelay.listen-address")),
-		standardblockrelay.WithValidatorRegistrationSigner(signerSvc.(signer.ValidatorRegistrationSigner)),
-		standardblockrelay.WithTimeout(util.Timeout("blockrelay")),
-		standardblockrelay.WithSecondaryValidatorRegistrationsSubmitters(secondaryValidatorRegistrationsSubmitters),
-	)
+	blockRelay, err := startBlockRelay(ctx, monitor, majordomo, scheduler, chainTime, accountManager, signerSvc)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start block relay")
+		return nil, nil, err
 	}
-
 	log.Trace().Msg("Selecting beacon block proposal provider")
 	beaconBlockProposalProvider, err := selectBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime, cacheSvc)
 	if err != nil {
@@ -1401,4 +1345,100 @@ func runCommands(_ context.Context) bool {
 	}
 
 	return false
+}
+
+func consensusClientCapabilities(ctx context.Context, consensusClient eth2client.Service) (bool, bool, error) {
+	// Decide if the ETH2 client is capable of Altair.
+	altairCapable := false
+	spec, err := consensusClient.(eth2client.SpecProvider).Spec(ctx)
+	if err != nil {
+		return false, false, errors.Wrap(err, "failed to obtain spec")
+	}
+	if _, exists := spec["INACTIVITY_PENALTY_QUOTIENT_ALTAIR"]; exists {
+		altairCapable = true
+		log.Info().Msg("Client is Altair-capable")
+	} else {
+		log.Info().Msg("Client is not Altair-capable")
+	}
+
+	// Decide if the ETH2 client is capabale of Bellatrix.
+	bellatrixCapable := false
+	if _, exists := spec["BELLATRIX_FORK_EPOCH"]; exists {
+		bellatrixCapable = true
+		log.Info().Msg("Client is Bellatrix-capable")
+	} else {
+		log.Info().Msg("Client is not Bellatrix-capable")
+	}
+
+	return altairCapable, bellatrixCapable, nil
+}
+
+func startBlockRelay(ctx context.Context,
+	monitor metrics.Service,
+	majordomo majordomo.Service,
+	scheduler scheduler.Service,
+	chainTime chaintime.Service,
+	accountManager accountmanager.Service,
+	signerSvc signer.Service,
+) (
+	blockrelay.Service,
+	error,
+) {
+	// We also need to submit validator registrations to all nodes that are acting as blinded beacon block proposers, as
+	// some of them use the registration as part of the condition to decide if the blinded block should be called or not.
+	secondaryValidatorRegistrationsSubmitters := []eth2client.ValidatorRegistrationsSubmitter{}
+	clients := make(map[string]struct{})
+	for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best") {
+		client, err := fetchClient(ctx, address)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
+		}
+		secondaryValidatorRegistrationsSubmitters = append(secondaryValidatorRegistrationsSubmitters, client.(eth2client.ValidatorRegistrationsSubmitter))
+		clients[address] = struct{}{}
+	}
+	for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first") {
+		if _, exists := clients[address]; !exists {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
+			}
+			secondaryValidatorRegistrationsSubmitters = append(secondaryValidatorRegistrationsSubmitters, client.(eth2client.ValidatorRegistrationsSubmitter))
+			clients[address] = struct{}{}
+		}
+	}
+
+	var fallbackFeeRecipient bellatrix.ExecutionAddress
+	feeRecipient, err := hex.DecodeString(strings.TrimPrefix(viper.GetString("blockrelay.fallback-fee-recipient"), "0x"))
+	if err != nil {
+		return nil, errors.New("blockrelay: invalid fallback fee recipient")
+	}
+	if len(feeRecipient) != len(fallbackFeeRecipient) {
+		return nil, errors.New("blockrelay: incorrect length for fallback fee recipient")
+	}
+	copy(fallbackFeeRecipient[:], feeRecipient)
+
+	var blockRelay blockrelay.Service
+	blockRelay, err = standardblockrelay.New(ctx,
+		standardblockrelay.WithLogLevel(util.LogLevel("blockrelay")),
+		standardblockrelay.WithMonitor(monitor),
+		standardblockrelay.WithMajordomo(majordomo),
+		standardblockrelay.WithScheduler(scheduler),
+		standardblockrelay.WithChainTime(chainTime),
+		standardblockrelay.WithConfigURL(viper.GetString("blockrelay.config.url")),
+		standardblockrelay.WithFallbackFeeRecipient(fallbackFeeRecipient),
+		standardblockrelay.WithFallbackGasLimit(viper.GetUint64("blockrelay.fallback-gas-limit")),
+		standardblockrelay.WithClientCertURL(viper.GetString("blockrelay.config.client-cert")),
+		standardblockrelay.WithClientKeyURL(viper.GetString("blockrelay.config.client-key")),
+		standardblockrelay.WithCACertURL(viper.GetString("blockrelay.config.ca-cert")),
+		standardblockrelay.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+		standardblockrelay.WithListenAddress(viper.GetString("blockrelay.listen-address")),
+		standardblockrelay.WithValidatorRegistrationSigner(signerSvc.(signer.ValidatorRegistrationSigner)),
+		standardblockrelay.WithTimeout(util.Timeout("blockrelay")),
+		standardblockrelay.WithSecondaryValidatorRegistrationsSubmitters(secondaryValidatorRegistrationsSubmitters),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start block relay")
+	}
+
+	return blockRelay, nil
 }

@@ -15,8 +15,6 @@ package standard
 
 import (
 	"context"
-	"encoding/hex"
-	"strings"
 	"sync"
 	"time"
 
@@ -85,6 +83,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		clientCertURL:               parameters.clientCertURL,
 		clientKeyURL:                parameters.clientKeyURL,
 		caCertURL:                   parameters.caCertURL,
+		fallbackFeeRecipient:        parameters.fallbackFeeRecipient,
 		fallbackGasLimit:            parameters.fallbackGasLimit,
 		validatingAccountsProvider:  parameters.validatingAccountsProvider,
 		validatorRegistrationSigner: parameters.validatorRegistrationSigner,
@@ -92,15 +91,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		secondaryValidatorRegistrationsSubmitters: parameters.secondaryValidatorRegistrationsSubmitters,
 		builderBidsCache: make(map[string]map[string]*spec.VersionedSignedBuilderBid),
 	}
-
-	feeRecipient, err := hex.DecodeString(strings.TrimPrefix(parameters.fallbackFeeRecipient, "0x"))
-	if err != nil {
-		return nil, errors.New("invalid fallback fee recipient")
-	}
-	if len(feeRecipient) != len(s.fallbackFeeRecipient) {
-		return nil, errors.New("incorrect length for fallback fee recipient")
-	}
-	copy(s.fallbackFeeRecipient[:], feeRecipient)
 
 	// Carry out initial fetch of execution configuration.
 	// Need to run this inline, as other modules need this information.

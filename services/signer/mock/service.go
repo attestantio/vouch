@@ -16,6 +16,7 @@ package mock
 import (
 	"context"
 
+	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -144,6 +145,17 @@ func (*Service) SignSyncCommitteeSelection(_ context.Context,
 	_ e2wtypes.Account,
 	_ phase0.Slot,
 	_ uint64,
+) (
+	phase0.BLSSignature,
+	error,
+) {
+	return phase0.BLSSignature{}, nil
+}
+
+// SignValidatorRegistration signs a validator registration.
+func (*Service) SignValidatorRegistration(_ context.Context,
+	_ e2wtypes.Account,
+	_ *api.VersionedValidatorRegistration,
 ) (
 	phase0.BLSSignature,
 	error,
