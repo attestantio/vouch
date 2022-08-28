@@ -14,6 +14,7 @@
 package standard
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -21,12 +22,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	httpconfidant "github.com/wealdtech/go-majordomo/confidants/http"
 )
+
+var zeroFeeRecipient bellatrix.ExecutionAddress
 
 // fetchExecutionConfigRuntime sets the runtime for the next execution configuration call.
 func (s *Service) fetchExecutionConfigRuntime(_ context.Context,
@@ -89,9 +93,8 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 				ProposerConfigs: make(map[phase0.BLSPubKey]*blockrelay.ProposerConfig),
 				DefaultConfig: &blockrelay.ProposerConfig{
 					FeeRecipient: s.fallbackFeeRecipient,
-					Builder: &blockrelay.BuilderConfig{
-						GasLimit: s.fallbackGasLimit,
-					},
+					GasLimit:     s.fallbackGasLimit,
+					Builder:      &blockrelay.BuilderConfig{},
 				},
 			}
 			s.executionConfigMu.Unlock()
@@ -109,9 +112,8 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 				ProposerConfigs: make(map[phase0.BLSPubKey]*blockrelay.ProposerConfig),
 				DefaultConfig: &blockrelay.ProposerConfig{
 					FeeRecipient: s.fallbackFeeRecipient,
-					Builder: &blockrelay.BuilderConfig{
-						GasLimit: s.fallbackGasLimit,
-					},
+					GasLimit:     s.fallbackGasLimit,
+					Builder:      &blockrelay.BuilderConfig{},
 				},
 			}
 			s.executionConfigMu.Unlock()
@@ -119,6 +121,26 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 			log.Warn().Err(err).Msg("Obtained nil updated execution configuration; retaining current configuration")
 		}
 		return
+	}
+
+	// Ensure that zero values are filled with fallbacks.
+	if executionConfig.DefaultConfig.GasLimit == 0 {
+		log.Debug().Msg("Default gas limit 0; setting to fallback value")
+		executionConfig.DefaultConfig.GasLimit = s.fallbackGasLimit
+	}
+	if bytes.Equal(executionConfig.DefaultConfig.FeeRecipient[:], zeroFeeRecipient[:]) {
+		log.Debug().Msg("Default fee recipient 0; setting to fallback value")
+		executionConfig.DefaultConfig.FeeRecipient = s.fallbackFeeRecipient
+	}
+	for key, proposerConfig := range executionConfig.ProposerConfigs {
+		if proposerConfig.GasLimit == 0 {
+			log.Debug().Str("validator", fmt.Sprintf("%#x", key)).Msg("Gas limit 0; setting to fallback value")
+			proposerConfig.GasLimit = s.fallbackGasLimit
+		}
+		if bytes.Equal(proposerConfig.FeeRecipient[:], zeroFeeRecipient[:]) {
+			log.Debug().Str("validator", fmt.Sprintf("%#x", key)).Msg("Fee recipient 0; setting to fallback value")
+			proposerConfig.FeeRecipient = s.fallbackFeeRecipient
+		}
 	}
 
 	log.Trace().Stringer("execution_config", executionConfig).Msg("Obtained configuration")

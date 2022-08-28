@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/attestantio/go-block-relay v0.1.2
-	github.com/attestantio/go-builder-client v0.1.2
+	github.com/attestantio/go-builder-client v0.1.3
 	github.com/attestantio/go-eth2-client v0.13.3
 	github.com/aws/aws-sdk-go v1.44.81
 	github.com/herumi/bls-eth-go-binary v0.0.0-20220715020739-c139e7dca14d // indirect
@@ -40,7 +40,10 @@ require (
 	gotest.tools v2.2.0+incompatible
 )
 
-require github.com/holiman/uint256 v1.2.0
+require (
+	github.com/holiman/uint256 v1.2.0
+	github.com/wealdtech/go-eth2-wallet-nd/v2 v2.4.0
+)
 
 require (
 	cloud.google.com/go v0.103.0 // indirect
@@ -98,7 +101,6 @@ require (
 	github.com/wealdtech/go-ecodec v1.1.2 // indirect
 	github.com/wealdtech/go-eth2-util v1.7.0 // indirect
 	github.com/wealdtech/go-eth2-wallet-distributed v1.1.4 // indirect
-	github.com/wealdtech/go-eth2-wallet-nd/v2 v2.4.0 // indirect
 	github.com/wealdtech/go-eth2-wallet-store-s3 v1.10.0 // indirect
 	github.com/wealdtech/go-indexer v1.0.0 // indirect
 	go.opencensus.io v0.23.0 // indirect

@@ -114,7 +114,7 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 
 		registration := &apiv1.ValidatorRegistration{
 			FeeRecipient: proposerConfig.FeeRecipient,
-			GasLimit:     proposerConfig.Builder.GasLimit,
+			GasLimit:     proposerConfig.GasLimit,
 			Timestamp:    time.Now().Round(time.Second),
 			Pubkey:       pubkey,
 		}

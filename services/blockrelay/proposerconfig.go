@@ -17,6 +17,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -26,11 +27,13 @@ import (
 // ProposerConfig is the configuration for a specific proposer.
 type ProposerConfig struct {
 	FeeRecipient bellatrix.ExecutionAddress
+	GasLimit     uint64
 	Builder      *BuilderConfig
 }
 
 type proposerConfigJSON struct {
 	FeeRecipient string         `json:"fee_recipient"`
+	GasLimit     string         `json:"gas_limit"`
 	Builder      *BuilderConfig `json:"builder"`
 }
 
@@ -38,6 +41,7 @@ type proposerConfigJSON struct {
 func (p *ProposerConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&proposerConfigJSON{
 		FeeRecipient: fmt.Sprintf("%#x", p.FeeRecipient),
+		GasLimit:     fmt.Sprintf("%d", p.GasLimit),
 		Builder:      p.Builder,
 	})
 }
@@ -54,6 +58,10 @@ func (p *ProposerConfig) UnmarshalJSON(input []byte) error {
 		return errors.Wrap(err, "failed to decode fee recipient")
 	}
 	copy(p.FeeRecipient[:], feeRecipient)
+	p.GasLimit, err = strconv.ParseUint(data.GasLimit, 10, 64)
+	if err != nil {
+		return errors.Wrap(err, "invalid gas limit")
+	}
 	p.Builder = data.Builder
 
 	return nil

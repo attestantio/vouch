@@ -16,30 +16,26 @@ package blockrelay
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"github.com/pkg/errors"
 )
 
 // BuilderConfig is the builder configuration for a specific proposer.
 type BuilderConfig struct {
-	Enabled  bool
-	Relays   []string
-	GasLimit uint64
+	Enabled bool
+	Relays  []string
 }
 
 type builderConfigJSON struct {
-	Enabled  bool     `json:"enabled"`
-	Relays   []string `json:"relays,omitempty"`
-	GasLimit string   `json:"gas_limit"`
+	Enabled bool     `json:"enabled"`
+	Relays  []string `json:"relays,omitempty"`
 }
 
 // MarshalJSON implements json.Marshaler.
 func (b *BuilderConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&builderConfigJSON{
-		Enabled:  b.Enabled,
-		Relays:   b.Relays,
-		GasLimit: fmt.Sprintf("%d", b.GasLimit),
+		Enabled: b.Enabled,
+		Relays:  b.Relays,
 	})
 }
 
@@ -52,11 +48,6 @@ func (b *BuilderConfig) UnmarshalJSON(input []byte) error {
 
 	b.Enabled = data.Enabled
 	b.Relays = data.Relays
-	var err error
-	b.GasLimit, err = strconv.ParseUint(data.GasLimit, 10, 64)
-	if err != nil {
-		return errors.Wrap(err, "invalid gas limit")
-	}
 
 	return nil
 }
