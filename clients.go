@@ -33,6 +33,10 @@ var clientsMu sync.Mutex
 
 // fetchClient fetches a client service, instantiating it if required.
 func fetchClient(ctx context.Context, address string) (eth2client.Service, error) {
+	if address == "" {
+		return nil, errors.New("no address supplied for client")
+	}
+
 	clientsMu.Lock()
 	defer clientsMu.Unlock()
 	if clients == nil {
@@ -48,7 +52,7 @@ func fetchClient(ctx context.Context, address string) (eth2client.Service, error
 			httpclient.WithTimeout(util.Timeout("eth2client")),
 			httpclient.WithAddress(address))
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to initiate client")
+			return nil, errors.Wrap(err, "failed to initiate consensus client")
 		}
 		clients[address] = client
 	}

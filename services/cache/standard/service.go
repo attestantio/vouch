@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	eth2client "github.com/attestantio/go-eth2-client"
+	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/pkg/errors"
@@ -29,10 +29,14 @@ import (
 // Service provides cached information.
 type Service struct {
 	chainTime       chaintime.Service
-	consensusClient eth2client.Service
+	consensusClient consensusclient.Service
 
 	blockRootToSlotMu sync.RWMutex
 	blockRootToSlot   map[phase0.Root]phase0.Slot
+
+	executionChainHeadMu     sync.RWMutex
+	executionChainHeadHeight uint64
+	executionChainHeadRoot   phase0.Hash32
 }
 
 // module-wide log.
@@ -61,9 +65,22 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		blockRootToSlot: make(map[phase0.Root]phase0.Slot),
 	}
 
-	if eventsProvider, isProvider := s.consensusClient.(eth2client.EventsProvider); isProvider {
+	// Fetch the current execution head.
+	block, err := s.consensusClient.(consensusclient.SignedBeaconBlockProvider).SignedBeaconBlock(context.Background(), "head")
+	if err != nil {
+		// Could happen for various reasons, including the chain not yet being ready.  Log it, but don't error.
+		log.Debug().Err(err).Msg("Failed to obtain head block")
+	} else {
+		s.updateExecutionHeadFromBlock(block)
+	}
+
+	if eventsProvider, isProvider := s.consensusClient.(consensusclient.EventsProvider); isProvider {
 		if err := eventsProvider.Events(ctx, []string{"block"}, s.handleBlock); err != nil {
-			return nil, errors.Wrap(err, "failed to configure events")
+			return nil, errors.Wrap(err, "failed to configure block event")
+		}
+
+		if err := eventsProvider.Events(ctx, []string{"head"}, s.handleHead); err != nil {
+			return nil, errors.Wrap(err, "failed to configure head event")
 		}
 	}
 

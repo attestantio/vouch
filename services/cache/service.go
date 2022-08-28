@@ -27,3 +27,9 @@ type BlockRootToSlotProvider interface {
 	// BlockRootToSlot provides the slot for a given block root.
 	BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0.Slot, error)
 }
+
+// ExecutionChainHeadProvider provides the current execution chain head.
+type ExecutionChainHeadProvider interface {
+	// ExecutionChainHead provides the current execution chain head.
+	ExecutionChainHead(ctx context.Context) (phase0.Hash32, uint64)
+}

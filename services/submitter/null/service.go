@@ -17,7 +17,7 @@ import (
 	"context"
 	"encoding/json"
 
-	api "github.com/attestantio/go-eth2-client/api/v1"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -83,7 +83,7 @@ func (*Service) SubmitAttestations(_ context.Context, attestations []*phase0.Att
 }
 
 // SubmitBeaconCommitteeSubscriptions submits a batch of beacon committee subscriptions.
-func (*Service) SubmitBeaconCommitteeSubscriptions(_ context.Context, subscriptions []*api.BeaconCommitteeSubscription) error {
+func (*Service) SubmitBeaconCommitteeSubscriptions(_ context.Context, subscriptions []*apiv1.BeaconCommitteeSubscription) error {
 	if subscriptions == nil {
 		return errors.New("no subscriptions supplied")
 	}
@@ -123,7 +123,7 @@ func (*Service) SubmitAggregateAttestations(_ context.Context, aggregates []*pha
 }
 
 // SubmitProposalPreparations submits proposal preparations.
-func (s *Service) SubmitProposalPreparations(_ context.Context, preparations []*api.ProposalPreparation) error {
+func (*Service) SubmitProposalPreparations(_ context.Context, preparations []*apiv1.ProposalPreparation) error {
 	if len(preparations) == 0 {
 		return errors.New("no preparations supplied")
 	}
@@ -155,7 +155,7 @@ func (*Service) SubmitSyncCommitteeMessages(_ context.Context, messages []*altai
 }
 
 // SubmitSyncCommitteeSubscriptions submits a batch of sync committee subscriptions.
-func (*Service) SubmitSyncCommitteeSubscriptions(_ context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+func (*Service) SubmitSyncCommitteeSubscriptions(_ context.Context, subscriptions []*apiv1.SyncCommitteeSubscription) error {
 	if len(subscriptions) == 0 {
 		return errors.New("no sync committee subscriptions supplied")
 	}

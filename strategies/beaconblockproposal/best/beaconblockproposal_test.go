@@ -48,7 +48,8 @@ func TestBeaconBlockProposal(t *testing.T) {
 		standardchaintime.WithSlotsPerEpochProvider(slotsPerEpochProvider),
 	)
 	require.NoError(t, err)
-	cache := mockcache.New(map[phase0.Root]phase0.Slot{}).(cache.BlockRootToSlotProvider)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	blockToSlotCache := cacheSvc.(cache.BlockRootToSlotProvider)
 
 	tests := []struct {
 		name           string
@@ -71,7 +72,7 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
 					"good": mock.NewBeaconBlockProposalProvider(),
 				}),
-				best.WithBlockRootToSlotCache(cache),
+				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -89,7 +90,7 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
 					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(5*time.Second, mock.NewBeaconBlockProposalProvider()),
 				}),
-				best.WithBlockRootToSlotCache(cache),
+				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -108,7 +109,7 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
 					"nil": mock.NewNilBeaconBlockProposalProvider(),
 				}),
-				best.WithBlockRootToSlotCache(cache),
+				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -128,7 +129,7 @@ func TestBeaconBlockProposal(t *testing.T) {
 					"error":  mock.NewErroringBeaconBlockProposalProvider(),
 					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(time.Second, mock.NewBeaconBlockProposalProvider()),
 				}),
-				best.WithBlockRootToSlotCache(cache),
+				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -147,7 +148,7 @@ func TestBeaconBlockProposal(t *testing.T) {
 					"good":   mock.NewBeaconBlockProposalProvider(),
 					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(2*time.Second, mock.NewBeaconBlockProposalProvider()),
 				}),
-				best.WithBlockRootToSlotCache(cache),
+				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -166,7 +167,7 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
 					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(2*time.Second, mock.NewBeaconBlockProposalProvider()),
 				}),
-				best.WithBlockRootToSlotCache(cache),
+				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -186,7 +187,7 @@ func TestBeaconBlockProposal(t *testing.T) {
 					"error":  mock.NewErroringBeaconBlockProposalProvider(),
 					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(2*time.Second, mock.NewBeaconBlockProposalProvider()),
 				}),
-				best.WithBlockRootToSlotCache(cache),
+				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
 			slot:           12345,
 			committeeIndex: 3,

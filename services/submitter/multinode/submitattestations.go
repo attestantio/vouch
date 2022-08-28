@@ -95,14 +95,21 @@ func (s *Service) handleAttestationsError(ctx context.Context,
 	case serverType == "lighthouse" && strings.Contains(err.Error(), "PriorAttestationKnown"):
 		// Lighthouse rejects duplicate attestations.  It is possible that an attestation we sent
 		// to another node already propagated to this node, so ignore the error.
-		log.Trace().Msg("Node already knows about attestation; ignored")
+		log.Trace().Msg("Lighthouse node already knows about attestation; ignored")
 		// Not an error as far as we are concerned, so clear it.
 		err = nil
 	case serverType == "lighthouse" && strings.Contains(err.Error(), "UnknownHeadBlock"):
-		// Lighthouse rejects an attestation for a block  that is not its current head.  It is possible
+		// Lighthouse rejects an attestation for a block that is not its current head.  It is possible
 		// that the node is just behind, and we can't do anything about it anyway at this point having
 		// already signed an attestation for this slot, so ignore the error.
-		log.Debug().Err(err).Msg("Node does not know head block; rejected")
+		log.Debug().Err(err).Msg("Lighthouse node does not know head block; rejected")
+		// Not an error as far as we are concerned, so clear it.
+		err = nil
+	case serverType == "nimbus" && strings.Contains(err.Error(), "Attempt to send attestation for unknown target"):
+		// Nimbus rejects an attestation for a block when it does not know the target.  It is possible
+		// that the node is just behind, and we can't do anything about it anyway at this point having
+		// already signed an attestation for this slot, so ignore the error.
+		log.Debug().Err(err).Msg("Nimbus node does not know target block; rejected")
 		// Not an error as far as we are concerned, so clear it.
 		err = nil
 	}

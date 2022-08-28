@@ -16,15 +16,22 @@ package standard
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"math/big"
 	"time"
 
+	builderclient "github.com/attestantio/go-builder-client"
 	consensusclient "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/pkg/errors"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // Propose proposes a block.
@@ -37,12 +44,23 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 		s.monitor.BeaconBlockProposalCompleted(started, 0, "failed")
 		return
 	}
+	if duty == nil {
+		log.Error().Msg("Passed nil data structure")
+		s.monitor.BeaconBlockProposalCompleted(started, 0, "failed")
+		return
+	}
 	log := log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Proposing")
 
 	var zeroSig phase0.BLSSignature
 	if duty.RANDAOReveal() == zeroSig {
 		log.Error().Msg("Missing RANDAO reveal")
+		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
+		return
+	}
+
+	if duty.Account() == nil {
+		log.Error().Msg("Missing account")
 		s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "failed")
 		return
 	}
@@ -81,8 +99,189 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	s.monitor.BeaconBlockProposalCompleted(started, duty.Slot(), "succeeded")
 }
 
-// proposeBlock proposes a full block.
+// proposeBlock proposes a beacon block.
 func (s *Service) proposeBlock(ctx context.Context,
+	started time.Time,
+	duty *beaconblockproposer.Duty,
+	graffiti []byte,
+) error {
+	if s.blockAuctioneer != nil {
+		// There is a block auctioneer specified, try to propose the block with auction.
+		canTryWithout, err := s.proposeBlockWithAuction(ctx, started, duty, graffiti)
+		if err == nil {
+			s.monitor.BeaconBlockProposalSource("auction")
+			return nil
+		}
+		if canTryWithout {
+			log.Warn().Err(err).Msg("Failed to propose with auction; attempting to propose without it")
+		} else {
+			return errors.Wrap(err, "failed to propose with auction, already signed so cannot fall back")
+		}
+	}
+
+	err := s.proposeBlockWithoutAuction(ctx, started, duty, graffiti)
+	if err != nil {
+		return err
+	}
+
+	s.monitor.BeaconBlockProposalSource("direct")
+	return nil
+}
+
+// proposeBlockWithAuction proposes a block after going through an auction for the blockspace.
+func (s *Service) proposeBlockWithAuction(ctx context.Context,
+	started time.Time,
+	duty *beaconblockproposer.Duty,
+	graffiti []byte,
+) (
+	bool, // True if it is okay to propose without auction.
+	error,
+) {
+	// We start off being able to fall back to using the non-auction method if we fail.
+	canTryWithout := true
+
+	pubkey := phase0.BLSPubKey{}
+	if provider, isProvider := duty.Account().(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
+		copy(pubkey[:], provider.CompositePublicKey().Marshal())
+	} else {
+		copy(pubkey[:], duty.Account().PublicKey().Marshal())
+	}
+	hash, height := s.executionChainHeadProvider.ExecutionChainHead(ctx)
+	log.Trace().Str("hash", fmt.Sprintf("%#x", hash)).Uint64("height", height).Uint64("slot", uint64(duty.Slot())).Msg("Current execution chain state")
+	auctionResults, err := s.blockAuctioneer.AuctionBlock(ctx,
+		duty.Slot(),
+		hash,
+		pubkey)
+	if err != nil {
+		return canTryWithout, errors.Wrap(err, "failed to auction block")
+	}
+	if auctionResults == nil {
+		return canTryWithout, errors.New("auction returned no results")
+	}
+	if len(auctionResults.Values) == 0 {
+		return canTryWithout, errors.New("no bids obtained for block")
+	}
+	for provider, value := range auctionResults.Values {
+		delta := new(big.Int).Sub(value, auctionResults.Bid.Data.Message.Value.ToBig())
+		log.Trace().Uint64("slot", uint64(duty.Slot())).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Msg("Auction participant")
+	}
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(auctionResults.Bid)
+		if err == nil {
+			e.RawJSON("header", data).Msg("Obtained best bid; using as header for beacon block proposals")
+		}
+	}
+
+	proposal, err := s.blindedProposalProvider.BlindedBeaconBlockProposal(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti)
+	if err != nil {
+		return canTryWithout, errors.Wrap(err, "failed to obtain blinded proposal data")
+	}
+	if proposal == nil {
+		return canTryWithout, errors.New("obtained nil blinded beacon block proposal")
+	}
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained blinded proposal")
+
+	proposalSlot, err := proposal.Slot()
+	if err != nil {
+		return canTryWithout, errors.Wrap(err, "failed to obtain proposal slot")
+	}
+
+	if proposalSlot != duty.Slot() {
+		return canTryWithout, errors.New("proposal data for incorrect slot")
+	}
+
+	bodyRoot, err := proposal.BodyRoot()
+	if err != nil {
+		return canTryWithout, errors.Wrap(err, "failed to calculate hash tree root of block body")
+	}
+
+	parentRoot, err := proposal.ParentRoot()
+	if err != nil {
+		return canTryWithout, errors.Wrap(err, "failed to obtain parent root of block")
+	}
+
+	stateRoot, err := proposal.StateRoot()
+	if err != nil {
+		return canTryWithout, errors.Wrap(err, "failed to obtain state root of block")
+	}
+
+	proposalTransactionsRoot, err := proposal.TransactionsRoot()
+	if err != nil {
+		return canTryWithout, errors.New("failed to obtain proposal transactions root")
+	}
+	auctionTransactionsRoot, err := auctionResults.Bid.TransactionsRoot()
+	if err != nil {
+		return canTryWithout, errors.New("failed to obtain auction results transactions root")
+	}
+	if !bytes.Equal(proposalTransactionsRoot[:], auctionTransactionsRoot[:]) {
+		log.Debug().Str("proposal_transactions_root", fmt.Sprintf("%#x", proposalTransactionsRoot[:])).Str("auction_transactions_root", fmt.Sprintf("%#x", auctionTransactionsRoot[:])).Msg("Transactions root mismatch")
+		// This is a mismatch, back out.
+		return canTryWithout, errors.New("transactions root mismatch")
+	}
+
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(proposal)
+		if err == nil {
+			e.RawJSON("proposal", data).Msg("Obtained blinded proposal")
+		}
+	}
+
+	// Ensure that the auction winner can (attempt to) unblind the block before we sign it.
+	unblindedBlockProvider, isProvider := auctionResults.Provider.(builderclient.UnblindedBlockProvider)
+	if !isProvider {
+		return canTryWithout, errors.New("auctioneer cannot unblind the block")
+	}
+
+	// If there are failures from this point forwards we cannot safely propose without the auction.
+	canTryWithout = false
+
+	sig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
+		duty.Account(),
+		proposalSlot,
+		duty.ValidatorIndex(),
+		parentRoot,
+		stateRoot,
+		bodyRoot)
+	if err != nil {
+		return canTryWithout, errors.Wrap(err, "failed to sign blinded beacon block proposal")
+	}
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed blinded proposal")
+
+	signedBlindedBlock := &api.VersionedSignedBlindedBeaconBlock{
+		Version: proposal.Version,
+	}
+	switch signedBlindedBlock.Version {
+	case spec.DataVersionBellatrix:
+		signedBlindedBlock.Bellatrix = &apiv1.SignedBlindedBeaconBlock{
+			Message:   proposal.Bellatrix,
+			Signature: sig,
+		}
+	default:
+		return canTryWithout, fmt.Errorf("unknown proposal version %v", signedBlindedBlock.Version)
+	}
+
+	// Unblind the blinded block.
+	signedBlock, err := unblindedBlockProvider.UnblindBlock(ctx, signedBlindedBlock)
+	if err != nil {
+		return canTryWithout, errors.Wrap(err, "failed to unblind block")
+	}
+
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(signedBlock)
+		if err == nil {
+			log.Trace().RawJSON("signed_block", data).Msg("Recomposed block to submit")
+		}
+	}
+
+	// Submit the block.
+	if err := s.beaconBlockSubmitter.SubmitBeaconBlock(ctx, signedBlock); err != nil {
+		return canTryWithout, errors.Wrap(err, "failed to submit beacon block proposal")
+	}
+
+	return canTryWithout, nil
+}
+
+func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 	started time.Time,
 	duty *beaconblockproposer.Duty,
 	graffiti []byte,

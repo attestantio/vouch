@@ -20,8 +20,8 @@ import (
 
 	"github.com/attestantio/vouch/mock"
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
+	mockblockrelay "github.com/attestantio/vouch/services/blockrelay/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
-	mockfeerecipientprovider "github.com/attestantio/vouch/services/feerecipientprovider/mock"
 	"github.com/attestantio/vouch/services/proposalpreparer/standard"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
@@ -59,32 +59,10 @@ func TestUpdatePreparations(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(mockaccountmanager.NewErroringValidatingAccountsProvider()),
-				standard.WithFeeRecipientProvider(mockfeerecipientprovider.New()),
 				standard.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
+				standard.WithExecutionConfigProvider(mockblockrelay.New()),
 			},
 			err: "failed to obtain validating accounts: error",
-		},
-		{
-			name: "ErroringFeeRecipientProvider",
-			params: []standard.Parameter{
-				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithChainTimeService(chainTime),
-				standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
-				standard.WithFeeRecipientProvider(mockfeerecipientprovider.NewErroring()),
-				standard.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
-			},
-			err: "failed to obtain fee recipients: error",
-		},
-		{
-			name: "ErroringProposalPreparationsSubmitter",
-			params: []standard.Parameter{
-				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithChainTimeService(chainTime),
-				standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
-				standard.WithFeeRecipientProvider(mockfeerecipientprovider.New()),
-				standard.WithProposalPreparationsSubmitter(mock.NewErroringProposalPreparationsSubmitter()),
-			},
-			err: "failed to update proposal preparations: error",
 		},
 		{
 			name: "Good",
@@ -92,8 +70,8 @@ func TestUpdatePreparations(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
-				standard.WithFeeRecipientProvider(mockfeerecipientprovider.New()),
 				standard.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
+				standard.WithExecutionConfigProvider(mockblockrelay.New()),
 			},
 		},
 	}

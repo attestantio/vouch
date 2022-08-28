@@ -18,8 +18,8 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/services/chaintime"
-	"github.com/attestantio/vouch/services/feerecipientprovider"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -27,10 +27,11 @@ import (
 
 // Service is a proposal preparer.
 type Service struct {
-	chainTimeService              chaintime.Service
-	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
-	feeRecipientProvider          feerecipientprovider.Service
-	proposalPreparationsSubmitter eth2client.ProposalPreparationsSubmitter
+	chainTimeService                chaintime.Service
+	validatingAccountsProvider      accountmanager.ValidatingAccountsProvider
+	proposalPreparationsSubmitter   eth2client.ProposalPreparationsSubmitter
+	executionConfigProvider         blockrelay.ExecutionConfigProvider
+	validatorRegistrationsSubmitter blockrelay.ValidatorRegistrationsSubmitter
 }
 
 // module-wide log.
@@ -54,10 +55,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		chainTimeService:              parameters.chainTimeService,
-		validatingAccountsProvider:    parameters.validatingAccountsProvider,
-		feeRecipientProvider:          parameters.feeRecipientProvider,
-		proposalPreparationsSubmitter: parameters.proposalPreparationsSubmitter,
+		chainTimeService:                parameters.chainTimeService,
+		validatingAccountsProvider:      parameters.validatingAccountsProvider,
+		proposalPreparationsSubmitter:   parameters.proposalPreparationsSubmitter,
+		executionConfigProvider:         parameters.executionConfigProvider,
+		validatorRegistrationsSubmitter: parameters.validatorRegistrationsSubmitter,
 	}
 
 	return s, nil

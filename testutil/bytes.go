@@ -30,6 +30,19 @@ func HexToBytes(input string) []byte {
 	return res
 }
 
+// HexToBytes32 converts a hex string to a 32-byte array.
+// This should only be used for pre-defined test strings; it will panic if the input is invalid.
+func HexToBytes32(input string) [32]byte {
+	tmp, err := hex.DecodeString(strings.TrimPrefix(input, "0x"))
+	if err != nil {
+		panic(err)
+	}
+	res := [32]byte{}
+	copy(res[:], tmp)
+
+	return res
+}
+
 // HexToPubKey converts a hex string to a spec public key.
 // This should only be used for pre-defined test strings; it will panic if the input is invalid.
 func HexToPubKey(input string) phase0.BLSPubKey {

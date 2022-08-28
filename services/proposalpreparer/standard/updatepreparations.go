@@ -15,11 +15,13 @@ package standard
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	api "github.com/attestantio/go-eth2-client/api/v1"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // UpdatePreparations updates the preparations for validators on the beacon nodes.
@@ -28,13 +30,21 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 
 	epoch := s.chainTimeService.CurrentEpoch()
 
-	// ValidatingAccountsForEpoch obtains the validating accounts for a given epoch.
-	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpoch(ctx, epoch)
+	// Fetch the validating accounts for the next epoch, to ensure that we capture any validators
+	// that are going to start proposing soon.
+	// Note that this will result in us not obtaining a validator that is on its last validating
+	// epoch, however preparations linger for a couple of epochs after registration so this is safe.
+	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpoch(ctx, epoch+1)
 	if err != nil {
 		proposalPreparationCompleted(started, epoch, "failed")
 		return errors.Wrap(err, "failed to obtain validating accounts")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
+
+	if len(accounts) == 0 {
+		log.Trace().Msg("No validating accounts; not preparing")
+		return nil
+	}
 
 	indices := make([]phase0.ValidatorIndex, len(accounts))
 	i := 0
@@ -43,28 +53,65 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 		i++
 	}
 
-	feeRecipients, err := s.feeRecipientProvider.FeeRecipients(ctx, indices)
+	execConfig, err := s.executionConfigProvider.ExecutionConfig(ctx)
 	if err != nil {
-		return errors.Wrap(err, "failed to obtain fee recipients")
+		return errors.Wrap(err, "failed to obtain execution configuration")
 	}
 
-	proposalPreparations := make([]*api.ProposalPreparation, len(feeRecipients))
-	i = 0
-	for index, feeRecipient := range feeRecipients {
-		proposalPreparations[i] = &api.ProposalPreparation{
-			ValidatorIndex: index,
-			FeeRecipient:   feeRecipient,
+	proposalPreparations := make([]*apiv1.ProposalPreparation, 0, len(accounts))
+	for index, account := range accounts {
+		pubkey := phase0.BLSPubKey{}
+		if distributedAccount, isDistributedAccount := account.(e2wtypes.AccountCompositePublicKeyProvider); isDistributedAccount {
+			copy(pubkey[:], distributedAccount.CompositePublicKey().Marshal())
+		} else {
+			copy(pubkey[:], account.PublicKey().Marshal())
 		}
-		i++
+		proposerConfig := execConfig.ProposerConfig(pubkey)
+		if proposerConfig == nil {
+			// Error but keep going, as we want to provide as many preparations as possible.
+			log.Error().Str("pubkey", fmt.Sprintf("%#x", pubkey)).Err(err).Msg("Obtained nil propopser configuration")
+			continue
+		}
+		proposalPreparations = append(proposalPreparations, &apiv1.ProposalPreparation{
+			ValidatorIndex: index,
+			FeeRecipient:   proposerConfig.FeeRecipient,
+		})
 	}
 
+	go s.updateProposalPreparations(ctx, started, epoch, proposalPreparations)
+	go s.updateValidatorRegistrations(ctx, started, accounts)
+
+	return nil
+}
+
+func (s *Service) updateValidatorRegistrations(ctx context.Context,
+	started time.Time,
+	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
+) {
+	if s.validatorRegistrationsSubmitter == nil {
+		return
+	}
+
+	if err := s.validatorRegistrationsSubmitter.SubmitValidatorRegistrations(ctx, accounts); err != nil {
+		validatorRegistrationsCompleted("failed")
+		log.Error().Err(err).Msg("Failed to update validator registrations")
+		return
+	}
+	validatorRegistrationsCompleted("succeeded")
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("updated validator registrations")
+}
+
+func (s *Service) updateProposalPreparations(ctx context.Context,
+	started time.Time,
+	epoch phase0.Epoch,
+	proposalPreparations []*apiv1.ProposalPreparation,
+) {
 	if err := s.proposalPreparationsSubmitter.SubmitProposalPreparations(ctx, proposalPreparations); err != nil {
 		proposalPreparationCompleted(started, epoch, "failed")
-		return errors.Wrap(err, "failed to update proposal preparations")
+		log.Error().Err(err).Msg("Failed to update proposal preparations")
+		return
 	}
 
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted proposal preparations")
 	proposalPreparationCompleted(started, epoch, "succeeded")
-
-	return nil
 }

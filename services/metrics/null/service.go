@@ -55,6 +55,9 @@ func (*Service) BlockDelay(_ uint, _ time.Duration) {}
 // BeaconBlockProposalCompleted is called when a block proposal process has completed.
 func (*Service) BeaconBlockProposalCompleted(_ time.Time, _ phase0.Slot, _ string) {}
 
+// BeaconBlockProposalSource is called to tag the source of a beacon block proposal.
+func (*Service) BeaconBlockProposalSource(_ string) {}
+
 // AttestationsCompleted is called when an attestation process has completed.
 func (*Service) AttestationsCompleted(_ time.Time, _ phase0.Slot, _ int, _ string) {
 }

@@ -20,8 +20,8 @@ import (
 
 	"github.com/attestantio/vouch/mock"
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
+	mockblockrelay "github.com/attestantio/vouch/services/blockrelay/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
-	mockfeerecipientprovider "github.com/attestantio/vouch/services/feerecipientprovider/mock"
 	prometheusmetrics "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/services/proposalpreparer/standard"
 	"github.com/attestantio/vouch/testing/logger"
@@ -42,8 +42,8 @@ func TestService(t *testing.T) {
 	slotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
 
 	mockValidatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
-	mockFeeRecipientProvider := mockfeerecipientprovider.New()
 	mockProposalPreparationsSubmitter := mock.NewProposalPreparationsSubmitter()
+	mockBlockRelay := mockblockrelay.New()
 
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithGenesisTimeProvider(genesisTimeProvider),
@@ -71,8 +71,8 @@ func TestService(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithFeeRecipientProvider(mockFeeRecipientProvider),
 				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
+				standard.WithExecutionConfigProvider(mockBlockRelay),
 			},
 			err: "problem with parameters: no monitor specified",
 		},
@@ -81,8 +81,8 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithFeeRecipientProvider(mockFeeRecipientProvider),
 				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
+				standard.WithExecutionConfigProvider(mockBlockRelay),
 			},
 			err: "problem with parameters: no chain time service specified",
 		},
@@ -91,20 +91,20 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
-				standard.WithFeeRecipientProvider(mockFeeRecipientProvider),
 				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
+				standard.WithExecutionConfigProvider(mockBlockRelay),
 			},
 			err: "problem with parameters: no validating accounts provider specified",
 		},
 		{
-			name: "FeeRecipientProviderMissing",
+			name: "ExecConfigProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
 			},
-			err: "problem with parameters: no fee recipient provider specified",
+			err: "problem with parameters: no execution configuration provider specified",
 		},
 		{
 			name: "ProposalPreparationsSubmitterMissing",
@@ -112,7 +112,7 @@ func TestService(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithFeeRecipientProvider(mockFeeRecipientProvider),
+				standard.WithExecutionConfigProvider(mockBlockRelay),
 			},
 			err: "problem with parameters: no proposal preparations submitter specified",
 		},
@@ -123,8 +123,8 @@ func TestService(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithFeeRecipientProvider(mockFeeRecipientProvider),
 				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
+				standard.WithExecutionConfigProvider(mockBlockRelay),
 			},
 		},
 	}

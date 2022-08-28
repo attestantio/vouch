@@ -11,24 +11,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package static
+// Package first is a strategy that obtains beacon block proposals from multiple
+// nodes and selects the first one returned.
+package first
 
 import (
 	"context"
-	"errors"
+	"time"
 
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 type parameters struct {
-	logLevel            zerolog.Level
-	monitor             metrics.Service
-	feeRecipients       map[phase0.ValidatorIndex]bellatrix.ExecutionAddress
-	defaultFeeRecipient bellatrix.ExecutionAddress
+	logLevel                            zerolog.Level
+	clientMonitor                       metrics.ClientMonitor
+	blindedBeaconBlockProposalProviders map[string]eth2client.BlindedBeaconBlockProposalProvider
+	timeout                             time.Duration
 }
 
 // Parameter is the interface for service parameters.
@@ -49,32 +51,32 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 	})
 }
 
-// WithMonitor sets the monitor for the module.
-func WithMonitor(monitor metrics.Service) Parameter {
+// WithClientMonitor sets the client monitor for the service.
+func WithClientMonitor(monitor metrics.ClientMonitor) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.monitor = monitor
+		p.clientMonitor = monitor
 	})
 }
 
-// WithFeeRecipients sets the fee recipients.
-func WithFeeRecipients(feeRecipients map[phase0.ValidatorIndex]bellatrix.ExecutionAddress) Parameter {
+// WithBlindedBeaconBlockProposalProviders sets the blinded beacon block proposal providers.
+func WithBlindedBeaconBlockProposalProviders(providers map[string]eth2client.BlindedBeaconBlockProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.feeRecipients = feeRecipients
+		p.blindedBeaconBlockProposalProviders = providers
 	})
 }
 
-// WithDefaultFeeRecipient sets the default fee recipient.
-func WithDefaultFeeRecipient(feeRecipient bellatrix.ExecutionAddress) Parameter {
+// WithTimeout sets the timeout for requests.
+func WithTimeout(timeout time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.defaultFeeRecipient = feeRecipient
+		p.timeout = timeout
 	})
 }
 
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel: zerolog.GlobalLevel(),
-		monitor:  nullmetrics.New(context.Background()),
+		logLevel:      zerolog.GlobalLevel(),
+		clientMonitor: nullmetrics.New(context.Background()),
 	}
 	for _, p := range params {
 		if params != nil {
@@ -82,11 +84,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
-	if parameters.monitor == nil {
-		return nil, errors.New("monitor not supplied")
-	}
-	if parameters.defaultFeeRecipient == (bellatrix.ExecutionAddress{}) {
-		return nil, errors.New("default fee recipient not supplied")
+	if parameters.blindedBeaconBlockProposalProviders == nil {
+		return nil, errors.New("no blinded beacon block proposal providers specified")
 	}
 
 	return &parameters, nil

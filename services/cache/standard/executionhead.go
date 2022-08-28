@@ -11,35 +11,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package static
+package standard
 
 import (
 	"context"
-	"time"
 
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
-// FeeRecipients returns the fee recipients for the given validators.
-func (s *Service) FeeRecipients(_ context.Context,
-	indices []phase0.ValidatorIndex,
-) (
-	map[phase0.ValidatorIndex]bellatrix.ExecutionAddress,
-	error,
-) {
-	started := time.Now()
+// ExecutionChainHead provides the execution chain head.
+func (s *Service) ExecutionChainHead(_ context.Context) (phase0.Hash32, uint64) {
+	s.executionChainHeadMu.RLock()
+	defer s.executionChainHeadMu.RUnlock()
+	return s.executionChainHeadRoot, s.executionChainHeadHeight
+}
 
-	res := make(map[phase0.ValidatorIndex]bellatrix.ExecutionAddress, len(indices))
-	for _, index := range indices {
-		feeRecipient, exists := s.feeRecipients[index]
-		if exists {
-			res[index] = feeRecipient
-		} else {
-			res[index] = s.defaultFeeRecipient
-		}
-	}
-
-	feeRecipientsCompleted(started, "succeeded")
-	return res, nil
+// setExecutionChainHead sets the execution chain head.
+func (s *Service) setExecutionChainHead(root phase0.Hash32, height uint64) {
+	s.executionChainHeadMu.Lock()
+	s.executionChainHeadRoot = root
+	s.executionChainHeadHeight = height
+	monitorExecutionChainHeadUpdated(height)
+	s.executionChainHeadMu.Unlock()
 }

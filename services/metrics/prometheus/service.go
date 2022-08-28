@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,6 +16,7 @@ package prometheus
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/pkg/errors"
@@ -40,6 +41,7 @@ type Service struct {
 	beaconBlockProposalProcessRequests   *prometheus.CounterVec
 	beaconBlockProposalMarkTimer         prometheus.Histogram
 	beaconBlockProposalProcessLatestSlot prometheus.Gauge
+	beaconBlockProposalSource            *prometheus.CounterVec
 
 	attestationProcessTimer      prometheus.Histogram
 	attestationProcessRequests   *prometheus.CounterVec
@@ -135,8 +137,13 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	go func() {
+		server := &http.Server{
+			Addr:              parameters.address,
+			ReadHeaderTimeout: 5 * time.Second,
+		}
+
 		http.Handle("/metrics", promhttp.Handler())
-		if err := http.ListenAndServe(parameters.address, nil); err != nil {
+		if err := server.ListenAndServe(); err != nil {
 			log.Warn().Str("metrics_address", parameters.address).Err(err).Msg("Failed to run metrics server")
 		}
 	}()

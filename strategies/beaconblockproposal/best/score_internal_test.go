@@ -832,13 +832,14 @@ func TestScore(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cache := mockcache.New(map[phase0.Root]phase0.Slot{
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{
 		testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"): phase0.Slot(12344),
 		testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"): phase0.Slot(12345),
 		testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"): phase0.Slot(12346),
 		testutil.HexToRoot("0x0404040404040404040404040404040404040404040404040404040404040404"): phase0.Slot(12347),
 		testutil.HexToRoot("0x0505050505050505050505050505050505050505050505050505050505050505"): phase0.Slot(12348),
-	}).(cache.BlockRootToSlotProvider)
+	})
+	blockToSlotCache := cacheSvc.(cache.BlockRootToSlotProvider)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -854,7 +855,7 @@ func TestScore(t *testing.T) {
 					"one": mock.NewBeaconBlockProposalProvider(),
 				}),
 				WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
-				WithBlockRootToSlotCache(cache),
+				WithBlockRootToSlotCache(blockToSlotCache),
 			)
 			require.NoError(t, err)
 			if test.priorBlocks != nil {

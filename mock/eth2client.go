@@ -21,9 +21,11 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prysmaticlabs/go-bitfield"
 )
@@ -417,6 +419,52 @@ func (m *SleepyBeaconBlockSubmitter) SubmitBeaconBlock(ctx context.Context, bloc
 	return m.next.SubmitBeaconBlock(ctx, block)
 }
 
+// BlindedBeaconBlockSubmitter is a mock for eth2client.BlindedBeaconBlockSubmitter.
+type BlindedBeaconBlockSubmitter struct{}
+
+// NewBlindedBeaconBlockSubmitter returns a mock blindedBeacon block submitter.
+func NewBlindedBeaconBlockSubmitter() eth2client.BlindedBeaconBlockSubmitter {
+	return &BlindedBeaconBlockSubmitter{}
+}
+
+// SubmitBlindedBeaconBlock is a mock.
+func (*BlindedBeaconBlockSubmitter) SubmitBlindedBeaconBlock(_ context.Context, _ *api.VersionedSignedBlindedBeaconBlock) error {
+	return nil
+}
+
+// ErroringBlindedBeaconBlockSubmitter is a mock for eth2client.BlindedBeaconBlockSubmitter that returns errors.
+type ErroringBlindedBeaconBlockSubmitter struct{}
+
+// NewErroringBlindedBeaconBlockSubmitter returns a mock blindedBeacon block submitter.
+func NewErroringBlindedBeaconBlockSubmitter() eth2client.BlindedBeaconBlockSubmitter {
+	return &ErroringBlindedBeaconBlockSubmitter{}
+}
+
+// SubmitBlindedBeaconBlock is a mock.
+func (*ErroringBlindedBeaconBlockSubmitter) SubmitBlindedBeaconBlock(_ context.Context, _ *api.VersionedSignedBlindedBeaconBlock) error {
+	return errors.New("error")
+}
+
+// SleepyBlindedBeaconBlockSubmitter is a mock for eth2client.BlindedBeaconBlockSubmitter.
+type SleepyBlindedBeaconBlockSubmitter struct {
+	wait time.Duration
+	next eth2client.BlindedBeaconBlockSubmitter
+}
+
+// NewSleepyBlindedBeaconBlockSubmitter returns a mock blindedBeacon block submitter.
+func NewSleepyBlindedBeaconBlockSubmitter(wait time.Duration, next eth2client.BlindedBeaconBlockSubmitter) eth2client.BlindedBeaconBlockSubmitter {
+	return &SleepyBlindedBeaconBlockSubmitter{
+		wait: wait,
+		next: next,
+	}
+}
+
+// SubmitBlindedBeaconBlock is a mock.
+func (m *SleepyBlindedBeaconBlockSubmitter) SubmitBlindedBeaconBlock(ctx context.Context, block *api.VersionedSignedBlindedBeaconBlock) error {
+	time.Sleep(m.wait)
+	return m.next.SubmitBlindedBeaconBlock(ctx, block)
+}
+
 // AggregateAttestationsSubmitter is a mock for eth2client.AggregateAttestationsSubmitter.
 type AggregateAttestationsSubmitter struct{}
 
@@ -566,8 +614,8 @@ func NewBeaconBlockProposalProvider() eth2client.BeaconBlockProposalProvider {
 // BeaconBlockProposal is a mock.
 func (*BeaconBlockProposalProvider) BeaconBlockProposal(_ context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*spec.VersionedBeaconBlock, error) {
 	// Graffiti should be 32 bytes.
-	fixedGraffiti := make([]byte, 32)
-	copy(fixedGraffiti, graffiti)
+	fixedGraffiti := [32]byte{}
+	copy(fixedGraffiti[:], graffiti)
 
 	// Build a beacon block.
 
@@ -694,6 +742,159 @@ func NewSleepyBeaconBlockProposalProvider(wait time.Duration, next eth2client.Be
 func (m *SleepyBeaconBlockProposalProvider) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*spec.VersionedBeaconBlock, error) {
 	time.Sleep(m.wait)
 	return m.next.BeaconBlockProposal(ctx, slot, randaoReveal, graffiti)
+}
+
+// BlindedBeaconBlockProposalProvider is a mock for eth2client.BlindedBeaconBlockProposalProvider.
+type BlindedBeaconBlockProposalProvider struct{}
+
+// NewBlindedBeaconBlockProposalProvider returns a mock blinded beacon block proposal provider.
+func NewBlindedBeaconBlockProposalProvider() eth2client.BlindedBeaconBlockProposalProvider {
+	return &BlindedBeaconBlockProposalProvider{}
+}
+
+// BlindedBeaconBlockProposal is a mock.
+func (*BlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*api.VersionedBlindedBeaconBlock, error) {
+	// Graffiti should be 32 bytes.
+	fixedGraffiti := [32]byte{}
+	copy(fixedGraffiti[:], graffiti)
+
+	// Build a beacon block.
+
+	// Create a few attestations.
+	attestations := make([]*phase0.Attestation, 4)
+	for i := uint64(0); i < 4; i++ {
+		aggregationBits := bitfield.NewBitlist(128)
+		aggregationBits.SetBitAt(i, true)
+		attestations[i] = &phase0.Attestation{
+			AggregationBits: aggregationBits,
+			Data: &phase0.AttestationData{
+				Slot:  slot - 1,
+				Index: phase0.CommitteeIndex(i),
+				BeaconBlockRoot: phase0.Root([32]byte{
+					0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+					0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+				}),
+				Source: &phase0.Checkpoint{
+					Epoch: 0,
+					Root: phase0.Root([32]byte{
+						0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+						0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+					}),
+				},
+				Target: &phase0.Checkpoint{
+					Epoch: 1,
+					Root: phase0.Root([32]byte{
+						0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
+						0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+					}),
+				},
+			},
+			Signature: phase0.BLSSignature([96]byte{
+				0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+				0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+				0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+				0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+				0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
+				0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+			}),
+		}
+	}
+
+	// Create an execution payload header.
+	executionPayloadHeader := &bellatrix.ExecutionPayloadHeader{
+		FeeRecipient: bellatrix.ExecutionAddress{
+			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+			0x10, 0x11, 0x12, 0x13,
+		},
+	}
+
+	block := &api.VersionedBlindedBeaconBlock{
+		Version: spec.DataVersionBellatrix,
+		Bellatrix: &apiv1.BlindedBeaconBlock{
+			Slot:          slot,
+			ProposerIndex: 1,
+			ParentRoot: phase0.Root([32]byte{
+				0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+				0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+			}),
+			StateRoot: phase0.Root([32]byte{
+				0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+				0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+			}),
+			Body: &apiv1.BlindedBeaconBlockBody{
+				RANDAOReveal: randaoReveal,
+				ETH1Data: &phase0.ETH1Data{
+					DepositRoot: phase0.Root([32]byte{
+						0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
+						0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+					}),
+					DepositCount: 16384,
+					BlockHash: []byte{
+						0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
+						0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
+					},
+				},
+				Graffiti:          fixedGraffiti,
+				ProposerSlashings: []*phase0.ProposerSlashing{},
+				AttesterSlashings: []*phase0.AttesterSlashing{},
+				Attestations:      attestations,
+				Deposits:          []*phase0.Deposit{},
+				VoluntaryExits:    []*phase0.SignedVoluntaryExit{},
+				SyncAggregate: &altair.SyncAggregate{
+					SyncCommitteeBits: bitfield.NewBitvector512(),
+				},
+				ExecutionPayloadHeader: executionPayloadHeader,
+			},
+		},
+	}
+
+	return block, nil
+}
+
+// ErroringBlindedBeaconBlockProposalProvider is a mock for eth2client.BlindedBeaconBlockProposalProvider.
+type ErroringBlindedBeaconBlockProposalProvider struct{}
+
+// NewErroringBlindedBeaconBlockProposalProvider returns a mock blinded beacon block proposal provider.
+func NewErroringBlindedBeaconBlockProposalProvider() eth2client.BlindedBeaconBlockProposalProvider {
+	return &ErroringBlindedBeaconBlockProposalProvider{}
+}
+
+// BlindedBeaconBlockProposal is a mock.
+func (*ErroringBlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ context.Context, _ phase0.Slot, _ phase0.BLSSignature, _ []byte) (*api.VersionedBlindedBeaconBlock, error) {
+	return nil, errors.New("error")
+}
+
+// NilBlindedBeaconBlockProposalProvider is a mock for eth2client.BlindedBeaconBlockProposalProvider.
+type NilBlindedBeaconBlockProposalProvider struct{}
+
+// NewNilBlindedBeaconBlockProposalProvider returns a mock beacon block proposal provider.
+func NewNilBlindedBeaconBlockProposalProvider() eth2client.BlindedBeaconBlockProposalProvider {
+	return &NilBlindedBeaconBlockProposalProvider{}
+}
+
+// BlindedBeaconBlockProposal is a mock.
+func (*NilBlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ context.Context, _ phase0.Slot, _ phase0.BLSSignature, _ []byte) (*api.VersionedBlindedBeaconBlock, error) {
+	return nil, nil
+}
+
+// SleepyBlindedBeaconBlockProposalProvider is a mock for eth2client.BlindedBeaconBlockProposalProvider.
+type SleepyBlindedBeaconBlockProposalProvider struct {
+	wait time.Duration
+	next eth2client.BlindedBeaconBlockProposalProvider
+}
+
+// NewSleepyBlindedBeaconBlockProposalProvider returns a mock blinded beacon block proposal
+func NewSleepyBlindedBeaconBlockProposalProvider(wait time.Duration, next eth2client.BlindedBeaconBlockProposalProvider) eth2client.BlindedBeaconBlockProposalProvider {
+	return &SleepyBlindedBeaconBlockProposalProvider{
+		wait: wait,
+		next: next,
+	}
+}
+
+// BlindedBeaconBlockProposal is a mock.
+func (m *SleepyBlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*api.VersionedBlindedBeaconBlock, error) {
+	time.Sleep(m.wait)
+	return m.next.BlindedBeaconBlockProposal(ctx, slot, randaoReveal, graffiti)
 }
 
 // BeaconBlockHeadersProvider is a mock for eth2client.BeaconBlockHeadersProvider.
@@ -974,6 +1175,7 @@ func (*SpecProvider) Spec(_ context.Context) (map[string]interface{}, error) {
 		"DOMAIN_SYNC_COMMITTEE":                    phase0.DomainType{0x07, 0x00, 0x00, 0x00},
 		"DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF":    phase0.DomainType{0x08, 0x00, 0x00, 0x00},
 		"DOMAIN_VOLUNTARY_EXIT":                    phase0.DomainType{0x04, 0x00, 0x00, 0x00},
+		"DOMAIN_APPLICATION_BUILDER":               phase0.DomainType{0x00, 0x00, 0x00, 0x01},
 		"EPOCHS_PER_SYNC_COMMITTEE_PERIOD":         uint64(256),
 		"SECONDS_PER_SLOT":                         12 * time.Second,
 		"SLOTS_PER_EPOCH":                          uint64(32),

@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 
 	// #nosec G108
 	_ "net/http/pprof"
@@ -32,9 +31,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/loggers"
 	"github.com/attestantio/vouch/services/accountmanager"
 	dirkaccountmanager "github.com/attestantio/vouch/services/accountmanager/dirk"
@@ -43,14 +42,13 @@ import (
 	standardattester "github.com/attestantio/vouch/services/attester/standard"
 	standardbeaconblockproposer "github.com/attestantio/vouch/services/beaconblockproposer/standard"
 	standardbeaconcommitteesubscriber "github.com/attestantio/vouch/services/beaconcommitteesubscriber/standard"
+	"github.com/attestantio/vouch/services/blockrelay"
+	standardblockrelay "github.com/attestantio/vouch/services/blockrelay/standard"
 	"github.com/attestantio/vouch/services/cache"
 	standardcache "github.com/attestantio/vouch/services/cache/standard"
 	"github.com/attestantio/vouch/services/chaintime"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	standardcontroller "github.com/attestantio/vouch/services/controller/standard"
-	"github.com/attestantio/vouch/services/feerecipientprovider"
-	remotefeerecipientprovider "github.com/attestantio/vouch/services/feerecipientprovider/remote"
-	staticfeerecipientprovider "github.com/attestantio/vouch/services/feerecipientprovider/static"
 	"github.com/attestantio/vouch/services/graffitiprovider"
 	dynamicgraffitiprovider "github.com/attestantio/vouch/services/graffitiprovider/dynamic"
 	staticgraffitiprovider "github.com/attestantio/vouch/services/graffitiprovider/static"
@@ -80,6 +78,8 @@ import (
 	firstattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/first"
 	bestbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	firstbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/first"
+	bestblindedbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/blindedbeaconblockproposal/best"
+	firstblindedbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/blindedbeaconblockproposal/first"
 	bestsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/best"
 	firstsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/first"
 	"github.com/attestantio/vouch/util"
@@ -96,11 +96,12 @@ import (
 	directconfidant "github.com/wealdtech/go-majordomo/confidants/direct"
 	fileconfidant "github.com/wealdtech/go-majordomo/confidants/file"
 	gsmconfidant "github.com/wealdtech/go-majordomo/confidants/gsm"
+	httpconfidant "github.com/wealdtech/go-majordomo/confidants/http"
 	standardmajordomo "github.com/wealdtech/go-majordomo/standard"
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.5.0"
+var ReleaseVersion = "1.6.0-beta1"
 
 func main() {
 	os.Exit(main2())
@@ -232,6 +233,9 @@ func fetchConfig() error {
 	viper.SetDefault("controller.max-sync-committee-message-delay", 4*time.Second)
 	viper.SetDefault("controller.attestation-aggregation-delay", 8*time.Second)
 	viper.SetDefault("controller.sync-committee-aggregation-delay", 8*time.Second)
+	viper.SetDefault("blockrelay.timeout", 1*time.Second)
+	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
+	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(30000000))
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch err.(type) {
@@ -291,8 +295,12 @@ func initProfiling() error {
 	if profileAddress != "" {
 		go func() {
 			log.Info().Str("profile_address", profileAddress).Msg("Starting profile server")
+			server := &http.Server{
+				Addr:              profileAddress,
+				ReadHeaderTimeout: 5 * time.Second,
+			}
 			runtime.SetMutexProfileFraction(1)
-			if err := http.ListenAndServe(profileAddress, nil); err != nil {
+			if err := server.ListenAndServe(); err != nil {
 				log.Warn().Str("profile_address", profileAddress).Err(err).Msg("Failed to run profile server")
 			}
 		}()
@@ -323,31 +331,15 @@ func startServices(ctx context.Context,
 	*standardcontroller.Service,
 	error,
 ) {
-	eth2Client, err := startClient(ctx)
+	eth2Client, chainTime, monitor, err := startBasicServices(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	log.Trace().Msg("Starting chain time service")
-	chainTime, err := standardchaintime.New(ctx,
-		standardchaintime.WithLogLevel(util.LogLevel("chaintime")),
-		standardchaintime.WithGenesisTimeProvider(eth2Client.(eth2client.GenesisTimeProvider)),
-		standardchaintime.WithSlotDurationProvider(eth2Client.(eth2client.SlotDurationProvider)),
-		standardchaintime.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
-	)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start chain time service")
-	}
 
-	log.Trace().Msg("Starting metrics service")
-	monitor, err := startMonitor(ctx, chainTime)
+	altairCapable, bellatrixCapable, err := consensusClientCapabilities(ctx, eth2Client)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start metrics service")
+		return nil, nil, err
 	}
-	if err := registerMetrics(monitor); err != nil {
-		return nil, nil, errors.Wrap(err, "failed to register metrics")
-	}
-	setRelease(ReleaseVersion)
-	setReady(false)
 
 	log.Trace().Msg("Selecting scheduler")
 	scheduler, err := selectScheduler(ctx, monitor)
@@ -356,7 +348,7 @@ func startServices(ctx context.Context,
 	}
 
 	log.Trace().Msg("Starting cache")
-	cache, err := startCache(ctx, monitor, chainTime, scheduler, eth2Client)
+	cacheSvc, err := startCache(ctx, monitor, chainTime, scheduler, eth2Client)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to start cache")
 	}
@@ -391,25 +383,30 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to start graffiti provider")
 	}
 
-	log.Trace().Msg("Starting fee recipient provider")
-	feeRecipientProvider, err := startFeeRecipientProvider(ctx, monitor, majordomo)
+	blockRelay, err := startBlockRelay(ctx, monitor, majordomo, scheduler, chainTime, accountManager, signerSvc)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start fee recipient provider")
+		return nil, nil, err
 	}
-
 	log.Trace().Msg("Selecting beacon block proposal provider")
-	beaconBlockProposalProvider, err := selectBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
+	beaconBlockProposalProvider, err := selectBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime, cacheSvc)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to select beacon block proposal provider")
 	}
 
-	log.Trace().Msg("Starting beacon block proposer")
+	log.Trace().Msg("Selecting blinded beacon block proposal provider")
+	blindedBeaconBlockProposalProvider, err := selectBlindedBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime, cacheSvc)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to select blinded beacon block proposal provider")
+	}
+
 	beaconBlockProposer, err := standardbeaconblockproposer.New(ctx,
 		standardbeaconblockproposer.WithLogLevel(util.LogLevel("beaconblockproposer")),
 		standardbeaconblockproposer.WithChainTimeService(chainTime),
 		standardbeaconblockproposer.WithProposalDataProvider(beaconBlockProposalProvider),
+		standardbeaconblockproposer.WithBlindedProposalDataProvider(blindedBeaconBlockProposalProvider),
+		standardbeaconblockproposer.WithBlockAuctioneer(blockRelay.(blockauctioneer.BlockAuctioneer)),
 		standardbeaconblockproposer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-		standardbeaconblockproposer.WithFeeRecipientProvider(feeRecipientProvider),
+		standardbeaconblockproposer.WithExecutionChainHeadProvider(cacheSvc.(cache.ExecutionChainHeadProvider)),
 		standardbeaconblockproposer.WithGraffitiProvider(graffitiProvider),
 		standardbeaconblockproposer.WithMonitor(monitor.(metrics.BeaconBlockProposalMonitor)),
 		standardbeaconblockproposer.WithBeaconBlockSubmitter(submitterStrategy.(submitter.BeaconBlockSubmitter)),
@@ -421,7 +418,7 @@ func startServices(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting attestation data provider")
-	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, eth2Client, chainTime, cache)
+	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, eth2Client, chainTime, cacheSvc)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to select attestation data provider")
 	}
@@ -475,28 +472,6 @@ func startServices(ctx context.Context,
 	)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to start beacon committee subscriber service")
-	}
-
-	// Decide if the ETH2 client is capable of Altair.
-	altairCapable := false
-	spec, err := eth2Client.(eth2client.SpecProvider).Spec(ctx)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to obtain spec")
-	}
-	if _, exists := spec["INACTIVITY_PENALTY_QUOTIENT_ALTAIR"]; exists {
-		altairCapable = true
-		log.Info().Msg("Client is Altair-capable")
-	} else {
-		log.Info().Msg("Client is not Altair-capable")
-	}
-
-	// Decide if the ETH2 client is capabale of Bellatrix.
-	bellatrixCapable := false
-	if _, exists := spec["BELLATRIX_FORK_EPOCH"]; exists {
-		bellatrixCapable = true
-		log.Info().Msg("Client is Bellatrix-capable")
-	} else {
-		log.Info().Msg("Client is not Bellatrix-capable")
 	}
 
 	// The following items are for Altair.  These are optional.
@@ -558,13 +533,15 @@ func startServices(ctx context.Context,
 	var proposalPreparer proposalpreparer.Service
 	if bellatrixCapable {
 		log.Trace().Msg("Starting proposals preparer")
+
 		proposalPreparer, err = standardproposalpreparer.New(ctx,
 			standardproposalpreparer.WithLogLevel(util.LogLevel("proposalspreparor")),
 			standardproposalpreparer.WithMonitor(monitor),
 			standardproposalpreparer.WithChainTimeService(chainTime),
 			standardproposalpreparer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-			standardproposalpreparer.WithFeeRecipientProvider(feeRecipientProvider),
 			standardproposalpreparer.WithProposalPreparationsSubmitter(submitterStrategy.(eth2client.ProposalPreparationsSubmitter)),
+			standardproposalpreparer.WithValidatorRegistrationsSubmitter(blockRelay.(blockrelay.ValidatorRegistrationsSubmitter)),
+			standardproposalpreparer.WithExecutionConfigProvider(blockRelay.(blockrelay.ExecutionConfigProvider)),
 		)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "failed to start proposal preparer service")
@@ -607,6 +584,42 @@ func startServices(ctx context.Context,
 	}
 
 	return chainTime, controller, nil
+}
+
+func startBasicServices(ctx context.Context,
+) (
+	eth2client.Service,
+	chaintime.Service,
+	metrics.Service,
+	error,
+) {
+	eth2Client, err := startClient(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	log.Trace().Msg("Starting chain time service")
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(util.LogLevel("chaintime")),
+		standardchaintime.WithGenesisTimeProvider(eth2Client.(eth2client.GenesisTimeProvider)),
+		standardchaintime.WithSlotDurationProvider(eth2Client.(eth2client.SlotDurationProvider)),
+		standardchaintime.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
+	)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to start chain time service")
+	}
+
+	log.Trace().Msg("Starting metrics service")
+	monitor, err := startMonitor(ctx, chainTime)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to start metrics service")
+	}
+	if err := registerMetrics(monitor); err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to register metrics")
+	}
+	setRelease(ReleaseVersion)
+	setReady(false)
+
+	return eth2Client, chainTime, monitor, nil
 }
 
 // logModules logs a list of modules with their versions.
@@ -703,6 +716,16 @@ func initMajordomo(ctx context.Context) (majordomo.Service, error) {
 		}
 	}
 
+	httpConfidant, err := httpconfidant.New(ctx,
+		httpconfidant.WithLogLevel(util.LogLevel("majordomo.confidants.http")),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create HTTP confidant")
+	}
+	if err := majordomo.RegisterConfidant(ctx, httpConfidant); err != nil {
+		return nil, errors.Wrap(err, "failed to register HTTP confidant")
+	}
+
 	return majordomo, nil
 }
 
@@ -772,81 +795,6 @@ func startCache(ctx context.Context,
 	}
 
 	return cache, nil
-}
-
-// startFeeRecipientProvider starts the appropriate fee recipient provider given user input.
-func startFeeRecipientProvider(ctx context.Context, monitor metrics.Service, majordomo majordomo.Service) (feerecipientprovider.Service, error) {
-	addr := viper.GetString("feerecipient.default-address")
-	if addr == "" {
-		return nil, errors.New("no default fee recipient address, cannot continue")
-	}
-	bytes, err := hex.DecodeString(strings.TrimPrefix(addr, "0x"))
-	if err != nil {
-		return nil, errors.Wrap(err, "invalid default fee recipient address")
-	}
-	if len(bytes) != bellatrix.FeeRecipientLength {
-		return nil, errors.New("default fee recipient address wrong length")
-	}
-	var feeRecipient bellatrix.ExecutionAddress
-	copy(feeRecipient[:], bytes)
-
-	switch {
-	case viper.Get("feerecipient.remote") != nil:
-		log.Info().Msg("Starting remote fee recipient provider")
-
-		certPEMBlock, err := majordomo.Fetch(ctx, viper.GetString("feerecipient.remote.client-cert"))
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to obtain server certificate")
-		}
-		keyPEMBlock, err := majordomo.Fetch(ctx, viper.GetString("feerecipient.remote.client-key"))
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to obtain server key")
-		}
-		var caPEMBlock []byte
-		if viper.GetString("feerecipient.remote.ca-cert") != "" {
-			caPEMBlock, err = majordomo.Fetch(ctx, viper.GetString("feerecipient.remote.ca-cert"))
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to obtain client CA certificate")
-			}
-		}
-
-		return remotefeerecipientprovider.New(ctx,
-			remotefeerecipientprovider.WithMonitor(monitor),
-			remotefeerecipientprovider.WithLogLevel(util.LogLevel("feerecipient.remote")),
-			remotefeerecipientprovider.WithTimeout(util.Timeout("feerecipient.remote")),
-			remotefeerecipientprovider.WithBaseURL(viper.GetString("feerecipient.remote.base-url")),
-			remotefeerecipientprovider.WithClientCert(certPEMBlock),
-			remotefeerecipientprovider.WithClientKey(keyPEMBlock),
-			remotefeerecipientprovider.WithCACert(caPEMBlock),
-			remotefeerecipientprovider.WithDefaultFeeRecipient(feeRecipient),
-		)
-	default:
-		log.Info().Msg("Starting static fee recipient provider")
-		feeRecipients := make(map[phase0.ValidatorIndex]bellatrix.ExecutionAddress)
-		for k, v := range viper.GetStringMap("feerecipient.static.validator-addresses") {
-			index, err := strconv.ParseUint(k, 10, 64)
-			if err != nil {
-				return nil, errors.New("invalid validator index")
-			}
-			bytes, err := hex.DecodeString(strings.TrimPrefix(v.(string), "0x"))
-			if err != nil {
-				return nil, errors.New("invalid fee recipient address")
-			}
-			if len(bytes) != bellatrix.FeeRecipientLength {
-				return nil, errors.New("fee recipient address wrong length")
-			}
-			var feeRecipient bellatrix.ExecutionAddress
-			copy(feeRecipient[:], bytes)
-			feeRecipients[phase0.ValidatorIndex(index)] = feeRecipient
-		}
-
-		return staticfeerecipientprovider.New(ctx,
-			staticfeerecipientprovider.WithMonitor(monitor),
-			staticfeerecipientprovider.WithLogLevel(util.LogLevel("feerecipient.static")),
-			staticfeerecipientprovider.WithFeeRecipients(feeRecipients),
-			staticfeerecipientprovider.WithDefaultFeeRecipient(feeRecipient),
-		)
-	}
 }
 
 // startGraffitiProvider starts the appropriate graffiti provider given user input.
@@ -1160,6 +1108,68 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 	return beaconBlockProposalProvider, nil
 }
 
+// selectBlindedBeaconBlockProposalProvider selects the appropriate blinded beacon block proposal provider given user input.
+func selectBlindedBeaconBlockProposalProvider(ctx context.Context,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+	chainTime chaintime.Service,
+	cacheSvc cache.Service,
+) (eth2client.BlindedBeaconBlockProposalProvider, error) {
+	var blindedBeaconBlockProposalProvider eth2client.BlindedBeaconBlockProposalProvider
+	var err error
+	switch viper.GetString("strategies.blindedbeaconblockproposal.style") {
+	case "best":
+		log.Info().Msg("Starting best blinded beacon block proposal strategy")
+		blindedBeaconBlockProposalProviders := make(map[string]eth2client.BlindedBeaconBlockProposalProvider)
+		for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best") {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
+			}
+			blindedBeaconBlockProposalProviders[address] = client.(eth2client.BlindedBeaconBlockProposalProvider)
+		}
+		blindedBeaconBlockProposalProvider, err = bestblindedbeaconblockproposalstrategy.New(ctx,
+			bestblindedbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			bestblindedbeaconblockproposalstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.blindedbeaconblockproposal.best")),
+			bestblindedbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.blindedbeaconblockproposal.best")),
+			bestblindedbeaconblockproposalstrategy.WithEventsProvider(eth2Client.(eth2client.EventsProvider)),
+			bestblindedbeaconblockproposalstrategy.WithChainTimeService(chainTime),
+			bestblindedbeaconblockproposalstrategy.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
+			bestblindedbeaconblockproposalstrategy.WithBlindedBeaconBlockProposalProviders(blindedBeaconBlockProposalProviders),
+			bestblindedbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
+			bestblindedbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.blindedbeaconblockproposal.best")),
+			bestblindedbeaconblockproposalstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start best blinded beacon block proposal strategy")
+		}
+	case "first":
+		log.Info().Msg("Starting first blinded beacon block proposal strategy")
+		blindedBeaconBlockProposalProviders := make(map[string]eth2client.BlindedBeaconBlockProposalProvider)
+		for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first") {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
+			}
+			blindedBeaconBlockProposalProviders[address] = client.(eth2client.BlindedBeaconBlockProposalProvider)
+		}
+		blindedBeaconBlockProposalProvider, err = firstblindedbeaconblockproposalstrategy.New(ctx,
+			firstblindedbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			firstblindedbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.blindedbeaconblockproposal.first")),
+			firstblindedbeaconblockproposalstrategy.WithBlindedBeaconBlockProposalProviders(blindedBeaconBlockProposalProviders),
+			firstblindedbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.blindedbeaconblockproposal.first")),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start first blinded beacon block proposal strategy")
+		}
+	default:
+		log.Info().Msg("Starting simple blinded beacon block proposal strategy")
+		blindedBeaconBlockProposalProvider = eth2Client.(eth2client.BlindedBeaconBlockProposalProvider)
+	}
+
+	return blindedBeaconBlockProposalProvider, nil
+}
+
 // selectSyncCommitteeContributionProvider selects the appropriate sync committee contribution provider given user input.
 func selectSyncCommitteeContributionProvider(ctx context.Context,
 	monitor metrics.Service,
@@ -1339,4 +1349,100 @@ func runCommands(_ context.Context) bool {
 	}
 
 	return false
+}
+
+func consensusClientCapabilities(ctx context.Context, consensusClient eth2client.Service) (bool, bool, error) {
+	// Decide if the ETH2 client is capable of Altair.
+	altairCapable := false
+	spec, err := consensusClient.(eth2client.SpecProvider).Spec(ctx)
+	if err != nil {
+		return false, false, errors.Wrap(err, "failed to obtain spec")
+	}
+	if _, exists := spec["INACTIVITY_PENALTY_QUOTIENT_ALTAIR"]; exists {
+		altairCapable = true
+		log.Info().Msg("Client is Altair-capable")
+	} else {
+		log.Info().Msg("Client is not Altair-capable")
+	}
+
+	// Decide if the ETH2 client is capabale of Bellatrix.
+	bellatrixCapable := false
+	if _, exists := spec["BELLATRIX_FORK_EPOCH"]; exists {
+		bellatrixCapable = true
+		log.Info().Msg("Client is Bellatrix-capable")
+	} else {
+		log.Info().Msg("Client is not Bellatrix-capable")
+	}
+
+	return altairCapable, bellatrixCapable, nil
+}
+
+func startBlockRelay(ctx context.Context,
+	monitor metrics.Service,
+	majordomo majordomo.Service,
+	scheduler scheduler.Service,
+	chainTime chaintime.Service,
+	accountManager accountmanager.Service,
+	signerSvc signer.Service,
+) (
+	blockrelay.Service,
+	error,
+) {
+	// We also need to submit validator registrations to all nodes that are acting as blinded beacon block proposers, as
+	// some of them use the registration as part of the condition to decide if the blinded block should be called or not.
+	secondaryValidatorRegistrationsSubmitters := []eth2client.ValidatorRegistrationsSubmitter{}
+	clients := make(map[string]struct{})
+	for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best") {
+		client, err := fetchClient(ctx, address)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
+		}
+		secondaryValidatorRegistrationsSubmitters = append(secondaryValidatorRegistrationsSubmitters, client.(eth2client.ValidatorRegistrationsSubmitter))
+		clients[address] = struct{}{}
+	}
+	for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first") {
+		if _, exists := clients[address]; !exists {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
+			}
+			secondaryValidatorRegistrationsSubmitters = append(secondaryValidatorRegistrationsSubmitters, client.(eth2client.ValidatorRegistrationsSubmitter))
+			clients[address] = struct{}{}
+		}
+	}
+
+	var fallbackFeeRecipient bellatrix.ExecutionAddress
+	feeRecipient, err := hex.DecodeString(strings.TrimPrefix(viper.GetString("blockrelay.fallback-fee-recipient"), "0x"))
+	if err != nil {
+		return nil, errors.New("blockrelay: invalid fallback fee recipient")
+	}
+	if len(feeRecipient) != len(fallbackFeeRecipient) {
+		return nil, errors.New("blockrelay: incorrect length for fallback fee recipient")
+	}
+	copy(fallbackFeeRecipient[:], feeRecipient)
+
+	var blockRelay blockrelay.Service
+	blockRelay, err = standardblockrelay.New(ctx,
+		standardblockrelay.WithLogLevel(util.LogLevel("blockrelay")),
+		standardblockrelay.WithMonitor(monitor),
+		standardblockrelay.WithMajordomo(majordomo),
+		standardblockrelay.WithScheduler(scheduler),
+		standardblockrelay.WithChainTime(chainTime),
+		standardblockrelay.WithConfigURL(viper.GetString("blockrelay.config.url")),
+		standardblockrelay.WithFallbackFeeRecipient(fallbackFeeRecipient),
+		standardblockrelay.WithFallbackGasLimit(viper.GetUint64("blockrelay.fallback-gas-limit")),
+		standardblockrelay.WithClientCertURL(viper.GetString("blockrelay.config.client-cert")),
+		standardblockrelay.WithClientKeyURL(viper.GetString("blockrelay.config.client-key")),
+		standardblockrelay.WithCACertURL(viper.GetString("blockrelay.config.ca-cert")),
+		standardblockrelay.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+		standardblockrelay.WithListenAddress(viper.GetString("blockrelay.listen-address")),
+		standardblockrelay.WithValidatorRegistrationSigner(signerSvc.(signer.ValidatorRegistrationSigner)),
+		standardblockrelay.WithTimeout(util.Timeout("blockrelay")),
+		standardblockrelay.WithSecondaryValidatorRegistrationsSubmitters(secondaryValidatorRegistrationsSubmitters),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start block relay")
+	}
+
+	return blockRelay, nil
 }

@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -11,18 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package feerecipientprovider provides fee recipients for block proposals.
-package feerecipientprovider
+package standard
 
 import (
 	"context"
-
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"io"
 )
 
-// Service is the fee recipient provider service.
-type Service interface {
-	// FeeRecipients returns the fee recipients for the given validators.
-	FeeRecipients(ctx context.Context, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]bellatrix.ExecutionAddress, error)
+// ValidatorRegistrationsPassthrough handles validator registrations directly.
+func (*Service) ValidatorRegistrationsPassthrough(_ context.Context, _ io.ReadCloser) error {
+	log.Trace().Msg("Validator registrations called; ignoring")
+
+	return nil
 }
