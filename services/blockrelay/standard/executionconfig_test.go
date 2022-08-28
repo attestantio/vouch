@@ -98,7 +98,7 @@ func TestExecConfig(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(base)
 	configFile := filepath.Join(base, "config.json")
-	require.NoError(t, os.WriteFile(configFile, []byte(`{"default_config":{"fee_recipient":"0x0200000000000000000000000000000000000000","builder":{"enabled":false,"gas_limit":"20000000"}}}`), 0600))
+	require.NoError(t, os.WriteFile(configFile, []byte(`{"default_config":{"fee_recipient":"0x0200000000000000000000000000000000000000","gas_limit":"20000000","builder":{"enabled":false}}}`), 0600))
 	badConfigFile := filepath.Join(base, "badconfig.json")
 	require.NoError(t, os.WriteFile(badConfigFile, []byte(`bad`), 0600))
 
@@ -124,7 +124,7 @@ func TestExecConfig(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
 			},
-			execConfig: `{"default_config":{"fee_recipient":"0x0100000000000000000000000000000000000000","builder":{"enabled":false,"gas_limit":"10000000"}}}`,
+			execConfig: `{"default_config":{"fee_recipient":"0x0100000000000000000000000000000000000000","gas_limit":"10000000","builder":{"enabled":false}}}`,
 		},
 		{
 			name: "File",
@@ -141,7 +141,7 @@ func TestExecConfig(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
 			},
-			execConfig: `{"default_config":{"fee_recipient":"0x0200000000000000000000000000000000000000","builder":{"enabled":false,"gas_limit":"20000000"}}}`,
+			execConfig: `{"default_config":{"fee_recipient":"0x0200000000000000000000000000000000000000","gas_limit":"20000000","builder":{"enabled":false}}}`,
 			logEntries: []map[string]interface{}{
 				{
 					"message": "Obtained configuration",
@@ -163,7 +163,7 @@ func TestExecConfig(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
 			},
-			execConfig: `{"default_config":{"fee_recipient":"0x0100000000000000000000000000000000000000","builder":{"enabled":false,"gas_limit":"10000000"}}}`,
+			execConfig: `{"default_config":{"fee_recipient":"0x0100000000000000000000000000000000000000","gas_limit":"10000000","builder":{"enabled":false}}}`,
 			logEntries: []map[string]interface{}{
 				{
 					"message": "Failed to obtain execution configuration; setting default configuration with fallback",
