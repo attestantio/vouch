@@ -28,6 +28,7 @@ type validatingAccountsProvider struct {
 
 // NewValidatingAccountsProvider is a mock.
 // nolint
+// skipcq: RVV-B0011
 func NewValidatingAccountsProvider() *validatingAccountsProvider {
 	return &validatingAccountsProvider{
 		validatingAccounts: make(map[phase0.ValidatorIndex]e2wtypes.Account),

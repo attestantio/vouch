@@ -19,7 +19,7 @@ import (
 )
 
 // ValidatorRegistrationsPassthrough handles validator registrations directly.
-func (*Service) ValidatorRegistrationsPassthrough(ctx context.Context, reader io.ReadCloser) error {
+func (*Service) ValidatorRegistrationsPassthrough(_ context.Context, _ io.ReadCloser) error {
 	log.Trace().Msg("Validator registrations called; ignoring")
 
 	return nil

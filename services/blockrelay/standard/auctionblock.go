@@ -124,7 +124,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 			log.Error().Err(err).Msg("Builder client does not supply builder bids")
 			continue
 		}
-		go s.builderBid(ctx, started, provider, respCh, errCh, slot, parentHash, pubkey)
+		go s.builderBid(ctx, provider, respCh, errCh, slot, parentHash, pubkey)
 	}
 
 	// Wait for all responses (or context done).
@@ -204,7 +204,6 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 }
 
 func (*Service) builderBid(ctx context.Context,
-	started time.Time,
 	provider builderclient.BuilderBidProvider,
 	respCh chan *builderBidResponse,
 	errCh chan error,

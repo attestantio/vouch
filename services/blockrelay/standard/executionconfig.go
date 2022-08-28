@@ -220,7 +220,7 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 }
 
 // ExecutionConfig provides the current execution configuration.
-func (s *Service) ExecutionConfig(ctx context.Context) (*blockrelay.ExecutionConfig, error) {
+func (s *Service) ExecutionConfig(_ context.Context) (*blockrelay.ExecutionConfig, error) {
 	s.executionConfigMu.RLock()
 	defer s.executionConfigMu.RUnlock()
 	if s.executionConfig == nil {

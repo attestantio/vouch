@@ -25,7 +25,7 @@ import (
 )
 
 // BuilderBid provides a builder bid.
-func (s *Service) BuilderBid(ctx context.Context,
+func (s *Service) BuilderBid(_ context.Context,
 	slot phase0.Slot,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
