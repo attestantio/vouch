@@ -10,7 +10,7 @@ Vouch's configuration file can be written in JSON or YAML.  The file can either 
 
 A sample configuration file in YAML with is shown below:
 
-```
+```YAML
 # log-file is the location for Vouch log output.  If this is not provided logs will be written to the console.
 log-file: /home/me/vouch.log
 # log-level is the global log level for Vouch logging.
@@ -131,7 +131,7 @@ A number of items in the configuration are hierarchical.  If not stated explicit
 
 Vouch will use the first value obtained.  Continuing the example, if a configuration file is set up as follows:
 
-```
+```YAML
 beacon-node-addresses: [ localhost:4000, localhost:5051 ]
 strategies:
   beacon-node-address: [ localhost: 5051 ]

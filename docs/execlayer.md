@@ -5,7 +5,7 @@ The execution layer configuration contains two pieces.  The first, which is mand
 
 Configuration is provided under the `blockrelay` key.  The minimal configuration is as follows:
 
-```
+```YAML
 blockrelay:
   fallback-fee-recipient: '0x0123…cdef'
 ```
@@ -14,7 +14,7 @@ This will use the provided address `0x0123…cdef` as the fee recipient for all 
 
 For more advanced configurations an execution configuration file is required.  Access to the configuration file is usually through a simple URL, for example:
 
-```
+```YAML
 blockrelay:
   fallback-fee-recipient: '0x0123…cdef'
   config:
@@ -25,7 +25,7 @@ blockrelay:
 
 The URL can be any valid [Majordomo](https://github.com/wealdtech/go-majordomo) URL.  Of special note is the [HTTP confidant](https://github.com/wealdtech/go-majordomo/blob/master/confidants/http/service.go#L32), for which Vouch provides additional features.  Notably, the call is made as a POST request with its body containing the public keys of the validators for which Vouch is currently validating, for example:
 
-```
+```json
 [
   "0x1111…1111",
   "0x2222…2222"
@@ -34,7 +34,7 @@ The URL can be any valid [Majordomo](https://github.com/wealdtech/go-majordomo) 
 
 Also, additional configuration parameters can be provided to secure the connection using HTTPS.  A full example of such a configuration is:
 
-```
+```YAML
 blockrelay:
   fallback-fee-recipient: '0x0123…cdef'
   config:
@@ -48,12 +48,12 @@ The combination of the list of public keys and certificate-level authentication 
 
 The execution configuration file referenced by the configuration URL allows for a default configuration alongside per-validator overrides, for example:
 
-```
+```json
 {
   "proposer_config": {
     "0xaaaa…aaaa": {
       "fee_recipient": "0x1111…1111"
-    }
+    },
     "0xbbbb…bbbb": {
       "fee_recipient": "0x2222…2222"
     }
@@ -70,34 +70,34 @@ In this configuration the validator with the public key `0xaaaa…aaaa` will use
 
 Vouch acts as an MEV-boost server, talking to MEV relays and accepting requests from beacon nodes for execution payload headers.
 
-```
+```json
 {
   "proposer_config": {
     "0xaaaa…aaaa": {
-      "fee_recipient": "0x1111…1111"
+      "fee_recipient": "0x1111…1111",
       "builder": {
         "enabled": true,
         "relays": [
           "relay1.example.com",
           "relay2.example.com"
-        ],
+        ]
       }
-    }
+    },
     "0xbbbb…bbbb": {
-      "fee_recipient": "0x2222…2222"
+      "fee_recipient": "0x2222…2222",
       "builder": {
         "enabled": false
       }
     }
   },
   "default_config": {
-  "fee_recipient": "0x0123…cdef"
+  "fee_recipient": "0x0123…cdef",
     "builder": {
       "enabled": true,
       "relays": [
         "relay1.example.com",
         "relay2.example.com"
-      ],
+      ]
     }
   }
 }
@@ -106,7 +106,7 @@ Vouch acts as an MEV-boost server, talking to MEV relays and accepting requests 
 ## Beacon node configuration
 By default, Vouch's MEV-boost service listens on port 18550.  Beacon nodes used by Vouch should be configured to talk directly to this, rather than other MEV-boost services or directly to relays.  Details of how to configure the beacon nodes is listed in the relevant client's documentation.  If a different port is required this can be set in the block relay configuration, for example:
 
-```
+```YAML
 blockrelay:
   listen-address: '0.0.0.0:12345'
   ...
@@ -115,22 +115,22 @@ blockrelay:
 ## Gas limit
 Block proposers have the ability to alter the gas limit as part of their block proposal process.  In general it is recommended that this value be left to the Vouch default, as it requires a majority of block proposers to agree on a new value for it to be reached, however if there is a requirement to change this then it can be done in the execution configuration file.  A sample execution configuration file that includes changing gas limit to 100000000 is shown below:
 
-```
+```json
 {
   "proposer_config": {
     "0xaaaa…aaaa": {
-      "fee_recipient": "0x1111…1111"
+      "fee_recipient": "0x1111…1111",
       "gas_limit": 100000000,
       "builder": {
         "enabled": true,
         "relays": [
           "relay1.example.com",
           "relay2.example.com"
-        ],
+        ]
       }
-    }
+    },
     "0xbbbb…bbbb": {
-      "fee_recipient": "0x2222…2222"
+      "fee_recipient": "0x2222…2222",
       "gas_limit": 100000000,
       "builder": {
         "enabled": false
@@ -138,14 +138,14 @@ Block proposers have the ability to alter the gas limit as part of their block p
     }
   },
   "default_config": {
-  "fee_recipient": "0x0123…cdef"
+  "fee_recipient": "0x0123…cdef",
   "gas_limit": 100000000,
     "builder": {
       "enabled": true,
       "relays": [
         "relay1.example.com",
         "relay2.example.com"
-      ],
+      ]
     }
   }
 }
