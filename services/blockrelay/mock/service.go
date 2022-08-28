@@ -30,11 +30,11 @@ func New() *Service {
 }
 
 // ExecutionConfig provides the current execution configuration.
-func (s *Service) ExecutionConfig(ctx context.Context) (*blockrelay.ExecutionConfig, error) {
+func (*Service) ExecutionConfig(ctx context.Context) (*blockrelay.ExecutionConfig, error) {
 	return nil, nil
 }
 
 // SubmitValidatorRegistrations submits validator registrations for the given accounts.
-func (s *Service) SubmitValidatorRegistrations(ctx context.Context, accounts map[phase0.ValidatorIndex]e2wtypes.Account) error {
+func (*Service) SubmitValidatorRegistrations(ctx context.Context, accounts map[phase0.ValidatorIndex]e2wtypes.Account) error {
 	return nil
 }

@@ -203,7 +203,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	return res, nil
 }
 
-func (s *Service) builderBid(ctx context.Context,
+func (*Service) builderBid(ctx context.Context,
 	started time.Time,
 	provider builderclient.BuilderBidProvider,
 	respCh chan *builderBidResponse,
