@@ -14,6 +14,7 @@
 package blockrelay
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -24,6 +25,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var zeroExecutionAddress bellatrix.ExecutionAddress
+
 // ProposerConfig is the configuration for a specific proposer.
 type ProposerConfig struct {
 	FeeRecipient bellatrix.ExecutionAddress
@@ -32,18 +35,23 @@ type ProposerConfig struct {
 }
 
 type proposerConfigJSON struct {
-	FeeRecipient string         `json:"fee_recipient"`
-	GasLimit     string         `json:"gas_limit"`
-	Builder      *BuilderConfig `json:"builder"`
+	FeeRecipient string         `json:"fee_recipient,omitempty"`
+	GasLimit     string         `json:"gas_limit,omitempty"`
+	Builder      *BuilderConfig `json:"builder,omitempty"`
 }
 
 // MarshalJSON implements json.Marshaler.
 func (p *ProposerConfig) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&proposerConfigJSON{
-		FeeRecipient: fmt.Sprintf("%#x", p.FeeRecipient),
-		GasLimit:     fmt.Sprintf("%d", p.GasLimit),
-		Builder:      p.Builder,
-	})
+	proposerConfig := &proposerConfigJSON{
+		Builder: p.Builder,
+	}
+	if !bytes.Equal(p.FeeRecipient[:], zeroExecutionAddress[:]) {
+		proposerConfig.FeeRecipient = fmt.Sprintf("%#x", p.FeeRecipient)
+	}
+	if p.GasLimit != 0 {
+		proposerConfig.GasLimit = fmt.Sprintf("%d", p.GasLimit)
+	}
+	return json.Marshal(proposerConfig)
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -53,14 +61,24 @@ func (p *ProposerConfig) UnmarshalJSON(input []byte) error {
 		return errors.Wrap(err, "invalid JSON")
 	}
 
+	if data.FeeRecipient == "" {
+		return errors.New("fee recipient missing")
+	}
 	feeRecipient, err := hex.DecodeString(strings.TrimPrefix(data.FeeRecipient, "0x"))
 	if err != nil {
 		return errors.Wrap(err, "failed to decode fee recipient")
 	}
 	copy(p.FeeRecipient[:], feeRecipient)
-	p.GasLimit, err = strconv.ParseUint(data.GasLimit, 10, 64)
-	if err != nil {
-		return errors.Wrap(err, "invalid gas limit")
+
+	if data.GasLimit != "" {
+		var err error
+		p.GasLimit, err = strconv.ParseUint(data.GasLimit, 10, 64)
+		if err != nil {
+			return errors.Wrap(err, "invalid gas limit")
+		}
+	}
+	if data.Builder == nil {
+		p.Builder = &BuilderConfig{}
 	}
 	p.Builder = data.Builder
 

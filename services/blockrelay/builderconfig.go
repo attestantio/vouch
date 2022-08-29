@@ -47,6 +47,9 @@ func (b *BuilderConfig) UnmarshalJSON(input []byte) error {
 	}
 
 	b.Enabled = data.Enabled
+	if b.Enabled && len(data.Relays) == 0 {
+		return errors.New("relays missing")
+	}
 	b.Relays = data.Relays
 
 	return nil

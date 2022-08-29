@@ -61,11 +61,18 @@ func (e *ExecutionConfig) UnmarshalJSON(input []byte) error {
 			return errors.Wrap(err, "failed to decode public key")
 		}
 		pubKey := phase0.BLSPubKey{}
+		if len(pubkey) != len(pubKey) {
+			return fmt.Errorf("public key has %d bytes, should have %d", len(pubkey), len(pubKey))
+		}
+
 		copy(pubKey[:], pubkey)
 		proposerConfigs[pubKey] = config
 	}
 	e.ProposerConfigs = proposerConfigs
 
+	if data.DefaultConfig == nil {
+		return errors.New("default config missing")
+	}
 	e.DefaultConfig = data.DefaultConfig
 
 	return nil
