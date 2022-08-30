@@ -101,7 +101,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.6.0-beta3"
+var ReleaseVersion = "1.6.0-beta4"
 
 func main() {
 	os.Exit(main2())
