@@ -90,7 +90,7 @@ func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committ
 	if bestAttestationData == nil {
 		return nil, errors.New("no attestations received")
 	}
-	log.Trace().Stringer("attestation_data", bestAttestationData).Float64("score", bestScore).Msg("Selected best attestation")
+	log.Trace().Str("provider", bestProvider).Stringer("attestation_data", bestAttestationData).Float64("score", bestScore).Msg("Selected best attestation")
 	if bestProvider != "" {
 		s.clientMonitor.StrategyOperation("best", bestProvider, "attestation data", time.Since(started))
 	}

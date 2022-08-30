@@ -132,7 +132,7 @@ func (s *Service) BlindedBeaconBlockProposal(ctx context.Context, slot phase0.Sl
 	if bestProposal == nil {
 		return nil, errors.New("no proposals received")
 	}
-	log.Trace().Stringer("proposal", bestProposal).Float64("score", bestScore).Msg("Selected best proposal")
+	log.Trace().Str("provider", bestProvider).Stringer("proposal", bestProposal).Float64("score", bestScore).Msg("Selected best proposal")
 	if bestProvider != "" {
 		s.clientMonitor.StrategyOperation("best", bestProvider, "blinded beacon block proposal", time.Since(started))
 	}

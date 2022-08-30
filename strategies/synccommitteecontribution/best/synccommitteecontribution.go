@@ -91,7 +91,7 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 	if bestSyncCommitteeContribution == nil {
 		return nil, errors.New("no sync committee contribution received")
 	}
-	log.Trace().Stringer("sync_committee_contribution", bestSyncCommitteeContribution).Float64("score", bestScore).Msg("Selected best sync committee contribution")
+	log.Trace().Str("provider", bestProvider).Stringer("sync_committee_contribution", bestSyncCommitteeContribution).Float64("score", bestScore).Msg("Selected best sync committee contribution")
 	if bestProvider != "" {
 		s.clientMonitor.StrategyOperation("best", bestProvider, "sync committee contribution", time.Since(started))
 	}

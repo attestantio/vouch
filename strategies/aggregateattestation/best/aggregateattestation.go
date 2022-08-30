@@ -90,7 +90,7 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 	if bestAggregateAttestation == nil {
 		return nil, errors.New("no aggregate attestations received")
 	}
-	log.Trace().Stringer("aggregate_attestation", bestAggregateAttestation).Float64("score", bestScore).Msg("Selected best aggregate attestation")
+	log.Trace().Str("provider", bestProvider).Stringer("aggregate_attestation", bestAggregateAttestation).Float64("score", bestScore).Msg("Selected best aggregate attestation")
 	if bestProvider != "" {
 		s.clientMonitor.StrategyOperation("best", bestProvider, "aggregate attestation", time.Since(started))
 	}

@@ -78,8 +78,8 @@ Vouch acts as an MEV-boost server, talking to MEV relays and accepting requests 
       "builder": {
         "enabled": true,
         "relays": [
-          "relay1.example.com",
-          "relay2.example.com"
+          "https://relay1.example.com/",
+          "https://relay2.example.com/"
         ]
       }
     },
@@ -95,8 +95,8 @@ Vouch acts as an MEV-boost server, talking to MEV relays and accepting requests 
     "builder": {
       "enabled": true,
       "relays": [
-        "relay1.example.com",
-        "relay2.example.com"
+        "https://relay1.example.com/",
+        "https://relay2.example.com/"
       ]
     }
   }
@@ -104,13 +104,15 @@ Vouch acts as an MEV-boost server, talking to MEV relays and accepting requests 
 ```
 
 ## Beacon node configuration
-By default, Vouch's MEV-boost service listens on port 18550.  Beacon nodes used by Vouch should be configured to talk directly to this, rather than other MEV-boost services or directly to relays.  Details of how to configure the beacon nodes is listed in the relevant client's documentation.  If a different port is required this can be set in the block relay configuration, for example:
+By default, Vouch's MEV-boost service listens on port 18550.  Beacon nodes used by Vouch should be configured to talk directly to this, rather than other MEV-boost services or directly to relays.  Details of how to configure the beacon nodes is listed in the relevant client's documentation.  If Vouch is required to listen on a different port this can be set in the block relay configuration, for example:
 
 ```YAML
 blockrelay:
   listen-address: '0.0.0.0:12345'
   ...
 ```
+
+Vouch's MEV-boost uses HTTP rather than HTTPS, so its connection should be specified as `http://localhost:18850/` or similar.
 
 ## Gas limit
 Block proposers have the ability to alter the gas limit as part of their block proposal process.  In general it is recommended that this value be left to the Vouch default, as it requires a majority of block proposers to agree on a new value for it to be reached, however if there is a requirement to change this then it can be done in the execution configuration file.  A sample execution configuration file that includes changing gas limit to 100000000 is shown below:
@@ -124,8 +126,8 @@ Block proposers have the ability to alter the gas limit as part of their block p
       "builder": {
         "enabled": true,
         "relays": [
-          "relay1.example.com",
-          "relay2.example.com"
+          "https://relay1.example.com/",
+          "https://relay2.example.com/"
         ]
       }
     },
@@ -143,8 +145,8 @@ Block proposers have the ability to alter the gas limit as part of their block p
     "builder": {
       "enabled": true,
       "relays": [
-        "relay1.example.com",
-        "relay2.example.com"
+        "https://relay1.example.com/",
+        "https://relay2.example.com/"
       ]
     }
   }
