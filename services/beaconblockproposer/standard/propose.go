@@ -239,7 +239,7 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 
 	var signedBlock *spec.VersionedSignedBeaconBlock
 	var sig *phase0.BLSSignature
-	for retries := 6; retries > 0; retries-- {
+	for retries := 3; retries > 0; retries-- {
 		if sig == nil {
 			blockSig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
 				duty.Account(),
