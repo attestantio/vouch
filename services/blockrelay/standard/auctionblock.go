@@ -203,7 +203,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	return res, nil
 }
 
-func (*Service) builderBid(ctx context.Context,
+func (s *Service) builderBid(ctx context.Context,
 	provider builderclient.BuilderBidProvider,
 	respCh chan *builderBidResponse,
 	errCh chan error,
@@ -249,6 +249,10 @@ func (*Service) builderBid(ctx context.Context,
 		}
 		if zeroValue.Cmp(builderBid.Data.Message.Value) == 0 {
 			errCh <- fmt.Errorf("%s: zero value", provider.Address())
+			return
+		}
+		if uint64(s.chainTime.StartOfSlot(slot).Unix()) != builderBid.Data.Message.Header.Timestamp {
+			errCh <- fmt.Errorf("%s: provided timestamp %d for slot %d not expected value of %d", provider.Address(), builderBid.Data.Message.Header.Timestamp, slot, s.chainTime.StartOfSlot(slot).Unix())
 			return
 		}
 	default:
