@@ -234,36 +234,53 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 
 	// If there are failures from this point forwards we cannot safely propose without the auction.
 	canTryWithout = false
+	// As we cannot fall back we move to a retry system.
+	retryInterval := 500 * time.Millisecond
 
-	sig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
-		duty.Account(),
-		proposalSlot,
-		duty.ValidatorIndex(),
-		parentRoot,
-		stateRoot,
-		bodyRoot)
-	if err != nil {
-		return canTryWithout, errors.Wrap(err, "failed to sign blinded beacon block proposal")
-	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed blinded proposal")
-
-	signedBlindedBlock := &api.VersionedSignedBlindedBeaconBlock{
-		Version: proposal.Version,
-	}
-	switch signedBlindedBlock.Version {
-	case spec.DataVersionBellatrix:
-		signedBlindedBlock.Bellatrix = &apiv1.SignedBlindedBeaconBlock{
-			Message:   proposal.Bellatrix,
-			Signature: sig,
+	var signedBlock *spec.VersionedSignedBeaconBlock
+	var sig *phase0.BLSSignature
+	for retries := 6; retries > 0; retries-- {
+		if sig == nil {
+			blockSig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
+				duty.Account(),
+				proposalSlot,
+				duty.ValidatorIndex(),
+				parentRoot,
+				stateRoot,
+				bodyRoot)
+			if err != nil {
+				log.Debug().Err(err).Int("retries", retries).Msg("Failed to sign blinded beacon block proposal")
+				time.Sleep(retryInterval)
+				continue
+			}
+			sig = &blockSig
+			log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed blinded proposal")
 		}
-	default:
-		return canTryWithout, fmt.Errorf("unknown proposal version %v", signedBlindedBlock.Version)
-	}
 
-	// Unblind the blinded block.
-	signedBlock, err := unblindedBlockProvider.UnblindBlock(ctx, signedBlindedBlock)
-	if err != nil {
-		return canTryWithout, errors.Wrap(err, "failed to unblind block")
+		signedBlindedBlock := &api.VersionedSignedBlindedBeaconBlock{
+			Version: proposal.Version,
+		}
+		switch signedBlindedBlock.Version {
+		case spec.DataVersionBellatrix:
+			signedBlindedBlock.Bellatrix = &apiv1.SignedBlindedBeaconBlock{
+				Message:   proposal.Bellatrix,
+				Signature: *sig,
+			}
+		default:
+			return canTryWithout, fmt.Errorf("unknown proposal version %v", signedBlindedBlock.Version)
+		}
+
+		// Unblind the blinded block.
+		signedBlock, err = unblindedBlockProvider.UnblindBlock(ctx, signedBlindedBlock)
+		if err != nil {
+			log.Debug().Err(err).Int("retries", retries).Msg("Failed to unblind block")
+			time.Sleep(retryInterval)
+			continue
+		}
+		break
+	}
+	if signedBlock == nil {
+		return canTryWithout, errors.New("failed to obtain signed block after retries; giving up")
 	}
 
 	if e := log.Trace(); e.Enabled() {
