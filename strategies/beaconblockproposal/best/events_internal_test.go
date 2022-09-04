@@ -101,7 +101,7 @@ func TestUpdateBlockVotes(t *testing.T) {
 								DepositRoot: testutil.HexToRoot("0x1010101010101010101010101010101010101010101010101010101010101010"),
 								BlockHash:   testutil.HexToBytes("0x1111111111111111111111111111111111111111111111111111111111111111"),
 							},
-							Graffiti: testutil.HexToBytes("0x0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad"),
+							Graffiti: testutil.HexToBytes32("0x0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad0bad"),
 							Attestations: []*phase0.Attestation{
 								{
 									AggregationBits: bitList(10, 128),
