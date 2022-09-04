@@ -17,12 +17,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attester"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
@@ -38,10 +40,13 @@ type Service struct {
 	monitor                    metrics.AttestationMonitor
 	processConcurrency         int64
 	slotsPerEpoch              uint64
+	chainTimeService           chaintime.Service
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	attestationDataProvider    eth2client.AttestationDataProvider
 	attestationsSubmitter      submitter.AttestationsSubmitter
 	beaconAttestationsSigner   signer.BeaconAttestationsSigner
+	attested                   map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}
+	attestedMu                 sync.Mutex
 }
 
 // module-wide log.
@@ -69,10 +74,12 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		monitor:                    parameters.monitor,
 		processConcurrency:         parameters.processConcurrency,
 		slotsPerEpoch:              slotsPerEpoch,
+		chainTimeService:           parameters.chainTimeService,
 		validatingAccountsProvider: parameters.validatingAccountsProvider,
 		attestationDataProvider:    parameters.attestationDataProvider,
 		attestationsSubmitter:      parameters.attestationsSubmitter,
 		beaconAttestationsSigner:   parameters.beaconAttestationsSigner,
+		attested:                   make(map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}),
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
@@ -89,41 +96,60 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 		s.monitor.AttestationsCompleted(started, 0, len(duty.ValidatorIndices()), "failed")
 		return nil, errors.New("passed invalid data structure")
 	}
-	uints := make([]uint64, len(duty.ValidatorIndices()))
-	for i := range duty.ValidatorIndices() {
-		uints[i] = uint64(duty.ValidatorIndices()[i])
+
+	// Ensure that we have an attested map for this epoch.
+	epoch := s.chainTimeService.SlotToEpoch(duty.Slot())
+	s.attestedMu.Lock()
+	if _, exists := s.attested[epoch]; !exists {
+		s.attested[epoch] = make(map[phase0.ValidatorIndex]struct{})
+	}
+	s.attestedMu.Unlock()
+
+	// Filter the list of validator indices.
+	validatorIndices := make([]phase0.ValidatorIndex, 0, len(duty.ValidatorIndices()))
+	uints := make([]uint64, 0, len(duty.ValidatorIndices()))
+	for i, index := range duty.ValidatorIndices() {
+		s.attestedMu.Lock()
+		if _, exists := s.attested[epoch][index]; exists {
+			log.Warn().Uint64("slot", uint64(duty.Slot())).Int("array_index", i).Uint64("validator_index", uint64(index)).Msg("Validator already attested this epoch; not attesting again")
+		} else {
+			validatorIndices = append(validatorIndices, index)
+			uints = append(uints, uint64(index))
+			s.attested[epoch][index] = struct{}{}
+		}
+		s.attestedMu.Unlock()
 	}
 	log := log.With().Uint64("slot", uint64(duty.Slot())).Uints64("validator_indices", uints).Logger()
 
 	// Fetch the attestation data.
 	attestationData, err := s.attestationDataProvider.AttestationData(ctx, duty.Slot(), duty.CommitteeIndices()[0])
 	if err != nil {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed")
+		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
 		return nil, errors.Wrap(err, "failed to obtain attestation data")
 	}
 	if attestationData == nil {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed")
+		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
 		return nil, errors.Wrap(err, "obtained nil attestation data")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")
 
 	if attestationData.Slot != duty.Slot() {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed")
+		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
 		return nil, fmt.Errorf("attestation request for slot %d returned data for slot %d", duty.Slot(), attestationData.Slot)
 	}
 	if attestationData.Source.Epoch > attestationData.Target.Epoch {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed")
+		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
 		return nil, fmt.Errorf("attestation request for slot %d returned source epoch %d greater than target epoch %d", duty.Slot(), attestationData.Source.Epoch, attestationData.Target.Epoch)
 	}
 	if attestationData.Target.Epoch > phase0.Epoch(uint64(duty.Slot())/s.slotsPerEpoch) {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed")
+		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
 		return nil, fmt.Errorf("attestation request for slot %d returned target epoch %d greater than current epoch %d", duty.Slot(), attestationData.Target.Epoch, phase0.Epoch(uint64(duty.Slot())/s.slotsPerEpoch))
 	}
 
 	// Fetch the validating accounts.
-	validatingAccounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, phase0.Epoch(uint64(duty.Slot())/s.slotsPerEpoch), duty.ValidatorIndices())
+	validatingAccounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, phase0.Epoch(uint64(duty.Slot())/s.slotsPerEpoch), validatorIndices)
 	if err != nil {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed")
+		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
 		return nil, errors.New("failed to obtain attesting validator accounts")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Int("validating_accounts", len(validatingAccounts)).Msg("Obtained validating accounts")
@@ -138,8 +164,8 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 
 	// Set the per-validator information.
 	validatorIndexToArrayIndexMap := make(map[phase0.ValidatorIndex]int)
-	for i := range duty.ValidatorIndices() {
-		validatorIndexToArrayIndexMap[duty.ValidatorIndices()[i]] = i
+	for i, index := range validatorIndices {
+		validatorIndexToArrayIndexMap[index] = i
 	}
 	committeeIndices := make([]phase0.CommitteeIndex, len(validatingAccounts))
 	validatorCommitteeIndices := make([]phase0.ValidatorIndex, len(validatingAccounts))
@@ -160,14 +186,21 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 		started,
 	)
 	if err != nil {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed")
+		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
 		return nil, err
 	}
 
-	if len(attestations) < len(duty.ValidatorIndices()) {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(duty.ValidatorIndices())-len(attestations), "failed")
+	if len(attestations) < len(validatorIndices) {
+		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices)-len(attestations), "failed")
 	}
 	s.monitor.AttestationsCompleted(started, duty.Slot(), len(attestations), "succeeded")
+
+	// Housekeep attested map.
+	if epoch > 1 {
+		s.attestedMu.Lock()
+		delete(s.attested, epoch-2)
+		s.attestedMu.Unlock()
+	}
 
 	return attestations, nil
 }

@@ -16,6 +16,7 @@ package standard
 import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
@@ -27,6 +28,7 @@ type parameters struct {
 	logLevel                   zerolog.Level
 	processConcurrency         int64
 	monitor                    metrics.AttestationMonitor
+	chainTimeService           chaintime.Service
 	slotsPerEpochProvider      eth2client.SlotsPerEpochProvider
 	attestationDataProvider    eth2client.AttestationDataProvider
 	attestationsSubmitter      submitter.AttestationsSubmitter
@@ -56,6 +58,13 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 func WithProcessConcurrency(concurrency int64) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.processConcurrency = concurrency
+	})
+}
+
+// WithChainTime sets the chain time service.
+func WithChainTimeService(service chaintime.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.chainTimeService = service
 	})
 }
 
@@ -114,6 +123,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 
 	if parameters.processConcurrency == 0 {
 		return nil, errors.New("no process concurrency specified")
+	}
+	if parameters.chainTimeService == nil {
+		return nil, errors.New("no chain time service specified")
 	}
 	if parameters.slotsPerEpochProvider == nil {
 		return nil, errors.New("no slots per epoch provider specified")

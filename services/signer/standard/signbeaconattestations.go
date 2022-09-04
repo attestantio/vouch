@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2022 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,6 +15,7 @@ package standard
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/opentracing/opentracing-go"
@@ -49,6 +50,7 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
 	}
+	log.Trace().Str("domain_type", fmt.Sprintf("%#x", s.beaconAttesterDomainType)).Uint64("slot", uint64(slot)).Uint64("epoch", uint64(slot/s.slotsPerEpoch)).Str("domain", fmt.Sprintf("%#x", signatureDomain)).Msg("Obtained signature domain")
 
 	// Need to break the single request in to two: those for accounts and those for distributed accounts.
 	// This is because they operate differently (single shot Vs. threshold signing).
