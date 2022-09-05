@@ -101,7 +101,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.6.0-beta5"
+var ReleaseVersion = "1.6.0-rc1"
 
 func main() {
 	os.Exit(main2())
@@ -427,6 +427,7 @@ func startServices(ctx context.Context,
 	attester, err := standardattester.New(ctx,
 		standardattester.WithLogLevel(util.LogLevel("attester")),
 		standardattester.WithProcessConcurrency(util.ProcessConcurrency("attester")),
+		standardattester.WithChainTimeService(chainTime),
 		standardattester.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
 		standardattester.WithAttestationDataProvider(attestationDataProvider),
 		standardattester.WithAttestationsSubmitter(submitterStrategy.(submitter.AttestationsSubmitter)),
