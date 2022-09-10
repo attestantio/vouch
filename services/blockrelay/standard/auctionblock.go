@@ -67,11 +67,10 @@ func (s *Service) AuctionBlock(ctx context.Context,
 
 	// Update metrics.
 	for provider, value := range res.Values {
-		if strings.EqualFold(res.Provider.Address(), provider) {
-			continue
-		}
 		delta := new(big.Int).Sub(res.Bid.Data.Message.Value.ToBig(), value)
-		builderBidDeltas.WithLabelValues(provider).Observe(float64(delta.Uint64()) / 1e15)
+		if !strings.EqualFold(res.Provider.Address(), provider) {
+			builderBidDeltas.WithLabelValues(provider).Observe(float64(delta.Uint64()) / 1e15)
+		}
 		log.Debug().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta_wei", delta).Msg("Auction participant")
 	}
 
