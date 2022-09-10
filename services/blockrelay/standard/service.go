@@ -19,9 +19,11 @@ import (
 	"time"
 
 	restdaemon "github.com/attestantio/go-block-relay/services/daemon/rest"
+	apiv1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-builder-client/spec"
 	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/services/chaintime"
@@ -49,6 +51,8 @@ type Service struct {
 	builderBidsCache                          map[string]map[string]*spec.VersionedSignedBuilderBid
 	builderBidsCacheMu                        sync.RWMutex
 	timeout                                   time.Duration
+	signedValidatorRegistrations              map[phase0.BLSPubKey]*apiv1.SignedValidatorRegistration
+	signedValidatorRegistrationsMu            sync.RWMutex
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 
 	executionConfig   *blockrelay.ExecutionConfig
@@ -76,18 +80,19 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		monitor:                     parameters.monitor,
-		majordomo:                   parameters.majordomo,
-		chainTime:                   parameters.chainTime,
-		configURL:                   parameters.configURL,
-		clientCertURL:               parameters.clientCertURL,
-		clientKeyURL:                parameters.clientKeyURL,
-		caCertURL:                   parameters.caCertURL,
-		fallbackFeeRecipient:        parameters.fallbackFeeRecipient,
-		fallbackGasLimit:            parameters.fallbackGasLimit,
-		validatingAccountsProvider:  parameters.validatingAccountsProvider,
-		validatorRegistrationSigner: parameters.validatorRegistrationSigner,
-		timeout:                     parameters.timeout,
+		monitor:                      parameters.monitor,
+		majordomo:                    parameters.majordomo,
+		chainTime:                    parameters.chainTime,
+		configURL:                    parameters.configURL,
+		clientCertURL:                parameters.clientCertURL,
+		clientKeyURL:                 parameters.clientKeyURL,
+		caCertURL:                    parameters.caCertURL,
+		fallbackFeeRecipient:         parameters.fallbackFeeRecipient,
+		fallbackGasLimit:             parameters.fallbackGasLimit,
+		validatingAccountsProvider:   parameters.validatingAccountsProvider,
+		validatorRegistrationSigner:  parameters.validatorRegistrationSigner,
+		timeout:                      parameters.timeout,
+		signedValidatorRegistrations: make(map[phase0.BLSPubKey]*apiv1.SignedValidatorRegistration),
 		secondaryValidatorRegistrationsSubmitters: parameters.secondaryValidatorRegistrationsSubmitters,
 		builderBidsCache: make(map[string]map[string]*spec.VersionedSignedBuilderBid),
 	}

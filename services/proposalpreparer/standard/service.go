@@ -27,11 +27,10 @@ import (
 
 // Service is a proposal preparer.
 type Service struct {
-	chainTimeService                chaintime.Service
-	validatingAccountsProvider      accountmanager.ValidatingAccountsProvider
-	proposalPreparationsSubmitter   eth2client.ProposalPreparationsSubmitter
-	executionConfigProvider         blockrelay.ExecutionConfigProvider
-	validatorRegistrationsSubmitter blockrelay.ValidatorRegistrationsSubmitter
+	chainTimeService              chaintime.Service
+	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
+	proposalPreparationsSubmitter eth2client.ProposalPreparationsSubmitter
+	executionConfigProvider       blockrelay.ExecutionConfigProvider
 }
 
 // module-wide log.
@@ -55,11 +54,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		chainTimeService:                parameters.chainTimeService,
-		validatingAccountsProvider:      parameters.validatingAccountsProvider,
-		proposalPreparationsSubmitter:   parameters.proposalPreparationsSubmitter,
-		executionConfigProvider:         parameters.executionConfigProvider,
-		validatorRegistrationsSubmitter: parameters.validatorRegistrationsSubmitter,
+		chainTimeService:              parameters.chainTimeService,
+		validatingAccountsProvider:    parameters.validatingAccountsProvider,
+		proposalPreparationsSubmitter: parameters.proposalPreparationsSubmitter,
+		executionConfigProvider:       parameters.executionConfigProvider,
 	}
 
 	return s, nil

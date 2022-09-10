@@ -27,13 +27,12 @@ import (
 )
 
 type parameters struct {
-	logLevel                        zerolog.Level
-	monitor                         metrics.Service
-	chainTimeService                chaintime.Service
-	validatingAccountsProvider      accountmanager.ValidatingAccountsProvider
-	proposalPreparationsSubmitter   eth2client.ProposalPreparationsSubmitter
-	executionConfigProvider         blockrelay.ExecutionConfigProvider
-	validatorRegistrationsSubmitter blockrelay.ValidatorRegistrationsSubmitter
+	logLevel                      zerolog.Level
+	monitor                       metrics.Service
+	chainTimeService              chaintime.Service
+	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
+	proposalPreparationsSubmitter eth2client.ProposalPreparationsSubmitter
+	executionConfigProvider       blockrelay.ExecutionConfigProvider
 }
 
 // Parameter is the interface for service parameters.
@@ -86,13 +85,6 @@ func WithProposalPreparationsSubmitter(submitter eth2client.ProposalPreparations
 func WithExecutionConfigProvider(provider blockrelay.ExecutionConfigProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.executionConfigProvider = provider
-	})
-}
-
-// WithValidatorRegistrationsSubmitter sets the validator registrations submitter.
-func WithValidatorRegistrationsSubmitter(submitter blockrelay.ValidatorRegistrationsSubmitter) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.validatorRegistrationsSubmitter = submitter
 	})
 }
 

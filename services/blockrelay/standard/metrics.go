@@ -29,6 +29,7 @@ var builderBidDeltas *prometheus.HistogramVec
 var executionConfigCounter *prometheus.CounterVec
 var executionConfigTimer prometheus.Histogram
 var validatorRegistrationsCounter *prometheus.CounterVec
+var validatorRegistrationsGeneration *prometheus.CounterVec
 var validatorRegistrationsTimer prometheus.Histogram
 
 func registerMetrics(ctx context.Context, monitor metrics.Service) error {
@@ -156,6 +157,16 @@ func registerPrometheusMetrics(_ context.Context) error {
 		return err
 	}
 
+	validatorRegistrationsGeneration = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "vouch",
+		Subsystem: "relay_validator_registrations",
+		Name:      "generation",
+		Help:      "The generation of validator registration.",
+	}, []string{"source"})
+	if err := prometheus.Register(validatorRegistrationsGeneration); err != nil {
+		return err
+	}
+
 	validatorRegistrationsCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
 		Subsystem: "relay_validator_registrations",
@@ -225,4 +236,12 @@ func monitorValidatorRegistrations(succeeded bool, duration time.Duration) {
 	if succeeded {
 		validatorRegistrationsCounter.WithLabelValues("succeeded").Add(1)
 	}
+}
+
+// monitorRegistrationsGeneration provides generation metrics for registrations.
+func monitorRegistrationsGeneration(source string) {
+	if validatorRegistrationsGeneration == nil {
+		return
+	}
+	validatorRegistrationsGeneration.WithLabelValues(source).Inc()
 }
