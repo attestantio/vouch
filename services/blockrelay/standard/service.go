@@ -103,7 +103,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	// Periodically fetch the execution configuration.
 	if err := parameters.scheduler.SchedulePeriodicJob(ctx,
-		"blockrelay",
+		"Fetch execution configuration",
 		"Fetch execution configuration",
 		s.fetchExecutionConfigRuntime,
 		nil,
