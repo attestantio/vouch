@@ -1417,6 +1417,9 @@ func startBlockRelay(ctx context.Context,
 	if err != nil {
 		return nil, errors.New("blockrelay: invalid fallback fee recipient")
 	}
+	if len(feeRecipient) == 0 {
+		return nil, errors.New("blockrelay: no fallback fee recipient supplied")
+	}
 	if len(feeRecipient) != len(fallbackFeeRecipient) {
 		return nil, errors.New("blockrelay: incorrect length for fallback fee recipient")
 	}

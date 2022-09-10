@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"time"
 
 	builderclient "github.com/attestantio/go-builder-client"
@@ -161,10 +160,7 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 	if len(auctionResults.Values) == 0 {
 		return canTryWithout, errors.New("no bids obtained for block")
 	}
-	for provider, value := range auctionResults.Values {
-		delta := new(big.Int).Sub(value, auctionResults.Bid.Data.Message.Value.ToBig())
-		log.Trace().Uint64("slot", uint64(duty.Slot())).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Msg("Auction participant")
-	}
+
 	if e := log.Trace(); e.Enabled() {
 		data, err := json.Marshal(auctionResults.Bid)
 		if err == nil {

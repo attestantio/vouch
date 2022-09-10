@@ -21,10 +21,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var auctionBlockCounter *prometheus.CounterVec
+var auctionBlockUsed *prometheus.CounterVec
 var auctionBlockTimer prometheus.Histogram
 var builderBidCounter *prometheus.CounterVec
 var builderBidTimer prometheus.Histogram
+var builderBidDeltas *prometheus.HistogramVec
 var executionConfigCounter *prometheus.CounterVec
 var executionConfigTimer prometheus.Histogram
 var validatorRegistrationsCounter *prometheus.CounterVec
@@ -46,13 +47,13 @@ func registerMetrics(ctx context.Context, monitor metrics.Service) error {
 }
 
 func registerPrometheusMetrics(_ context.Context) error {
-	auctionBlockCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	auctionBlockUsed = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
 		Subsystem: "relay_auction_block",
 		Name:      "used_total",
 		Help:      "The auction block provider used by a relay.",
-	}, []string{"provider", "result"})
-	if err := prometheus.Register(auctionBlockCounter); err != nil {
+	}, []string{"provider"})
+	if err := prometheus.Register(auctionBlockUsed); err != nil {
 		return err
 	}
 
@@ -128,6 +129,17 @@ func registerPrometheusMetrics(_ context.Context) error {
 		return err
 	}
 
+	builderBidDeltas = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "vouch",
+		Subsystem: "relay_builder_bid",
+		Name:      "delta_meth",
+		Help:      "The amount short the provider was compared to the winning bid (in mETH).",
+		Buckets:   prometheus.LinearBuckets(0, 10, 101),
+	}, []string{"provider"})
+	if err := prometheus.Register(builderBidDeltas); err != nil {
+		return err
+	}
+
 	validatorRegistrationsTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "vouch",
 		Subsystem: "relay_validator_registrations",
@@ -161,14 +173,14 @@ func registerPrometheusMetrics(_ context.Context) error {
 
 // monitorAuctionBlock provides metrics for an auction block operation.
 func monitorAuctionBlock(provider string, succeeded bool, duration time.Duration) {
-	if auctionBlockCounter == nil {
+	if auctionBlockUsed == nil {
 		// Not yet registered.
 		return
 	}
 
 	auctionBlockTimer.Observe(duration.Seconds())
 	if succeeded {
-		auctionBlockCounter.WithLabelValues(provider, "succeeded").Add(1)
+		auctionBlockUsed.WithLabelValues(provider).Add(1)
 	}
 }
 

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,6 +63,16 @@ func (s *Service) AuctionBlock(ctx context.Context,
 		}
 		s.builderBidsCache[key][subKey] = res.Bid
 		s.builderBidsCacheMu.Unlock()
+	}
+
+	// Update metrics.
+	for provider, value := range res.Values {
+		if strings.EqualFold(res.Provider.Address(), provider) {
+			continue
+		}
+		delta := new(big.Int).Sub(res.Bid.Data.Message.Value.ToBig(), value)
+		builderBidDeltas.WithLabelValues(provider).Observe(float64(delta.Uint64()) / 1e15)
+		log.Debug().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta_wei", delta).Msg("Auction participant")
 	}
 
 	return res, nil
