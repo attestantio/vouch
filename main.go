@@ -101,7 +101,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.6.0-rc1"
+var ReleaseVersion = "1.6.0-rc2"
 
 func main() {
 	os.Exit(main2())
@@ -541,7 +541,6 @@ func startServices(ctx context.Context,
 			standardproposalpreparer.WithChainTimeService(chainTime),
 			standardproposalpreparer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 			standardproposalpreparer.WithProposalPreparationsSubmitter(submitterStrategy.(eth2client.ProposalPreparationsSubmitter)),
-			standardproposalpreparer.WithValidatorRegistrationsSubmitter(blockRelay.(blockrelay.ValidatorRegistrationsSubmitter)),
 			standardproposalpreparer.WithExecutionConfigProvider(blockRelay.(blockrelay.ExecutionConfigProvider)),
 		)
 		if err != nil {
@@ -1416,6 +1415,9 @@ func startBlockRelay(ctx context.Context,
 	feeRecipient, err := hex.DecodeString(strings.TrimPrefix(viper.GetString("blockrelay.fallback-fee-recipient"), "0x"))
 	if err != nil {
 		return nil, errors.New("blockrelay: invalid fallback fee recipient")
+	}
+	if len(feeRecipient) == 0 {
+		return nil, errors.New("blockrelay: no fallback fee recipient supplied")
 	}
 	if len(feeRecipient) != len(fallbackFeeRecipient) {
 		return nil, errors.New("blockrelay: incorrect length for fallback fee recipient")

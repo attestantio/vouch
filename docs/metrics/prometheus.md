@@ -116,3 +116,24 @@ Network metrics provide information about the network from Vouch's point of view
   - `vouch_block_receipt_delay_seconds` the delay between the start of a slot and the arrival of the block for that slot.  This metric is provided as a histogram, with buckets in increments of 0.1 seconds up to 12 seconds.  This has a label `epoch_slot` which is the position of the slot in the epoch (0 through 31, inclusive)
   - `vouch_attestationaggregation_coverage_ratio` the ratio of the number of attestations included in the aggregate to the total number of attestations for the aggregate.  This metric is provided as a histogram, with buckets in increments of 0.1 up to 1.
   - `vouch_synccommitteeaggregation_coverage_ratio` the ratio of the number of sync committee messages included in the aggregate to the total number of members of the sync committee for the aggregate.  This metric is provided as a histogram, with buckets in increments of 0.1 up to 1.
+
+## Relay
+Relay metrics provide information about the performance, both individually and comparatively, of the block relays configured for use.
+
+`vouch_relay_auction_block_duration_seconds` is provided as a histogram, with buckets in increments of 0.1 seconds up to 4 seconds.  It provides details of the total time taken for Vouch to obtain the best bid from competing relays.  There is also a companion metric `vouch_relay_auction_block_duration_seconds_count`, which is a simple count of the number of operations that have taken place.
+
+`vouch_relay_auction_block_used_total` provides the number of blocks used.  It has a single label:
+
+  - `provider` is the address of the relay used from which the winning bid comes
+
+`vouch_relay_builder_bid_delta_meth_bucket` is provided as a histogram, with buckets in increments of 10 milliEther up to 1 Ether.  It provides details of the difference in value between the winning bid and the bid from the given provider. It has a single label:
+
+  - `provider` is the address of the relay used from which a losing bid comes
+
+There is also a companion metric `vouch_relay_auction_block_duration_seconds_count`, which is a simple count of the number of operations that have taken place.
+
+`vouch_relay_builder_bid_duration_seconds_bucket` is provided as a histogram, with buckets in increments of 0.1 seconds up to 4 seconds.  It provides details of the total time taken for Vouch to serve builder bid requests from beacon nodes.  There is also a companion metric `vouch_relay_builder_bid_duration_seconds_count`, which is a simple count of the number of operations that have taken place.
+
+`vouch_relay_execution_config_duration_seconds_bucket` is provided as a histogram, with buckets in increments of 0.1 seconds up to 4 seconds.  It provides details of the total time taken for Vouch to obtain the execution configuration from the local or remote source.  There is also a companion metric `vouch_relay_execution_config_duration_seconds_count`, which is a simple count of the number of operations that have taken place.
+
+`vouch_relay_validator_registrations_duration_seconds_bucket` is provided as a histogram, with buckets in increments of 0.1 seconds up to 4 seconds.  It provides details of the total time taken for Vouch to serve validator registration requests from beacon nodes.  There is also a companion metric `vouch_relay_validator_registrations_duration_seconds_count`, which is a simple count of the number of operations that have taken place.

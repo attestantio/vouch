@@ -79,26 +79,8 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 	}
 
 	go s.updateProposalPreparations(ctx, started, epoch, proposalPreparations)
-	go s.updateValidatorRegistrations(ctx, started, accounts)
 
 	return nil
-}
-
-func (s *Service) updateValidatorRegistrations(ctx context.Context,
-	started time.Time,
-	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
-) {
-	if s.validatorRegistrationsSubmitter == nil {
-		return
-	}
-
-	if err := s.validatorRegistrationsSubmitter.SubmitValidatorRegistrations(ctx, accounts); err != nil {
-		validatorRegistrationsCompleted("failed")
-		log.Error().Err(err).Msg("Failed to update validator registrations")
-		return
-	}
-	validatorRegistrationsCompleted("succeeded")
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("updated validator registrations")
 }
 
 func (s *Service) updateProposalPreparations(ctx context.Context,

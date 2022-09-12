@@ -14,6 +14,7 @@
 package standard
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"sync"
@@ -40,13 +41,13 @@ func (s *Service) submitValidatorRegistrationsRuntime(_ context.Context,
 	time.Time,
 	error,
 ) {
-	// Schedule for the middle of the slot, half-way through the epoch.
+	// Schedule for the middle of the slot, half-way through the next epoch.
 	currentEpoch := s.chainTime.CurrentEpoch()
 	epochDuration := s.chainTime.StartOfEpoch(currentEpoch + 1).Sub(s.chainTime.StartOfEpoch(currentEpoch))
 	currentSlot := s.chainTime.CurrentSlot()
 	slotDuration := s.chainTime.StartOfSlot(currentSlot + 1).Sub(s.chainTime.StartOfSlot(currentSlot))
 	offset := int(epochDuration.Seconds()/2.0 + slotDuration.Seconds()/2.0)
-	return s.chainTime.StartOfEpoch(s.chainTime.CurrentEpoch() + 1).Add(time.Duration(offset) * time.Second), nil
+	return s.chainTime.StartOfEpoch(currentEpoch + 1).Add(time.Duration(offset) * time.Second), nil
 }
 
 // SubmitValidatorRegistrations submits validator registrations for the given accounts.
@@ -112,26 +113,46 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 		}
 		proposerConfig := s.executionConfig.ProposerConfig(pubkey)
 
-		registration := &apiv1.ValidatorRegistration{
-			FeeRecipient: proposerConfig.FeeRecipient,
-			GasLimit:     proposerConfig.GasLimit,
-			Timestamp:    time.Now().Round(time.Second),
-			Pubkey:       pubkey,
+		// See if we already have a signed registration that matches this configuration.
+		s.signedValidatorRegistrationsMu.RLock()
+		signedRegistration, exists := s.signedValidatorRegistrations[pubkey]
+		s.signedValidatorRegistrationsMu.RUnlock()
+		if exists {
+			// See if we have a matching pre-signed registration for this validator.
+			if bytes.Equal(proposerConfig.FeeRecipient[:], signedRegistration.Message.FeeRecipient[:]) &&
+				proposerConfig.GasLimit == signedRegistration.Message.GasLimit {
+				monitorRegistrationsGeneration("cache")
+			} else {
+				signedRegistration = nil
+			}
 		}
+		if signedRegistration == nil {
+			// Need to build and sign a new registration.
+			registration := &apiv1.ValidatorRegistration{
+				FeeRecipient: proposerConfig.FeeRecipient,
+				GasLimit:     proposerConfig.GasLimit,
+				Timestamp:    time.Now().Round(time.Second),
+				Pubkey:       pubkey,
+			}
 
-		sig, err := s.validatorRegistrationSigner.SignValidatorRegistration(ctx, account, &api.VersionedValidatorRegistration{
-			Version: spec.BuilderVersionV1,
-			V1:      registration,
-		})
-		if err != nil {
-			// Log an error but continue.
-			log.Error().Err(err).Uint64("index", uint64(index)).Msg("Failed to sign validator registration")
-			continue
-		}
+			sig, err := s.validatorRegistrationSigner.SignValidatorRegistration(ctx, account, &api.VersionedValidatorRegistration{
+				Version: spec.BuilderVersionV1,
+				V1:      registration,
+			})
+			if err != nil {
+				// Log an error but continue.
+				log.Error().Err(err).Uint64("index", uint64(index)).Msg("Failed to sign validator registration")
+				continue
+			}
 
-		signedRegistration := &apiv1.SignedValidatorRegistration{
-			Message:   registration,
-			Signature: sig,
+			signedRegistration = &apiv1.SignedValidatorRegistration{
+				Message:   registration,
+				Signature: sig,
+			}
+			s.signedValidatorRegistrationsMu.Lock()
+			s.signedValidatorRegistrations[pubkey] = signedRegistration
+			s.signedValidatorRegistrationsMu.Unlock()
+			monitorRegistrationsGeneration("generation")
 		}
 
 		versionedSignedRegistration := &api.VersionedSignedValidatorRegistration{
@@ -148,10 +169,10 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 			Version: consensusclientspec.BuilderVersionV1,
 			V1: &consensusclientapiv1.SignedValidatorRegistration{
 				Message: &consensusclientapiv1.ValidatorRegistration{
-					FeeRecipient: registration.FeeRecipient,
-					GasLimit:     registration.GasLimit,
-					Timestamp:    registration.Timestamp,
-					Pubkey:       registration.Pubkey,
+					FeeRecipient: signedRegistration.Message.FeeRecipient,
+					GasLimit:     signedRegistration.Message.GasLimit,
+					Timestamp:    signedRegistration.Message.Timestamp,
+					Pubkey:       signedRegistration.Message.Pubkey,
 				},
 				Signature: signedRegistration.Signature,
 			},

@@ -25,7 +25,6 @@ import (
 var processTimer prometheus.Histogram
 var latestEpoch prometheus.Gauge
 var requestsProcessed *prometheus.CounterVec
-var registrationsProcessed *prometheus.CounterVec
 
 func registerMetrics(ctx context.Context, monitor metrics.Service) error {
 	if latestEpoch != nil {
@@ -74,17 +73,7 @@ func registerPrometheusMetrics(_ context.Context) error {
 		Name:      "requests_total",
 		Help:      "The number of proposal preparation processes.",
 	}, []string{"result"})
-	if err := prometheus.Register(requestsProcessed); err != nil {
-		return err
-	}
-
-	registrationsProcessed = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "vouch",
-		Subsystem: "validatorregistrations",
-		Name:      "requests_total",
-		Help:      "The number of validator registration processes.",
-	}, []string{"result"})
-	return prometheus.Register(registrationsProcessed)
+	return prometheus.Register(requestsProcessed)
 }
 
 // proposalPreparationCompleted is called when a proposal preparation process has completed.
@@ -99,13 +88,4 @@ func proposalPreparationCompleted(started time.Time, epoch phase0.Epoch, result 
 		processTimer.Observe(time.Since(started).Seconds())
 		latestEpoch.Set(float64(epoch))
 	}
-}
-
-// validatorRegistrationsCompleted is called when a validator registration process has completed.
-func validatorRegistrationsCompleted(result string) {
-	if registrationsProcessed == nil {
-		return
-	}
-
-	registrationsProcessed.WithLabelValues(result).Inc()
 }
