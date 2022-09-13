@@ -122,7 +122,7 @@ Block proposers have the ability to alter the gas limit as part of their block p
   "proposer_config": {
     "0xaaaa…aaaa": {
       "fee_recipient": "0x1111…1111",
-      "gas_limit": 100000000,
+      "gas_limit": "100000000",
       "builder": {
         "enabled": true,
         "relays": [
@@ -133,7 +133,7 @@ Block proposers have the ability to alter the gas limit as part of their block p
     },
     "0xbbbb…bbbb": {
       "fee_recipient": "0x2222…2222",
-      "gas_limit": 100000000,
+      "gas_limit": "100000000",
       "builder": {
         "enabled": false
       }
@@ -141,7 +141,7 @@ Block proposers have the ability to alter the gas limit as part of their block p
   },
   "default_config": {
   "fee_recipient": "0x0123…cdef",
-  "gas_limit": 100000000,
+  "gas_limit": "100000000",
     "builder": {
       "enabled": true,
       "relays": [
