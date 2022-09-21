@@ -1,3 +1,6 @@
+dev:
+  - fix bug where soft timeout message could repeat rapidly
+
 1.6.0:
   - add block relay module, to handle interactions with MEV relays
 

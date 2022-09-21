@@ -39,14 +39,14 @@ func (s *Service) BlindedBeaconBlockProposal(ctx context.Context, slot phase0.Sl
 	started := time.Now()
 	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(slot)).Logger()
 
-	requests := len(s.blindedBeaconBlockProposalProviders)
-
 	// We have two timeouts: a soft timeout and a hard timeout.
 	// At the soft timeout, we return if we have any responses so far.
 	// At the hard timeout, we return unconditionally.
 	// The soft timeout is half the duration of the hard timeout.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
+
+	requests := len(s.blindedBeaconBlockProposalProviders)
 
 	respCh := make(chan *beaconBlockResponse, requests)
 	errCh := make(chan error, requests)
@@ -127,7 +127,7 @@ func (s *Service) BlindedBeaconBlockProposal(ctx context.Context, slot phase0.Sl
 		}
 	}
 	cancel()
-	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Responses")
+	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Results")
 
 	if bestProposal == nil {
 		return nil, errors.New("no proposals received")
