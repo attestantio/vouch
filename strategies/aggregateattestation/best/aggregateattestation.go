@@ -41,8 +41,10 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
 
-	respCh := make(chan *aggregateAttestationResponse, len(s.aggregateAttestationProviders))
-	errCh := make(chan error, len(s.aggregateAttestationProviders))
+	requests := len(s.aggregateAttestationProviders)
+
+	respCh := make(chan *aggregateAttestationResponse, requests)
+	errCh := make(chan error, requests)
 	// Kick off the requests.
 	for name, provider := range s.aggregateAttestationProviders {
 		go s.aggregateAttestation(ctx, started, name, provider, respCh, errCh, slot, attestationDataRoot)
@@ -52,40 +54,61 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 	responded := 0
 	errored := 0
 	timedOut := 0
+	softTimedOut := 0
 	bestScore := float64(0)
 	var bestAggregateAttestation *phase0.Attestation
 	bestProvider := ""
 
-	for responded+errored+timedOut != len(s.aggregateAttestationProviders) {
+	// Loop 1: prior to soft timeout.
+	for responded+errored+timedOut+softTimedOut != requests {
 		select {
-		case <-softCtx.Done():
-			// If we have any responses at this point we consider the non-responders timed out.
-			if responded > 0 {
-				timedOut = len(s.aggregateAttestationProviders) - responded - errored
-				log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Msg("Soft timeout reached with responses")
-			} else {
-				log.Debug().Dur("elapsed", time.Since(started)).Int("errored", errored).Msg("Soft timeout reached with no responses")
-			}
-		case <-ctx.Done():
-			// Anyone not responded by now is considered errored.
-			errored = len(s.aggregateAttestationProviders) - responded
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
-		case err := <-errCh:
-			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Responded with error")
 		case resp := <-respCh:
 			responded++
+			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
 			if bestAggregateAttestation == nil || resp.score > bestScore {
 				bestAggregateAttestation = resp.aggregate
 				bestScore = resp.score
 				bestProvider = resp.provider
 			}
-			log.Trace().Dur("elapsed", time.Since(started)).Msg("Response")
+		case err := <-errCh:
+			errored++
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+		case <-softCtx.Done():
+			// If we have any responses at this point we consider the non-responders timed out.
+			if responded > 0 {
+				timedOut = requests - responded - errored
+				log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Soft timeout reached with responses")
+			} else {
+				log.Debug().Dur("elapsed", time.Since(started)).Int("errored", errored).Msg("Soft timeout reached with no responses")
+			}
+			// Set the number of requests that have soft timed out.
+			softTimedOut = requests - responded - errored - timedOut
 		}
 	}
 	softCancel()
+
+	// Loop 2: after soft timeout.
+	for responded+errored+timedOut != requests {
+		select {
+		case resp := <-respCh:
+			responded++
+			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			if bestAggregateAttestation == nil || resp.score > bestScore {
+				bestAggregateAttestation = resp.aggregate
+				bestScore = resp.score
+				bestProvider = resp.provider
+			}
+		case err := <-errCh:
+			errored++
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+		case <-ctx.Done():
+			// Anyone not responded by now is considered errored.
+			timedOut = requests - responded - errored
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
+		}
+	}
 	cancel()
-	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Responses")
+	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Results")
 
 	if bestAggregateAttestation == nil {
 		return nil, errors.New("no aggregate attestations received")

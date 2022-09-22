@@ -43,8 +43,10 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
 
-	respCh := make(chan *beaconBlockResponse, len(s.beaconBlockProposalProviders))
-	errCh := make(chan error, len(s.beaconBlockProposalProviders))
+	requests := len(s.beaconBlockProposalProviders)
+
+	respCh := make(chan *beaconBlockResponse, requests)
+	errCh := make(chan error, requests)
 	// Kick off the requests.
 	for name, provider := range s.beaconBlockProposalProviders {
 		providerGraffiti := graffiti
@@ -68,39 +70,61 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 	responded := 0
 	errored := 0
 	timedOut := 0
+	softTimedOut := 0
 	bestScore := float64(0)
 	var bestProposal *spec.VersionedBeaconBlock
 	bestProvider := ""
 
-	for responded+errored+timedOut != len(s.beaconBlockProposalProviders) {
+	// Loop 1: prior to soft timeout.
+	for responded+errored+timedOut+softTimedOut != requests {
 		select {
-		case <-softCtx.Done():
-			// If we have any responses at this point we consider the non-responders timed out.
-			if responded > 0 {
-				timedOut = len(s.beaconBlockProposalProviders) - responded - errored
-				log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Msg("Soft timeout reached with responses")
-			} else {
-				log.Debug().Dur("elapsed", time.Since(started)).Int("errored", errored).Msg("Soft timeout reached with no responses")
-			}
-		case <-ctx.Done():
-			// Anyone not responded by now is considered errored.
-			timedOut = len(s.beaconBlockProposalProviders) - responded - errored
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
-		case err := <-errCh:
-			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Responded with error")
 		case resp := <-respCh:
 			responded++
+			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
 			if bestProposal == nil || resp.score > bestScore {
 				bestProposal = resp.proposal
 				bestScore = resp.score
 				bestProvider = resp.provider
 			}
+		case err := <-errCh:
+			errored++
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+		case <-softCtx.Done():
+			// If we have any responses at this point we consider the non-responders timed out.
+			if responded > 0 {
+				timedOut = requests - responded - errored
+				log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Soft timeout reached with responses")
+			} else {
+				log.Debug().Dur("elapsed", time.Since(started)).Int("errored", errored).Msg("Soft timeout reached with no responses")
+			}
+			// Set the number of requests that have soft timed out.
+			softTimedOut = requests - responded - errored - timedOut
 		}
 	}
 	softCancel()
+
+	// Loop 2: after soft timeout.
+	for responded+errored+timedOut != requests {
+		select {
+		case resp := <-respCh:
+			responded++
+			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			if bestProposal == nil || resp.score > bestScore {
+				bestProposal = resp.proposal
+				bestScore = resp.score
+				bestProvider = resp.provider
+			}
+		case err := <-errCh:
+			errored++
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+		case <-ctx.Done():
+			// Anyone not responded by now is considered errored.
+			timedOut = requests - responded - errored
+			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
+		}
+	}
 	cancel()
-	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Responses")
+	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Results")
 
 	if bestProposal == nil {
 		return nil, errors.New("no proposals received")
