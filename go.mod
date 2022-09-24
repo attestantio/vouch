@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/attestantio/go-block-relay v0.1.5
-	github.com/attestantio/go-builder-client v0.1.6
+	github.com/attestantio/go-builder-client v0.1.7
 	github.com/attestantio/go-eth2-client v0.13.6
 	github.com/aws/aws-sdk-go v1.44.81
 	github.com/herumi/bls-eth-go-binary v1.28.1 // indirect

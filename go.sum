@@ -89,8 +89,8 @@ github.com/attestantio/dirk v1.1.0 h1:hwMTYZkwj/Y0um3OD0LQxg2xSl4/5xqVWV2MRePE4e
 github.com/attestantio/dirk v1.1.0/go.mod h1:2jkOw/XHjvIDdhDcmj+Z3kuVPpxMcQ6zxzzjSSv71PY=
 github.com/attestantio/go-block-relay v0.1.5 h1:U+ImfstRvv8zEvQJdWRJKMfraPFMdaDZor0WRniFQ9Q=
 github.com/attestantio/go-block-relay v0.1.5/go.mod h1:2osivLI24wVCUt+NMTQeE7XTialBse/RHE5Kw/HqZ6c=
-github.com/attestantio/go-builder-client v0.1.6 h1:LLEyb+SEJ7KLsBM9HboC1cFrZXlAAG0fGdp9tz79KdA=
-github.com/attestantio/go-builder-client v0.1.6/go.mod h1:B+2hTxnboGYMC69RZIOv0ZkQOpkPU9OEYy5zAdTBk2s=
+github.com/attestantio/go-builder-client v0.1.7 h1:UPX+7mcrBmqpxbuXX/IJn4LuHbXxtROfX630CEqcLWU=
+github.com/attestantio/go-builder-client v0.1.7/go.mod h1:B+2hTxnboGYMC69RZIOv0ZkQOpkPU9OEYy5zAdTBk2s=
 github.com/attestantio/go-eth2-client v0.8.1/go.mod h1:kEK9iAAOBoADO5wEkd84FEOzjT1zXgVWveQsqn+uBGg=
 github.com/attestantio/go-eth2-client v0.13.6 h1:KivmTvEdW5Ah3wSsfb8u/8cZZh/BtaRwNJuPpLqhQdg=
 github.com/attestantio/go-eth2-client v0.13.6/go.mod h1:bcg5gfjVcm+MtcaZfzv/uSWNHU4i8hGamVG+9JCZnC0=
