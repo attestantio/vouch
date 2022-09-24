@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
@@ -52,6 +51,9 @@ func (s *Service) AuctionBlock(ctx context.Context,
 	res, err := s.bestBuilderBid(ctx, slot, parentHash, pubkey)
 	if err != nil {
 		return nil, err
+	}
+	if res == nil {
+		return nil, nil
 	}
 
 	if res.Bid != nil {
@@ -103,7 +105,8 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	s.executionConfigMu.RUnlock()
 
 	if !proposerConfig.Builder.Enabled {
-		return nil, errors.New("auction disabled in proposer configuration")
+		log.Trace().Msg("Auction disabled in proposer configuration")
+		return nil, nil
 	}
 
 	res := &blockauctioneer.Results{
@@ -143,7 +146,6 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	timedOut := 0
 	softTimedOut := 0
 	bestScore := new(big.Int)
-	bidsMu := new(sync.Mutex)
 
 	// Loop 1: prior to soft timeout.
 	for responded+errored+timedOut+softTimedOut != requests {
@@ -156,9 +158,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 				bestScore = resp.score
 				res.Provider = resp.provider
 			}
-			bidsMu.Lock()
 			res.Values[resp.provider.Address()] = resp.score
-			bidsMu.Unlock()
 		case err := <-errCh:
 			errored++
 			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
@@ -187,9 +187,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 				bestScore = resp.score
 				res.Provider = resp.provider
 			}
-			bidsMu.Lock()
 			res.Values[resp.provider.Address()] = resp.score
-			bidsMu.Unlock()
 		case err := <-errCh:
 			errored++
 			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
@@ -203,8 +201,10 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Results")
 
 	if res.Bid == nil {
+		log.Debug().Msg("No bids received")
 		monitorAuctionBlock("", false, time.Since(started))
-		return nil, errors.New("no bids received")
+		// No result, but not an error.
+		return nil, nil
 	}
 
 	log.Trace().Stringer("bid", res.Bid).Msg("Selected best bid")
@@ -225,6 +225,13 @@ func (s *Service) builderBid(ctx context.Context,
 	builderBid, err := provider.BuilderBid(ctx, slot, parentHash, pubkey)
 	if err != nil {
 		errCh <- errors.Wrap(err, provider.Address())
+		return
+	}
+	if builderBid == nil {
+		respCh <- &builderBidResponse{
+			provider: provider,
+			score:    big.NewInt(0),
+		}
 		return
 	}
 	if e := log.Trace(); e.Enabled() {

@@ -1,5 +1,6 @@
 dev:
   - fix bug where soft timeout message could repeat rapidly
+  - clean up control flow and logging for relay situations such as not returning any bid
 
 1.6.0:
   - add block relay module, to handle interactions with MEV relays

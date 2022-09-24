@@ -33,6 +33,16 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
+// auctionResult provides informaiton on the result of an auction process.
+type auctionResult int
+
+const (
+	auctionResultSucceeded = iota + 1
+	auctionResultFailed
+	auctionResultFailedCanTryWithout
+	auctionResultNoBids
+)
+
 // Propose proposes a block.
 func (s *Service) Propose(ctx context.Context, data interface{}) {
 	started := time.Now()
@@ -106,15 +116,17 @@ func (s *Service) proposeBlock(ctx context.Context,
 ) error {
 	if s.blockAuctioneer != nil {
 		// There is a block auctioneer specified, try to propose the block with auction.
-		canTryWithout, err := s.proposeBlockWithAuction(ctx, started, duty, graffiti)
-		if err == nil {
+		result := s.proposeBlockWithAuction(ctx, started, duty, graffiti)
+		switch result {
+		case auctionResultSucceeded:
 			s.monitor.BeaconBlockProposalSource("auction")
 			return nil
-		}
-		if canTryWithout {
-			log.Warn().Err(err).Msg("Failed to propose with auction; attempting to propose without it")
-		} else {
-			return errors.Wrap(err, "failed to propose with auction, already signed so cannot fall back")
+		case auctionResultFailedCanTryWithout:
+			log.Warn().Msg("Failed to propose with auction; attempting to propose without auction")
+		case auctionResultNoBids:
+			log.Debug().Msg("No auction bids; attempting to propose without auction")
+		case auctionResultFailed:
+			return errors.New("failed to propose with auction too late in process, cannot fall back")
 		}
 	}
 
@@ -132,13 +144,7 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 	started time.Time,
 	duty *beaconblockproposer.Duty,
 	graffiti []byte,
-) (
-	bool, // True if it is okay to propose without auction.
-	error,
-) {
-	// We start off being able to fall back to using the non-auction method if we fail.
-	canTryWithout := true
-
+) auctionResult {
 	pubkey := phase0.BLSPubKey{}
 	if provider, isProvider := duty.Account().(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
 		copy(pubkey[:], provider.CompositePublicKey().Marshal())
@@ -152,13 +158,11 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		hash,
 		pubkey)
 	if err != nil {
-		return canTryWithout, errors.Wrap(err, "failed to auction block")
+		log.Warn().Err(err).Msg("Failed to auction block")
+		return auctionResultFailedCanTryWithout
 	}
-	if auctionResults == nil {
-		return canTryWithout, errors.New("auction returned no results")
-	}
-	if len(auctionResults.Values) == 0 {
-		return canTryWithout, errors.New("no bids obtained for block")
+	if auctionResults == nil || len(auctionResults.Values) == 0 {
+		return auctionResultNoBids
 	}
 
 	if e := log.Trace(); e.Enabled() {
@@ -170,49 +174,57 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 
 	proposal, err := s.blindedProposalProvider.BlindedBeaconBlockProposal(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti)
 	if err != nil {
-		return canTryWithout, errors.Wrap(err, "failed to obtain blinded proposal data")
+		log.Warn().Err(err).Msg("Failed to obtain blinded proposal data")
+		return auctionResultFailedCanTryWithout
 	}
 	if proposal == nil {
-		return canTryWithout, errors.New("obtained nil blinded beacon block proposal")
+		log.Warn().Msg("Obtained nil blinded beacon block proposal")
+		return auctionResultFailedCanTryWithout
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained blinded proposal")
 
 	proposalSlot, err := proposal.Slot()
 	if err != nil {
-		return canTryWithout, errors.Wrap(err, "failed to obtain proposal slot")
+		log.Warn().Err(err).Msg("Failed to obtain proposal slot")
+		return auctionResultFailedCanTryWithout
 	}
-
 	if proposalSlot != duty.Slot() {
-		return canTryWithout, errors.New("proposal data for incorrect slot")
+		log.Warn().Msg("Proposal slot mismatch")
+		return auctionResultFailedCanTryWithout
 	}
 
 	bodyRoot, err := proposal.BodyRoot()
 	if err != nil {
-		return canTryWithout, errors.Wrap(err, "failed to calculate hash tree root of block body")
+		log.Warn().Err(err).Msg("Failed to obtain proposal body root")
+		return auctionResultFailedCanTryWithout
 	}
 
 	parentRoot, err := proposal.ParentRoot()
 	if err != nil {
-		return canTryWithout, errors.Wrap(err, "failed to obtain parent root of block")
+		log.Warn().Err(err).Msg("Failed to obtain proposal parent root")
+		return auctionResultFailedCanTryWithout
 	}
 
 	stateRoot, err := proposal.StateRoot()
 	if err != nil {
-		return canTryWithout, errors.Wrap(err, "failed to obtain state root of block")
+		log.Warn().Err(err).Msg("Failed to obtain proposal state root")
+		return auctionResultFailedCanTryWithout
 	}
 
 	proposalTransactionsRoot, err := proposal.TransactionsRoot()
 	if err != nil {
-		return canTryWithout, errors.New("failed to obtain proposal transactions root")
+		log.Warn().Err(err).Msg("Failed to obtain proposal transactions root")
+		return auctionResultFailedCanTryWithout
 	}
 	auctionTransactionsRoot, err := auctionResults.Bid.TransactionsRoot()
 	if err != nil {
-		return canTryWithout, errors.New("failed to obtain auction results transactions root")
+		log.Warn().Err(err).Msg("Failed to obtain auction transactions root")
+		return auctionResultFailedCanTryWithout
 	}
 	if !bytes.Equal(proposalTransactionsRoot[:], auctionTransactionsRoot[:]) {
 		log.Debug().Str("proposal_transactions_root", fmt.Sprintf("%#x", proposalTransactionsRoot[:])).Str("auction_transactions_root", fmt.Sprintf("%#x", auctionTransactionsRoot[:])).Msg("Transactions root mismatch")
 		// This is a mismatch, back out.
-		return canTryWithout, errors.New("transactions root mismatch")
+		return auctionResultFailedCanTryWithout
 	}
 
 	if e := log.Trace(); e.Enabled() {
@@ -225,11 +237,10 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 	// Ensure that the auction winner can (attempt to) unblind the block before we sign it.
 	unblindedBlockProvider, isProvider := auctionResults.Provider.(builderclient.UnblindedBlockProvider)
 	if !isProvider {
-		return canTryWithout, errors.New("auctioneer cannot unblind the block")
+		log.Error().Msg("Auctioneer cannot unblind the block")
+		return auctionResultFailedCanTryWithout
 	}
 
-	// If there are failures from this point forwards we cannot safely propose without the auction.
-	canTryWithout = false
 	// As we cannot fall back we move to a retry system.
 	retryInterval := 500 * time.Millisecond
 
@@ -263,7 +274,8 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 				Signature: *sig,
 			}
 		default:
-			return canTryWithout, fmt.Errorf("unknown proposal version %v", signedBlindedBlock.Version)
+			log.Error().Int("version", int(signedBlock.Version)).Msg("Unknown proposal version")
+			return auctionResultFailed
 		}
 
 		// Unblind the blinded block.
@@ -276,7 +288,8 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		break
 	}
 	if signedBlock == nil {
-		return canTryWithout, errors.New("failed to obtain signed block after retries; giving up")
+		log.Error().Int("version", int(signedBlock.Version)).Msg("Unknown proposal version")
+		return auctionResultFailed
 	}
 
 	if e := log.Trace(); e.Enabled() {
@@ -288,10 +301,11 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 
 	// Submit the block.
 	if err := s.beaconBlockSubmitter.SubmitBeaconBlock(ctx, signedBlock); err != nil {
-		return canTryWithout, errors.Wrap(err, "failed to submit beacon block proposal")
+		log.Error().Err(err).Msg("Failed to submit beacon block proposal")
+		return auctionResultFailed
 	}
 
-	return canTryWithout, nil
+	return auctionResultSucceeded
 }
 
 func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
