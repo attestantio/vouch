@@ -119,6 +119,9 @@ func TestSubmitAttestations(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
+
+	// Return happens prior to the log message, so wait before asserting.
+	time.Sleep(time.Millisecond)
 	capture.AssertHasEntry(t, "Submitted attestations")
 }
 
