@@ -20,7 +20,6 @@ import (
 
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
-	"github.com/stretchr/testify/assert"
 )
 
 // LogCapture allows testing code to query log output.
@@ -55,9 +54,12 @@ func NewLogCapture() *LogCapture {
 
 // AssertHasEntry checks if there is a log entry with the given string.
 func (c *LogCapture) AssertHasEntry(t *testing.T, msg string) {
-	assert.True(t, c.HasLog(map[string]interface{}{
+	if !c.HasLog(map[string]interface{}{
 		"message": msg,
-	}))
+	}) {
+		t.Logf("missing entry %q in log", msg)
+		t.Fail()
+	}
 }
 
 // HasLog returns true if there is a log entry with the matching fields.
