@@ -1,4 +1,4 @@
-dev:
+1.6.1:
   - fix bug where soft timeout message could repeat rapidly
   - clean up control flow and logging for relay situations such as not returning any bid
 
