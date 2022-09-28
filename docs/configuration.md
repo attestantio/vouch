@@ -86,9 +86,22 @@ feerecipient:
 
 # strategies provide advanced strategies for dealing with multiple beacon nodes
 strategies:
-  # The beaconblockproposal strategy obtains beacon block proposals from multiple sources.
+  # The beaconblockproposal strategy obtains beacon block proposals from multiple beacon nodes.
   beaconblockproposal:
     # style can be 'best', which obtains blocks from all nodes and selects the best, or 'first', which uses the first returned
+    style: best
+    # beacon-node-addresses are the addresses from which to receive beacon block proposals.
+    beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
+    # timeout defines the maximum amount of time the strategy will wait for a response.  As soon as a response from all beacon
+    # nodes has been obtained,the strategy will return with the best.  Half-way through the timeout period, Vouch will check to see
+    # if there have been any responses from the beacon nodes, and if so will return with the best.
+    # This allows Vouch to remain responsive in the situation where some beacon nodes are significantly slower than others, for
+    # example if one is remote.
+    timeout: 2s
+  # The blindedbeaconblockproposal strategy obtains blinded beacon block proposals from multiple beacon nodes when using the block
+  # relay module to obtain execution payloads from MEV relays.
+  blindedbeaconblockproposal:
+    # style can be 'best', which obtains blocks from all beacon nodes and selects the best, or 'first', which uses the first returned
     style: best
     # beacon-node-addresses are the addresses from which to receive beacon block proposals.
     beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
