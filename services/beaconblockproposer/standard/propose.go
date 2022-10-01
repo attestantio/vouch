@@ -288,7 +288,7 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		break
 	}
 	if signedBlock == nil {
-		log.Error().Int("version", int(signedBlock.Version)).Msg("Unknown proposal version")
+		log.Error().Msg("No signed block received")
 		return auctionResultFailed
 	}
 
