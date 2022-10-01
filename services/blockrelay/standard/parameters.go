@@ -46,6 +46,7 @@ type parameters struct {
 	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
+	logResults                                bool
 	timeout                                   time.Duration
 }
 
@@ -169,6 +170,13 @@ func WithTimeout(timeout time.Duration) Parameter {
 func WithSecondaryValidatorRegistrationsSubmitters(submitters []consensusclient.ValidatorRegistrationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.secondaryValidatorRegistrationsSubmitters = submitters
+	})
+}
+
+// WithLogResults sets the flag to log relay results.
+func WithLogResults(logResults bool) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.logResults = logResults
 	})
 }
 

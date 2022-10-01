@@ -294,6 +294,7 @@ func TestService(t *testing.T) {
 				standard.WithFallbackGasLimit(fallbackGasLimit),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
+				standard.WithLogResults(true),
 			},
 		},
 	}

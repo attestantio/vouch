@@ -79,11 +79,6 @@ submitter:
     # beacon-node-addresses are the addresses to which to submit beacon sync committee subscriptions.
     beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
 
-# fee recipient provides information about the fee recipient for block proposals.  Advanced configuration
-# information is available in the documentation.
-feerecipient:
-  default-address: '0x0000000000000000000000000000000000000001'
-
 # strategies provide advanced strategies for dealing with multiple beacon nodes
 strategies:
   # The beaconblockproposal strategy obtains beacon block proposals from multiple beacon nodes.
@@ -132,6 +127,12 @@ strategies:
     style: best
     # beacon-node-addresses are the addresses from which to receive sync committee contributions.
     beacon-node-addresses: [ localhost:4000, localhost:5051, localhost:5052]
+
+# blockrelay provides information about working with local execution clients and remote relays for block proposals.
+# Configuration information for this section can be found in the execution layer documentation.
+blockrelay:
+  fallback-fee-recipient: '0x0000000000000000000000000000000000000001'
+
 ```
 
 ## Hierarchical configuration.

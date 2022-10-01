@@ -1,5 +1,6 @@
 dev:
   - fix crash on failure to propose a block
+  - log auction results with the `blockrelay.log-results` flag
 
 1.6.1:
   - fix bug where soft timeout message could repeat rapidly
