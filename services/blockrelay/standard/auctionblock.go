@@ -73,7 +73,11 @@ func (s *Service) AuctionBlock(ctx context.Context,
 		if !strings.EqualFold(res.Provider.Address(), provider) {
 			builderBidDeltas.WithLabelValues(provider).Observe(float64(delta.Uint64()) / 1e15)
 		}
-		log.Debug().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta_wei", delta).Msg("Auction participant")
+		if s.logResults {
+			log.Info().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", provider == res.Provider.Address()).Msg("Auction participant")
+		} else {
+			log.Trace().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", provider == res.Provider.Address()).Msg("Auction participant")
+		}
 	}
 
 	return res, nil

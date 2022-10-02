@@ -54,6 +54,7 @@ type Service struct {
 	signedValidatorRegistrations              map[phase0.BLSPubKey]*apiv1.SignedValidatorRegistration
 	signedValidatorRegistrationsMu            sync.RWMutex
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
+	logResults                                bool
 
 	executionConfig   *blockrelay.ExecutionConfig
 	executionConfigMu sync.RWMutex
@@ -94,6 +95,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		timeout:                      parameters.timeout,
 		signedValidatorRegistrations: make(map[phase0.BLSPubKey]*apiv1.SignedValidatorRegistration),
 		secondaryValidatorRegistrationsSubmitters: parameters.secondaryValidatorRegistrationsSubmitters,
+		logResults:       parameters.logResults,
 		builderBidsCache: make(map[string]map[string]*spec.VersionedSignedBuilderBid),
 	}
 

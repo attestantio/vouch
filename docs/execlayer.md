@@ -156,3 +156,22 @@ Block proposers have the ability to alter the gas limit as part of their block p
 ## Dynamic configuration file
 
 The execution configuration file is re-read each epoch, which allows for changes to take place without restarting Vouch.
+
+## Logging auction results
+
+The results of the auctions can be added to the logs with the `log-results` option:
+
+```YAML
+blockrelay:
+  log-results: true
+```
+
+If this is set then after each auction a set of results will be written to the logs, for example:
+
+```json
+{"level":"info","service":"blockrelay","impl":"standard","slot":4008626,"provider":"https://relay-goerli.edennetwork.io","value":"19660294862786212","delta":"628156784573160","selected":false,"time":"2022-10-01T08:05:12Z","message":"Auction participant"}
+{"level":"info","service":"blockrelay","impl":"standard","slot":4008626,"provider":"https://builder-relay-goerli.blocknative.com","value":"20288451647359372","delta":"0","selected":true,"time":"2022-10-01T08:05:12Z","message":"Auction participant"}
+{"level":"info","service":"blockrelay","impl":"standard","slot":4008626,"provider":"https://builder-relay-goerli.flashbots.net","value":"20288451647047372","delta":"312000","selected":false,"time":"2022-10-01T08:05:12Z","message":"Auction participant"}
+```
+
+In the above example there were three participants in the auction, a participant being a relay that responded to the request for a bid.  The value of each of the participants bids is displayed (in Wei), along with the difference (if any) between that and the winning bid. The selected bid is also marked for easy reference.  This allows users to easily track the relative value of blocks presented by relays for comparison purposes.
