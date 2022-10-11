@@ -1,4 +1,4 @@
-dev:
+1.6.2:
   - fix crash on failure to propose a block
   - log auction results with the `blockrelay.log-results` flag
 
