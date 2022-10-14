@@ -15,6 +15,7 @@ package standard
 
 import (
 	"context"
+	"math/big"
 	"time"
 
 	"github.com/attestantio/vouch/services/metrics"
@@ -244,4 +245,12 @@ func monitorRegistrationsGeneration(source string) {
 		return
 	}
 	validatorRegistrationsGeneration.WithLabelValues(source).Inc()
+}
+
+// monitorBuilderBidDelta provides builder bid deltas for blocks.
+func monitorBuilderBidDelta(source string, delta *big.Int) {
+	if builderBidDeltas == nil {
+		return
+	}
+	builderBidDeltas.WithLabelValues(source).Observe(float64(delta.Uint64()) / 1e15)
 }
