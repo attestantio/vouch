@@ -1,3 +1,6 @@
+1.6.3:
+  - fix crash attempting to store metrics when prometheus not enabled
+
 1.6.2:
   - fix crash on failure to propose a block
   - log auction results with the `blockrelay.log-results` flag

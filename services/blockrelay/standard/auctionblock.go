@@ -71,7 +71,7 @@ func (s *Service) AuctionBlock(ctx context.Context,
 	for provider, value := range res.Values {
 		delta := new(big.Int).Sub(res.Bid.Data.Message.Value.ToBig(), value)
 		if !strings.EqualFold(res.Provider.Address(), provider) {
-			builderBidDeltas.WithLabelValues(provider).Observe(float64(delta.Uint64()) / 1e15)
+			monitorBuilderBidDelta(provider, delta)
 		}
 		if s.logResults {
 			log.Info().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", provider == res.Provider.Address()).Msg("Auction participant")
