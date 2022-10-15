@@ -1,3 +1,6 @@
+dev:
+  - provide full information for beacon committee subscriptions
+
 1.6.3:
   - fix crash attempting to store metrics when prometheus not enabled
 

@@ -133,17 +133,8 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 		return errors.New("no beacon committee subscriptions supplied")
 	}
 
-	subs := make([]*apiv1.BeaconCommitteeSubscription, len(subscriptions))
-	for i, subscription := range subscriptions {
-		subs[i] = &apiv1.BeaconCommitteeSubscription{
-			Slot:             subscription.Slot,
-			CommitteeIndex:   subscription.CommitteeIndex,
-			CommitteesAtSlot: subscription.CommitteesAtSlot,
-			IsAggregator:     subscription.IsAggregator,
-		}
-	}
 	started := time.Now()
-	err := s.beaconCommitteeSubscriptionsSubmitter.SubmitBeaconCommitteeSubscriptions(ctx, subs)
+	err := s.beaconCommitteeSubscriptionsSubmitter.SubmitBeaconCommitteeSubscriptions(ctx, subscriptions)
 	if service, isService := s.beaconCommitteeSubscriptionsSubmitter.(eth2client.Service); isService {
 		s.clientMonitor.ClientOperation(service.Address(), "submit beacon committee subscription", err == nil, time.Since(started))
 	} else {
