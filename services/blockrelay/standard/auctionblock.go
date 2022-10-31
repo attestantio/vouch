@@ -28,6 +28,7 @@ import (
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/util"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
@@ -48,7 +49,27 @@ func (s *Service) AuctionBlock(ctx context.Context,
 	*blockauctioneer.Results,
 	error,
 ) {
-	res, err := s.bestBuilderBid(ctx, slot, parentHash, pubkey)
+	started := time.Now()
+
+	s.executionConfigMu.RLock()
+	proposerConfig, exists := s.executionConfig.ProposerConfigs[pubkey]
+	if !exists {
+		proposerConfig = s.executionConfig.DefaultConfig
+	}
+	s.executionConfigMu.RUnlock()
+
+	if proposerConfig.Builder.Enabled {
+		log.Trace().Msg("Auction disabled in proposer configuration")
+		return nil, nil
+	}
+
+	if proposerConfig.Builder.Grace > 0 {
+		log.Trace().Dur("elapsed", time.Since(started)).Msg("Starting grace period")
+		time.Sleep(proposerConfig.Builder.Grace)
+		log.Trace().Dur("elapsed", time.Since(started)).Msg("Grace period over")
+	}
+
+	res, err := s.bestBuilderBid(ctx, slot, parentHash, pubkey, proposerConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -94,24 +115,13 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	slot phase0.Slot,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
+	proposerConfig *blockrelay.ProposerConfig,
 ) (
 	*blockauctioneer.Results,
 	error,
 ) {
 	started := time.Now()
 	log := util.LogWithID(ctx, log, "strategy_id").With().Str("operation", "builderbid").Uint64("slot", uint64(slot)).Str("pubkey", fmt.Sprintf("%#x", pubkey)).Logger()
-
-	s.executionConfigMu.RLock()
-	proposerConfig, exists := s.executionConfig.ProposerConfigs[pubkey]
-	if !exists {
-		proposerConfig = s.executionConfig.DefaultConfig
-	}
-	s.executionConfigMu.RUnlock()
-
-	if !proposerConfig.Builder.Enabled {
-		log.Trace().Msg("Auction disabled in proposer configuration")
-		return nil, nil
-	}
 
 	res := &blockauctioneer.Results{
 		Values: make(map[string]*big.Int),

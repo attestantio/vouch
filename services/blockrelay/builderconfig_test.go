@@ -39,31 +39,45 @@ func TestBuilderConfig(t *testing.T) {
 		},
 		{
 			name:  "EnabledWrongType",
-			input: []byte(`{"enabled":"true","relays":["server1.example.com","server2.example.com"]}`),
+			input: []byte(`{"enabled":"true","grace":"123","relays":["server1.example.com","server2.example.com"]}`),
 			err:   "invalid JSON: json: cannot unmarshal string into Go struct field builderConfigJSON.enabled of type bool",
 		},
 		{
 			name:  "EnabledInvalid",
-			input: []byte(`{"enabled":maybe,"relays":["server1.example.com","server2.example.com"]}`),
+			input: []byte(`{"enabled":maybe,"grace":"123","relays":["server1.example.com","server2.example.com"]}`),
 			err:   "invalid character 'm' looking for beginning of value",
 		},
 		{
+			name:  "GraceWrongType",
+			input: []byte(`{"enabled":true,"grace":true,"relays":["server1.example.com","server2.example.com"]}`),
+			err:   "invalid JSON: json: cannot unmarshal bool into Go struct field builderConfigJSON.grace of type string",
+		},
+		{
+			name:  "GraceInvalid",
+			input: []byte(`{"enabled":true,"grace":"-1","relays":["server1.example.com","server2.example.com"]}`),
+			err:   "grace invalid: strconv.ParseUint: parsing \"-1\": invalid syntax",
+		},
+		{
 			name:  "RelaysMissing",
-			input: []byte(`{"enabled":true}`),
+			input: []byte(`{"enabled":true,"grace":"123"}`),
 			err:   "relays missing",
 		},
 		{
 			name:  "RelaysWrongType",
-			input: []byte(`{"enabled":true,"relays":true}`),
+			input: []byte(`{"enabled":true,"grace":"123","relays":true}`),
 			err:   "invalid JSON: json: cannot unmarshal bool into Go struct field builderConfigJSON.relays of type []string",
 		},
 		{
 			name:  "RelayWrongType",
-			input: []byte(`{"enabled":true,"relays":[true, true]}`),
+			input: []byte(`{"enabled":true,"grace":"123","relays":[true, true]}`),
 			err:   "invalid JSON: json: cannot unmarshal bool into Go struct field builderConfigJSON.relays of type string",
 		},
 		{
 			name:  "Good",
+			input: []byte(`{"enabled":true,"grace":"123","relays":["server1.example.com","server2.example.com"]}`),
+		},
+		{
+			name:  "GoodNoGrace",
 			input: []byte(`{"enabled":true,"relays":["server1.example.com","server2.example.com"]}`),
 		},
 		{
