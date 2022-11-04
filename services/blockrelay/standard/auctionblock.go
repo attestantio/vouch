@@ -58,7 +58,7 @@ func (s *Service) AuctionBlock(ctx context.Context,
 	}
 	s.executionConfigMu.RUnlock()
 
-	if proposerConfig.Builder.Enabled {
+	if !proposerConfig.Builder.Enabled {
 		log.Trace().Msg("Auction disabled in proposer configuration")
 		return nil, nil
 	}
