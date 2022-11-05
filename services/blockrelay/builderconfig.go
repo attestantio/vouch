@@ -16,6 +16,8 @@ package blockrelay
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -23,18 +25,25 @@ import (
 // BuilderConfig is the builder configuration for a specific proposer.
 type BuilderConfig struct {
 	Enabled bool
+	Grace   time.Duration
 	Relays  []string
 }
 
 type builderConfigJSON struct {
 	Enabled bool     `json:"enabled"`
+	Grace   string   `json:"grace,omitempty"`
 	Relays  []string `json:"relays,omitempty"`
 }
 
 // MarshalJSON implements json.Marshaler.
 func (b *BuilderConfig) MarshalJSON() ([]byte, error) {
+	grace := ""
+	if b.Grace > 0 {
+		grace = fmt.Sprintf("%d", b.Grace.Milliseconds())
+	}
 	return json.Marshal(&builderConfigJSON{
 		Enabled: b.Enabled,
+		Grace:   grace,
 		Relays:  b.Relays,
 	})
 }
@@ -47,6 +56,15 @@ func (b *BuilderConfig) UnmarshalJSON(input []byte) error {
 	}
 
 	b.Enabled = data.Enabled
+
+	if data.Grace != "" {
+		grace, err := strconv.ParseUint(data.Grace, 10, 64)
+		if err != nil {
+			return errors.Wrap(err, "grace invalid")
+		}
+		b.Grace = time.Duration(grace) * time.Millisecond
+	}
+
 	if b.Enabled && len(data.Relays) == 0 {
 		return errors.New("relays missing")
 	}

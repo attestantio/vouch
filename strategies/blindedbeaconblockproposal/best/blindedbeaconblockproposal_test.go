@@ -15,7 +15,6 @@ package best_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -214,9 +213,6 @@ func TestBlindedBeaconBlockProposal(t *testing.T) {
 				nil,
 			)
 			if test.err != "" {
-				for k, v := range capture.Entries() {
-					fmt.Printf("%v: %v\n", k, v)
-				}
 				require.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)

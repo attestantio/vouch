@@ -446,7 +446,7 @@ func TestManyJobs(t *testing.T) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runTime := time.Now().Add(200 * time.Millisecond)
+	runTime := time.Now().Add(500 * time.Millisecond)
 
 	jobs := 2048
 	for i := 0; i < jobs; i++ {
@@ -464,7 +464,7 @@ func TestManyJobs(t *testing.T) {
 	}
 
 	// Sleep to let the others run normally.
-	time.Sleep(400 * time.Millisecond)
+	time.Sleep(time.Second)
 
 	require.Equal(t, uint32(jobs), run)
 	require.Len(t, s.ListJobs(ctx), 0)
