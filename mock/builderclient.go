@@ -25,12 +25,12 @@ type BuilderClient struct {
 }
 
 // Name returns the name of the builder implementation.
-func (m *BuilderClient) Name() string {
+func (*BuilderClient) Name() string {
 	return "mock"
 }
 
 // Address returns the address of the builder.
-func (m *BuilderClient) Address() string {
+func (*BuilderClient) Address() string {
 	return "mock:12345"
 }
 
@@ -40,10 +40,10 @@ func (m *BuilderClient) Pubkey() *phase0.BLSPubKey {
 }
 
 // BuilderBidProvider obtains a builder bid.
-func (m *BuilderClient) BuilderBid(ctx context.Context,
-	slot phase0.Slot,
-	parentHash phase0.Hash32,
-	pubKey phase0.BLSPubKey,
+func (*BuilderClient) BuilderBid(_ context.Context,
+	_ phase0.Slot,
+	_ phase0.Hash32,
+	_ phase0.BLSPubKey,
 ) (
 	*builderspec.VersionedSignedBuilderBid,
 	error,
