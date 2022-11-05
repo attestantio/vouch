@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/attestantio/go-block-relay v0.1.5
-	github.com/attestantio/go-builder-client v0.1.8
+	github.com/attestantio/go-builder-client v0.1.9
 	github.com/attestantio/go-eth2-client v0.14.1
 	github.com/aws/aws-sdk-go v1.44.81
 	github.com/herumi/bls-eth-go-binary v1.28.1 // indirect
@@ -41,7 +41,7 @@ require (
 )
 
 require (
-	github.com/holiman/uint256 v1.2.0
+	github.com/holiman/uint256 v1.2.1
 	github.com/wealdtech/go-eth2-wallet-nd/v2 v2.4.0
 )
 

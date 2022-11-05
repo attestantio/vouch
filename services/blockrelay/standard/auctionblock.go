@@ -32,6 +32,7 @@ import (
 	"github.com/attestantio/vouch/util"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
+	e2types "github.com/wealdtech/go-eth2-types/v2"
 )
 
 // zeroExecutionAddress is used for comparison purposes.
@@ -286,6 +287,16 @@ func (s *Service) builderBid(ctx context.Context,
 			errCh <- fmt.Errorf("%s: provided timestamp %d for slot %d not expected value of %d", provider.Address(), builderBid.Data.Message.Header.Timestamp, slot, s.chainTime.StartOfSlot(slot).Unix())
 			return
 		}
+		verified, err := s.verifyBidSignature(ctx, builderBid, provider)
+		if err != nil {
+			errCh <- errors.Wrap(err, "error verifying bid signature")
+			return
+		}
+		if !verified {
+			log.Warn().Msg("Failed to verify bid signature")
+			errCh <- fmt.Errorf("%s: invalid signature", provider.Address())
+			return
+		}
 	default:
 		errCh <- fmt.Errorf("%s: unhandled builder bid data version %v", provider.Address(), builderBid.Version)
 	}
@@ -295,4 +306,58 @@ func (s *Service) builderBid(ctx context.Context,
 		provider: provider,
 		score:    builderBid.Data.Message.Value.ToBig(),
 	}
+}
+
+// verifyBidSignature verifies the signature of a bid to ensure it comes from the expected source.
+func (s *Service) verifyBidSignature(_ context.Context,
+	bid *builderspec.VersionedSignedBuilderBid,
+	provider builderclient.BuilderBidProvider,
+) (
+	bool,
+	error,
+) {
+	var err error
+	log := log.With().Str("provider", provider.Address()).Logger()
+
+	relayPubkey := provider.Pubkey()
+	if relayPubkey == nil {
+		log.Trace().Msg("Provider did not supply public key; skipping validation")
+		return true, nil
+	}
+
+	s.relayPubkeysMu.RLock()
+	pubkey, exists := s.relayPubkeys[*relayPubkey]
+	s.relayPubkeysMu.RUnlock()
+	if !exists {
+		pubkey, err = e2types.BLSPublicKeyFromBytes(provider.Pubkey()[:])
+		if err != nil {
+			return false, errors.Wrap(err, "invalid public key supplied with bid")
+		}
+		s.relayPubkeysMu.Lock()
+		s.relayPubkeys[*relayPubkey] = pubkey
+		s.relayPubkeysMu.Unlock()
+	}
+
+	dataRoot, err := bid.Data.Message.HashTreeRoot()
+	if err != nil {
+		return false, errors.Wrap(err, "failed to hash bid message")
+	}
+
+	signingData := &phase0.SigningData{
+		ObjectRoot: dataRoot,
+		Domain:     s.applicationBuilderDomain,
+	}
+	signingRoot, err := signingData.HashTreeRoot()
+	if err != nil {
+		return false, errors.Wrap(err, "failed to hash signing data")
+	}
+
+	bidSig := make([]byte, len(bid.Data.Signature))
+	copy(bidSig, bid.Data.Signature[:])
+	sig, err := e2types.BLSSignatureFromBytes(bidSig)
+	if err != nil {
+		return false, errors.Wrap(err, "invalid signature")
+	}
+
+	return sig.Verify(signingRoot[:], pubkey), nil
 }

@@ -20,7 +20,7 @@ import (
 
 	restdaemon "github.com/attestantio/go-block-relay/services/daemon/rest"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-builder-client/spec"
+	builderspec "github.com/attestantio/go-builder-client/spec"
 	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -32,6 +32,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
+	e2types "github.com/wealdtech/go-eth2-types/v2"
 	"github.com/wealdtech/go-majordomo"
 )
 
@@ -48,16 +49,20 @@ type Service struct {
 	caCertURL                                 string
 	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
-	builderBidsCache                          map[string]map[string]*spec.VersionedSignedBuilderBid
+	builderBidsCache                          map[string]map[string]*builderspec.VersionedSignedBuilderBid
 	builderBidsCacheMu                        sync.RWMutex
 	timeout                                   time.Duration
 	signedValidatorRegistrations              map[phase0.BLSPubKey]*apiv1.SignedValidatorRegistration
 	signedValidatorRegistrationsMu            sync.RWMutex
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 	logResults                                bool
+	applicationBuilderDomain                  phase0.Domain
 
 	executionConfig   *blockrelay.ExecutionConfig
 	executionConfigMu sync.RWMutex
+
+	relayPubkeys   map[phase0.BLSPubKey]*e2types.BLSPublicKey
+	relayPubkeysMu sync.RWMutex
 }
 
 // module-wide log.
@@ -80,6 +85,24 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("failed to register metrics")
 	}
 
+	// The application domain is static, so fetch it here once.
+	spec, err := parameters.specProvider.Spec(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain spec")
+	}
+	tmp, exists := spec["DOMAIN_APPLICATION_BUILDER"]
+	if !exists {
+		return nil, errors.New("failed to obtain application builder domain type")
+	}
+	applicationBuilderDomainType, ok := tmp.(phase0.DomainType)
+	if !ok {
+		return nil, errors.New("unexpected type for application builder domain type")
+	}
+	domain, err := parameters.domainProvider.Domain(ctx, applicationBuilderDomainType, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain application builder domain")
+	}
+
 	s := &Service{
 		monitor:                      parameters.monitor,
 		majordomo:                    parameters.majordomo,
@@ -95,8 +118,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		timeout:                      parameters.timeout,
 		signedValidatorRegistrations: make(map[phase0.BLSPubKey]*apiv1.SignedValidatorRegistration),
 		secondaryValidatorRegistrationsSubmitters: parameters.secondaryValidatorRegistrationsSubmitters,
-		logResults:       parameters.logResults,
-		builderBidsCache: make(map[string]map[string]*spec.VersionedSignedBuilderBid),
+		logResults:               parameters.logResults,
+		applicationBuilderDomain: domain,
+		builderBidsCache:         make(map[string]map[string]*builderspec.VersionedSignedBuilderBid),
+		relayPubkeys:             make(map[phase0.BLSPubKey]*e2types.BLSPublicKey),
 	}
 
 	// Carry out initial fetch of execution configuration.

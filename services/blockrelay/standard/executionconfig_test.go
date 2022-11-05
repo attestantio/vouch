@@ -55,6 +55,8 @@ func TestExecConfig(t *testing.T) {
 	genesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
 	slotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
 	slotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
+	specProvider := mock.NewSpecProvider()
+	domainProvider := mock.NewDomainProvider()
 
 	mockValidatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
 	require.NoError(t, e2types.InitBLS())
@@ -123,6 +125,8 @@ func TestExecConfig(t *testing.T) {
 				standard.WithFallbackGasLimit(10000000),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
+				standard.WithSpecProvider(specProvider),
+				standard.WithDomainProvider(domainProvider),
 			},
 			execConfig: `{"default_config":{"fee_recipient":"0x0100000000000000000000000000000000000000","gas_limit":"10000000","builder":{"enabled":false}}}`,
 		},
@@ -140,6 +144,8 @@ func TestExecConfig(t *testing.T) {
 				standard.WithFallbackGasLimit(10000000),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
+				standard.WithSpecProvider(specProvider),
+				standard.WithDomainProvider(domainProvider),
 			},
 			execConfig: `{"default_config":{"fee_recipient":"0x0200000000000000000000000000000000000000","gas_limit":"20000000","builder":{"enabled":false}}}`,
 			logEntries: []map[string]interface{}{
@@ -162,6 +168,8 @@ func TestExecConfig(t *testing.T) {
 				standard.WithFallbackGasLimit(10000000),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
+				standard.WithSpecProvider(specProvider),
+				standard.WithDomainProvider(domainProvider),
 			},
 			execConfig: `{"default_config":{"fee_recipient":"0x0100000000000000000000000000000000000000","gas_limit":"10000000","builder":{"enabled":false}}}`,
 			logEntries: []map[string]interface{}{
