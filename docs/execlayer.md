@@ -68,7 +68,7 @@ In this configuration the validator with the public key `0xaaaa…aaaa` will use
 
 ## MEV configuration
 
-Vouch acts as an MEV-boost server, talking to MEV relays and accepting requests from beacon nodes for execution payload headers.
+Vouch acts as an MEV-boost server, talking to MEV relays and accepting requests from beacon nodes for execution payload headers.  A relay is a URL, for example `https://relay.provider.com/'.  Relays can also include a public key in the username section of the relay, for example `https://0xac6e77dfe25ecd6110b8e780608cce0dab71fdd5ebea22a16c0205200f2f8e2e3ad3b71d3499c54ad14d6c21b41a37ae@relay.provider.com/`.  If the public key is present in the URL then signed bids provided by this relay will be verified by Vouch before being considered for inclusion, otherwise bids from the relay are considered trusted and not verified.
 
 ```json
 {

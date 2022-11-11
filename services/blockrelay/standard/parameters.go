@@ -47,6 +47,8 @@ type parameters struct {
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 	logResults                                bool
+	specProvider                              consensusclient.SpecProvider
+	domainProvider                            consensusclient.DomainProvider
 	timeout                                   time.Duration
 }
 
@@ -180,6 +182,20 @@ func WithLogResults(logResults bool) Parameter {
 	})
 }
 
+// WithSpecProvider sets the spec provider.
+func WithSpecProvider(provider consensusclient.SpecProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.specProvider = provider
+	})
+}
+
+// WithDomainProvider sets the signature domain provider.
+func WithDomainProvider(provider consensusclient.DomainProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.domainProvider = provider
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -223,6 +239,12 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		return nil, errors.New("listen address malformed")
 	}
 	// config URL can be empty.
+	if parameters.specProvider == nil {
+		return nil, errors.New("no spec provider specified")
+	}
+	if parameters.domainProvider == nil {
+		return nil, errors.New("no domain provider specified")
+	}
 
 	return &parameters, nil
 }

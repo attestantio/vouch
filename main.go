@@ -383,7 +383,7 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to start graffiti provider")
 	}
 
-	blockRelay, err := startBlockRelay(ctx, monitor, majordomo, scheduler, chainTime, accountManager, signerSvc)
+	blockRelay, err := startBlockRelay(ctx, monitor, majordomo, eth2Client, scheduler, chainTime, accountManager, signerSvc)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1380,6 +1380,7 @@ func consensusClientCapabilities(ctx context.Context, consensusClient eth2client
 func startBlockRelay(ctx context.Context,
 	monitor metrics.Service,
 	majordomo majordomo.Service,
+	eth2Client eth2client.Service,
 	scheduler scheduler.Service,
 	chainTime chaintime.Service,
 	accountManager accountmanager.Service,
@@ -1443,6 +1444,8 @@ func startBlockRelay(ctx context.Context,
 		standardblockrelay.WithTimeout(util.Timeout("blockrelay")),
 		standardblockrelay.WithSecondaryValidatorRegistrationsSubmitters(secondaryValidatorRegistrationsSubmitters),
 		standardblockrelay.WithLogResults(viper.GetBool("blockrelay.log-results")),
+		standardblockrelay.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
+		standardblockrelay.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start block relay")

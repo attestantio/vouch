@@ -1,5 +1,6 @@
 dev:
   - provide full information for beacon committee subscriptions
+  - verify bid signatures from relays if public key available
 
 1.6.3:
   - fix crash attempting to store metrics when prometheus not enabled
