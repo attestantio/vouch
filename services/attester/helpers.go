@@ -22,6 +22,7 @@ import (
 
 // MergeDuties merges attester duties given by an Ethereum 2 client into vouch's per-slot structure.
 func MergeDuties(ctx context.Context, attesterDuties []*api.AttesterDuty) ([]*Duty, error) {
+	committeesAtSlot := make(map[uint64]uint64)
 	validatorIndices := make(map[uint64][]uint64)
 	committeeIndices := make(map[uint64][]uint64)
 	validatorCommitteeIndices := make(map[uint64][]uint64)
@@ -60,6 +61,7 @@ func MergeDuties(ctx context.Context, attesterDuties []*api.AttesterDuty) ([]*Du
 			committeeIndices[duty.Slot] = make([]uint64, 0, arrayCap)
 			committeeLengths[duty.Slot] = make(map[uint64]uint64)
 		}
+		committeesAtSlot[duty.Slot] = duty.CommitteesAtSlot
 		validatorIndices[duty.Slot] = append(validatorIndices[duty.Slot], duty.ValidatorIndex)
 		committeeIndices[duty.Slot] = append(committeeIndices[duty.Slot], duty.CommitteeIndex)
 		committeeLengths[duty.Slot][duty.CommitteeIndex] = duty.CommitteeLength
@@ -71,6 +73,7 @@ func MergeDuties(ctx context.Context, attesterDuties []*api.AttesterDuty) ([]*Du
 		if duty, err := NewDuty(
 			ctx,
 			slot,
+			committeesAtSlot[slot],
 			validatorIndices[slot],
 			committeeIndices[slot],
 			validatorCommitteeIndices[slot],

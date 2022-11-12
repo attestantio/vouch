@@ -19,6 +19,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -162,6 +163,53 @@ func (d *ValidatingAccount) SignBeaconAttestation(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to sign beacon attestation")
 	}
 	return sig.Marshal(), nil
+}
+
+// SignBeaconAttestations signs multiple beacon attestations.
+func (d *ValidatingAccount) SignBeaconAttestations(ctx context.Context,
+	slot uint64,
+	accounts []accountmanager.ValidatingAccount,
+	committeeIndices []uint64,
+	blockRoot []byte,
+	sourceEpoch uint64,
+	sourceRoot []byte,
+	targetEpoch uint64,
+	targetRoot []byte) ([][]byte, error) {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "dirk.SignBeaconAttestations")
+	defer span.Finish()
+
+	signatureDomain, err := d.signatureDomainProvider.SignatureDomain(ctx,
+		d.accountManager.beaconAttesterDomain,
+		slot/d.accountManager.slotsPerEpoch)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
+	}
+
+	e2Accounts := make([]e2wtypes.Account, len(accounts))
+	for i := range accounts {
+		e2Accounts[i] = accounts[i].(*ValidatingAccount).account
+	}
+	sigs, err := d.account.(e2wtypes.AccountProtectingMultiSigner).SignBeaconAttestations(ctx,
+		slot,
+		e2Accounts,
+		committeeIndices,
+		blockRoot,
+		sourceEpoch,
+		sourceRoot,
+		targetEpoch,
+		targetRoot,
+		signatureDomain)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to sign beacon attestation")
+	}
+
+	res := make([][]byte, len(sigs))
+	for i := range sigs {
+		if sigs[i] != nil {
+			res[i] = sigs[i].Marshal()
+		}
+	}
+	return res, nil
 }
 
 // SignAggregateAndProof signs an aggregate and proof item.
