@@ -145,6 +145,8 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 	duty *beaconblockproposer.Duty,
 	graffiti []byte,
 ) auctionResult {
+	log := log.With().Uint64("slot", uint64(duty.Slot())).Logger()
+
 	pubkey := phase0.BLSPubKey{}
 	if provider, isProvider := duty.Account().(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
 		copy(pubkey[:], provider.CompositePublicKey().Marshal())
@@ -152,7 +154,7 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		copy(pubkey[:], duty.Account().PublicKey().Marshal())
 	}
 	hash, height := s.executionChainHeadProvider.ExecutionChainHead(ctx)
-	log.Trace().Str("hash", fmt.Sprintf("%#x", hash)).Uint64("height", height).Uint64("slot", uint64(duty.Slot())).Msg("Current execution chain state")
+	log.Trace().Str("hash", fmt.Sprintf("%#x", hash)).Uint64("height", height).Msg("Current execution chain state")
 	auctionResults, err := s.blockAuctioneer.AuctionBlock(ctx,
 		duty.Slot(),
 		hash,
