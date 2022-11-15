@@ -123,25 +123,7 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 		return
 	}
 
-	// Ensure that zero values are filled with fallbacks.
-	if executionConfig.DefaultConfig.GasLimit == 0 {
-		log.Debug().Msg("Default gas limit 0; setting to fallback value")
-		executionConfig.DefaultConfig.GasLimit = s.fallbackGasLimit
-	}
-	if bytes.Equal(executionConfig.DefaultConfig.FeeRecipient[:], zeroFeeRecipient[:]) {
-		log.Debug().Msg("Default fee recipient 0; setting to fallback value")
-		executionConfig.DefaultConfig.FeeRecipient = s.fallbackFeeRecipient
-	}
-	for key, proposerConfig := range executionConfig.ProposerConfigs {
-		if proposerConfig.GasLimit == 0 {
-			log.Debug().Str("validator", fmt.Sprintf("%#x", key)).Msg("Gas limit 0; setting to fallback value")
-			proposerConfig.GasLimit = s.fallbackGasLimit
-		}
-		if bytes.Equal(proposerConfig.FeeRecipient[:], zeroFeeRecipient[:]) {
-			log.Debug().Str("validator", fmt.Sprintf("%#x", key)).Msg("Fee recipient 0; setting to fallback value")
-			proposerConfig.FeeRecipient = s.fallbackFeeRecipient
-		}
-	}
+	s.normaliseExecutionConfig(ctx, executionConfig)
 
 	log.Trace().Stringer("execution_config", executionConfig).Msg("Obtained configuration")
 
@@ -227,4 +209,43 @@ func (s *Service) ExecutionConfig(_ context.Context) (*blockrelay.ExecutionConfi
 		return nil, errors.New("no execution config available at current")
 	}
 	return s.executionConfig, nil
+}
+
+// normaliseExecutionConfig tidies up potentially partially missing execution configuration values.
+func (s *Service) normaliseExecutionConfig(_ context.Context,
+	executionConfig *blockrelay.ExecutionConfig,
+) {
+	// Ensure that missing default values are filled with fallbacks.
+	if executionConfig.DefaultConfig == nil {
+		executionConfig.DefaultConfig = &blockrelay.ProposerConfig{}
+	}
+	if executionConfig.DefaultConfig.GasLimit == 0 {
+		log.Debug().Msg("Default gas limit 0; setting to fallback value")
+		executionConfig.DefaultConfig.GasLimit = s.fallbackGasLimit
+	}
+	if bytes.Equal(executionConfig.DefaultConfig.FeeRecipient[:], zeroFeeRecipient[:]) {
+		log.Debug().Msg("Default fee recipient 0; setting to fallback value")
+		executionConfig.DefaultConfig.FeeRecipient = s.fallbackFeeRecipient
+	}
+	if executionConfig.DefaultConfig.Builder == nil {
+		executionConfig.DefaultConfig.Builder = &blockrelay.BuilderConfig{}
+	}
+	// Ensure that missing proposer values are filled with defaults.
+	for key, proposerConfig := range executionConfig.ProposerConfigs {
+		if proposerConfig == nil {
+			proposerConfig = &blockrelay.ProposerConfig{}
+			executionConfig.ProposerConfigs[key] = proposerConfig
+		}
+		if proposerConfig.GasLimit == 0 {
+			log.Debug().Str("validator", fmt.Sprintf("%#x", key)).Msg("Gas limit 0; setting to default value")
+			proposerConfig.GasLimit = executionConfig.DefaultConfig.GasLimit
+		}
+		if bytes.Equal(proposerConfig.FeeRecipient[:], zeroFeeRecipient[:]) {
+			log.Debug().Str("validator", fmt.Sprintf("%#x", key)).Msg("Fee recipient 0; setting to default value")
+			proposerConfig.FeeRecipient = executionConfig.DefaultConfig.FeeRecipient
+		}
+		if proposerConfig.Builder == nil {
+			proposerConfig.Builder = executionConfig.DefaultConfig.Builder
+		}
+	}
 }

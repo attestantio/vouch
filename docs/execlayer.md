@@ -91,7 +91,7 @@ Vouch acts as an MEV-boost server, talking to MEV relays and accepting requests 
     }
   },
   "default_config": {
-  "fee_recipient": "0x0123…cdef",
+    "fee_recipient": "0x0123…cdef",
     "builder": {
       "enabled": true,
       "relays": [
@@ -102,6 +102,51 @@ Vouch acts as an MEV-boost server, talking to MEV relays and accepting requests 
   }
 }
 ```
+
+### Precedence of configuration values.
+There are three places that a configuration value can be defined.  These are:
+  - in the execution configuration file, under the  `proposer_config` section
+  - in the execution configuration file, under the `default_config` section
+  - in the Vouch configuration files, known as fallback values (note that relays cannot be defined as fallback)
+
+The precedence of the values is top to bottom, which means that for any given validator:
+  - if a value is found in the validator-specific `proposer_config` section it is used
+  - if not, and a value is found in the `default_config` section it is used
+  - otherwise, the fallback value is used
+
+To understand how the precedence acts, consider the following execution configuration:
+
+```json
+{
+  "proposer_config": {
+    "0xaaaa…aaaa": {
+      "fee_recipient": "0x1111…1111"
+    },
+    "0xbbbb…bbbb": {
+      "builder": {
+        "enabled": false
+      }
+    }
+  },
+  "default_config": {
+    "fee_recipient": "0x0123…cdef",
+    "builder": {
+      "enabled": true,
+      "relays": [
+        "https://relay1.example.com/",
+        "https://relay2.example.com/"
+      ]
+    }
+  }
+}
+```
+
+The proposal configuration for the validators is as follows:
+
+- validator 0xaaaa…aaaa has fee recipient as defined in its proposer configuration and builder configuration as defined in the default configuration
+- validator 0xbbbb…bbbb has fee recipient as defined in the default configuration and builder configuration as defined in its proposer configuration
+- all other validators have fee recipient as defined in the default configuration and builder configuration as defined in the default configuration
+- all of the validators have a gas limit as defined as fallback in the Vouch configuration
 
 ## Beacon node configuration
 By default, Vouch's MEV-boost service listens on port 18550.  Beacon nodes used by Vouch should be configured to talk directly to this, rather than other MEV-boost services or directly to relays.  Details of how to configure the beacon nodes is listed in the relevant client's documentation.  If Vouch is required to listen on a different port this can be set in the block relay configuration, for example:
