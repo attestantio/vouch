@@ -140,6 +140,7 @@ func (s *Service) syncCommitteeContribution(ctx context.Context,
 	}
 	log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained sync committee contribution")
 	if contribution == nil {
+		errCh <- errors.New("sync committee contribution nil")
 		return
 	}
 

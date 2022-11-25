@@ -137,6 +137,7 @@ func (s *Service) aggregateAttestation(ctx context.Context,
 	}
 	log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained aggregate attestation")
 	if aggregate == nil {
+		errCh <- errors.New("aggregate attestation nil")
 		return
 	}
 
