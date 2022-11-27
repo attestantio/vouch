@@ -153,8 +153,9 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 		errCh <- errors.Wrap(err, name)
 		return
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
 	if proposal == nil {
+		errCh <- errors.New("beacon block proposal nil")
 		return
 	}
 

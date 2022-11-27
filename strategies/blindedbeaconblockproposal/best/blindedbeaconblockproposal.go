@@ -158,7 +158,7 @@ func (s *Service) blindedBeaconBlockProposal(ctx context.Context,
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained blinded beacon block proposal")
 	if proposal == nil {
-		errCh <- errors.New("empty blinded beacon block response")
+		errCh <- errors.New("blinded beacon block proposal nil")
 		return
 	}
 	feeRecipient, err := proposal.FeeRecipient()
