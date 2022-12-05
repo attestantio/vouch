@@ -103,6 +103,9 @@ func (s *Service) submitValidatorRegistrations(ctx context.Context,
 func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 ) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "submitValidatorRegistrationsForAccounts")
+	defer span.End()
+
 	if s.executionConfig == nil {
 		return errors.New("no execution configuration; cannot submit validator registrations at current")
 	}
@@ -183,6 +186,7 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 			},
 		})
 	}
+	span.AddEvent("Generated registrations")
 
 	if e := log.Trace(); e.Enabled() {
 		data, err := json.Marshal(signedRegistrations)
@@ -203,6 +207,11 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 		wg.Add(1)
 		go func(ctx context.Context, builder string, providerRegistrations []*api.VersionedSignedValidatorRegistration, monitor metrics.Service) {
 			defer wg.Done()
+			ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "(submit relay registrations)", trace.WithAttributes(
+				attribute.String("relay", builder),
+			))
+			defer span.End()
+
 			client, err := util.FetchBuilderClient(ctx, builder, s.monitor)
 			if err != nil {
 				log.Error().Err(err).Str("builder", builder).Msg("Failed to fetch builder client")
@@ -224,6 +233,11 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 		wg.Add(1)
 		go func(ctx context.Context, submitter eth2client.ValidatorRegistrationsSubmitter, registrations []*consensusclientapi.VersionedSignedValidatorRegistration) {
 			defer wg.Done()
+			ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "(submit consensus registrations)", trace.WithAttributes(
+				attribute.String("node", submitter.(eth2client.Service).Address()),
+			))
+			defer span.End()
+
 			log.Trace().Str("client", submitter.(eth2client.Service).Address()).Msg("Submitting secondary validator registrations")
 			if err := submitter.SubmitValidatorRegistrations(ctx, consensusRegistrations); err != nil {
 				log.Error().Err(err).Str("client", submitter.(eth2client.Service).Address()).Msg("Failed to submit secondary validator registrations")
