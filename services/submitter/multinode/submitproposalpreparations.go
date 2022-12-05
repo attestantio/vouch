@@ -21,11 +21,19 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 )
 
 // SubmitProposalPreparations submits proposal preparations.
 func (s *Service) SubmitProposalPreparations(ctx context.Context, preparations []*api.ProposalPreparation) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.multinode").Start(ctx, "SubmitProposalPreparations", trace.WithAttributes(
+		attribute.String("strategy", "multinode"),
+	))
+	defer span.End()
+
 	if len(preparations) == 0 {
 		return errors.New("no proposal preparations supplied")
 	}

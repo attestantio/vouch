@@ -21,6 +21,9 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type attestationDataResponse struct {
@@ -31,6 +34,11 @@ type attestationDataResponse struct {
 
 // AttestationData provides the best attestation data from a number of beacon nodes.
 func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committeeIndex phase0.CommitteeIndex) (*phase0.AttestationData, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.attestationdata.best").Start(ctx, "AttestationData", trace.WithAttributes(
+		attribute.Int64("slot", int64(slot)),
+	))
+	defer span.End()
+
 	started := time.Now()
 	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(slot)).Logger()
 
@@ -130,6 +138,11 @@ func (s *Service) attestationData(ctx context.Context,
 	slot phase0.Slot,
 	committeeIndex phase0.CommitteeIndex,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.attestationdata.best").Start(ctx, "attestationData", trace.WithAttributes(
+		attribute.String("provider", name),
+	))
+	defer span.End()
+
 	attestationData, err := provider.AttestationData(ctx, slot, committeeIndex)
 	s.clientMonitor.ClientOperation(name, "attestation data", err == nil, time.Since(started))
 	if err != nil {

@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 )
 
 // Service is a sync committee aggregator.
@@ -131,6 +132,8 @@ func (s *Service) SetBeaconBlockRoot(slot phase0.Slot, root phase0.Root) {
 
 // Aggregate aggregates the attestations for a given slot/committee combination.
 func (s *Service) Aggregate(ctx context.Context, data interface{}) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.synccommitteeaggregator.standard").Start(ctx, "Aggregate")
+	defer span.End()
 	started := time.Now()
 
 	duty, ok := data.(*synccommitteeaggregator.Duty)

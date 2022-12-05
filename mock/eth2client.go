@@ -27,6 +27,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
@@ -745,15 +746,19 @@ func (m *SleepyBeaconBlockProposalProvider) BeaconBlockProposal(ctx context.Cont
 }
 
 // BlindedBeaconBlockProposalProvider is a mock for eth2client.BlindedBeaconBlockProposalProvider.
-type BlindedBeaconBlockProposalProvider struct{}
+type BlindedBeaconBlockProposalProvider struct {
+	chainTime chaintime.Service
+}
 
 // NewBlindedBeaconBlockProposalProvider returns a mock blinded beacon block proposal provider.
-func NewBlindedBeaconBlockProposalProvider() eth2client.BlindedBeaconBlockProposalProvider {
-	return &BlindedBeaconBlockProposalProvider{}
+func NewBlindedBeaconBlockProposalProvider(chainTime chaintime.Service) eth2client.BlindedBeaconBlockProposalProvider {
+	return &BlindedBeaconBlockProposalProvider{
+		chainTime: chainTime,
+	}
 }
 
 // BlindedBeaconBlockProposal is a mock.
-func (*BlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*api.VersionedBlindedBeaconBlock, error) {
+func (m *BlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*api.VersionedBlindedBeaconBlock, error) {
 	// Graffiti should be 32 bytes.
 	fixedGraffiti := [32]byte{}
 	copy(fixedGraffiti[:], graffiti)
@@ -806,6 +811,7 @@ func (*BlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ context.
 			0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 			0x10, 0x11, 0x12, 0x13,
 		},
+		Timestamp: uint64(m.chainTime.StartOfSlot(slot).Unix()),
 	}
 
 	block := &api.VersionedBlindedBeaconBlock{

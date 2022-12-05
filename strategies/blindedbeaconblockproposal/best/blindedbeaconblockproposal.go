@@ -24,6 +24,9 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var zeroFeeRecipient bellatrix.ExecutionAddress
@@ -36,6 +39,11 @@ type beaconBlockResponse struct {
 
 // BlindedBeaconBlockProposal provides the best blinded beacon block proposal from a number of beacon nodes.
 func (s *Service) BlindedBeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*api.VersionedBlindedBeaconBlock, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.blindedbeaconblockproposal.best").Start(ctx, "BlindedBeaconBlockProposal", trace.WithAttributes(
+		attribute.Int64("slot", int64(slot)),
+	))
+	defer span.End()
+
 	started := time.Now()
 	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(slot)).Logger()
 
@@ -150,6 +158,11 @@ func (s *Service) blindedBeaconBlockProposal(ctx context.Context,
 	randaoReveal phase0.BLSSignature,
 	graffiti []byte,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.blindedbeaconblockproposal.best").Start(ctx, "blindedBeaconBlockProposal", trace.WithAttributes(
+		attribute.String("provider", name),
+	))
+	defer span.End()
+
 	proposal, err := provider.BlindedBeaconBlockProposal(ctx, slot, randaoReveal, graffiti)
 	s.clientMonitor.ClientOperation(name, "blinded beacon block proposal", err == nil, time.Since(started))
 	if err != nil {
@@ -168,6 +181,15 @@ func (s *Service) blindedBeaconBlockProposal(ctx context.Context,
 	}
 	if bytes.Equal(feeRecipient[:], zeroFeeRecipient[:]) {
 		errCh <- errors.New("blinded beacon block response has 0 fee recipient")
+		return
+	}
+	executionTimestamp, err := proposal.Timestamp()
+	if err != nil {
+		errCh <- errors.Wrap(err, "failed to obtain blinded beacon block timestamp")
+		return
+	}
+	if int64(executionTimestamp) != s.chainTime.StartOfSlot(slot).Unix() {
+		errCh <- errors.New("blinded beacon block response has incorrect timestamp")
 		return
 	}
 

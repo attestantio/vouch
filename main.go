@@ -17,7 +17,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"net/http"
 
 	// #nosec G108
@@ -34,7 +33,6 @@ import (
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	"github.com/attestantio/vouch/loggers"
 	"github.com/attestantio/vouch/services/accountmanager"
 	dirkaccountmanager "github.com/attestantio/vouch/services/accountmanager/dirk"
 	walletaccountmanager "github.com/attestantio/vouch/services/accountmanager/wallet"
@@ -85,11 +83,9 @@ import (
 	"github.com/attestantio/vouch/util"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	homedir "github.com/mitchellh/go-homedir"
-	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	jaegerconfig "github.com/uber/jaeger-client-go/config"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 	majordomo "github.com/wealdtech/go-majordomo"
 	asmconfidant "github.com/wealdtech/go-majordomo/confidants/asm"
@@ -101,10 +97,15 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.6.4-dev"
+var ReleaseVersion = "1.7.0-dev"
 
 func main() {
-	os.Exit(main2())
+	exitCode := main2()
+	if exitCode != 0 {
+		// Exit immediately.
+		os.Exit(exitCode)
+	}
+	// Leave without an explicit exit; this allows cancelled contexts to tidy themselves up.
 }
 
 func main2() int {
@@ -139,13 +140,9 @@ func main2() int {
 		return 1
 	}
 
-	closer, err := initTracing()
-	if err != nil {
+	if err := initTracing(ctx, majordomo); err != nil {
 		log.Error().Err(err).Msg("Failed to initialise tracing")
 		return 1
-	}
-	if closer != nil {
-		defer closer.Close()
 	}
 
 	runtime.GOMAXPROCS(runtime.NumCPU() * 8)
@@ -166,25 +163,20 @@ func main2() int {
 	// Wait for signal.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	<-sigCh
+	// Received a signal to stop, but don't do so until we have finished attesting for this slot.
+	slot := chainTime.CurrentSlot()
+	first := true
 	for {
-		sig := <-sigCh
-		if sig == syscall.SIGINT || sig == syscall.SIGTERM || sig == os.Interrupt || sig == os.Kill {
-			// Received a signal to stop, but don't do so until we have finished attesting for this slot.
-			slot := chainTime.CurrentSlot()
-			first := true
-			for {
-				if !controller.HasPendingAttestations(ctx, slot) {
-					log.Info().Uint64("slot", uint64(slot)).Msg("Attestations complete; shutting down")
-					break
-				}
-				if first {
-					log.Info().Uint64("slot", uint64(slot)).Msg("Waiting for attestations to complete")
-					first = false
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
+		if !controller.HasPendingAttestations(ctx, slot) {
+			log.Info().Uint64("slot", uint64(slot)).Msg("Attestations complete; shutting down")
 			break
 		}
+		if first {
+			log.Info().Uint64("slot", uint64(slot)).Msg("Waiting for attestations to complete")
+			first = false
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	log.Info().Msg("Stopping vouch")
@@ -260,33 +252,6 @@ func fetchConfig() error {
 	}
 
 	return nil
-}
-
-// initTracing initialises the tracing system.
-func initTracing() (io.Closer, error) {
-	tracingAddress := viper.GetString("tracing-address")
-	if tracingAddress == "" {
-		return nil, nil
-	}
-	cfg := &jaegerconfig.Configuration{
-		ServiceName: "vouch",
-		Sampler: &jaegerconfig.SamplerConfig{
-			Type:  "probabilistic",
-			Param: 0.1,
-		},
-		Reporter: &jaegerconfig.ReporterConfig{
-			LogSpans:           true,
-			LocalAgentHostPort: tracingAddress,
-		},
-	}
-	tracer, closer, err := cfg.NewTracer(jaegerconfig.Logger(loggers.NewJaegerLogger(log)))
-	if err != nil {
-		return nil, err
-	}
-	if tracer != nil {
-		opentracing.SetGlobalTracer(tracer)
-	}
-	return closer, nil
 }
 
 // initProfiling initialises the profiling server.

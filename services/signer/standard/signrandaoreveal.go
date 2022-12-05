@@ -20,6 +20,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
 )
 
 // SignRANDAOReveal returns a RANDAO reveal signature.
@@ -31,6 +32,9 @@ func (s *Service) SignRANDAOReveal(ctx context.Context,
 	phase0.BLSSignature,
 	error,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignRANDAOReveal")
+	defer span.End()
+
 	var messageRoot phase0.Root
 	epoch := phase0.Epoch(slot / s.slotsPerEpoch)
 	binary.LittleEndian.PutUint64(messageRoot[:], uint64(epoch))

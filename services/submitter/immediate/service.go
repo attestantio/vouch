@@ -27,6 +27,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 )
 
 // Service is the submitter for signed items.
@@ -75,6 +76,9 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 
 // SubmitBeaconBlock submits a block.
 func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitBeaconBlock")
+	defer span.End()
+
 	if block == nil {
 		return errors.New("no beacon block supplied")
 	}
@@ -102,6 +106,9 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSi
 
 // SubmitAttestations submits multiple attestations.
 func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitAttestations")
+	defer span.End()
+
 	if len(attestations) == 0 {
 		return errors.New("no attestations supplied")
 	}
@@ -129,6 +136,9 @@ func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0
 
 // SubmitBeaconCommitteeSubscriptions submits a batch of beacon committee subscriptions.
 func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*apiv1.BeaconCommitteeSubscription) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitBeaconCommitteeSubscriptions")
+	defer span.End()
+
 	if len(subscriptions) == 0 {
 		return errors.New("no beacon committee subscriptions supplied")
 	}
@@ -164,6 +174,9 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 
 // SubmitAggregateAttestations submits aggregate attestations.
 func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []*phase0.SignedAggregateAndProof) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitAggregateAttestations")
+	defer span.End()
+
 	if len(aggregates) == 0 {
 		return errors.New("no aggregate attestations supplied")
 	}
@@ -191,6 +204,9 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []
 
 // SubmitProposalPreparations submits proposal preparations.
 func (s *Service) SubmitProposalPreparations(ctx context.Context, preparations []*apiv1.ProposalPreparation) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitProposalPreparations")
+	defer span.End()
+
 	if len(preparations) == 0 {
 		return errors.New("no proposal preparations supplied")
 	}
@@ -218,6 +234,9 @@ func (s *Service) SubmitProposalPreparations(ctx context.Context, preparations [
 
 // SubmitSyncCommitteeMessages submits sync committee messages.
 func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*altair.SyncCommitteeMessage) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitSyncCommitteeMessages")
+	defer span.End()
+
 	if len(messages) == 0 {
 		return errors.New("no sync committee messages supplied")
 	}
@@ -245,6 +264,9 @@ func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*a
 
 // SubmitSyncCommitteeSubscriptions submits a batch of beacon committee subscriptions.
 func (s *Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*apiv1.SyncCommitteeSubscription) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitSyncCommitteeSubscriptions")
+	defer span.End()
+
 	if len(subscriptions) == 0 {
 		return errors.New("no sync committee subscriptions supplied")
 	}
@@ -272,6 +294,9 @@ func (s *Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscrip
 
 // SubmitSyncCommitteeContributions submits sync committee contributions.
 func (s *Service) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitSyncCommitteeContributions")
+	defer span.End()
+
 	if len(contributionAndProofs) == 0 {
 		return errors.New("no sync committee contribution and proofs supplied")
 	}

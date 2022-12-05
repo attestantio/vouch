@@ -21,11 +21,15 @@ import (
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
 )
 
 // RefreshValidatorsFromBeaconNode refreshes the local store from the beacon node.
 // This is an expensive operation, and should not be called in the validating path.
 func (s *Service) RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys []phase0.BLSPubKey) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.validatorsmanager.standard").Start(ctx, "RefreshValidatorsFromBeaconNode")
+	defer span.End()
+
 	var validators map[phase0.ValidatorIndex]*api.Validator
 	var err error
 	started := time.Now()

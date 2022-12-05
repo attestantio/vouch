@@ -23,6 +23,9 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type beaconBlockResponse struct {
@@ -33,6 +36,11 @@ type beaconBlockResponse struct {
 
 // BeaconBlockProposal provides the best beacon block proposal from a number of beacon nodes.
 func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*spec.VersionedBeaconBlock, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.best").Start(ctx, "BeaconBlockProposal", trace.WithAttributes(
+		attribute.Int64("slot", int64(slot)),
+	))
+	defer span.End()
+
 	started := time.Now()
 	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(slot)).Logger()
 
@@ -147,6 +155,11 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 	randaoReveal phase0.BLSSignature,
 	graffiti []byte,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.best").Start(ctx, "beaconBlockProposal", trace.WithAttributes(
+		attribute.String("provider", name),
+	))
+	defer span.End()
+
 	proposal, err := provider.BeaconBlockProposal(ctx, slot, randaoReveal, graffiti)
 	s.clientMonitor.ClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
 	if err != nil {

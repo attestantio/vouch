@@ -33,6 +33,10 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // zeroExecutionAddress is used for comparison purposes.
@@ -50,7 +54,8 @@ func (s *Service) AuctionBlock(ctx context.Context,
 	*blockauctioneer.Results,
 	error,
 ) {
-	started := time.Now()
+	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "AuctionBlock")
+	defer span.End()
 
 	s.executionConfigMu.RLock()
 	proposerConfig, exists := s.executionConfig.ProposerConfigs[pubkey]
@@ -121,6 +126,8 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	*blockauctioneer.Results,
 	error,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "bestBuilderBid")
+	defer span.End()
 	started := time.Now()
 	log := util.LogWithID(ctx, log, "strategy_id").With().Str("operation", "builderbid").Uint64("slot", uint64(slot)).Str("pubkey", fmt.Sprintf("%#x", pubkey)).Logger()
 
@@ -235,7 +242,13 @@ func (s *Service) builderBid(ctx context.Context,
 	slot phase0.Slot,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
+	relay *beaconblockproposer.RelayConfig,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "builderBid", trace.WithAttributes(
+		attribute.String("relay", provider.Address()),
+	))
+	defer span.End()
+
 	log := log.With().Str("bidder", provider.Address()).Logger()
 	builderBid, err := provider.BuilderBid(ctx, slot, parentHash, pubkey)
 	if err != nil {
@@ -261,43 +274,66 @@ func (s *Service) builderBid(ctx context.Context,
 		errCh <- fmt.Errorf("%s: builder bid empty", provider.Address())
 		return
 	}
+
+	span.SetAttributes(
+		attribute.String("relay", provider.Address()),
+		// Has to be a string due to the potential size being >maxint64.
+		attribute.String("value", builderBid.Data.Message.Value.ToBig().String()),
+	)
+
+	if builderBid.Data.Message.Value.ToBig().Cmp(relay.MinValue.BigInt()) <= 0 {
+		// Return empty bid, not error.
+		log.Debug().Stringer("value", builderBid.Data.Message.Value.ToBig()).Stringer("min_relay_value", relay.MinValue.BigInt()).Msg("Value too small, not using this bid")
+		respCh <- &builderBidResponse{}
+		return
+	}
+
 	switch builderBid.Version {
 	case consensusspec.DataVersionBellatrix:
 		if builderBid.Data == nil {
+			span.SetStatus(codes.Error, "data missing")
 			errCh <- fmt.Errorf("%s: data missing", provider.Address())
 			return
 		}
 		if builderBid.Data.Message == nil {
+			span.SetStatus(codes.Error, "data message missing")
 			errCh <- fmt.Errorf("%s: data message missing", provider.Address())
 			return
 		}
 		if builderBid.Data.Message.Header == nil {
+			span.SetStatus(codes.Error, "data message header missing")
 			errCh <- fmt.Errorf("%s: data message header missing", provider.Address())
 			return
 		}
 		if bytes.Equal(builderBid.Data.Message.Header.FeeRecipient[:], zeroExecutionAddress[:]) {
+			span.SetStatus(codes.Error, "zero fee recipient")
 			errCh <- fmt.Errorf("%s: zero fee recipient", provider.Address())
 			return
 		}
 		if zeroValue.Cmp(builderBid.Data.Message.Value) == 0 {
+			span.SetStatus(codes.Error, "zero value")
 			errCh <- fmt.Errorf("%s: zero value", provider.Address())
 			return
 		}
 		if uint64(s.chainTime.StartOfSlot(slot).Unix()) != builderBid.Data.Message.Header.Timestamp {
+			span.SetStatus(codes.Error, "incorrect timestamp")
 			errCh <- fmt.Errorf("%s: provided timestamp %d for slot %d not expected value of %d", provider.Address(), builderBid.Data.Message.Header.Timestamp, slot, s.chainTime.StartOfSlot(slot).Unix())
 			return
 		}
 		verified, err := s.verifyBidSignature(ctx, builderBid, provider)
 		if err != nil {
+			span.SetStatus(codes.Error, "invalid bid signature")
 			errCh <- errors.Wrap(err, "error verifying bid signature")
 			return
 		}
 		if !verified {
+			span.SetStatus(codes.Error, "incorrect bid signature")
 			log.Warn().Msg("Failed to verify bid signature")
 			errCh <- fmt.Errorf("%s: invalid signature", provider.Address())
 			return
 		}
 	default:
+		span.SetStatus(codes.Error, "unhandled builder bid data version")
 		errCh <- fmt.Errorf("%s: unhandled builder bid data version %v", provider.Address(), builderBid.Version)
 	}
 

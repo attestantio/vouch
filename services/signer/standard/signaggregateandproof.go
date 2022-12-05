@@ -19,6 +19,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
 )
 
 // SignAggregateAndProof signs an aggregate and proof item.
@@ -30,6 +31,9 @@ func (s *Service) SignAggregateAndProof(ctx context.Context,
 	phase0.BLSSignature,
 	error,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignAggregateAndProof")
+	defer span.End()
+
 	// Fetch the domain.
 	domain, err := s.domainProvider.Domain(ctx,
 		s.aggregateAndProofDomainType,

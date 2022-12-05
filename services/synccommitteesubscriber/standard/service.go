@@ -24,6 +24,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 )
 
 // Service is an beacon committee subscriber.
@@ -61,6 +62,9 @@ func (s *Service) Subscribe(ctx context.Context,
 	endEpoch phase0.Epoch,
 	duties []*api.SyncCommitteeDuty,
 ) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.synccommitteesubscriber.standard").Start(ctx, "Subscribe")
+	defer span.End()
+
 	if len(duties) == 0 {
 		// Nothing to do.
 		return nil

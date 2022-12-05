@@ -31,9 +31,12 @@ import (
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
-// auctionResult provides informaiton on the result of an auction process.
+// auctionResult provides information on the result of an auction process.
 type auctionResult int
 
 const (
@@ -45,6 +48,8 @@ const (
 
 // Propose proposes a block.
 func (s *Service) Propose(ctx context.Context, data interface{}) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "Propose")
+	defer span.End()
 	started := time.Now()
 
 	duty, ok := data.(*beaconblockproposer.Duty)
@@ -58,6 +63,7 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 		s.monitor.BeaconBlockProposalCompleted(started, 0, "failed")
 		return
 	}
+	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))
 	log := log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Proposing")
 
@@ -114,6 +120,9 @@ func (s *Service) proposeBlock(ctx context.Context,
 	duty *beaconblockproposer.Duty,
 	graffiti []byte,
 ) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "proposeBlock")
+	defer span.End()
+
 	if s.blockAuctioneer != nil {
 		// There is a block auctioneer specified, try to propose the block with auction.
 		result := s.proposeBlockWithAuction(ctx, started, duty, graffiti)
@@ -145,6 +154,9 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 	duty *beaconblockproposer.Duty,
 	graffiti []byte,
 ) auctionResult {
+	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "proposeBlockWithAuction")
+	defer span.End()
+
 	log := log.With().Uint64("slot", uint64(duty.Slot())).Logger()
 
 	pubkey := phase0.BLSPubKey{}
@@ -281,7 +293,11 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		}
 
 		// Unblind the blinded block.
+		ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "UnblindBlock", trace.WithAttributes(
+			attribute.String("relay", unblindedBlockProvider.Address()),
+		))
 		signedBlock, err = unblindedBlockProvider.UnblindBlock(ctx, signedBlindedBlock)
+		span.End()
 		if err != nil {
 			log.Debug().Err(err).Int("retries", retries).Msg("Failed to unblind block")
 			time.Sleep(retryInterval)
@@ -315,6 +331,9 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 	duty *beaconblockproposer.Duty,
 	graffiti []byte,
 ) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "proposeBlockWithoutAuction")
+	defer span.End()
+
 	proposal, err := s.proposalProvider.BeaconBlockProposal(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti)
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain proposal data")

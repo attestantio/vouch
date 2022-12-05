@@ -21,6 +21,9 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type aggregateAttestationResponse struct {
@@ -31,6 +34,11 @@ type aggregateAttestationResponse struct {
 
 // AggregateAttestation provides the aggregate attestation from a number of beacon nodes.
 func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, attestationDataRoot phase0.Root) (*phase0.Attestation, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.aggregateattestation.best").Start(ctx, "AggregateAttestation", trace.WithAttributes(
+		attribute.Int64("slot", int64(slot)),
+	))
+	defer span.End()
+
 	started := time.Now()
 	log := util.LogWithID(ctx, log, "strategy_id")
 
@@ -129,6 +137,11 @@ func (s *Service) aggregateAttestation(ctx context.Context,
 	slot phase0.Slot,
 	attestationDataRoot phase0.Root,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.aggregateattestation.best").Start(ctx, "aggregateAttestation", trace.WithAttributes(
+		attribute.String("provider", name),
+	))
+	defer span.End()
+
 	aggregate, err := provider.AggregateAttestation(ctx, slot, attestationDataRoot)
 	s.clientMonitor.ClientOperation(name, "aggregate attestation", err == nil, time.Since(started))
 	if err != nil {

@@ -33,6 +33,9 @@ import (
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func (s *Service) submitValidatorRegistrationsRuntime(_ context.Context,
@@ -61,6 +64,8 @@ func (s *Service) SubmitValidatorRegistrations(ctx context.Context,
 func (s *Service) submitValidatorRegistrations(ctx context.Context,
 	_ interface{},
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "submitValidatorRegistrations")
+	defer span.End()
 	started := time.Now()
 
 	epoch := s.chainTime.CurrentEpoch()

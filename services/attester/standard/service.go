@@ -33,6 +33,9 @@ import (
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Service is a beacon block attester.
@@ -89,6 +92,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 // Attest carries out attestations for a slot.
 // It returns a map of attestations made, keyed on the validator index.
 func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attestation, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.attester.standard").Start(ctx, "Attest")
+	defer span.End()
 	started := time.Now()
 
 	duty, ok := data.(*attester.Duty)
@@ -96,6 +101,7 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 		s.monitor.AttestationsCompleted(started, 0, len(duty.ValidatorIndices()), "failed")
 		return nil, errors.New("passed invalid data structure")
 	}
+	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))
 
 	// Ensure that we have an attested map for this epoch.
 	epoch := s.chainTimeService.SlotToEpoch(duty.Slot())
@@ -217,6 +223,10 @@ func (s *Service) attest(
 	data *phase0.AttestationData,
 	started time.Time,
 ) ([]*phase0.Attestation, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.attester.standard").Start(ctx, "attest", trace.WithAttributes(
+		attribute.Int64("slot", int64(duty.Slot())),
+	))
+	defer span.End()
 
 	// Sign the attestation for all validating accounts.
 	uintCommitteeIndices := make([]uint64, len(committeeIndices))

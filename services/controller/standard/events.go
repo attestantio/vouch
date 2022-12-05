@@ -21,15 +21,20 @@ import (
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // HandleHeadEvent handles the "head" events from the beacon node.
 func (s *Service) HandleHeadEvent(event *api.Event) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(context.Background(), "HandleHeadEvent")
+	defer span.End()
+
 	if event.Data == nil {
 		return
 	}
 
-	ctx := context.Background()
 	var zeroRoot phase0.Root
 
 	data := event.Data.(*api.HeadEvent)
@@ -151,6 +156,11 @@ func (s *Service) handleCurrentDependentRootChanged(ctx context.Context) {
 }
 
 func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "refreshProposerDutiesForEpoch", trace.WithAttributes(
+		attribute.Int64("epoch", int64(epoch)),
+	))
+	defer span.End()
+
 	// First thing we do is cancel all scheduled beacon bock proposal jobs for the epoch.
 	for slot := s.chainTimeService.FirstSlotOfEpoch(epoch); slot < s.chainTimeService.FirstSlotOfEpoch(epoch+1); slot++ {
 		s.scheduler.CancelJobIfExists(ctx, fmt.Sprintf("Early beacon block proposal for slot %d", slot))
@@ -173,6 +183,11 @@ func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch phase
 }
 
 func (s *Service) refreshAttesterDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "refreshAttesterDutiesForEpoch", trace.WithAttributes(
+		attribute.Int64("epoch", int64(epoch)),
+	))
+	defer span.End()
+
 	// If the epoch duties are yet to be scheduled then we don't have anything to do.
 	if s.scheduler.JobExists(ctx, fmt.Sprintf("Prepare for epoch %d", epoch)) {
 		log.Trace().Msg("Refresh not necessary as epoch not yet prepared")
@@ -218,6 +233,11 @@ func (s *Service) refreshAttesterDutiesForEpoch(ctx context.Context, epoch phase
 // refreshSyncCommitteeDutiesForEpochPeriod refreshes sync committee duties for all epochs in the
 // given sync period.
 func (s *Service) refreshSyncCommitteeDutiesForEpochPeriod(ctx context.Context, epoch phase0.Epoch) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "refreshSyncCommitteeDutiesForEpochPeriod", trace.WithAttributes(
+		attribute.Int64("epoch", int64(epoch)),
+	))
+	defer span.End()
+
 	if !s.handlingAltair {
 		// Not handling Altair, nothing to do.
 		return

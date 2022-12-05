@@ -24,6 +24,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Service is the provider for beacon block proposals.
@@ -60,6 +63,11 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 
 // BlindedBeaconBlockProposal provides the first blinded beacon block proposal from a number of beacon nodes.
 func (s *Service) BlindedBeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*api.VersionedBlindedBeaconBlock, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.blindedbeaconblockproposal.first").Start(ctx, "BlindedBeaconBlockProposal", trace.WithAttributes(
+		attribute.Int64("slot", int64(slot)),
+	))
+	defer span.End()
+
 	// We create a cancelable context with a timeout.  As soon as the first provider has responded we
 	// cancel the context to cancel the other requests.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
