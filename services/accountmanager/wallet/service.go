@@ -152,9 +152,8 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 				wallets[wallet.Name()] = wallet
 				found = true
 				break
-			} else {
-				log.Trace().Str("store", store.Name()).Str("wallet", pathBits[0]).Err(err).Msg("Failed to find wallet in store")
 			}
+			log.Trace().Str("store", store.Name()).Str("wallet", pathBits[0]).Err(err).Msg("Failed to find wallet in store")
 		}
 		if !found {
 			log.Warn().Str("wallet", pathBits[0]).Msg("Failed to find wallet in any store")
