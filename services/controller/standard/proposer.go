@@ -20,6 +20,8 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // scheduleProposals schedules proposals for the given epoch and validator indices.
@@ -112,11 +114,15 @@ func (s *Service) scheduleProposals(ctx context.Context,
 // proposeEarly attempts to propose as soon as the slot starts, as long
 // as the head of the chain is up-to-date.
 func (s *Service) proposeEarly(ctx context.Context, data interface{}) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "proposeEarly")
+	defer span.End()
+
 	duty, ok := data.(*beaconblockproposer.Duty)
 	if !ok {
 		log.Error().Msg("Invalid duty data for proposal")
 		return
 	}
+	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))
 
 	// Start off by fetching the current head.
 	header, err := s.beaconBlockHeadersProvider.BeaconBlockHeader(ctx, "head")

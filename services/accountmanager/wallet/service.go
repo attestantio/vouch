@@ -33,6 +33,9 @@ import (
 	e2wallet "github.com/wealdtech/go-eth2-wallet"
 	filesystem "github.com/wealdtech/go-eth2-wallet-store-filesystem"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -118,6 +121,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 // the validators provider.
 // This is a relatively expensive operation, so should not be run in the validating path.
 func (s *Service) Refresh(ctx context.Context) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, "Refresh")
+	defer span.End()
+
 	if err := s.refreshAccounts(ctx); err != nil {
 		log.Error().Err(err).Msg("Failed to refresh accounts")
 	}
@@ -128,6 +134,9 @@ func (s *Service) Refresh(ctx context.Context) {
 
 // refreshAccounts refreshes the accounts from local store.
 func (s *Service) refreshAccounts(ctx context.Context) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, "refreshAccounts")
+	defer span.End()
+
 	// Find the relevant wallets.
 	wallets := make(map[string]e2wtypes.Wallet)
 	for _, path := range s.accountPaths {
@@ -143,9 +152,8 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 				wallets[wallet.Name()] = wallet
 				found = true
 				break
-			} else {
-				log.Trace().Str("store", store.Name()).Str("wallet", pathBits[0]).Err(err).Msg("Failed to find wallet in store")
 			}
+			log.Trace().Str("store", store.Name()).Str("wallet", pathBits[0]).Err(err).Msg("Failed to find wallet in store")
 		}
 		if !found {
 			log.Warn().Str("wallet", pathBits[0]).Msg("Failed to find wallet in any store")
@@ -176,6 +184,9 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 
 // refreshValidators refreshes the validator information for our known accounts.
 func (s *Service) refreshValidators(ctx context.Context) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, "refreshValidators")
+	defer span.End()
+
 	accountPubKeys := make([]phase0.BLSPubKey, 0, len(s.accounts))
 	for pubKey := range s.accounts {
 		accountPubKeys = append(accountPubKeys, pubKey)
@@ -188,6 +199,11 @@ func (s *Service) refreshValidators(ctx context.Context) error {
 
 // ValidatingAccountsForEpoch obtains the validating accounts for a given epoch.
 func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, "ValidatingAccountsForEpoch", trace.WithAttributes(
+		attribute.Int64("epoch", int64(epoch)),
+	))
+	defer span.End()
+
 	// stateCount is used to update metrics.
 	stateCount := map[api.ValidatorState]uint64{
 		api.ValidatorStateUnknown:            0,
@@ -237,6 +253,11 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 
 // ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
 func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch phase0.Epoch, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, "ValidatingAccountsForEpochByIndex", trace.WithAttributes(
+		attribute.Int64("epoch", int64(epoch)),
+	))
+	defer span.End()
+
 	validatingAccounts := make(map[phase0.ValidatorIndex]e2wtypes.Account)
 	pubKeys := make([]phase0.BLSPubKey, 0, len(s.accounts))
 	for pubKey := range s.accounts {
@@ -292,6 +313,11 @@ func accountPathsToVerificationRegexes(paths []string) []*regexp.Regexp {
 }
 
 func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wallet, accounts map[phase0.BLSPubKey]e2wtypes.Account, verificationRegexes []*regexp.Regexp) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, "fetchAccountsForWallet", trace.WithAttributes(
+		attribute.String("wallet", wallet.Name()),
+	))
+	defer span.End()
+
 	var mu sync.Mutex
 	sem := semaphore.NewWeighted(s.processConcurrency)
 	var wg sync.WaitGroup

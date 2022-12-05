@@ -21,10 +21,18 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // AggregateAttestation provides the aggregate attestation from a number of beacon nodes.
 func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, attestationDataRoot phase0.Root) (*phase0.Attestation, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.aggregateattestation.first").Start(ctx, "AggregateAttestation", trace.WithAttributes(
+		attribute.Int64("slot", int64(slot)),
+	))
+	defer span.End()
+
 	started := time.Now()
 	log := util.LogWithID(ctx, log, "strategy_id")
 
@@ -42,14 +50,14 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 			aggregate, err := provider.AggregateAttestation(ctx, slot, attestationDataRoot)
 			s.clientMonitor.ClientOperation(name, "aggregate attestation", err == nil, time.Since(started))
 			if err != nil {
-				log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain aggregate attestation")
+				log.Warn().Err(err).Msg("Failed to obtain aggregate attestation")
 				return
 			}
 			if aggregate == nil {
-				log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Returned empty aggregate attestation")
+				log.Warn().Msg("Returned empty aggregate attestation")
 				return
 			}
-			log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained aggregate attestation")
+			log.Trace().Str("provider", name).Msg("Obtained aggregate attestation")
 
 			ch <- aggregate
 		}(ctx, name, provider, respCh)

@@ -18,9 +18,11 @@ import (
 	"fmt"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // SignBeaconAttestations signs multiple beacon attestations.
@@ -37,8 +39,10 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 	[]phase0.BLSSignature,
 	error,
 ) {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "signer.SignBeaconAttestations")
-	defer span.Finish()
+	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignBeaconAttestations", trace.WithAttributes(
+		attribute.Int("validators", len(accounts)),
+	))
+	defer span.End()
 
 	if len(accounts) == 0 {
 		return nil, errors.New("no accounts supplied")

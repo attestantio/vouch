@@ -19,6 +19,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
 )
 
 // SignBeaconAttestation signs a beacon attestation item.
@@ -35,6 +36,9 @@ func (s *Service) SignBeaconAttestation(ctx context.Context,
 	phase0.BLSSignature,
 	error,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignBeaconAttestation")
+	defer span.End()
+
 	domain, err := s.domainProvider.Domain(ctx,
 		s.beaconAttesterDomainType,
 		phase0.Epoch(slot/s.slotsPerEpoch))

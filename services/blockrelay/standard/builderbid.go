@@ -22,10 +22,11 @@ import (
 	"github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
 )
 
 // BuilderBid provides a builder bid.
-func (s *Service) BuilderBid(_ context.Context,
+func (s *Service) BuilderBid(ctx context.Context,
 	slot phase0.Slot,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
@@ -33,6 +34,9 @@ func (s *Service) BuilderBid(_ context.Context,
 	*spec.VersionedSignedBuilderBid,
 	error,
 ) {
+	_, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "BuilderBid")
+	defer span.End()
+
 	started := time.Now()
 
 	log.Trace().Uint64("slot", uint64(slot)).Str("parent_hash", fmt.Sprintf("%#x", parentHash)).Str("pubkey", fmt.Sprintf("%#x", pubkey)).Msg("Builder bid called")

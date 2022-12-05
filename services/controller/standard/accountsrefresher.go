@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
 )
 
 // startAccountsRefresher starts a periodic job that refreshes the accounts known by Vouch.
@@ -52,6 +53,8 @@ func (s *Service) startAccountsRefresher(ctx context.Context) error {
 
 // refreshAccounts refreshes accounts.
 func (s *Service) refreshAccounts(ctx context.Context, _ interface{}) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "refreshAccounts")
+	defer span.End()
 	started := time.Now()
 	s.accountsRefresher.Refresh(ctx)
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Refreshed accounts")

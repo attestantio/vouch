@@ -20,6 +20,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
 )
 
 // SignSlotSelection returns a slot selection signature.
@@ -31,6 +32,9 @@ func (s *Service) SignSlotSelection(ctx context.Context,
 	phase0.BLSSignature,
 	error,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignSlotSelection")
+	defer span.End()
+
 	var messageRoot phase0.Root
 	binary.LittleEndian.PutUint64(messageRoot[:], uint64(slot))
 

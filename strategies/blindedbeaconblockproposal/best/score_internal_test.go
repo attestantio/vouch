@@ -520,7 +520,7 @@ func TestScore(t *testing.T) {
 				WithSpecProvider(specProvider),
 				WithProcessConcurrency(6),
 				WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
-					"one": mock.NewBlindedBeaconBlockProposalProvider(),
+					"one": mock.NewBlindedBeaconBlockProposalProvider(chainTime),
 				}),
 				WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				WithBlockRootToSlotCache(blockToSlotCache),

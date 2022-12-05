@@ -32,6 +32,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // Service is a beacon block proposer.
@@ -85,6 +87,8 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 // Prepare prepares for a beacon block proposal, carrying out activities that
 // can be undertaken before the time the proposal is required.
 func (s *Service) Prepare(ctx context.Context, data interface{}) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "Prepare")
+	defer span.End()
 	started := time.Now()
 
 	duty, ok := data.(*beaconblockproposer.Duty)
@@ -94,6 +98,7 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 	if duty == nil {
 		return errors.New("passed nil data structure")
 	}
+	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))
 
 	log := log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Preparing")

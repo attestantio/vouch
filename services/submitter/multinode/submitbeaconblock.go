@@ -21,11 +21,19 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 )
 
 // SubmitBeaconBlock submits a beacon block.
 func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error {
+	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "SubmitBeaconBlock", trace.WithAttributes(
+		attribute.String("strategy", "multinode"),
+	))
+	defer span.End()
+
 	if block == nil {
 		return errors.New("no beacon block supplied")
 	}
@@ -58,6 +66,11 @@ func (s *Service) submitBeaconBlock(ctx context.Context,
 	block *spec.VersionedSignedBeaconBlock,
 	submitter eth2client.BeaconBlockSubmitter,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "submitBeaconBlock", trace.WithAttributes(
+		attribute.String("server", name),
+	))
+	defer span.End()
+
 	slot, err := block.Slot()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain slot")

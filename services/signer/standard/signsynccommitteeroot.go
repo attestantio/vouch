@@ -19,6 +19,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
 )
 
 // SignSyncCommitteeRoot returns a root signature.
@@ -31,6 +32,9 @@ func (s *Service) SignSyncCommitteeRoot(ctx context.Context,
 	phase0.BLSSignature,
 	error,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignSyncCommitteeRoot")
+	defer span.End()
+
 	if s.syncCommitteeDomainType == nil {
 		return phase0.BLSSignature{}, errors.New("no sync committee domain type available; cannot sign")
 	}

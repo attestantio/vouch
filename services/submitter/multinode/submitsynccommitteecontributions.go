@@ -23,11 +23,19 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 )
 
 // SubmitSyncCommitteeContributions submits sync committee contributions.
 func (s *Service) SubmitSyncCommitteeContributions(ctx context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.multinode").Start(ctx, "SubmitSyncCommitteeContributions", trace.WithAttributes(
+		attribute.String("strategy", "multinode"),
+	))
+	defer span.End()
+
 	if len(contributionAndProofs) == 0 {
 		return errors.New("no sync committee contribution and proofs supplied")
 	}

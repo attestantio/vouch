@@ -33,7 +33,7 @@ import (
 func TestBlindedBeaconBlockProposal(t *testing.T) {
 	ctx := context.Background()
 
-	genesisTime := time.Now()
+	genesisTime := time.Unix(1669161600, 0)
 	slotDuration := 12 * time.Second
 	slotsPerEpoch := uint64(32)
 	genesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
@@ -70,7 +70,7 @@ func TestBlindedBeaconBlockProposal(t *testing.T) {
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
-					"good": mock.NewBlindedBeaconBlockProposalProvider(),
+					"good": mock.NewBlindedBeaconBlockProposalProvider(chainTime),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -88,7 +88,7 @@ func TestBlindedBeaconBlockProposal(t *testing.T) {
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
-					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(5*time.Second, mock.NewBlindedBeaconBlockProposalProvider()),
+					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(5*time.Second, mock.NewBlindedBeaconBlockProposalProvider(chainTime)),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -127,7 +127,7 @@ func TestBlindedBeaconBlockProposal(t *testing.T) {
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
 					"error":  mock.NewErroringBlindedBeaconBlockProposalProvider(),
-					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(time.Second, mock.NewBlindedBeaconBlockProposalProvider()),
+					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(time.Second, mock.NewBlindedBeaconBlockProposalProvider(chainTime)),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -145,8 +145,8 @@ func TestBlindedBeaconBlockProposal(t *testing.T) {
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
-					"good":   mock.NewBlindedBeaconBlockProposalProvider(),
-					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(2*time.Second, mock.NewBlindedBeaconBlockProposalProvider()),
+					"good":   mock.NewBlindedBeaconBlockProposalProvider(chainTime),
+					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(2*time.Second, mock.NewBlindedBeaconBlockProposalProvider(chainTime)),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -165,7 +165,7 @@ func TestBlindedBeaconBlockProposal(t *testing.T) {
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
-					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(2*time.Second, mock.NewBlindedBeaconBlockProposalProvider()),
+					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(2*time.Second, mock.NewBlindedBeaconBlockProposalProvider(chainTime)),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -185,7 +185,7 @@ func TestBlindedBeaconBlockProposal(t *testing.T) {
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 				best.WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
 					"error":  mock.NewErroringBlindedBeaconBlockProposalProvider(),
-					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(2*time.Second, mock.NewBlindedBeaconBlockProposalProvider()),
+					"sleepy": mock.NewSleepyBlindedBeaconBlockProposalProvider(2*time.Second, mock.NewBlindedBeaconBlockProposalProvider(chainTime)),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},

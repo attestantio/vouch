@@ -25,6 +25,7 @@ import (
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
 	"github.com/wealdtech/go-majordomo"
+	"go.opentelemetry.io/otel"
 )
 
 // Service is a graffiti provider service.
@@ -50,6 +51,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Random seed for line selection in multi-line graaffiti input.
+	// skipcq: GO-S1033
 	rand.Seed(time.Now().UnixNano())
 
 	s := &Service{
@@ -62,6 +64,9 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 
 // Graffiti provides graffiti.
 func (s *Service) Graffiti(ctx context.Context, slot phase0.Slot, validatorIndex phase0.ValidatorIndex) ([]byte, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.graffitiprovider.dyamic").Start(ctx, "Graffiti")
+	defer span.End()
+
 	// Replace location parameters with values.
 	location := strings.ReplaceAll(s.location, "{{SLOT}}", fmt.Sprintf("%d", slot))
 	location = strings.ReplaceAll(location, "{{VALIDATORINDEX}}", fmt.Sprintf("%d", validatorIndex))

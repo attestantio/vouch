@@ -22,6 +22,9 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type syncCommitteeContributionResponse struct {
@@ -32,6 +35,11 @@ type syncCommitteeContributionResponse struct {
 
 // SyncCommitteeContribution provides the sync committee contribution from a number of beacon nodes.
 func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slot, subcommitteeIndex uint64, beaconBlockRoot phase0.Root) (*altair.SyncCommitteeContribution, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.synccommitteecontribution.best").Start(ctx, "SyncCommitteeContribution", trace.WithAttributes(
+		attribute.Int64("slot", int64(slot)),
+	))
+	defer span.End()
+
 	started := time.Now()
 	log := util.LogWithID(ctx, log, "strategy_id")
 
@@ -132,6 +140,11 @@ func (s *Service) syncCommitteeContribution(ctx context.Context,
 	subcommitteeIndex uint64,
 	beaconBlockRoot phase0.Root,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.synccommitteecontribution.best").Start(ctx, "syncCommitteeContribution", trace.WithAttributes(
+		attribute.String("provider", name),
+	))
+	defer span.End()
+
 	contribution, err := provider.SyncCommitteeContribution(ctx, slot, subcommitteeIndex, beaconBlockRoot)
 	s.clientMonitor.ClientOperation(name, "sync committee contribution", err == nil, time.Since(started))
 	if err != nil {

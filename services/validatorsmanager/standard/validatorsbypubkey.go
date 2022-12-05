@@ -17,10 +17,14 @@ import (
 	"context"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"go.opentelemetry.io/otel"
 )
 
 // ValidatorsByPubKey fetches the requested validators from local store given their public keys.
-func (s *Service) ValidatorsByPubKey(_ context.Context, pubKeys []phase0.BLSPubKey) map[phase0.ValidatorIndex]*phase0.Validator {
+func (s *Service) ValidatorsByPubKey(ctx context.Context, pubKeys []phase0.BLSPubKey) map[phase0.ValidatorIndex]*phase0.Validator {
+	_, span := otel.Tracer("attestantio.vouch.services.validatorsmanager.standard").Start(ctx, "ValidatorsByPubKey")
+	defer span.End()
+
 	res := make(map[phase0.ValidatorIndex]*phase0.Validator)
 	s.validatorsMutex.RLock()
 	for _, pubKey := range pubKeys {

@@ -17,10 +17,14 @@ import (
 	"context"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"go.opentelemetry.io/otel"
 )
 
 // ValidatorsByIndex fetches the requested validators from local store given their indices.
-func (s *Service) ValidatorsByIndex(_ context.Context, indices []phase0.ValidatorIndex) map[phase0.ValidatorIndex]*phase0.Validator {
+func (s *Service) ValidatorsByIndex(ctx context.Context, indices []phase0.ValidatorIndex) map[phase0.ValidatorIndex]*phase0.Validator {
+	_, span := otel.Tracer("attestantio.vouch.services.validatorsmanager.standard").Start(ctx, "ValidatorsByIndex")
+	defer span.End()
+
 	res := make(map[phase0.ValidatorIndex]*phase0.Validator)
 	s.validatorsMutex.RLock()
 	for _, index := range indices {

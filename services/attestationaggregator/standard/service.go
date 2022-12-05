@@ -30,6 +30,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 )
 
 // Service is an attestation aggregator.
@@ -85,6 +86,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 // Aggregate aggregates the attestations for a given slot/committee combination.
 func (s *Service) Aggregate(ctx context.Context, data interface{}) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.attestationaggregator.standard").Start(ctx, "Aggregate")
+	defer span.End()
 	started := time.Now()
 
 	duty, ok := data.(*attestationaggregator.Duty)
@@ -169,6 +172,9 @@ func (s *Service) IsAggregator(ctx context.Context,
 	slot phase0.Slot,
 	committeeSize uint64,
 ) (bool, phase0.BLSSignature, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.attestationaggregator.standard").Start(ctx, "IsAggregator")
+	defer span.End()
+
 	modulo := committeeSize / s.targetAggregatorsPerCommittee
 	if modulo == 0 {
 		// Modulo must be at least 1.

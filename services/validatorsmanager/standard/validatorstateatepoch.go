@@ -19,10 +19,14 @@ import (
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
 )
 
 // ValidatorStateAtEpoch returns the validator's state at the given epoch.
-func (s *Service) ValidatorStateAtEpoch(_ context.Context, index phase0.ValidatorIndex, epoch phase0.Epoch) (api.ValidatorState, error) {
+func (s *Service) ValidatorStateAtEpoch(ctx context.Context, index phase0.ValidatorIndex, epoch phase0.Epoch) (api.ValidatorState, error) {
+	_, span := otel.Tracer("attestantio.vouch.services.validatorsmanager.standard").Start(ctx, "ValidatorStateAtEpoch")
+	defer span.End()
+
 	s.validatorsMutex.RLock()
 	validator, exists := s.validatorsByIndex[index]
 	s.validatorsMutex.RUnlock()

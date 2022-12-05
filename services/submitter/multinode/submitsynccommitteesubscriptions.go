@@ -21,11 +21,19 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 )
 
 // SubmitSyncCommitteeSubscriptions submits a batch of sync committee subscriptions.
 func (s *Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*api.SyncCommitteeSubscription) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.multinode").Start(ctx, "SubmitSyncCommitteeSubscriptions", trace.WithAttributes(
+		attribute.String("strategy", "multinode"),
+	))
+	defer span.End()
+
 	if len(subscriptions) == 0 {
 		return errors.New("no sync committee subscriptions supplied")
 	}

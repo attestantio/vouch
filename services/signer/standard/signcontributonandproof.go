@@ -20,6 +20,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
 )
 
 // SignContributionAndProof signs a sync committee contribution for given slot and root.
@@ -30,6 +31,9 @@ func (s *Service) SignContributionAndProof(ctx context.Context,
 	phase0.BLSSignature,
 	error,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignContributionAndProof")
+	defer span.End()
+
 	if s.contributionAndProofDomainType == nil {
 		return phase0.BLSSignature{}, errors.New("no contribution and proof domain type available; cannot sign")
 	}

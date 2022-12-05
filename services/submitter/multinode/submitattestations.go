@@ -23,11 +23,19 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 )
 
 // SubmitAttestations submits a batch of attestations.
 func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error {
+	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "SubmitAttestations", trace.WithAttributes(
+		attribute.String("strategy", "multinode"),
+	))
+	defer span.End()
+
 	if len(attestations) == 0 {
 		return errors.New("no attestations supplied")
 	}
@@ -60,6 +68,11 @@ func (s *Service) submitAttestations(ctx context.Context,
 	attestations []*phase0.Attestation,
 	submitter eth2client.AttestationsSubmitter,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "submitAttestations", trace.WithAttributes(
+		attribute.String("server", name),
+	))
+	defer span.End()
+
 	log := log.With().Str("beacon_node_address", name).Uint64("slot", uint64(attestations[0].Data.Slot)).Logger()
 	if err := sem.Acquire(ctx, 1); err != nil {
 		log.Error().Err(err).Msg("Failed to acquire semaphore")

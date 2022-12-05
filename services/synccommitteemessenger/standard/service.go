@@ -35,6 +35,7 @@ import (
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -117,6 +118,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 // Prepare prepares in advance of a sync committee message.
 func (s *Service) Prepare(ctx context.Context, data interface{}) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.synccommitteemessenger.standard").Start(ctx, "Prepare")
+	defer span.End()
 	started := time.Now()
 
 	duty, ok := data.(*synccommitteemessenger.Duty)
@@ -149,6 +152,8 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 // Message generates and broadcasts sync committee messages for a slot.
 // It returns a list of messages made.
 func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.SyncCommitteeMessage, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.synccommitteemessenger.standard").Start(ctx, "Message")
+	defer span.End()
 	started := time.Now()
 
 	duty, ok := data.(*synccommitteemessenger.Duty)
@@ -226,6 +231,8 @@ func (s *Service) contribute(ctx context.Context,
 	phase0.BLSSignature,
 	error,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.synccommitteemessenger.standard").Start(ctx, "contribute")
+	defer span.End()
 	sig, err := s.syncCommitteeRootSigner.SignSyncCommitteeRoot(ctx, account, epoch, root)
 	if err != nil {
 		return phase0.BLSSignature{}, err

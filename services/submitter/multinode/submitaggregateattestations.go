@@ -21,11 +21,19 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 )
 
 // SubmitAggregateAttestations submits aggregate attestations.
 func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []*phase0.SignedAggregateAndProof) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.multinode").Start(ctx, "SubmitAggregateAttestations", trace.WithAttributes(
+		attribute.String("strategy", "multinode"),
+	))
+	defer span.End()
+
 	if len(aggregates) == 0 {
 		return errors.New("no aggregate attestations supplied")
 	}

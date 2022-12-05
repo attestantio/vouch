@@ -18,6 +18,9 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // startProposalsPreparer starts a periodic job to prepare proposal information.
@@ -47,6 +50,11 @@ func (s *Service) startProposalsPreparer(ctx context.Context) error {
 
 // prepareProposals prepares validator information for potential proposals.
 func (s *Service) prepareProposals(ctx context.Context, _ interface{}) {
+	_, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "prepareProposals", trace.WithAttributes(
+		attribute.Int64("epoch", int64(s.chainTimeService.CurrentEpoch())),
+	))
+	defer span.End()
+
 	started := time.Now()
 
 	if s.chainTimeService.CurrentEpoch() < s.bellatrixForkEpoch {

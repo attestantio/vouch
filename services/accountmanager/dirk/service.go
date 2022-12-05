@@ -36,6 +36,9 @@ import (
 	"github.com/wealdtech/go-bytesutil"
 	dirk "github.com/wealdtech/go-eth2-wallet-dirk"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/credentials"
 )
@@ -136,6 +139,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 // the validators provider.
 // This is a relatively expensive operation, so should not be run in the validating path.
 func (s *Service) Refresh(ctx context.Context) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "Refresh")
+	defer span.End()
+
 	if err := s.refreshAccounts(ctx); err != nil {
 		log.Error().Err(err).Msg("Failed to refresh accounts")
 	}
@@ -153,6 +159,9 @@ func (s *Service) Refresh(ctx context.Context) {
 
 // refreshAccounts refreshes the accounts from Dirk.
 func (s *Service) refreshAccounts(ctx context.Context) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "refreshAccounts")
+	defer span.End()
+
 	// Create the relevant wallets.
 	wallets := make([]e2wtypes.Wallet, 0, len(s.accountPaths))
 	pathsByWallet := make(map[string][]string)
@@ -237,6 +246,9 @@ func (s *Service) openWallet(ctx context.Context, name string) (e2wtypes.Wallet,
 
 // refreshValidators refreshes the validator information for our known accounts.
 func (s *Service) refreshValidators(ctx context.Context) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "refreshValidators")
+	defer span.End()
+
 	s.mutex.RLock()
 	accountPubKeys := make([]phase0.BLSPubKey, 0, len(s.accounts))
 	for pubKey := range s.accounts {
@@ -251,7 +263,10 @@ func (s *Service) refreshValidators(ctx context.Context) error {
 	return nil
 }
 
-func credentialsFromCerts(_ context.Context, clientCert []byte, clientKey []byte, caCert []byte) (credentials.TransportCredentials, error) {
+func credentialsFromCerts(ctx context.Context, clientCert []byte, clientKey []byte, caCert []byte) (credentials.TransportCredentials, error) {
+	_, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "credentialsFromCerts")
+	defer span.End()
+
 	clientPair, err := tls.X509KeyPair(clientCert, clientKey)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load client keypair")
@@ -275,6 +290,11 @@ func credentialsFromCerts(_ context.Context, clientCert []byte, clientKey []byte
 
 // ValidatingAccountsForEpoch obtains the validating accounts for a given epoch.
 func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "ValidatingAccountsForEpoch", trace.WithAttributes(
+		attribute.Int64("epoch", int64(epoch)),
+	))
+	defer span.End()
+
 	// stateCount is used to update metrics.
 	stateCount := map[api.ValidatorState]uint64{
 		api.ValidatorStateUnknown:            0,
@@ -328,6 +348,11 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 
 // ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
 func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch phase0.Epoch, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "ValidatingAccountsForEpochByIndex", trace.WithAttributes(
+		attribute.Int64("epoch", int64(epoch)),
+	))
+	defer span.End()
+
 	s.mutex.RLock()
 	pubKeys := make([]phase0.BLSPubKey, 0, len(s.accounts))
 	for pubKey := range s.accounts {
@@ -388,6 +413,11 @@ func accountPathsToVerificationRegexes(paths []string) []*regexp.Regexp {
 }
 
 func (*Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wallet, verificationRegexes []*regexp.Regexp) map[phase0.BLSPubKey]e2wtypes.Account {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "fetchAccountsForWallet", trace.WithAttributes(
+		attribute.String("wallet", wallet.Name()),
+	))
+	defer span.End()
+
 	res := make(map[phase0.BLSPubKey]e2wtypes.Account)
 	for account := range wallet.Accounts(ctx) {
 		// Ensure the name matches one of our account paths.

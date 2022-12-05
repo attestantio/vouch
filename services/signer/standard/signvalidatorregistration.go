@@ -22,6 +22,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
 )
 
 // SignValidatorRegistration signs a validator registration.
@@ -32,6 +33,9 @@ func (s *Service) SignValidatorRegistration(ctx context.Context,
 	phase0.BLSSignature,
 	error,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignValidatorRegistration")
+	defer span.End()
+
 	if registration == nil {
 		return phase0.BLSSignature{}, errors.New("no registration supplied")
 	}
