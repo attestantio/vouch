@@ -56,6 +56,7 @@ func (s *Service) AuctionBlock(ctx context.Context,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "AuctionBlock")
 	defer span.End()
+	started := time.Now()
 
 	s.executionConfigMu.RLock()
 	proposerConfig, exists := s.executionConfig.ProposerConfigs[pubkey]
