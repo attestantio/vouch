@@ -51,6 +51,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Random seed for line selection in multi-line graaffiti input.
+	// skipcq: GO-S1033
 	rand.Seed(time.Now().UnixNano())
 
 	s := &Service{
