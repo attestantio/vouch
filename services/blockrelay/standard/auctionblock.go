@@ -243,7 +243,6 @@ func (s *Service) builderBid(ctx context.Context,
 	slot phase0.Slot,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
-	relay *beaconblockproposer.RelayConfig,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "builderBid", trace.WithAttributes(
 		attribute.String("relay", provider.Address()),
@@ -281,13 +280,6 @@ func (s *Service) builderBid(ctx context.Context,
 		// Has to be a string due to the potential size being >maxint64.
 		attribute.String("value", builderBid.Data.Message.Value.ToBig().String()),
 	)
-
-	if builderBid.Data.Message.Value.ToBig().Cmp(relay.MinValue.BigInt()) <= 0 {
-		// Return empty bid, not error.
-		log.Debug().Stringer("value", builderBid.Data.Message.Value.ToBig()).Stringer("min_relay_value", relay.MinValue.BigInt()).Msg("Value too small, not using this bid")
-		respCh <- &builderBidResponse{}
-		return
-	}
 
 	switch builderBid.Version {
 	case consensusspec.DataVersionBellatrix:
