@@ -22,10 +22,16 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // UpdatePreparations updates the preparations for validators on the beacon nodes.
 func (s *Service) UpdatePreparations(ctx context.Context) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.proposalpreparer.standard").Start(ctx, "UpdatePreparations")
+	defer span.End()
+
 	started := time.Now()
 
 	epoch := s.chainTimeService.CurrentEpoch()
@@ -53,11 +59,6 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 		i++
 	}
 
-	execConfig, err := s.executionConfigProvider.ExecutionConfig(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to obtain execution configuration")
-	}
-
 	proposalPreparations := make([]*apiv1.ProposalPreparation, 0, len(accounts))
 	for index, account := range accounts {
 		pubkey := phase0.BLSPubKey{}
@@ -66,10 +67,15 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 		} else {
 			copy(pubkey[:], account.PublicKey().Marshal())
 		}
-		proposerConfig := execConfig.ProposerConfig(pubkey)
+		proposerConfig, err := s.executionConfigProvider.ProposerConfig(ctx, account, pubkey)
+		if err != nil {
+			// Error but keep going, as we want to provide as many preparations as possible.
+			log.Error().Str("pubkey", fmt.Sprintf("%#x", pubkey)).Err(err).Msg("Error obtaining propopser configuration")
+			continue
+		}
 		if proposerConfig == nil {
 			// Error but keep going, as we want to provide as many preparations as possible.
-			log.Error().Str("pubkey", fmt.Sprintf("%#x", pubkey)).Err(err).Msg("Obtained nil propopser configuration")
+			log.Error().Str("pubkey", fmt.Sprintf("%#x", pubkey)).Msg("Obtained nil propopser configuration")
 			continue
 		}
 		proposalPreparations = append(proposalPreparations, &apiv1.ProposalPreparation{
@@ -88,6 +94,11 @@ func (s *Service) updateProposalPreparations(ctx context.Context,
 	epoch phase0.Epoch,
 	proposalPreparations []*apiv1.ProposalPreparation,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.proposalpreparer.standard").Start(ctx, "updateProposalPreparations", trace.WithAttributes(
+		attribute.Int64("epoch", int64(epoch)),
+	))
+	defer span.End()
+
 	if err := s.proposalPreparationsSubmitter.SubmitProposalPreparations(ctx, proposalPreparations); err != nil {
 		proposalPreparationCompleted(started, epoch, "failed")
 		log.Error().Err(err).Msg("Failed to update proposal preparations")

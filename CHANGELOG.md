@@ -4,6 +4,7 @@
   - make execution configuration values hierarchical
   - mark nil responses from beacon nodes as errors rather than dropping silently
   - update tracing implementation to use opentelemetry
+  - support version 2 of execution configuration; see docs/execlayer.md for details
   - support Capella
   - update dirk module to reduce number of concurrent connections
   - provide timeout option for remote dirk interactions

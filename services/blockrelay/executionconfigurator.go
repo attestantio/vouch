@@ -16,32 +16,20 @@ package blockrelay
 import (
 	"context"
 
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
-// Service is the block relay service.
-type Service interface{}
-
-// ValidatorRegistrationsSubmitter is the interface for a submitter of validator registrations.
-type ValidatorRegistrationsSubmitter interface {
-	Service
-
-	// SubmitValidatorRegistrations submits validator registrations for the given accounts.
-	SubmitValidatorRegistrations(ctx context.Context,
-		accounts map[phase0.ValidatorIndex]e2wtypes.Account,
-	) error
-}
-
-// ExecutionConfigProvider is the interface for providing execution configuration.
-type ExecutionConfigProvider interface {
-	Service
-
-	// ProposerConfig returns the proposer configuration for the given validator.
+// ExecutionConfigurator is the interface providing proposer configuration information.
+type ExecutionConfigurator interface {
+	// ProposerConfig returns the proposer configuration for the given validator,
 	ProposerConfig(ctx context.Context,
 		account e2wtypes.Account,
 		pubkey phase0.BLSPubKey,
+		fallbackFeeRecipient bellatrix.ExecutionAddress,
+		fallbackGasLimit uint64,
 	) (
 		*beaconblockproposer.ProposerConfig,
 		error,

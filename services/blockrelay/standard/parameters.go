@@ -43,6 +43,7 @@ type parameters struct {
 	clientCertURL                             string
 	clientKeyURL                              string
 	caCertURL                                 string
+	accountsProvider                          accountmanager.AccountsProvider
 	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
@@ -147,7 +148,14 @@ func WithCACertURL(url string) Parameter {
 	})
 }
 
-// WithValidatingAccountsProvider sets the account manager.
+// WithAccountsProvider sets the accounts provider.
+func WithAccountsProvider(provider accountmanager.AccountsProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.accountsProvider = provider
+	})
+}
+
+// WithValidatingAccountsProvider sets the validating accounts provider.
 func WithValidatingAccountsProvider(provider accountmanager.ValidatingAccountsProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.validatingAccountsProvider = provider
@@ -222,6 +230,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.fallbackGasLimit == 0 {
 		return nil, errors.New("no fallback gas limit specified")
+	}
+	if parameters.accountsProvider == nil {
+		return nil, errors.New("no accounts provider specified")
 	}
 	if parameters.validatingAccountsProvider == nil {
 		return nil, errors.New("no validating accounts provider specified")

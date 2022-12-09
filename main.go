@@ -123,7 +123,7 @@ func main2() int {
 		return 1
 	}
 
-	if exit := runCommands(ctx); exit {
+	if exit := runCommands(ctx, majordomo); exit {
 		return 0
 	}
 
@@ -192,6 +192,7 @@ func fetchConfig() error {
 	pflag.String("tracing-address", "", "Address to which to send tracing data")
 	pflag.String("beacon-node-address", "", "Address on which to contact the beacon node")
 	pflag.Bool("version", false, "show Vouch version and exit")
+	pflag.String("proposer-config-check", "", "show the proposer configuration for the given public key and exit")
 	pflag.Parse()
 	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
 		return errors.Wrap(err, "failed to bind pflags to viper")
@@ -698,7 +699,7 @@ func initMajordomo(ctx context.Context) (majordomo.Service, error) {
 func startMonitor(ctx context.Context, chainTime chaintime.Service) (metrics.Service, error) {
 	log.Trace().Msg("Starting metrics service")
 	var monitor metrics.Service
-	if viper.Get("metrics.prometheus") != nil {
+	if viper.Get("metrics.prometheus.listen-address") != "" {
 		var err error
 		monitor, err = prometheusmetrics.New(ctx,
 			prometheusmetrics.WithLogLevel(util.LogLevel("metrics.prometheus")),
@@ -1308,10 +1309,16 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 
 // runCommands potentially runs commands.
 // Returns true if Vouch should exit.
-func runCommands(_ context.Context) bool {
+func runCommands(ctx context.Context,
+	majordomo majordomo.Service,
+) bool {
 	if viper.GetBool("version") {
 		fmt.Printf("%s\n", ReleaseVersion)
 		return true
+	}
+
+	if viper.GetString("proposer-config-check") != "" {
+		return proposerConfigCheck(ctx, majordomo)
 	}
 
 	return false
@@ -1415,6 +1422,7 @@ func startBlockRelay(ctx context.Context,
 		standardblockrelay.WithClientCertURL(viper.GetString("blockrelay.config.client-cert")),
 		standardblockrelay.WithClientKeyURL(viper.GetString("blockrelay.config.client-key")),
 		standardblockrelay.WithCACertURL(viper.GetString("blockrelay.config.ca-cert")),
+		standardblockrelay.WithAccountsProvider(accountManager.(accountmanager.AccountsProvider)),
 		standardblockrelay.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardblockrelay.WithListenAddress(viper.GetString("blockrelay.listen-address")),
 		standardblockrelay.WithValidatorRegistrationSigner(signerSvc.(signer.ValidatorRegistrationSigner)),

@@ -27,12 +27,14 @@ import (
 	builderspec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/blockrelay"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/util"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // zeroExecutionAddress is used for comparison purposes.
@@ -52,24 +54,21 @@ func (s *Service) AuctionBlock(ctx context.Context,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "AuctionBlock")
 	defer span.End()
-	started := time.Now()
 
+	account, err := s.accountsProvider.AccountByPublicKey(ctx, pubkey)
+	if err != nil {
+		return nil, errors.New("no account found for public key")
+	}
 	s.executionConfigMu.RLock()
-	proposerConfig, exists := s.executionConfig.ProposerConfigs[pubkey]
-	if !exists {
-		proposerConfig = s.executionConfig.DefaultConfig
+	proposerConfig, err := s.executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain proposer configuration")
 	}
 	s.executionConfigMu.RUnlock()
 
-	if !proposerConfig.Builder.Enabled {
-		log.Trace().Msg("Auction disabled in proposer configuration")
+	if len(proposerConfig.Relays) == 0 {
+		log.Trace().Msg("No relays in proposer configuration")
 		return nil, nil
-	}
-
-	if proposerConfig.Builder.Grace > 0 {
-		log.Trace().Dur("elapsed", time.Since(started)).Msg("Starting grace period")
-		time.Sleep(proposerConfig.Builder.Grace)
-		log.Trace().Dur("elapsed", time.Since(started)).Msg("Grace period over")
 	}
 
 	res, err := s.bestBuilderBid(ctx, slot, parentHash, pubkey, proposerConfig)
@@ -95,6 +94,7 @@ func (s *Service) AuctionBlock(ctx context.Context,
 	for _, provider := range res.Providers {
 		selectedProviders[strings.ToLower(provider.Address())] = struct{}{}
 	}
+
 	// Update metrics.
 	val, err := res.Bid.Value()
 	if err != nil {
@@ -128,7 +128,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	slot phase0.Slot,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
-	proposerConfig *blockrelay.ProposerConfig,
+	proposerConfig *beaconblockproposer.ProposerConfig,
 ) (
 	*blockauctioneer.Results,
 	error,
@@ -142,7 +142,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 		Values:    make(map[string]*big.Int),
 		Providers: make([]builderclient.BuilderBidProvider, 0),
 	}
-	requests := len(proposerConfig.Builder.Relays)
+	requests := len(proposerConfig.Relays)
 
 	// We have two timeouts: a soft timeout and a hard timeout.
 	// At the soft timeout, we return if we have any responses so far.
@@ -154,8 +154,8 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	respCh := make(chan *builderBidResponse, requests)
 	errCh := make(chan error, requests)
 	// Kick off the requests.
-	for _, relay := range proposerConfig.Builder.Relays {
-		builderClient, err := util.FetchBuilderClient(ctx, relay, s.monitor)
+	for _, relay := range proposerConfig.Relays {
+		builderClient, err := util.FetchBuilderClient(ctx, relay.Address, s.monitor)
 		if err != nil {
 			// Error but continue.
 			log.Error().Err(err).Msg("Failed to obtain builder client for block auction")
@@ -167,7 +167,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 			log.Error().Err(err).Msg("Builder client does not supply builder bids")
 			continue
 		}
-		go s.builderBid(ctx, provider, respCh, errCh, slot, parentHash, pubkey)
+		go s.builderBid(ctx, provider, respCh, errCh, slot, parentHash, pubkey, relay)
 	}
 
 	// Wait for all responses (or context done).
@@ -183,6 +183,10 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 		case resp := <-respCh:
 			responded++
 			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			if resp.bid == nil {
+				// This means that the bid was ineligible, for example the bid value was too small.
+				continue
+			}
 			switch {
 			case res.Bid == nil || resp.score.Cmp(bestScore) > 0:
 				log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("New winning bid")
@@ -219,6 +223,10 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 		case resp := <-respCh:
 			responded++
 			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			if resp.bid == nil {
+				// This means that the bid was ineligible, for example the bid value was too small.
+				continue
+			}
 			switch {
 			case res.Bid == nil || resp.score.Cmp(bestScore) > 0:
 				log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("New winning bid")
@@ -245,7 +253,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Results")
 
 	if res.Bid == nil {
-		log.Debug().Msg("No bids received")
+		log.Debug().Msg("No useful bids received")
 		monitorAuctionBlock("", false, time.Since(started))
 		// No result, but not an error.
 		return nil, nil
@@ -267,7 +275,18 @@ func (s *Service) builderBid(ctx context.Context,
 	slot phase0.Slot,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
+	relay *beaconblockproposer.RelayConfig,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "builderBid", trace.WithAttributes(
+		attribute.String("relay", provider.Address()),
+	))
+	defer span.End()
+
+	if relay.Grace > 0 {
+		time.Sleep(relay.Grace)
+		span.AddEvent("grace period over")
+	}
+
 	log := log.With().Str("bidder", provider.Address()).Logger()
 	builderBid, err := provider.BuilderBid(ctx, slot, parentHash, pubkey)
 	if err != nil {

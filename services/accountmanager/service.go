@@ -46,3 +46,9 @@ type Refresher interface {
 	// This is a relatively expensive operation, so should not be run in the validating path.
 	Refresh(ctx context.Context)
 }
+
+// AccountsProvider provides accounts.
+type AccountsProvider interface {
+	// AccountByPublicKey returns the account for the given public key.
+	AccountByPublicKey(ctx context.Context, pubkey phase0.BLSPubKey) (e2wtypes.Account, error)
+}

@@ -47,18 +47,19 @@ type Service struct {
 	clientCertURL                             string
 	clientKeyURL                              string
 	caCertURL                                 string
+	accountsProvider                          accountmanager.AccountsProvider
 	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	builderBidsCache                          map[string]map[string]*builderspec.VersionedSignedBuilderBid
 	builderBidsCacheMu                        sync.RWMutex
 	timeout                                   time.Duration
-	signedValidatorRegistrations              map[phase0.BLSPubKey]*apiv1.SignedValidatorRegistration
+	signedValidatorRegistrations              map[string]*apiv1.SignedValidatorRegistration
 	signedValidatorRegistrationsMu            sync.RWMutex
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 	logResults                                bool
 	applicationBuilderDomain                  phase0.Domain
 
-	executionConfig   *blockrelay.ExecutionConfig
+	executionConfig   blockrelay.ExecutionConfigurator
 	executionConfigMu sync.RWMutex
 
 	relayPubkeys   map[phase0.BLSPubKey]*e2types.BLSPublicKey
@@ -113,10 +114,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		caCertURL:                    parameters.caCertURL,
 		fallbackFeeRecipient:         parameters.fallbackFeeRecipient,
 		fallbackGasLimit:             parameters.fallbackGasLimit,
+		accountsProvider:             parameters.accountsProvider,
 		validatingAccountsProvider:   parameters.validatingAccountsProvider,
 		validatorRegistrationSigner:  parameters.validatorRegistrationSigner,
 		timeout:                      parameters.timeout,
-		signedValidatorRegistrations: make(map[phase0.BLSPubKey]*apiv1.SignedValidatorRegistration),
+		signedValidatorRegistrations: make(map[string]*apiv1.SignedValidatorRegistration),
 		secondaryValidatorRegistrationsSubmitters: parameters.secondaryValidatorRegistrationsSubmitters,
 		logResults:               parameters.logResults,
 		applicationBuilderDomain: domain,

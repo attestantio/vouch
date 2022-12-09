@@ -11,28 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mock
+package standard
 
 import (
 	"context"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
-
-// Service is a mock block relay.
-type Service struct{}
-
-// New creates a new mock block relay.
-func New() *Service {
-	return &Service{}
-}
-
-// SubmitValidatorRegistrations submits validator registrations for the given accounts.
-func (*Service) SubmitValidatorRegistrations(_ context.Context, _ map[phase0.ValidatorIndex]e2wtypes.Account) error {
-	return nil
-}
 
 // ProposerConfig returns the proposer configuration for the given validator.
 func (s *Service) ProposerConfig(ctx context.Context,
@@ -42,5 +30,10 @@ func (s *Service) ProposerConfig(ctx context.Context,
 	*beaconblockproposer.ProposerConfig,
 	error,
 ) {
-	return nil, nil
+	s.executionConfigMu.RLock()
+	defer s.executionConfigMu.RUnlock()
+	if s.executionConfig == nil {
+		return nil, errors.New("no execution config at current")
+	}
+	return s.executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit)
 }
