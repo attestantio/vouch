@@ -65,6 +65,13 @@ func (s *Service) updateExecutionHeadFromBlock(block *spec.VersionedSignedBeacon
 				s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
 			}
 		}
+	case spec.DataVersionCapella:
+		// Execution information available.
+		executionPayload := block.Capella.Message.Body.ExecutionPayload
+		if executionPayload != nil && !bytes.Equal(executionPayload.StateRoot[:], []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) {
+			log.Trace().Uint64("height", executionPayload.BlockNumber).Str("hash", fmt.Sprintf("%#x", executionPayload.BlockHash)).Msg("Updating execution chain head")
+			s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
+		}
 	default:
 		log.Error().Msg("Unhandled block version")
 	}

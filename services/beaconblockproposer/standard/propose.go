@@ -23,7 +23,8 @@ import (
 	builderclient "github.com/attestantio/go-builder-client"
 	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	apiv1bellatrix "github.com/attestantio/go-eth2-client/api/v1/bellatrix"
+	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -283,8 +284,13 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		}
 		switch signedBlindedBlock.Version {
 		case spec.DataVersionBellatrix:
-			signedBlindedBlock.Bellatrix = &apiv1.SignedBlindedBeaconBlock{
+			signedBlindedBlock.Bellatrix = &apiv1bellatrix.SignedBlindedBeaconBlock{
 				Message:   proposal.Bellatrix,
+				Signature: *sig,
+			}
+		case spec.DataVersionCapella:
+			signedBlindedBlock.Capella = &apiv1capella.SignedBlindedBeaconBlock{
+				Message:   proposal.Capella,
 				Signature: *sig,
 			}
 		default:

@@ -84,6 +84,7 @@ type Service struct {
 	altairForkEpoch    phase0.Epoch
 	handlingBellatrix  bool
 	bellatrixForkEpoch phase0.Epoch
+	capellaForkEpoch   phase0.Epoch
 
 	// Tracking for reorgs.
 	lastBlockRoot             phase0.Root
@@ -177,6 +178,15 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log.Debug().Msg("Not handling Bellatrix")
 	}
 
+	// Fetch the Capella fork epoch from the fork schedule.
+	var capellaForkEpoch phase0.Epoch
+	capellaForkEpoch, err = fetchCapellaForkEpoch(ctx, parameters.forkScheduleProvider)
+	if err != nil {
+		capellaForkEpoch = 0xffffffffffffffff
+	} else {
+		log.Trace().Uint64("epoch", uint64(capellaForkEpoch)).Msg("Obtained Capella fork epoch")
+	}
+
 	s := &Service{
 		monitor:                       parameters.monitor,
 		slotDuration:                  slotDuration,
@@ -210,6 +220,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		altairForkEpoch:               altairForkEpoch,
 		handlingBellatrix:             handlingBellatrix,
 		bellatrixForkEpoch:            bellatrixForkEpoch,
+		capellaForkEpoch:              capellaForkEpoch,
 		pendingAttestations:           make(map[phase0.Slot]bool),
 	}
 
@@ -522,6 +533,25 @@ func fetchBellatrixForkEpoch(ctx context.Context, forkScheduleProvider eth2clien
 		}
 	}
 	return 0, errors.New("no bellatrix fork obtained")
+}
+
+func fetchCapellaForkEpoch(ctx context.Context, forkScheduleProvider eth2client.ForkScheduleProvider) (phase0.Epoch, error) {
+	forkSchedule, err := forkScheduleProvider.ForkSchedule(ctx)
+	if err != nil {
+		return 0, err
+	}
+	forkCount := 0
+	for i := range forkSchedule {
+		if bytes.Equal(forkSchedule[i].CurrentVersion[:], forkSchedule[i].PreviousVersion[:]) {
+			// This is the genesis fork; ignore it.
+			continue
+		}
+		forkCount++
+		if forkCount == 3 {
+			return forkSchedule[i].Epoch, nil
+		}
+	}
+	return 0, errors.New("no capella fork obtained")
 }
 
 // handleAltairForkEpoch handles changes that need to take place at the Altair hard fork boundary.

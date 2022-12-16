@@ -20,7 +20,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	apiv1bellatrix "github.com/attestantio/go-eth2-client/api/v1/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -67,10 +67,10 @@ func TestScore(t *testing.T) {
 			name: "SingleAttestation",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
+				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12346,
 					ParentRoot: testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-					Body: &apiv1.BlindedBeaconBlockBody{
+					Body: &apiv1bellatrix.BlindedBeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
@@ -96,10 +96,10 @@ func TestScore(t *testing.T) {
 			name: "BellatrixSingleAttestationDistance1",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
+				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12346,
 					ParentRoot: testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-					Body: &apiv1.BlindedBeaconBlockBody{
+					Body: &apiv1bellatrix.BlindedBeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
@@ -125,10 +125,10 @@ func TestScore(t *testing.T) {
 			name: "BellatrixSingleAttestationDistance1IncorrectHead",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
+				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12346,
 					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-					Body: &apiv1.BlindedBeaconBlockBody{
+					Body: &apiv1bellatrix.BlindedBeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
@@ -154,10 +154,10 @@ func TestScore(t *testing.T) {
 			name: "BellatrixSingleAttestationDistance2",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
+				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12346,
 					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-					Body: &apiv1.BlindedBeaconBlockBody{
+					Body: &apiv1bellatrix.BlindedBeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
@@ -182,10 +182,10 @@ func TestScore(t *testing.T) {
 			name: "BellatrixSingleAttestationDistance5",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
+				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12349,
 					ParentRoot: testutil.HexToRoot("0x0505050505050505050505050505050505050505050505050505050505050505"),
-					Body: &apiv1.BlindedBeaconBlockBody{
+					Body: &apiv1bellatrix.BlindedBeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
@@ -211,10 +211,10 @@ func TestScore(t *testing.T) {
 			name: "BellatrixSingleAttestationDistance6",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
+				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12350,
 					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-					Body: &apiv1.BlindedBeaconBlockBody{
+					Body: &apiv1bellatrix.BlindedBeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
@@ -239,10 +239,10 @@ func TestScore(t *testing.T) {
 			name: "BellatrixOverlappingAttestations",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
+				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12345,
 					ParentRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-					Body: &apiv1.BlindedBeaconBlockBody{
+					Body: &apiv1bellatrix.BlindedBeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
@@ -277,10 +277,10 @@ func TestScore(t *testing.T) {
 			name: "BellatrixParentMissing",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
+				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12345,
 					ParentRoot: testutil.HexToRoot("0x1111111111111111111111111111111111111111111111111111111111111111"),
-					Body: &apiv1.BlindedBeaconBlockBody{
+					Body: &apiv1bellatrix.BlindedBeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
@@ -344,10 +344,10 @@ func TestScore(t *testing.T) {
 			},
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
+				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12344,
 					ParentRoot: testutil.HexToRoot("0x4343434343434343434343434343434343434343434343434343434343434343"),
-					Body: &apiv1.BlindedBeaconBlockBody{
+					Body: &apiv1bellatrix.BlindedBeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(5, 128),
@@ -385,10 +385,10 @@ func TestScore(t *testing.T) {
 			},
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
+				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12345,
 					ParentRoot: testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
-					Body: &apiv1.BlindedBeaconBlockBody{
+					Body: &apiv1bellatrix.BlindedBeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
@@ -426,10 +426,10 @@ func TestScore(t *testing.T) {
 			},
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersionBellatrix,
-				Bellatrix: &apiv1.BlindedBeaconBlock{
+				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12345,
 					ParentRoot: testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
-					Body: &apiv1.BlindedBeaconBlockBody{
+					Body: &apiv1bellatrix.BlindedBeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),
@@ -455,9 +455,9 @@ func TestScore(t *testing.T) {
 			name: "InvalidVersion",
 			block: &api.VersionedBlindedBeaconBlock{
 				Version: spec.DataVersion(999),
-				Bellatrix: &apiv1.BlindedBeaconBlock{
+				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot: 12345,
-					Body: &apiv1.BlindedBeaconBlockBody{
+					Body: &apiv1bellatrix.BlindedBeaconBlockBody{
 						Attestations: []*phase0.Attestation{
 							{
 								AggregationBits: bitList(1, 128),

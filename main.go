@@ -301,7 +301,7 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	altairCapable, bellatrixCapable, err := consensusClientCapabilities(ctx, eth2Client)
+	altairCapable, bellatrixCapable, _, err := consensusClientCapabilities(ctx, eth2Client)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1316,12 +1316,12 @@ func runCommands(_ context.Context) bool {
 	return false
 }
 
-func consensusClientCapabilities(ctx context.Context, consensusClient eth2client.Service) (bool, bool, error) {
+func consensusClientCapabilities(ctx context.Context, consensusClient eth2client.Service) (bool, bool, bool, error) {
 	// Decide if the ETH2 client is capable of Altair.
 	altairCapable := false
 	spec, err := consensusClient.(eth2client.SpecProvider).Spec(ctx)
 	if err != nil {
-		return false, false, errors.Wrap(err, "failed to obtain spec")
+		return false, false, false, errors.Wrap(err, "failed to obtain spec")
 	}
 	if _, exists := spec["INACTIVITY_PENALTY_QUOTIENT_ALTAIR"]; exists {
 		altairCapable = true
@@ -1339,7 +1339,16 @@ func consensusClientCapabilities(ctx context.Context, consensusClient eth2client
 		log.Info().Msg("Client is not Bellatrix-capable")
 	}
 
-	return altairCapable, bellatrixCapable, nil
+	// Decide if the ETH2 client is capabale of Capella.
+	capellaCapable := false
+	if _, exists := spec["CAPELLA_FORK_EPOCH"]; exists {
+		capellaCapable = true
+		log.Info().Msg("Client is Capella-capable")
+	} else {
+		log.Info().Msg("Client is not Capella-capable")
+	}
+
+	return altairCapable, bellatrixCapable, capellaCapable, nil
 }
 
 func startBlockRelay(ctx context.Context,

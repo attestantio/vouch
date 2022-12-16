@@ -325,6 +325,49 @@ func (s *Service) builderBid(ctx context.Context,
 			errCh <- fmt.Errorf("%s: invalid signature", provider.Address())
 			return
 		}
+	case consensusspec.DataVersionCapella:
+		if builderBid.Data == nil {
+			span.SetStatus(codes.Error, "data missing")
+			errCh <- fmt.Errorf("%s: data missing", provider.Address())
+			return
+		}
+		if builderBid.Data.Message == nil {
+			span.SetStatus(codes.Error, "data message missing")
+			errCh <- fmt.Errorf("%s: data message missing", provider.Address())
+			return
+		}
+		if builderBid.Data.Message.Header == nil {
+			span.SetStatus(codes.Error, "data message header missing")
+			errCh <- fmt.Errorf("%s: data message header missing", provider.Address())
+			return
+		}
+		if bytes.Equal(builderBid.Data.Message.Header.FeeRecipient[:], zeroExecutionAddress[:]) {
+			span.SetStatus(codes.Error, "zero fee recipient")
+			errCh <- fmt.Errorf("%s: zero fee recipient", provider.Address())
+			return
+		}
+		if zeroValue.Cmp(builderBid.Data.Message.Value) == 0 {
+			span.SetStatus(codes.Error, "zero value")
+			errCh <- fmt.Errorf("%s: zero value", provider.Address())
+			return
+		}
+		if uint64(s.chainTime.StartOfSlot(slot).Unix()) != builderBid.Data.Message.Header.Timestamp {
+			span.SetStatus(codes.Error, "incorrect timestamp")
+			errCh <- fmt.Errorf("%s: provided timestamp %d for slot %d not expected value of %d", provider.Address(), builderBid.Data.Message.Header.Timestamp, slot, s.chainTime.StartOfSlot(slot).Unix())
+			return
+		}
+		verified, err := s.verifyBidSignature(ctx, builderBid, provider)
+		if err != nil {
+			span.SetStatus(codes.Error, "invalid bid signature")
+			errCh <- errors.Wrap(err, "error verifying bid signature")
+			return
+		}
+		if !verified {
+			span.SetStatus(codes.Error, "incorrect bid signature")
+			log.Warn().Msg("Failed to verify bid signature")
+			errCh <- fmt.Errorf("%s: invalid signature", provider.Address())
+			return
+		}
 	default:
 		span.SetStatus(codes.Error, "unhandled builder bid data version")
 		errCh <- fmt.Errorf("%s: unhandled builder bid data version %v", provider.Address(), builderBid.Version)
