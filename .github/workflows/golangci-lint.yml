@@ -1,6 +1,8 @@
 name: golangci-lint
 on:
   push:
+    tags:
+      - v*
     branches:
     - master
   pull_request:
@@ -18,6 +20,4 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          skip-go-installation: true
-          version: latest
-          args: --timeout=10m
+          only-new-issues: true
