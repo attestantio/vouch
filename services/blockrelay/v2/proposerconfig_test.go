@@ -59,8 +59,8 @@ func TestProposerConfig(t *testing.T) {
 		},
 		{
 			name:  "ProposerInvalidRegex",
-			input: []byte(`{"proposer":"*","fee_recipient":"0x1111111111111111111111111111111111111111","gas_limit":"30000000","grace":"1000","min_value":"0.5"}`),
-			err:   "invalid account proposer *: error parsing regexp: missing argument to repetition operator: `*`",
+			input: []byte(`{"proposer":"**","fee_recipient":"0x1111111111111111111111111111111111111111","gas_limit":"30000000","grace":"1000","min_value":"0.5"}`),
+			err:   "invalid account proposer **: error parsing regexp: invalid nested repetition operator: `**`",
 		},
 		{
 			name:  "FeeRecipientWrongType",
