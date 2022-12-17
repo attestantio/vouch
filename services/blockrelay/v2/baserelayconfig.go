@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
 )
@@ -30,6 +31,7 @@ var weiPerETH = decimal.New(1e18, 0)
 
 // BaseRelayConfig are the options for base relays.
 type BaseRelayConfig struct {
+	PublicKey    *phase0.BLSPubKey
 	FeeRecipient *bellatrix.ExecutionAddress
 	GasLimit     *uint64
 	Grace        *time.Duration
@@ -37,6 +39,7 @@ type BaseRelayConfig struct {
 }
 
 type baseRelayConfigJSON struct {
+	PublicKey    string `json:"public_key,omitempty"`
 	FeeRecipient string `json:"fee_recipient,omitempty"`
 	GasLimit     string `json:"gas_limit,omitempty"`
 	Grace        string `json:"grace,omitempty"`
@@ -45,6 +48,10 @@ type baseRelayConfigJSON struct {
 
 // MarshalJSON implements json.Marshaler.
 func (c *BaseRelayConfig) MarshalJSON() ([]byte, error) {
+	publicKey := ""
+	if c.PublicKey != nil {
+		publicKey = fmt.Sprintf("%#x", *c.PublicKey)
+	}
 	feeRecipient := ""
 	if c.FeeRecipient != nil {
 		feeRecipient = fmt.Sprintf("%#x", *c.FeeRecipient)
@@ -62,6 +69,7 @@ func (c *BaseRelayConfig) MarshalJSON() ([]byte, error) {
 		minValue = fmt.Sprintf("%v", c.MinValue.Div(weiPerETH))
 	}
 	return json.Marshal(&baseRelayConfigJSON{
+		PublicKey:    publicKey,
 		FeeRecipient: feeRecipient,
 		GasLimit:     gasLimit,
 		Grace:        grace,
@@ -76,6 +84,18 @@ func (c *BaseRelayConfig) UnmarshalJSON(input []byte) error {
 		return errors.Wrap(err, "invalid JSON")
 	}
 
+	if data.PublicKey != "" {
+		tmp, err := hex.DecodeString(strings.TrimPrefix(data.PublicKey, "0x"))
+		if err != nil {
+			return errors.Wrap(err, "failed to decode public key")
+		}
+		if len(tmp) != phase0.PublicKeyLength {
+			return errors.New("incorrect length for public key")
+		}
+		publicKey := phase0.BLSPubKey{}
+		copy(publicKey[:], tmp)
+		c.PublicKey = &publicKey
+	}
 	if data.FeeRecipient != "" {
 		tmp, err := hex.DecodeString(strings.TrimPrefix(data.FeeRecipient, "0x"))
 		if err != nil {

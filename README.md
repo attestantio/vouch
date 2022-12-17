@@ -48,7 +48,7 @@ Vouch sits between the beacon node(s) and signer(s) in an Ethereum 2 validating 
   - [Prometheus metrics](docs/metrics/prometheus.md) Prometheus metrics
   - [Configuration](docs/configuration.md) Sample annotated configuration file
   - [Account manager](docs/accountmanager.md) Details of the supported account managers
-  - [Execution layer configuration](docs/execlayer.md) Details of the execution layer configuration
+  - [Execution configuration](docs/executionconfig.md) Details of the execution configuration
   - [Graffiti](docs/graffiti.md) Details of the graffiti provider
 
 ## Known issues

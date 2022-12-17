@@ -35,7 +35,7 @@ import (
 // proposerConfigCheck checks a proposer configuration.
 func proposerConfigCheck(ctx context.Context, majordomo majordomo.Service) bool {
 	if err := e2types.InitBLS(); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to initialise BLS library: %v", err)
+		fmt.Fprintf(os.Stderr, "failed to initialise BLS library: %v\n", err)
 		return true
 	}
 
@@ -43,29 +43,29 @@ func proposerConfigCheck(ctx context.Context, majordomo majordomo.Service) bool 
 	viper.Set("metrics.prometheus.listen-address", "")
 	consensusClient, chainTime, monitor, err := startBasicServices(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to start basic services: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to start basic services: %v\n", err)
 		return true
 	}
 
 	validatorsManager, err := startValidatorsManager(ctx, monitor, consensusClient)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to start validators manager: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to start validators manager: %v\n", err)
 		return true
 	}
 	accountManager, err := startAccountManager(ctx, monitor, consensusClient, validatorsManager, majordomo, chainTime)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to start account manager: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to start account manager: %v\n", err)
 		return true
 	}
 	scheduler := mockscheduler.New()
 	signer, err := startSigner(ctx, monitor, consensusClient)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to start signer: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to start signer: %v\n", err)
 		return true
 	}
 	blockRelaySvc, err := startBlockRelay(ctx, monitor, majordomo, consensusClient, scheduler, chainTime, accountManager, signer)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to start block relay: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to start block relay: %v\n", err)
 		return true
 	}
 
@@ -73,25 +73,25 @@ func proposerConfigCheck(ctx context.Context, majordomo majordomo.Service) bool 
 	var pubkey phase0.BLSPubKey
 	data, err := hex.DecodeString(strings.TrimPrefix(viper.GetString("proposer-config-check"), "0x"))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "invalid public key: %v", err)
+		fmt.Fprintf(os.Stderr, "invalid public key: %v\n", err)
 		return true
 	}
 	copy(pubkey[:], data)
 	account, err := accountManager.(accountmanager.AccountsProvider).AccountByPublicKey(ctx, pubkey)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not obtain account: %v", err)
+		fmt.Fprintf(os.Stderr, "Could not obtain account for public key: %v.  Please ensure the public key matches a validator managed by this Vouch instance.", err)
 		return true
 	}
 
 	proposerConfig, err := blockRelaySvc.(blockrelay.ExecutionConfigProvider).ProposerConfig(ctx, account, pubkey)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to obtain proposer config: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to obtain proposer config: %v\n", err)
 		return true
 	}
 
 	data, err = proposerConfig.MarshalJSON()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "invalid proposer config: %v", err)
+		fmt.Fprintf(os.Stderr, "Invalid proposer config: %v\n", err)
 		return true
 	}
 

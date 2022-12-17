@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/shopspring/decimal"
 )
 
@@ -27,6 +28,7 @@ var weiPerETH = decimal.New(1e18, 0)
 // RelayConfig contains configuration for a relay.
 type RelayConfig struct {
 	Address      string
+	PublicKey    *phase0.BLSPubKey
 	FeeRecipient bellatrix.ExecutionAddress
 	GasLimit     uint64
 	Grace        time.Duration
@@ -35,6 +37,7 @@ type RelayConfig struct {
 
 type relayConfigJSON struct {
 	Address      string `json:"address"`
+	PublicKey    string `json:"public_key,omitempty"`
 	FeeRecipient string `json:"fee_recipient"`
 	GasLimit     string `json:"gas_limit"`
 	Grace        string `json:"grace,omitempty"`
@@ -43,6 +46,10 @@ type relayConfigJSON struct {
 
 // MarshalJSON implements json.Marshaler.
 func (r *RelayConfig) MarshalJSON() ([]byte, error) {
+	publicKey := ""
+	if r.PublicKey != nil {
+		publicKey = fmt.Sprintf("%#x", *r.PublicKey)
+	}
 	grace := ""
 	if r.Grace != 0 {
 		grace = fmt.Sprintf("%d", r.Grace.Milliseconds())
@@ -53,6 +60,7 @@ func (r *RelayConfig) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(&relayConfigJSON{
 		Address:      r.Address,
+		PublicKey:    publicKey,
 		FeeRecipient: fmt.Sprintf("%#x", r.FeeRecipient),
 		GasLimit:     fmt.Sprintf("%d", r.GasLimit),
 		Grace:        grace,

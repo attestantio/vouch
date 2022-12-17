@@ -512,6 +512,125 @@ func TestConfig(t *testing.T) {
 			},
 		},
 		{
+			name: "ProposerValidatorResetRelays",
+			executionConfig: &v2.ExecutionConfig{
+				Relays: map[string]*v2.BaseRelayConfig{
+					"https://relay1.com/": {
+						FeeRecipient: &feeRecipient2,
+						GasLimit:     &gasLimit2,
+						Grace:        &grace1,
+						MinValue:     &minValue1,
+					},
+				},
+				Proposers: []*v2.ProposerConfig{
+					{
+						Validator:    pubkey1,
+						FeeRecipient: &feeRecipient3,
+						GasLimit:     &gasLimit3,
+						Grace:        &grace2,
+						MinValue:     &minValue2,
+						ResetRelays:  true,
+					},
+				},
+			},
+			account:              account1,
+			pubkey:               pubkey1,
+			fallbackFeeRecipient: feeRecipient1,
+			fallbackGasLimit:     gasLimit1,
+			expected: &beaconblockproposer.ProposerConfig{
+				FeeRecipient: feeRecipient3,
+				Relays:       []*beaconblockproposer.RelayConfig{},
+			},
+		},
+		{
+			name: "ProposerValidatorResetRelaysAndAdd",
+			executionConfig: &v2.ExecutionConfig{
+				Relays: map[string]*v2.BaseRelayConfig{
+					"https://relay1.com/": {
+						FeeRecipient: &feeRecipient2,
+						GasLimit:     &gasLimit2,
+						Grace:        &grace1,
+						MinValue:     &minValue1,
+					},
+				},
+				Proposers: []*v2.ProposerConfig{
+					{
+						Validator:    pubkey1,
+						FeeRecipient: &feeRecipient3,
+						GasLimit:     &gasLimit3,
+						Grace:        &grace2,
+						MinValue:     &minValue2,
+						ResetRelays:  true,
+						Relays: map[string]*v2.ProposerRelayConfig{
+							"https://relay3.com/": {},
+						},
+					},
+				},
+			},
+			account:              account1,
+			pubkey:               pubkey1,
+			fallbackFeeRecipient: feeRecipient1,
+			fallbackGasLimit:     gasLimit1,
+			expected: &beaconblockproposer.ProposerConfig{
+				FeeRecipient: feeRecipient3,
+				Relays: []*beaconblockproposer.RelayConfig{
+					{
+						Address:      "https://relay3.com/",
+						FeeRecipient: feeRecipient3,
+						GasLimit:     gasLimit1,
+						MinValue:     decimal.Zero,
+					},
+				},
+			},
+		},
+		{
+			name: "ProposerValidatorResetRelaysAndAddWithConfig",
+			executionConfig: &v2.ExecutionConfig{
+				Relays: map[string]*v2.BaseRelayConfig{
+					"https://relay1.com/": {
+						FeeRecipient: &feeRecipient2,
+						GasLimit:     &gasLimit2,
+						Grace:        &grace1,
+						MinValue:     &minValue1,
+					},
+				},
+				Proposers: []*v2.ProposerConfig{
+					{
+						Validator:    pubkey1,
+						FeeRecipient: &feeRecipient3,
+						GasLimit:     &gasLimit3,
+						Grace:        &grace2,
+						MinValue:     &minValue2,
+						ResetRelays:  true,
+						Relays: map[string]*v2.ProposerRelayConfig{
+							"https://relay3.com/": {
+								FeeRecipient: &feeRecipient4,
+								GasLimit:     &gasLimit4,
+								Grace:        &grace2,
+								MinValue:     &minValue2,
+							},
+						},
+					},
+				},
+			},
+			account:              account1,
+			pubkey:               pubkey1,
+			fallbackFeeRecipient: feeRecipient1,
+			fallbackGasLimit:     gasLimit1,
+			expected: &beaconblockproposer.ProposerConfig{
+				FeeRecipient: feeRecipient3,
+				Relays: []*beaconblockproposer.RelayConfig{
+					{
+						Address:      "https://relay3.com/",
+						FeeRecipient: feeRecipient4,
+						GasLimit:     gasLimit4,
+						Grace:        grace2,
+						MinValue:     minValue2,
+					},
+				},
+			},
+		},
+		{
 			name: "InvalidProposerConfig",
 			executionConfig: &v2.ExecutionConfig{
 				Relays: map[string]*v2.BaseRelayConfig{

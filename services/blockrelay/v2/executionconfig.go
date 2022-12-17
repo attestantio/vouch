@@ -165,8 +165,17 @@ func (e *ExecutionConfig) ProposerConfig(ctx context.Context,
 	// Set initial relay options.
 	for address, baseRelayConfig := range e.Relays {
 		configRelay := &beaconblockproposer.RelayConfig{
-			Address:  address,
-			MinValue: decimal.Zero,
+			Address: address,
+		}
+		if e.Grace == nil {
+			configRelay.Grace = 0
+		} else {
+			configRelay.Grace = *e.Grace
+		}
+		if e.MinValue == nil {
+			configRelay.MinValue = decimal.Zero
+		} else {
+			configRelay.MinValue = *e.MinValue
 		}
 		setRelayConfig(configRelay, baseRelayConfig, config.FeeRecipient, fallbackGasLimit)
 		config.Relays = append(config.Relays, configRelay)
@@ -216,22 +225,51 @@ func (e *ExecutionConfig) ProposerConfig(ctx context.Context,
 			}
 		}
 
-		// Update from relay-level info.
-		updatedRelays := make([]*beaconblockproposer.RelayConfig, 0)
+		if proposerConfig.ResetRelays {
+			// The proposer wants to start from scratch, remove existing relay info.
+			config.Relays = make([]*beaconblockproposer.RelayConfig, 0)
+		}
+
+		relays := make([]*beaconblockproposer.RelayConfig, 0)
+
+		// Create/update from relay-level info.
+		updated := make(map[string]struct{})
+		// Update existing relays.
 		for _, configRelay := range config.Relays {
-			// See if there is an update for this relay.
 			proposerRelayConfig, exists := proposerConfig.Relays[configRelay.Address]
 			if exists {
 				if !proposerRelayConfig.Disabled {
 					updateRelayConfig(configRelay, proposerRelayConfig)
-					updatedRelays = append(updatedRelays, configRelay)
+					relays = append(relays, configRelay)
 				}
 			} else {
 				// No update; pass along as-is.
-				updatedRelays = append(updatedRelays, configRelay)
+				relays = append(relays, configRelay)
+			}
+			updated[configRelay.Address] = struct{}{}
+		}
+		// Add new relays.
+		for address, proposerRelayConfig := range proposerConfig.Relays {
+			if _, alreadyUpdated := updated[address]; !alreadyUpdated {
+				configRelay := &beaconblockproposer.RelayConfig{
+					Address: address,
+				}
+				if e.Grace == nil {
+					configRelay.Grace = 0
+				} else {
+					configRelay.Grace = *e.Grace
+				}
+				if e.MinValue == nil {
+					configRelay.MinValue = decimal.Zero
+				} else {
+					configRelay.MinValue = *e.MinValue
+				}
+				setRelayConfig(configRelay, &BaseRelayConfig{}, config.FeeRecipient, fallbackGasLimit)
+				updateRelayConfig(configRelay, proposerRelayConfig)
+				relays = append(relays, configRelay)
 			}
 		}
-		config.Relays = updatedRelays
+		config.Relays = relays
 
 		// Once we have a match we are done.
 		break
@@ -246,6 +284,10 @@ func setRelayConfig(config *beaconblockproposer.RelayConfig,
 	fallbackFeeRecipient bellatrix.ExecutionAddress,
 	fallbackGasLimit uint64,
 ) {
+	if relayConfig.PublicKey != nil {
+		config.PublicKey = relayConfig.PublicKey
+	}
+
 	if relayConfig.FeeRecipient == nil {
 		config.FeeRecipient = fallbackFeeRecipient
 	} else {
@@ -271,6 +313,10 @@ func setRelayConfig(config *beaconblockproposer.RelayConfig,
 func updateRelayConfig(config *beaconblockproposer.RelayConfig,
 	relayConfig *ProposerRelayConfig,
 ) {
+	if relayConfig.PublicKey != nil {
+		config.PublicKey = relayConfig.PublicKey
+	}
+
 	if relayConfig.FeeRecipient != nil {
 		config.FeeRecipient = *relayConfig.FeeRecipient
 	}

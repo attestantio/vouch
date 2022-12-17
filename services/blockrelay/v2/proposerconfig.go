@@ -37,6 +37,7 @@ type ProposerConfig struct {
 	GasLimit     *uint64
 	Grace        *time.Duration
 	MinValue     *decimal.Decimal
+	ResetRelays  bool
 	Relays       map[string]*ProposerRelayConfig
 }
 
@@ -46,6 +47,7 @@ type proposerConfigJSON struct {
 	GasLimit     string                          `json:"gas_limit,omitempty"`
 	Grace        string                          `json:"grace,omitempty"`
 	MinValue     string                          `json:"min_value,omitempty"`
+	ResetRelays  bool                            `json:"reset_relays,omitempty"`
 	Relays       map[string]*ProposerRelayConfig `json:"relays,omitempty"`
 }
 
@@ -80,6 +82,7 @@ func (p *ProposerConfig) MarshalJSON() ([]byte, error) {
 		GasLimit:     gasLimit,
 		Grace:        grace,
 		MinValue:     minValue,
+		ResetRelays:  p.ResetRelays,
 		Relays:       p.Relays,
 	})
 }
@@ -104,7 +107,14 @@ func (p *ProposerConfig) UnmarshalJSON(input []byte) error {
 		}
 		copy(p.Validator[:], tmp)
 	} else {
-		account, err := regexp.Compile(data.Proposer)
+		proposer := data.Proposer
+		if !strings.HasPrefix(proposer, "^") {
+			proposer = fmt.Sprintf("^%s", proposer)
+		}
+		if !strings.HasSuffix(proposer, "$") {
+			proposer = fmt.Sprintf("%s$", proposer)
+		}
+		account, err := regexp.Compile(proposer)
 		if err != nil {
 			return errors.Wrap(err, fmt.Sprintf("invalid account proposer %s", data.Proposer))
 		}
@@ -148,6 +158,7 @@ func (p *ProposerConfig) UnmarshalJSON(input []byte) error {
 		minValue = minValue.Mul(weiPerETH)
 		p.MinValue = &minValue
 	}
+	p.ResetRelays = data.ResetRelays
 	p.Relays = data.Relays
 
 	return nil

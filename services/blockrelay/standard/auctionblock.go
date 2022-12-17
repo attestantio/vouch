@@ -275,15 +275,15 @@ func (s *Service) builderBid(ctx context.Context,
 	slot phase0.Slot,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
-	relay *beaconblockproposer.RelayConfig,
+	relayConfig *beaconblockproposer.RelayConfig,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "builderBid", trace.WithAttributes(
 		attribute.String("relay", provider.Address()),
 	))
 	defer span.End()
 
-	if relay.Grace > 0 {
-		time.Sleep(relay.Grace)
+	if relayConfig.Grace > 0 {
+		time.Sleep(relayConfig.Grace)
 		span.AddEvent("grace period over")
 	}
 
@@ -363,6 +363,7 @@ func (s *Service) builderBid(ctx context.Context,
 
 // verifyBidSignature verifies the signature of a bid to ensure it comes from the expected source.
 func (s *Service) verifyBidSignature(_ context.Context,
+	relayConfig *beaconblockproposer.RelayConfig,
 	bid *builderspec.VersionedSignedBuilderBid,
 	provider builderclient.BuilderBidProvider,
 ) (
@@ -372,17 +373,21 @@ func (s *Service) verifyBidSignature(_ context.Context,
 	var err error
 	log := log.With().Str("provider", provider.Address()).Logger()
 
-	relayPubkey := provider.Pubkey()
+	relayPubkey := relayConfig.PublicKey
 	if relayPubkey == nil {
-		log.Trace().Msg("Provider did not supply public key; skipping validation")
-		return true, nil
+		// Try to fetch directly from the provider.
+		relayPubkey = provider.Pubkey()
+		if relayPubkey == nil {
+			log.Trace().Msg("Relay configuration does not contain public key; skipping validation")
+			return true, nil
+		}
 	}
 
 	s.relayPubkeysMu.RLock()
 	pubkey, exists := s.relayPubkeys[*relayPubkey]
 	s.relayPubkeysMu.RUnlock()
 	if !exists {
-		pubkey, err = e2types.BLSPublicKeyFromBytes(provider.Pubkey()[:])
+		pubkey, err = e2types.BLSPublicKeyFromBytes(relayPubkey[:])
 		if err != nil {
 			return false, errors.Wrap(err, "invalid public key supplied with bid")
 		}

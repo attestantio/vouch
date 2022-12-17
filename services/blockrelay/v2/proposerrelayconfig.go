@@ -22,12 +22,14 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	"github.com/shopspring/decimal"
 )
 
 type ProposerRelayConfig struct {
 	Disabled     bool
+	PublicKey    *phase0.BLSPubKey
 	FeeRecipient *bellatrix.ExecutionAddress
 	GasLimit     *uint64
 	Grace        *time.Duration
@@ -36,6 +38,7 @@ type ProposerRelayConfig struct {
 
 type proposerRelayConfigJSON struct {
 	Disabled     bool   `json:"disabled,omitempty"`
+	PublicKey    string `json:"public_key,omitempty"`
 	FeeRecipient string `json:"fee_recipient,omitempty"`
 	GasLimit     string `json:"gas_limit,omitempty"`
 	Grace        string `json:"grace,omitempty"`
@@ -44,6 +47,10 @@ type proposerRelayConfigJSON struct {
 
 // MarshalJSON implements json.Marshaler.
 func (c *ProposerRelayConfig) MarshalJSON() ([]byte, error) {
+	publicKey := ""
+	if c.PublicKey != nil {
+		publicKey = fmt.Sprintf("%#x", *c.PublicKey)
+	}
 	feeRecipient := ""
 	if c.FeeRecipient != nil {
 		feeRecipient = fmt.Sprintf("%#x", *c.FeeRecipient)
@@ -62,6 +69,7 @@ func (c *ProposerRelayConfig) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(&proposerRelayConfigJSON{
 		Disabled:     c.Disabled,
+		PublicKey:    publicKey,
 		FeeRecipient: feeRecipient,
 		GasLimit:     gasLimit,
 		Grace:        grace,
@@ -77,6 +85,18 @@ func (c *ProposerRelayConfig) UnmarshalJSON(input []byte) error {
 	}
 
 	c.Disabled = data.Disabled
+	if data.PublicKey != "" {
+		tmp, err := hex.DecodeString(strings.TrimPrefix(data.PublicKey, "0x"))
+		if err != nil {
+			return errors.Wrap(err, "failed to decode public key")
+		}
+		if len(tmp) != phase0.PublicKeyLength {
+			return errors.New("incorrect length for public key")
+		}
+		publicKey := phase0.BLSPubKey{}
+		copy(publicKey[:], tmp)
+		c.PublicKey = &publicKey
+	}
 	if data.FeeRecipient != "" {
 		tmp, err := hex.DecodeString(strings.TrimPrefix(data.FeeRecipient, "0x"))
 		if err != nil {
