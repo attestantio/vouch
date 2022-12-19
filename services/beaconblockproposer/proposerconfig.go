@@ -34,7 +34,7 @@ type proposerConfigJSON struct {
 // MarshalJSON implements json.Marshaler.
 func (p *ProposerConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&proposerConfigJSON{
-		FeeRecipient: fmt.Sprintf("%x", p.FeeRecipient),
+		FeeRecipient: fmt.Sprintf("%#x", p.FeeRecipient),
 		Relays:       p.Relays,
 	})
 }
