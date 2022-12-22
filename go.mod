@@ -4,8 +4,8 @@ go 1.18
 
 require (
 	github.com/attestantio/go-block-relay v0.1.5
-	github.com/attestantio/go-builder-client v0.1.10
-	github.com/attestantio/go-eth2-client v0.14.5
+	github.com/attestantio/go-builder-client v0.2.1
+	github.com/attestantio/go-eth2-client v0.15.0
 	github.com/aws/aws-sdk-go v1.44.141
 	github.com/herumi/bls-eth-go-binary v1.28.1 // indirect
 	github.com/holiman/uint256 v1.2.1
@@ -125,7 +125,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/attestantio/go-eth2-client => ../go-eth2-client
-
-replace github.com/attestantio/go-builder-client => ../go-builder-client

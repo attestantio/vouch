@@ -132,9 +132,9 @@ func (s *Service) proposeBlock(ctx context.Context,
 			s.monitor.BeaconBlockProposalSource("auction")
 			return nil
 		case auctionResultFailedCanTryWithout:
-			log.Warn().Msg("Failed to propose with auction; attempting to propose without auction")
+			log.Warn().Uint64("slot", uint64(duty.Slot())).Msg("Failed to propose with auction; attempting to propose without auction")
 		case auctionResultNoBids:
-			log.Debug().Msg("No auction bids; attempting to propose without auction")
+			log.Debug().Uint64("slot", uint64(duty.Slot())).Msg("No auction bids; attempting to propose without auction")
 		case auctionResultFailed:
 			return errors.New("failed to propose with auction too late in process, cannot fall back")
 		}
