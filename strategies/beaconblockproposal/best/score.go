@@ -313,7 +313,6 @@ func (s *Service) scoreBellatrixBeaconBlockProposal(ctx context.Context,
 }
 
 // scoreCapellaBeaconBlockPropsal generates a score for a capella beacon block.
-// TODO anything we want to change here?
 func (s *Service) scoreCapellaBeaconBlockProposal(ctx context.Context,
 	name string,
 	parentSlot phase0.Slot,
