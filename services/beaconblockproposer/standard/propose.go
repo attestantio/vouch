@@ -28,6 +28,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/pkg/errors"
@@ -402,6 +403,11 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 	case spec.DataVersionBellatrix:
 		signedBlock.Bellatrix = &bellatrix.SignedBeaconBlock{
 			Message:   proposal.Bellatrix,
+			Signature: sig,
+		}
+	case spec.DataVersionCapella:
+		signedBlock.Capella = &capella.SignedBeaconBlock{
+			Message:   proposal.Capella,
 			Signature: sig,
 		}
 	default:
