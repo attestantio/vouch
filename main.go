@@ -1364,9 +1364,11 @@ func startBlockRelay(ctx context.Context,
 ) {
 	// We also need to submit validator registrations to all nodes that are acting as blinded beacon block proposers, as
 	// some of them use the registration as part of the condition to decide if the blinded block should be called or not.
-	secondaryValidatorRegistrationsSubmitters := []eth2client.ValidatorRegistrationsSubmitter{}
+	bestBeaconNodeAddresses := util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best")
+	firstBeaconNodeAddresses := util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first")
+	secondaryValidatorRegistrationsSubmitters := make([]eth2client.ValidatorRegistrationsSubmitter, 0, len(bestBeaconNodeAddresses)+len(firstBeaconNodeAddresses))
 	clients := make(map[string]struct{})
-	for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best") {
+	for _, address := range bestBeaconNodeAddresses {
 		client, err := fetchClient(ctx, address)
 		if err != nil {
 			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
@@ -1374,7 +1376,7 @@ func startBlockRelay(ctx context.Context,
 		secondaryValidatorRegistrationsSubmitters = append(secondaryValidatorRegistrationsSubmitters, client.(eth2client.ValidatorRegistrationsSubmitter))
 		clients[address] = struct{}{}
 	}
-	for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first") {
+	for _, address := range firstBeaconNodeAddresses {
 		if _, exists := clients[address]; !exists {
 			client, err := fetchClient(ctx, address)
 			if err != nil {

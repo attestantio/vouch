@@ -616,7 +616,7 @@ func NewBeaconBlockProposalProvider() eth2client.BeaconBlockProposalProvider {
 // BeaconBlockProposal is a mock.
 func (*BeaconBlockProposalProvider) BeaconBlockProposal(_ context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*spec.VersionedBeaconBlock, error) {
 	// Graffiti should be 32 bytes.
-	fixedGraffiti := [32]byte{}
+	var fixedGraffiti [32]byte
 	copy(fixedGraffiti[:], graffiti)
 
 	// Build a beacon block.
@@ -761,7 +761,7 @@ func NewBlindedBeaconBlockProposalProvider(chainTime chaintime.Service) eth2clie
 // BlindedBeaconBlockProposal is a mock.
 func (m *BlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*api.VersionedBlindedBeaconBlock, error) {
 	// Graffiti should be 32 bytes.
-	fixedGraffiti := [32]byte{}
+	var fixedGraffiti [32]byte
 	copy(fixedGraffiti[:], graffiti)
 
 	// Build a beacon block.

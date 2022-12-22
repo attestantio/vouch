@@ -161,7 +161,7 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 
 	log := log.With().Uint64("slot", uint64(duty.Slot())).Logger()
 
-	pubkey := phase0.BLSPubKey{}
+	var pubkey phase0.BLSPubKey
 	if provider, isProvider := duty.Account().(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
 		copy(pubkey[:], provider.CompositePublicKey().Marshal())
 	} else {
