@@ -23,10 +23,12 @@ import (
 	builderclient "github.com/attestantio/go-builder-client"
 	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	apiv1bellatrix "github.com/attestantio/go-eth2-client/api/v1/bellatrix"
+	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/pkg/errors"
@@ -131,9 +133,9 @@ func (s *Service) proposeBlock(ctx context.Context,
 			s.monitor.BeaconBlockProposalSource("auction")
 			return nil
 		case auctionResultFailedCanTryWithout:
-			log.Warn().Msg("Failed to propose with auction; attempting to propose without auction")
+			log.Warn().Uint64("slot", uint64(duty.Slot())).Msg("Failed to propose with auction; attempting to propose without auction")
 		case auctionResultNoBids:
-			log.Debug().Msg("No auction bids; attempting to propose without auction")
+			log.Debug().Uint64("slot", uint64(duty.Slot())).Msg("No auction bids; attempting to propose without auction")
 		case auctionResultFailed:
 			return errors.New("failed to propose with auction too late in process, cannot fall back")
 		}
@@ -159,7 +161,7 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 
 	log := log.With().Uint64("slot", uint64(duty.Slot())).Logger()
 
-	pubkey := phase0.BLSPubKey{}
+	var pubkey phase0.BLSPubKey
 	if provider, isProvider := duty.Account().(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
 		copy(pubkey[:], provider.CompositePublicKey().Marshal())
 	} else {
@@ -283,8 +285,13 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		}
 		switch signedBlindedBlock.Version {
 		case spec.DataVersionBellatrix:
-			signedBlindedBlock.Bellatrix = &apiv1.SignedBlindedBeaconBlock{
+			signedBlindedBlock.Bellatrix = &apiv1bellatrix.SignedBlindedBeaconBlock{
 				Message:   proposal.Bellatrix,
+				Signature: *sig,
+			}
+		case spec.DataVersionCapella:
+			signedBlindedBlock.Capella = &apiv1capella.SignedBlindedBeaconBlock{
+				Message:   proposal.Capella,
 				Signature: *sig,
 			}
 		default:
@@ -396,6 +403,11 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 	case spec.DataVersionBellatrix:
 		signedBlock.Bellatrix = &bellatrix.SignedBeaconBlock{
 			Message:   proposal.Bellatrix,
+			Signature: sig,
+		}
+	case spec.DataVersionCapella:
+		signedBlock.Capella = &capella.SignedBeaconBlock{
+			Message:   proposal.Capella,
 			Signature: sig,
 		}
 	default:

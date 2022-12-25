@@ -4,6 +4,7 @@
   - make execution configuration values hierarchical
   - mark nil responses from beacon nodes as errors rather than dropping silently
   - update tracing implementation to use opentelemetry
+  - support Capella
 
 1.6.3:
   - fix crash attempting to store metrics when prometheus not enabled

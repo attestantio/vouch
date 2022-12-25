@@ -301,7 +301,7 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	altairCapable, bellatrixCapable, err := consensusClientCapabilities(ctx, eth2Client)
+	altairCapable, bellatrixCapable, _, err := consensusClientCapabilities(ctx, eth2Client)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -518,7 +518,6 @@ func startServices(ctx context.Context,
 		standardcontroller.WithLogLevel(util.LogLevel("controller")),
 		standardcontroller.WithMonitor(monitor.(metrics.ControllerMonitor)),
 		standardcontroller.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
-		standardcontroller.WithForkScheduleProvider(eth2Client.(eth2client.ForkScheduleProvider)),
 		standardcontroller.WithChainTimeService(chainTime),
 		standardcontroller.WithProposerDutiesProvider(eth2Client.(eth2client.ProposerDutiesProvider)),
 		standardcontroller.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),
@@ -1316,12 +1315,12 @@ func runCommands(_ context.Context) bool {
 	return false
 }
 
-func consensusClientCapabilities(ctx context.Context, consensusClient eth2client.Service) (bool, bool, error) {
+func consensusClientCapabilities(ctx context.Context, consensusClient eth2client.Service) (bool, bool, bool, error) {
 	// Decide if the ETH2 client is capable of Altair.
 	altairCapable := false
 	spec, err := consensusClient.(eth2client.SpecProvider).Spec(ctx)
 	if err != nil {
-		return false, false, errors.Wrap(err, "failed to obtain spec")
+		return false, false, false, errors.Wrap(err, "failed to obtain spec")
 	}
 	if _, exists := spec["INACTIVITY_PENALTY_QUOTIENT_ALTAIR"]; exists {
 		altairCapable = true
@@ -1339,7 +1338,16 @@ func consensusClientCapabilities(ctx context.Context, consensusClient eth2client
 		log.Info().Msg("Client is not Bellatrix-capable")
 	}
 
-	return altairCapable, bellatrixCapable, nil
+	// Decide if the ETH2 client is capabale of Capella.
+	capellaCapable := false
+	if _, exists := spec["CAPELLA_FORK_EPOCH"]; exists {
+		capellaCapable = true
+		log.Info().Msg("Client is Capella-capable")
+	} else {
+		log.Info().Msg("Client is not Capella-capable")
+	}
+
+	return altairCapable, bellatrixCapable, capellaCapable, nil
 }
 
 func startBlockRelay(ctx context.Context,
@@ -1356,9 +1364,11 @@ func startBlockRelay(ctx context.Context,
 ) {
 	// We also need to submit validator registrations to all nodes that are acting as blinded beacon block proposers, as
 	// some of them use the registration as part of the condition to decide if the blinded block should be called or not.
-	secondaryValidatorRegistrationsSubmitters := []eth2client.ValidatorRegistrationsSubmitter{}
+	bestBeaconNodeAddresses := util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best")
+	firstBeaconNodeAddresses := util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first")
+	secondaryValidatorRegistrationsSubmitters := make([]eth2client.ValidatorRegistrationsSubmitter, 0, len(bestBeaconNodeAddresses)+len(firstBeaconNodeAddresses))
 	clients := make(map[string]struct{})
-	for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best") {
+	for _, address := range bestBeaconNodeAddresses {
 		client, err := fetchClient(ctx, address)
 		if err != nil {
 			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
@@ -1366,7 +1376,7 @@ func startBlockRelay(ctx context.Context,
 		secondaryValidatorRegistrationsSubmitters = append(secondaryValidatorRegistrationsSubmitters, client.(eth2client.ValidatorRegistrationsSubmitter))
 		clients[address] = struct{}{}
 	}
-	for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first") {
+	for _, address := range firstBeaconNodeAddresses {
 		if _, exists := clients[address]; !exists {
 			client, err := fetchClient(ctx, address)
 			if err != nil {

@@ -20,7 +20,8 @@ import (
 	"sort"
 
 	"github.com/attestantio/go-eth2-client/api"
-	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	apiv1bellatrix "github.com/attestantio/go-eth2-client/api/v1/bellatrix"
+	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prysmaticlabs/go-bitfield"
@@ -55,6 +56,8 @@ func (s *Service) scoreBlindedBeaconBlockProposal(ctx context.Context,
 	switch blockProposal.Version {
 	case spec.DataVersionBellatrix:
 		return s.scoreBellatrixBlindedBeaconBlockProposal(ctx, name, parentSlot, blockProposal.Bellatrix)
+	case spec.DataVersionCapella:
+		return s.scoreCapellaBlindedBeaconBlockProposal(ctx, name, parentSlot, blockProposal.Capella)
 	default:
 		log.Error().Int("version", int(blockProposal.Version)).Msg("Unhandled block version")
 		return 0
@@ -65,7 +68,7 @@ func (s *Service) scoreBlindedBeaconBlockProposal(ctx context.Context,
 func (s *Service) scoreBellatrixBlindedBeaconBlockProposal(ctx context.Context,
 	name string,
 	parentSlot phase0.Slot,
-	blockProposal *apiv1.BlindedBeaconBlock,
+	blockProposal *apiv1bellatrix.BlindedBeaconBlock,
 ) float64 {
 	attestationScore := float64(0)
 	immediateAttestationScore := float64(0)
@@ -148,6 +151,97 @@ func (s *Service) scoreBellatrixBlindedBeaconBlockProposal(ctx context.Context,
 		Float64("sync_committee", syncCommitteeScore).
 		Float64("total", attestationScore+proposerSlashingScore+attesterSlashingScore+syncCommitteeScore).
 		Msg("Scored Bellatrix block")
+
+	return attestationScore + proposerSlashingScore + attesterSlashingScore + syncCommitteeScore
+}
+
+// scoreCapellaBlindedBeaconBlockPropsal generates a score for a capella blinded beacon block.
+func (s *Service) scoreCapellaBlindedBeaconBlockProposal(ctx context.Context,
+	name string,
+	parentSlot phase0.Slot,
+	blockProposal *apiv1capella.BlindedBeaconBlock,
+) float64 {
+	attestationScore := float64(0)
+	immediateAttestationScore := float64(0)
+
+	// We need to avoid duplicates in attestations.
+	// Map is attestation slot -> committee index -> validator committee index -> aggregate.
+	attested := make(map[phase0.Slot]map[phase0.CommitteeIndex]bitfield.Bitlist)
+	for _, attestation := range blockProposal.Body.Attestations {
+		data := attestation.Data
+		if _, exists := attested[data.Slot]; !exists {
+			attested[data.Slot] = make(map[phase0.CommitteeIndex]bitfield.Bitlist)
+		}
+		if _, exists := attested[data.Slot][data.Index]; !exists {
+			if !exists {
+				attested[data.Slot][data.Index] = bitfield.NewBitlist(attestation.AggregationBits.Len())
+			}
+		}
+
+		priorVotes, err := s.priorVotesForAttestation(ctx, attestation, blockProposal.ParentRoot)
+		if err != nil {
+			log.Debug().Err(err).Msg("Failed to obtain prior votes for attestation; assuming no votes")
+		}
+
+		votes := 0
+		for i := uint64(0); i < attestation.AggregationBits.Len(); i++ {
+			if attestation.AggregationBits.BitAt(i) {
+				if attested[attestation.Data.Slot][attestation.Data.Index].BitAt(i) {
+					// Already attested in this block; skip.
+					continue
+				}
+				if priorVotes.BitAt(i) {
+					// Attested in a previous block; skip.
+					continue
+				}
+				votes++
+				attested[attestation.Data.Slot][attestation.Data.Index].SetBitAt(i, true)
+			}
+		}
+
+		// Now we know how many new votes are in this attestation we can score it.
+		// We can calculate if the head vote is correct, but not target so for the
+		// purposes of the calculation we assume that it is.
+
+		headCorrect := capellaHeadCorrect(blockProposal, attestation)
+		targetCorrect := s.bellatrixTargetCorrect(ctx, attestation)
+		inclusionDistance := blockProposal.Slot - attestation.Data.Slot
+
+		score := 0.0
+		if targetCorrect {
+			// Target is correct (and timely).
+			score += float64(s.timelyTargetWeight) / float64(s.weightDenominator)
+		}
+		if inclusionDistance <= 5 {
+			// Source is timely.
+			score += float64(s.timelySourceWeight) / float64(s.weightDenominator)
+		}
+		if headCorrect && inclusionDistance == 1 {
+			score += float64(s.timelyHeadWeight) / float64(s.weightDenominator)
+		}
+		score *= float64(votes)
+		attestationScore += score
+		if inclusionDistance == 1 {
+			immediateAttestationScore += score
+		}
+	}
+
+	attesterSlashingScore, proposerSlashingScore := scoreSlashings(blockProposal.Body.AttesterSlashings, blockProposal.Body.ProposerSlashings)
+
+	// Add sync committee score.
+	syncCommitteeScore := float64(blockProposal.Body.SyncAggregate.SyncCommitteeBits.Count()) * float64(s.syncRewardWeight) / float64(s.weightDenominator)
+
+	log.Trace().
+		Uint64("slot", uint64(blockProposal.Slot)).
+		Uint64("parent_slot", uint64(parentSlot)).
+		Str("provider", name).
+		Float64("immediate_attestations", immediateAttestationScore).
+		Float64("attestations", attestationScore).
+		Float64("proposer_slashings", proposerSlashingScore).
+		Float64("attester_slashings", attesterSlashingScore).
+		Float64("sync_committee", syncCommitteeScore).
+		Float64("total", attestationScore+proposerSlashingScore+attesterSlashingScore+syncCommitteeScore).
+		Msg("Scored Capella block")
 
 	return attestationScore + proposerSlashingScore + attesterSlashingScore + syncCommitteeScore
 }
@@ -247,7 +341,12 @@ func (s *Service) bellatrixTargetCorrect(_ context.Context,
 }
 
 // bellatrixHeadCorrect calculates if the head of a Bellatrix attestation is correct.
-func bellatrixHeadCorrect(blockProposal *apiv1.BlindedBeaconBlock, attestation *phase0.Attestation) bool {
+func bellatrixHeadCorrect(blockProposal *apiv1bellatrix.BlindedBeaconBlock, attestation *phase0.Attestation) bool {
+	return bytes.Equal(blockProposal.ParentRoot[:], attestation.Data.BeaconBlockRoot[:])
+}
+
+// capellaHeadCorrect calculates if the head of a Capella attestation is correct.
+func capellaHeadCorrect(blockProposal *apiv1capella.BlindedBeaconBlock, attestation *phase0.Attestation) bool {
 	return bytes.Equal(blockProposal.ParentRoot[:], attestation.Data.BeaconBlockRoot[:])
 }
 

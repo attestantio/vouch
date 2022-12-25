@@ -23,6 +23,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	apiv1bellatrix "github.com/attestantio/go-eth2-client/api/v1/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -615,7 +616,7 @@ func NewBeaconBlockProposalProvider() eth2client.BeaconBlockProposalProvider {
 // BeaconBlockProposal is a mock.
 func (*BeaconBlockProposalProvider) BeaconBlockProposal(_ context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*spec.VersionedBeaconBlock, error) {
 	// Graffiti should be 32 bytes.
-	fixedGraffiti := [32]byte{}
+	var fixedGraffiti [32]byte
 	copy(fixedGraffiti[:], graffiti)
 
 	// Build a beacon block.
@@ -760,7 +761,7 @@ func NewBlindedBeaconBlockProposalProvider(chainTime chaintime.Service) eth2clie
 // BlindedBeaconBlockProposal is a mock.
 func (m *BlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*api.VersionedBlindedBeaconBlock, error) {
 	// Graffiti should be 32 bytes.
-	fixedGraffiti := [32]byte{}
+	var fixedGraffiti [32]byte
 	copy(fixedGraffiti[:], graffiti)
 
 	// Build a beacon block.
@@ -816,7 +817,7 @@ func (m *BlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ contex
 
 	block := &api.VersionedBlindedBeaconBlock{
 		Version: spec.DataVersionBellatrix,
-		Bellatrix: &apiv1.BlindedBeaconBlock{
+		Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 			Slot:          slot,
 			ProposerIndex: 1,
 			ParentRoot: phase0.Root([32]byte{
@@ -827,7 +828,7 @@ func (m *BlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ contex
 				0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
 				0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
 			}),
-			Body: &apiv1.BlindedBeaconBlockBody{
+			Body: &apiv1bellatrix.BlindedBeaconBlockBody{
 				RANDAOReveal: randaoReveal,
 				ETH1Data: &phase0.ETH1Data{
 					DepositRoot: phase0.Root([32]byte{
