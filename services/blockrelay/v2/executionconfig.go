@@ -106,7 +106,7 @@ func (e *ExecutionConfig) UnmarshalJSON(input []byte) error {
 		if len(tmp) != bellatrix.ExecutionAddressLength {
 			return errors.New("incorrect length for fee recipient")
 		}
-		feeRecipient := bellatrix.ExecutionAddress{}
+		var feeRecipient bellatrix.ExecutionAddress
 		copy(feeRecipient[:], tmp)
 		e.FeeRecipient = &feeRecipient
 	}
@@ -143,7 +143,7 @@ func (e *ExecutionConfig) UnmarshalJSON(input []byte) error {
 }
 
 // ProposerConfig returns the proposer configuration for the given validator,
-func (e *ExecutionConfig) ProposerConfig(ctx context.Context,
+func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 	account e2wtypes.Account,
 	pubkey phase0.BLSPubKey,
 	fallbackFeeRecipient bellatrix.ExecutionAddress,

@@ -61,7 +61,7 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 
 	proposalPreparations := make([]*apiv1.ProposalPreparation, 0, len(accounts))
 	for index, account := range accounts {
-		pubkey := phase0.BLSPubKey{}
+		var pubkey phase0.BLSPubKey
 		if distributedAccount, isDistributedAccount := account.(e2wtypes.AccountCompositePublicKeyProvider); isDistributedAccount {
 			copy(pubkey[:], distributedAccount.CompositePublicKey().Marshal())
 		} else {

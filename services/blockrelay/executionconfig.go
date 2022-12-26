@@ -28,20 +28,20 @@ type executionConfigMetadataJSON struct {
 
 // UnmarshalJSON unmarshals an execution configurator.
 func UnmarshalJSON(data []byte) (ExecutionConfigurator, error) {
-	metadata := executionConfigMetadataJSON{}
+	var metadata executionConfigMetadataJSON
 	if err := json.Unmarshal(data, &metadata); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal metadata")
 	}
 
 	switch metadata.Version {
 	case 0:
-		execConfigV1 := v1.ExecutionConfig{}
+		var execConfigV1 v1.ExecutionConfig
 		if err := json.Unmarshal(data, &execConfigV1); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal unversioned execution config")
 		}
 		return &execConfigV1, nil
 	case 2:
-		execConfigV2 := v2.ExecutionConfig{}
+		var execConfigV2 v2.ExecutionConfig
 		if err := json.Unmarshal(data, &execConfigV2); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal version 2 execution config")
 		}

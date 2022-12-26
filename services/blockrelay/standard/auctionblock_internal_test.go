@@ -34,7 +34,7 @@ func pubkey(input string) *phase0.BLSPubKey {
 	if err != nil {
 		panic(err)
 	}
-	key := phase0.BLSPubKey{}
+	var key phase0.BLSPubKey
 	copy(key[:], data)
 	return &key
 }
@@ -44,7 +44,7 @@ func domain(input string) phase0.Domain {
 	if err != nil {
 		panic(err)
 	}
-	domain := phase0.Domain{}
+	var domain phase0.Domain
 	copy(domain[:], data)
 	return domain
 }

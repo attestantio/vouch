@@ -92,7 +92,7 @@ func (c *BaseRelayConfig) UnmarshalJSON(input []byte) error {
 		if len(tmp) != phase0.PublicKeyLength {
 			return errors.New("incorrect length for public key")
 		}
-		publicKey := phase0.BLSPubKey{}
+		var publicKey phase0.BLSPubKey
 		copy(publicKey[:], tmp)
 		c.PublicKey = &publicKey
 	}
@@ -104,7 +104,7 @@ func (c *BaseRelayConfig) UnmarshalJSON(input []byte) error {
 		if len(tmp) != bellatrix.ExecutionAddressLength {
 			return errors.New("incorrect length for fee recipient")
 		}
-		feeRecipient := bellatrix.ExecutionAddress{}
+		var feeRecipient bellatrix.ExecutionAddress
 		copy(feeRecipient[:], tmp)
 		c.FeeRecipient = &feeRecipient
 	}

@@ -35,9 +35,9 @@ func (*Service) SubmitValidatorRegistrations(_ context.Context, _ map[phase0.Val
 }
 
 // ProposerConfig returns the proposer configuration for the given validator.
-func (s *Service) ProposerConfig(ctx context.Context,
-	account e2wtypes.Account,
-	pubkey phase0.BLSPubKey,
+func (*Service) ProposerConfig(_ context.Context,
+	_ e2wtypes.Account,
+	_ phase0.BLSPubKey,
 ) (
 	*beaconblockproposer.ProposerConfig,
 	error,
