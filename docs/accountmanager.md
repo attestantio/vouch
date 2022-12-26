@@ -20,6 +20,7 @@ accountmanager:
     ca-cert: file:///home/me/certs/ca.crt
     accounts:
       - my validators
+    timeout: 1m
 ```
 
 Each item is explained in more detail below.
@@ -48,6 +49,9 @@ Dirk requires all clients to use certificates to identify themselves.  Creating 
   - **`wallet/Validator.*[02468]`** will return all accounts in _wallet_ starting with _Validator_ and ending in an even number
 
 At least one account specifier is required for the Dirk account manager.
+
+### timeout
+`timeout` is the time that Vouch will wait for any single operation against the Dirk server to complete.  This defaults to 30 seconds.
 
 ## `wallet`
 The `wallet` account manager obtains account information from local wallets, and signs locally.  It supports wallets created by [ethdo](https://github.com/wealdtech/ethdo).

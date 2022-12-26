@@ -228,6 +228,7 @@ func fetchConfig() error {
 	viper.SetDefault("blockrelay.timeout", 1*time.Second)
 	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(30000000))
+	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch err.(type) {
@@ -838,6 +839,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 		accountManager, err = dirkaccountmanager.New(ctx,
 			dirkaccountmanager.WithLogLevel(util.LogLevel("accountmanager.dirk")),
 			dirkaccountmanager.WithMonitor(monitor.(metrics.AccountManagerMonitor)),
+			dirkaccountmanager.WithTimeout(util.Timeout("accountmanager.dirk")),
 			dirkaccountmanager.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			dirkaccountmanager.WithProcessConcurrency(util.ProcessConcurrency("accountmanager.dirk")),
 			dirkaccountmanager.WithValidatorsManager(validatorsManager),

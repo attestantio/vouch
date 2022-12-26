@@ -48,6 +48,7 @@ type Service struct {
 	mutex                sync.RWMutex
 	monitor              metrics.AccountManagerMonitor
 	clientMonitor        metrics.ClientMonitor
+	timeout              time.Duration
 	processConcurrency   int64
 	endpoints            []*dirk.Endpoint
 	accountPaths         []string
@@ -113,6 +114,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	s := &Service{
 		monitor:              parameters.monitor,
 		clientMonitor:        parameters.clientMonitor,
+		timeout:              parameters.timeout,
 		processConcurrency:   parameters.processConcurrency,
 		endpoints:            endpoints,
 		accountPaths:         parameters.accountPaths,
@@ -234,7 +236,14 @@ func (s *Service) openWallet(ctx context.Context, name string) (e2wtypes.Wallet,
 	wallet, exists := s.wallets[name]
 	var err error
 	if !exists {
-		wallet, err = dirk.OpenWallet(ctx, name, s.credentials, s.endpoints)
+		wallet, err = dirk.Open(ctx,
+			dirk.WithMonitor(s.monitor.(metrics.Service)),
+			dirk.WithName(name),
+			dirk.WithCredentials(s.credentials),
+			dirk.WithEndpoints(s.endpoints),
+			dirk.WithTimeout(s.timeout),
+		)
+		// wallet, err = dirk.OpenWallet(ctx, name, s.credentials, s.endpoints)
 		if err != nil {
 			return nil, err
 		}
