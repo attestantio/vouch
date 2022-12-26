@@ -353,11 +353,10 @@ func (s *Service) builderBid(ctx context.Context,
 		errCh <- fmt.Errorf("%s: invalid signature", provider.Address())
 		return
 	}
-
 	respCh <- &builderBidResponse{
 		bid:      builderBid,
 		provider: provider,
-		score:    value.ToBig(),
+		score:    builderBid.Bellatrix.Message.Value.ToBig(),
 	}
 }
 
