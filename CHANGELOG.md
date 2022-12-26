@@ -7,6 +7,7 @@
   - support Capella
   - update dirk module to reduce number of concurrent connections
   - provide timeout option for remote dirk interactions
+  - unblind blocks from all relays that have the desired payload
 
 1.6.3:
   - fix crash attempting to store metrics when prometheus not enabled

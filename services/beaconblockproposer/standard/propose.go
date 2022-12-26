@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	builderclient "github.com/attestantio/go-builder-client"
 	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
@@ -193,56 +194,12 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		log.Warn().Err(err).Msg("Failed to obtain blinded proposal data")
 		return auctionResultFailedCanTryWithout
 	}
-	if proposal == nil {
-		log.Warn().Msg("Obtained nil blinded beacon block proposal")
+	parentRoot, stateRoot, bodyRoot, err := s.validateBlindedBeaconBlockProposal(ctx, duty, auctionResults, proposal)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to validate blinded beacon block proposal")
 		return auctionResultFailedCanTryWithout
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained blinded proposal")
-
-	proposalSlot, err := proposal.Slot()
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to obtain proposal slot")
-		return auctionResultFailedCanTryWithout
-	}
-	if proposalSlot != duty.Slot() {
-		log.Warn().Msg("Proposal slot mismatch")
-		return auctionResultFailedCanTryWithout
-	}
-
-	bodyRoot, err := proposal.BodyRoot()
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to obtain proposal body root")
-		return auctionResultFailedCanTryWithout
-	}
-
-	parentRoot, err := proposal.ParentRoot()
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to obtain proposal parent root")
-		return auctionResultFailedCanTryWithout
-	}
-
-	stateRoot, err := proposal.StateRoot()
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to obtain proposal state root")
-		return auctionResultFailedCanTryWithout
-	}
-
-	proposalTransactionsRoot, err := proposal.TransactionsRoot()
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to obtain proposal transactions root")
-		return auctionResultFailedCanTryWithout
-	}
-	auctionTransactionsRoot, err := auctionResults.Bid.TransactionsRoot()
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to obtain auction transactions root")
-		return auctionResultFailedCanTryWithout
-	}
-	if !bytes.Equal(proposalTransactionsRoot[:], auctionTransactionsRoot[:]) {
-		log.Debug().Str("proposal_transactions_root", fmt.Sprintf("%#x", proposalTransactionsRoot[:])).Str("auction_transactions_root", fmt.Sprintf("%#x", auctionTransactionsRoot[:])).Msg("Transactions root mismatch")
-		// This is a mismatch, back out.
-		return auctionResultFailedCanTryWithout
-	}
-
 	if e := log.Trace(); e.Enabled() {
 		data, err := json.Marshal(proposal)
 		if err == nil {
@@ -250,60 +207,67 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		}
 	}
 
-	// Ensure that the auction winner can (attempt to) unblind the block before we sign it.
-	unblindedBlockProvider, isProvider := auctionResults.Provider.(builderclient.UnblindedBlockProvider)
-	if !isProvider {
-		log.Error().Msg("Auctioneer cannot unblind the block")
+	// Select the relays with the block we need that are capable of unblinding the block.
+	providers := make([]builderclient.UnblindedBlockProvider, 0, len(auctionResults.Providers))
+	for _, provider := range auctionResults.Providers {
+		unblindedBlockProvider, isProvider := provider.(builderclient.UnblindedBlockProvider)
+		if !isProvider {
+			log.Warn().Msg("Auctioneer cannot unblind the block")
+			continue
+		}
+		providers = append(providers, unblindedBlockProvider)
+	}
+	if len(providers) == 0 {
+		log.Debug().Msg("No relays can unblind the block")
 		return auctionResultFailedCanTryWithout
 	}
+	// TODO this should be a metric.
+	log.Warn().Int("providers", len(providers)).Msg("Obtained relays that can unblind the proposal")
 
+	// Sign the block.
+	sig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
+		duty.Account(),
+		duty.Slot(),
+		duty.ValidatorIndex(),
+		parentRoot,
+		stateRoot,
+		bodyRoot)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to sign blinded beacon block proposal")
+		return auctionResultFailed
+	}
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed blinded proposal")
+
+	signedBlindedBlock := &api.VersionedSignedBlindedBeaconBlock{
+		Version: proposal.Version,
+	}
+	switch signedBlindedBlock.Version {
+	case spec.DataVersionBellatrix:
+		signedBlindedBlock.Bellatrix = &apiv1bellatrix.SignedBlindedBeaconBlock{
+			Message:   proposal.Bellatrix,
+			Signature: sig,
+		}
+	case spec.DataVersionCapella:
+		signedBlindedBlock.Capella = &apiv1capella.SignedBlindedBeaconBlock{
+			Message:   proposal.Capella,
+			Signature: sig,
+		}
+	default:
+		log.Error().Int("version", int(signedBlindedBlock.Version)).Msg("Unknown proposal version")
+		return auctionResultFailed
+	}
+
+	var signedBlock *spec.VersionedSignedBeaconBlock
 	// As we cannot fall back we move to a retry system.
 	retryInterval := 500 * time.Millisecond
 
-	var signedBlock *spec.VersionedSignedBeaconBlock
-	var sig *phase0.BLSSignature
+	// TODO fetch from all providers.
 	for retries := 3; retries > 0; retries-- {
-		if sig == nil {
-			blockSig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
-				duty.Account(),
-				proposalSlot,
-				duty.ValidatorIndex(),
-				parentRoot,
-				stateRoot,
-				bodyRoot)
-			if err != nil {
-				log.Debug().Err(err).Int("retries", retries).Msg("Failed to sign blinded beacon block proposal")
-				time.Sleep(retryInterval)
-				continue
-			}
-			sig = &blockSig
-			log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed blinded proposal")
-		}
-
-		signedBlindedBlock := &api.VersionedSignedBlindedBeaconBlock{
-			Version: proposal.Version,
-		}
-		switch signedBlindedBlock.Version {
-		case spec.DataVersionBellatrix:
-			signedBlindedBlock.Bellatrix = &apiv1bellatrix.SignedBlindedBeaconBlock{
-				Message:   proposal.Bellatrix,
-				Signature: *sig,
-			}
-		case spec.DataVersionCapella:
-			signedBlindedBlock.Capella = &apiv1capella.SignedBlindedBeaconBlock{
-				Message:   proposal.Capella,
-				Signature: *sig,
-			}
-		default:
-			log.Error().Int("version", int(signedBlock.Version)).Msg("Unknown proposal version")
-			return auctionResultFailed
-		}
-
 		// Unblind the blinded block.
 		ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "UnblindBlock", trace.WithAttributes(
-			attribute.String("relay", unblindedBlockProvider.Address()),
+			attribute.String("relay", providers[0].Address()),
 		))
-		signedBlock, err = unblindedBlockProvider.UnblindBlock(ctx, signedBlindedBlock)
+		signedBlock, err = providers[0].UnblindBlock(ctx, signedBlindedBlock)
 		span.End()
 		if err != nil {
 			log.Debug().Err(err).Int("retries", retries).Msg("Failed to unblind block")
@@ -420,4 +384,60 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 	}
 
 	return nil
+}
+
+func (*Service) validateBlindedBeaconBlockProposal(ctx context.Context,
+	duty *beaconblockproposer.Duty,
+	auctionResults *blockauctioneer.Results,
+	proposal *api.VersionedBlindedBeaconBlock,
+) (
+	phase0.Root,
+	phase0.Root,
+	phase0.Root,
+	error,
+) {
+	if proposal == nil {
+		return phase0.Root{}, phase0.Root{}, phase0.Root{}, errors.New("obtained nil blinded beacon block proposal")
+	}
+
+	proposalSlot, err := proposal.Slot()
+	if err != nil {
+		return phase0.Root{}, phase0.Root{}, phase0.Root{}, errors.Wrap(err, "failed to obtain proposal slot")
+	}
+	if proposalSlot != duty.Slot() {
+		return phase0.Root{}, phase0.Root{}, phase0.Root{}, errors.New("proposal slot mismatch")
+	}
+
+	parentRoot, err := proposal.ParentRoot()
+	if err != nil {
+		return phase0.Root{}, phase0.Root{}, phase0.Root{}, errors.Wrap(err, "failed to obtain proposal parent root")
+	}
+
+	stateRoot, err := proposal.StateRoot()
+	if err != nil {
+		return phase0.Root{}, phase0.Root{}, phase0.Root{}, errors.Wrap(err, "failed to obtain proposal state root")
+	}
+
+	bodyRoot, err := proposal.BodyRoot()
+	if err != nil {
+		return phase0.Root{}, phase0.Root{}, phase0.Root{}, errors.Wrap(err, "failed ot obtain proposal body root")
+	}
+
+	proposalTransactionsRoot, err := proposal.TransactionsRoot()
+	if err != nil {
+		return phase0.Root{}, phase0.Root{}, phase0.Root{}, errors.Wrap(err, "failed to obtain proposal transactions root")
+	}
+	auctionTransactionsRoot, err := auctionResults.Bid.TransactionsRoot()
+	if err != nil {
+		return phase0.Root{}, phase0.Root{}, phase0.Root{}, errors.Wrap(err, "failed to obtain auction transactions root")
+	}
+	if !bytes.Equal(proposalTransactionsRoot[:], auctionTransactionsRoot[:]) {
+		log.Debug().
+			Str("proposal_transactions_root", fmt.Sprintf("%#x", proposalTransactionsRoot[:])).
+			Str("auction_transactions_root", fmt.Sprintf("%#x", auctionTransactionsRoot[:])).
+			Msg("Transactions root mismatch")
+		return phase0.Root{}, phase0.Root{}, phase0.Root{}, errors.New("transactions root mismatch")
+	}
+
+	return parentRoot, stateRoot, bodyRoot, nil
 }

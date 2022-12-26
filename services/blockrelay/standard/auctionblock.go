@@ -95,16 +95,21 @@ func (s *Service) AuctionBlock(ctx context.Context,
 		s.builderBidsCacheMu.Unlock()
 	}
 
+	selectedProviders := make(map[string]struct{})
+	for _, provider := range res.Providers {
+		selectedProviders[strings.ToLower(provider.Address())] = struct{}{}
+	}
 	// Update metrics.
 	for provider, value := range res.Values {
 		delta := new(big.Int).Sub(res.Bid.Data.Message.Value.ToBig(), value)
-		if !strings.EqualFold(res.Provider.Address(), provider) {
+		_, isSelected := selectedProviders[strings.ToLower(provider)]
+		if !isSelected {
 			monitorBuilderBidDelta(provider, delta)
 		}
 		if s.logResults {
-			log.Info().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", provider == res.Provider.Address()).Msg("Auction participant")
+			log.Info().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", isSelected).Msg("Auction participant")
 		} else {
-			log.Trace().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", provider == res.Provider.Address()).Msg("Auction participant")
+			log.Trace().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", isSelected).Msg("Auction participant")
 		}
 	}
 
@@ -133,7 +138,8 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	log := util.LogWithID(ctx, log, "strategy_id").With().Str("operation", "builderbid").Uint64("slot", uint64(slot)).Str("pubkey", fmt.Sprintf("%#x", pubkey)).Logger()
 
 	res := &blockauctioneer.Results{
-		Values: make(map[string]*big.Int),
+		Values:    make(map[string]*big.Int),
+		Providers: make([]builderclient.BuilderBidProvider, 0),
 	}
 	requests := len(proposerConfig.Builder.Relays)
 
@@ -177,9 +183,13 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 			responded++
 			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
 			if res.Bid == nil || resp.score.Cmp(bestScore) > 0 {
+				// New winner.
 				res.Bid = resp.bid
 				bestScore = resp.score
-				res.Provider = resp.provider
+				res.Providers = []builderclient.BuilderBidProvider{resp.provider}
+			} else if resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid) {
+				// Tied bid.
+				res.Providers = append(res.Providers, resp.provider)
 			}
 			res.Values[resp.provider.Address()] = resp.score
 		case err := <-errCh:
@@ -206,9 +216,13 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 			responded++
 			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
 			if res.Bid == nil || resp.score.Cmp(bestScore) > 0 {
+				// New winner.
 				res.Bid = resp.bid
 				bestScore = resp.score
-				res.Provider = resp.provider
+				res.Providers = []builderclient.BuilderBidProvider{resp.provider}
+			} else if resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid) {
+				// Tied bid.
+				res.Providers = append(res.Providers, resp.provider)
 			}
 			res.Values[resp.provider.Address()] = resp.score
 		case err := <-errCh:
@@ -231,7 +245,10 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	}
 
 	log.Trace().Stringer("bid", res.Bid).Msg("Selected best bid")
-	monitorAuctionBlock(res.Provider.Address(), true, time.Since(started))
+	// TODO consider.  We shouldn't create multiple data points here, what to do instead.
+	for _, provider := range res.Providers {
+		monitorAuctionBlock(provider.Address(), true, time.Since(started))
+	}
 
 	return res, nil
 }
@@ -432,4 +449,17 @@ func (s *Service) verifyBidSignature(_ context.Context,
 	}
 
 	return sig.Verify(signingRoot[:], pubkey), nil
+}
+
+func bidsEqual(bid1 *builderspec.VersionedSignedBuilderBid, bid2 *builderspec.VersionedSignedBuilderBid) bool {
+	// TODO do this properly.
+	bid1TransactionsRoot, err := bid1.TransactionsRoot()
+	if err != nil {
+		return false
+	}
+	bid2TransactionsRoot, err := bid2.TransactionsRoot()
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(bid1TransactionsRoot[:], bid2TransactionsRoot[:])
 }
