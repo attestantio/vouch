@@ -65,7 +65,7 @@ func (e *ExecutionConfig) UnmarshalJSON(input []byte) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to decode public key")
 		}
-		pubKey := phase0.BLSPubKey{}
+		var pubKey phase0.BLSPubKey
 		if len(pubkey) != len(pubKey) {
 			return fmt.Errorf("public key has %d bytes, should have %d", len(pubkey), len(pubKey))
 		}

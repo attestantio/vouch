@@ -456,7 +456,7 @@ func (*Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wall
 }
 
 // AccountByPublicKey returns the account for the given public key.
-func (s *Service) AccountByPublicKey(ctx context.Context, pubkey phase0.BLSPubKey) (e2wtypes.Account, error) {
+func (s *Service) AccountByPublicKey(_ context.Context, pubkey phase0.BLSPubKey) (e2wtypes.Account, error) {
 	s.mutex.RLock()
 	account, exists := s.accounts[pubkey]
 	s.mutex.RUnlock()

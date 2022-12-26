@@ -128,7 +128,7 @@ func (p *ProposerConfig) UnmarshalJSON(input []byte) error {
 		if len(tmp) != bellatrix.ExecutionAddressLength {
 			return errors.New("incorrect length for fee recipient")
 		}
-		feeRecipient := bellatrix.ExecutionAddress{}
+		var feeRecipient bellatrix.ExecutionAddress
 		copy(feeRecipient[:], tmp)
 		p.FeeRecipient = &feeRecipient
 	}

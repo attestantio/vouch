@@ -53,9 +53,9 @@ func (c *ConfigVersion) UnmarshalJSON(input []byte) error {
 }
 
 // String returns a string representation of the
-func (c ConfigVersion) String() string {
-	if int(c) >= len(configVersionStrings) {
+func (c *ConfigVersion) String() string {
+	if int(*c) >= len(configVersionStrings) {
 		return "unknown"
 	}
-	return configVersionStrings[c]
+	return configVersionStrings[*c]
 }
