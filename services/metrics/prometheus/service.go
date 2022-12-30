@@ -37,12 +37,6 @@ type Service struct {
 	epochsProcessed   prometheus.Counter
 	blockReceiptDelay *prometheus.HistogramVec
 
-	beaconBlockProposalProcessTimer      prometheus.Histogram
-	beaconBlockProposalProcessRequests   *prometheus.CounterVec
-	beaconBlockProposalMarkTimer         prometheus.Histogram
-	beaconBlockProposalProcessLatestSlot prometheus.Gauge
-	beaconBlockProposalSource            *prometheus.CounterVec
-
 	attestationProcessTimer      prometheus.Histogram
 	attestationProcessRequests   *prometheus.CounterVec
 	attestationMarkTimer         prometheus.Histogram
@@ -107,9 +101,6 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 	if err := s.setupControllerMetrics(); err != nil {
 		return nil, errors.Wrap(err, "failed to set up controller metrics")
-	}
-	if err := s.setupBeaconBlockProposalMetrics(); err != nil {
-		return nil, errors.Wrap(err, "failed to set up beacon block proposal metrics")
 	}
 	if err := s.setupAttestationMetrics(); err != nil {
 		return nil, errors.Wrap(err, "failed to set up attestation metrics")

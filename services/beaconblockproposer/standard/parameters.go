@@ -30,8 +30,8 @@ import (
 
 type parameters struct {
 	logLevel                   zerolog.Level
-	monitor                    metrics.BeaconBlockProposalMonitor
-	chainTimeService           chaintime.Service
+	monitor                    metrics.Service
+	chainTime                  chaintime.Service
 	blockAuctioneer            blockauctioneer.BlockAuctioneer
 	proposalProvider           eth2client.BeaconBlockProposalProvider
 	blindedProposalProvider    eth2client.BlindedBeaconBlockProposalProvider
@@ -61,10 +61,10 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 	})
 }
 
-// WithChainTimeService sets the chaintime service.
-func WithChainTimeService(service chaintime.Service) Parameter {
+// WithChainTime sets the chaintime service.
+func WithChainTime(service chaintime.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.chainTimeService = service
+		p.chainTime = service
 	})
 }
 
@@ -90,7 +90,7 @@ func WithBlindedProposalDataProvider(provider eth2client.BlindedBeaconBlockPropo
 }
 
 // WithMonitor sets the monitor for this module.
-func WithMonitor(monitor metrics.BeaconBlockProposalMonitor) Parameter {
+func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})
@@ -165,7 +165,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 			return nil, errors.New("no execution chain head provider specified")
 		}
 	}
-	if parameters.chainTimeService == nil {
+	if parameters.chainTime == nil {
 		return nil, errors.New("no chain time service specified")
 	}
 	if parameters.validatingAccountsProvider == nil {

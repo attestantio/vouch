@@ -126,7 +126,7 @@ func TestPropose(t *testing.T) {
 			s, err := standard.New(ctx,
 				standard.WithMonitor(nullmetrics.New(context.Background())),
 				standard.WithProposalDataProvider(consensusClient),
-				standard.WithChainTimeService(chainTime),
+				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
 				standard.WithBeaconBlockSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),

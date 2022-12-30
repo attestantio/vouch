@@ -26,7 +26,6 @@ import (
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/graffitiprovider"
-	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
@@ -38,8 +37,7 @@ import (
 
 // Service is a beacon block proposer.
 type Service struct {
-	monitor                    metrics.BeaconBlockProposalMonitor
-	chainTimeService           chaintime.Service
+	chainTime                  chaintime.Service
 	blockAuctioneer            blockauctioneer.BlockAuctioneer
 	proposalProvider           eth2client.BeaconBlockProposalProvider
 	blindedProposalProvider    eth2client.BlindedBeaconBlockProposalProvider
@@ -55,7 +53,7 @@ type Service struct {
 var log zerolog.Logger
 
 // New creates a new beacon block proposer.
-func New(_ context.Context, params ...Parameter) (*Service, error) {
+func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem with parameters")
@@ -67,9 +65,12 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
+	if err := registerMetrics(ctx, parameters.monitor); err != nil {
+		return nil, errors.New("failed to register metrics")
+	}
+
 	s := &Service{
-		monitor:                    parameters.monitor,
-		chainTimeService:           parameters.chainTimeService,
+		chainTime:                  parameters.chainTime,
 		blockAuctioneer:            parameters.blockAuctioneer,
 		proposalProvider:           parameters.proposalProvider,
 		blindedProposalProvider:    parameters.blindedProposalProvider,
@@ -103,7 +104,7 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 	log := log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Preparing")
 
-	dutyEpoch := s.chainTimeService.SlotToEpoch(duty.Slot())
+	dutyEpoch := s.chainTime.SlotToEpoch(duty.Slot())
 	// Fetch the validating account.
 	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx,
 		dutyEpoch,

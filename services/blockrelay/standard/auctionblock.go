@@ -25,7 +25,6 @@ import (
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	builderclient "github.com/attestantio/go-builder-client"
 	builderspec "github.com/attestantio/go-builder-client/spec"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/blockrelay"
@@ -100,16 +99,21 @@ func (s *Service) AuctionBlock(ctx context.Context,
 		selectedProviders[strings.ToLower(provider.Address())] = struct{}{}
 	}
 	// Update metrics.
-	for provider, value := range res.Values {
-		delta := new(big.Int).Sub(res.Bid.Data.Message.Value.ToBig(), value)
-		_, isSelected := selectedProviders[strings.ToLower(provider)]
-		if !isSelected {
-			monitorBuilderBidDelta(provider, delta)
-		}
-		if s.logResults {
-			log.Info().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", isSelected).Msg("Auction participant")
-		} else {
-			log.Trace().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", isSelected).Msg("Auction participant")
+	val, err := res.Bid.Value()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to obtain bid value")
+	} else {
+		for provider, value := range res.Values {
+			delta := new(big.Int).Sub(val.ToBig(), value)
+			_, isSelected := selectedProviders[strings.ToLower(provider)]
+			if !isSelected {
+				monitorBuilderBidDelta(provider, delta)
+			}
+			if s.logResults {
+				log.Info().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", isSelected).Msg("Auction participant")
+			} else {
+				log.Trace().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", isSelected).Msg("Auction participant")
+			}
 		}
 	}
 
@@ -182,14 +186,17 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 		case resp := <-respCh:
 			responded++
 			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
-			if res.Bid == nil || resp.score.Cmp(bestScore) > 0 {
-				// New winner.
+			switch {
+			case res.Bid == nil || resp.score.Cmp(bestScore) > 0:
+				log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("New winning bid")
 				res.Bid = resp.bid
 				bestScore = resp.score
 				res.Providers = []builderclient.BuilderBidProvider{resp.provider}
-			} else if resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid) {
-				// Tied bid.
+			case resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
+				log.Trace().Str("provider", resp.provider.Address()).Msg("Matching bid from different relay")
 				res.Providers = append(res.Providers, resp.provider)
+			default:
+				log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("Low or slow bid")
 			}
 			res.Values[resp.provider.Address()] = resp.score
 		case err := <-errCh:
@@ -215,14 +222,17 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 		case resp := <-respCh:
 			responded++
 			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
-			if res.Bid == nil || resp.score.Cmp(bestScore) > 0 {
-				// New winner.
+			switch {
+			case res.Bid == nil || resp.score.Cmp(bestScore) > 0:
+				log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("New winning bid")
 				res.Bid = resp.bid
 				bestScore = resp.score
 				res.Providers = []builderclient.BuilderBidProvider{resp.provider}
-			} else if resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid) {
-				// Tied bid.
+			case resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
+				log.Trace().Str("provider", resp.provider.Address()).Msg("Matching bid from different relay")
 				res.Providers = append(res.Providers, resp.provider)
+			default:
+				log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("Low or slow bid")
 			}
 			res.Values[resp.provider.Address()] = resp.score
 		case err := <-errCh:
@@ -292,108 +302,64 @@ func (s *Service) builderBid(ctx context.Context,
 		return
 	}
 
+	value, err := builderBid.Value()
+	if err != nil {
+		errCh <- fmt.Errorf("%s: invalid value", provider.Address())
+		return
+	}
+	if zeroValue.Cmp(value) == 0 {
+		span.SetStatus(codes.Error, "zero value")
+		errCh <- fmt.Errorf("%s: zero value", provider.Address())
+		return
+	}
+
 	span.SetAttributes(
 		attribute.String("relay", provider.Address()),
 		// Has to be a string due to the potential size being >maxint64.
-		attribute.String("value", builderBid.Data.Message.Value.ToBig().String()),
+		attribute.String("value", value.ToBig().String()),
 	)
 
-	switch builderBid.Version {
-	case consensusspec.DataVersionBellatrix:
-		if builderBid.Data == nil {
-			span.SetStatus(codes.Error, "data missing")
-			errCh <- fmt.Errorf("%s: data missing", provider.Address())
-			return
-		}
-		if builderBid.Data.Message == nil {
-			span.SetStatus(codes.Error, "data message missing")
-			errCh <- fmt.Errorf("%s: data message missing", provider.Address())
-			return
-		}
-		if builderBid.Data.Message.Header == nil {
-			span.SetStatus(codes.Error, "data message header missing")
-			errCh <- fmt.Errorf("%s: data message header missing", provider.Address())
-			return
-		}
-		if bytes.Equal(builderBid.Data.Message.Header.FeeRecipient[:], zeroExecutionAddress[:]) {
-			span.SetStatus(codes.Error, "zero fee recipient")
-			errCh <- fmt.Errorf("%s: zero fee recipient", provider.Address())
-			return
-		}
-		if zeroValue.Cmp(builderBid.Data.Message.Value) == 0 {
-			span.SetStatus(codes.Error, "zero value")
-			errCh <- fmt.Errorf("%s: zero value", provider.Address())
-			return
-		}
-		if uint64(s.chainTime.StartOfSlot(slot).Unix()) != builderBid.Data.Message.Header.Timestamp {
-			span.SetStatus(codes.Error, "incorrect timestamp")
-			errCh <- fmt.Errorf("%s: provided timestamp %d for slot %d not expected value of %d", provider.Address(), builderBid.Data.Message.Header.Timestamp, slot, s.chainTime.StartOfSlot(slot).Unix())
-			return
-		}
-		verified, err := s.verifyBidSignature(ctx, builderBid, provider)
-		if err != nil {
-			span.SetStatus(codes.Error, "invalid bid signature")
-			errCh <- errors.Wrap(err, "error verifying bid signature")
-			return
-		}
-		if !verified {
-			span.SetStatus(codes.Error, "incorrect bid signature")
-			log.Warn().Msg("Failed to verify bid signature")
-			errCh <- fmt.Errorf("%s: invalid signature", provider.Address())
-			return
-		}
-	case consensusspec.DataVersionCapella:
-		if builderBid.Data == nil {
-			span.SetStatus(codes.Error, "data missing")
-			errCh <- fmt.Errorf("%s: data missing", provider.Address())
-			return
-		}
-		if builderBid.Data.Message == nil {
-			span.SetStatus(codes.Error, "data message missing")
-			errCh <- fmt.Errorf("%s: data message missing", provider.Address())
-			return
-		}
-		if builderBid.Data.Message.Header == nil {
-			span.SetStatus(codes.Error, "data message header missing")
-			errCh <- fmt.Errorf("%s: data message header missing", provider.Address())
-			return
-		}
-		if bytes.Equal(builderBid.Data.Message.Header.FeeRecipient[:], zeroExecutionAddress[:]) {
-			span.SetStatus(codes.Error, "zero fee recipient")
-			errCh <- fmt.Errorf("%s: zero fee recipient", provider.Address())
-			return
-		}
-		if zeroValue.Cmp(builderBid.Data.Message.Value) == 0 {
-			span.SetStatus(codes.Error, "zero value")
-			errCh <- fmt.Errorf("%s: zero value", provider.Address())
-			return
-		}
-		if uint64(s.chainTime.StartOfSlot(slot).Unix()) != builderBid.Data.Message.Header.Timestamp {
-			span.SetStatus(codes.Error, "incorrect timestamp")
-			errCh <- fmt.Errorf("%s: provided timestamp %d for slot %d not expected value of %d", provider.Address(), builderBid.Data.Message.Header.Timestamp, slot, s.chainTime.StartOfSlot(slot).Unix())
-			return
-		}
-		verified, err := s.verifyBidSignature(ctx, builderBid, provider)
-		if err != nil {
-			span.SetStatus(codes.Error, "invalid bid signature")
-			errCh <- errors.Wrap(err, "error verifying bid signature")
-			return
-		}
-		if !verified {
-			span.SetStatus(codes.Error, "incorrect bid signature")
-			log.Warn().Msg("Failed to verify bid signature")
-			errCh <- fmt.Errorf("%s: invalid signature", provider.Address())
-			return
-		}
-	default:
-		span.SetStatus(codes.Error, "unhandled builder bid data version")
-		errCh <- fmt.Errorf("%s: unhandled builder bid data version %v", provider.Address(), builderBid.Version)
+	feeRecipient, err := builderBid.FeeRecipient()
+	if err != nil {
+		span.SetStatus(codes.Error, "invalid fee recipient")
+		errCh <- fmt.Errorf("%s: fee recipient: %v", provider.Address(), err)
+		return
+	}
+	if bytes.Equal(feeRecipient[:], zeroExecutionAddress[:]) {
+		span.SetStatus(codes.Error, "zero fee recipient")
+		errCh <- fmt.Errorf("%s: zero fee recipient", provider.Address())
+		return
+	}
+
+	timestamp, err := builderBid.Timestamp()
+	if err != nil {
+		span.SetStatus(codes.Error, "invalid timestamp")
+		errCh <- fmt.Errorf("%s: timestamp: %v", provider.Address(), err)
+		return
+	}
+	if uint64(s.chainTime.StartOfSlot(slot).Unix()) != timestamp {
+		span.SetStatus(codes.Error, "incorrect timestamp")
+		errCh <- fmt.Errorf("%s: provided timestamp %d for slot %d not expected value of %d", provider.Address(), timestamp, slot, s.chainTime.StartOfSlot(slot).Unix())
+		return
+	}
+
+	verified, err := s.verifyBidSignature(ctx, builderBid, provider)
+	if err != nil {
+		span.SetStatus(codes.Error, "invalid bid signature")
+		errCh <- errors.Wrap(err, "error verifying bid signature")
+		return
+	}
+	if !verified {
+		span.SetStatus(codes.Error, "incorrect bid signature")
+		log.Warn().Msg("Failed to verify bid signature")
+		errCh <- fmt.Errorf("%s: invalid signature", provider.Address())
+		return
 	}
 
 	respCh <- &builderBidResponse{
 		bid:      builderBid,
 		provider: provider,
-		score:    builderBid.Data.Message.Value.ToBig(),
+		score:    value.ToBig(),
 	}
 }
 
@@ -427,7 +393,7 @@ func (s *Service) verifyBidSignature(_ context.Context,
 		s.relayPubkeysMu.Unlock()
 	}
 
-	dataRoot, err := bid.Data.Message.HashTreeRoot()
+	dataRoot, err := bid.MessageHashTreeRoot()
 	if err != nil {
 		return false, errors.Wrap(err, "failed to hash bid message")
 	}
@@ -441,9 +407,14 @@ func (s *Service) verifyBidSignature(_ context.Context,
 		return false, errors.Wrap(err, "failed to hash signing data")
 	}
 
-	bidSig := make([]byte, len(bid.Data.Signature))
-	copy(bidSig, bid.Data.Signature[:])
-	sig, err := e2types.BLSSignatureFromBytes(bidSig)
+	bidSig, err := bid.Signature()
+	if err != nil {
+		return false, errors.Wrap(err, "failed to obtain bid signature")
+	}
+
+	byteSig := make([]byte, len(bidSig))
+	copy(byteSig, bidSig[:])
+	sig, err := e2types.BLSSignatureFromBytes(byteSig)
 	if err != nil {
 		return false, errors.Wrap(err, "invalid signature")
 	}
@@ -451,15 +422,17 @@ func (s *Service) verifyBidSignature(_ context.Context,
 	return sig.Verify(signingRoot[:], pubkey), nil
 }
 
+// bidsEqual returns true if the two bids are equal.
+// Bids are considered equal if they have the same header.
+// Note that this function is only called if the bids have the same value, so that is not checked here.
 func bidsEqual(bid1 *builderspec.VersionedSignedBuilderBid, bid2 *builderspec.VersionedSignedBuilderBid) bool {
-	// TODO do this properly.
-	bid1TransactionsRoot, err := bid1.TransactionsRoot()
+	bid1Root, err := bid1.HeaderHashTreeRoot()
 	if err != nil {
 		return false
 	}
-	bid2TransactionsRoot, err := bid2.TransactionsRoot()
+	bid2Root, err := bid2.HeaderHashTreeRoot()
 	if err != nil {
 		return false
 	}
-	return bytes.Equal(bid1TransactionsRoot[:], bid2TransactionsRoot[:])
+	return bytes.Equal(bid1Root[:], bid2Root[:])
 }
