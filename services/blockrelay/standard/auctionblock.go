@@ -255,7 +255,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	}
 
 	log.Trace().Stringer("bid", res.Bid).Msg("Selected best bid")
-	// TODO consider.  We shouldn't create multiple data points here, what to do instead.
+
 	for _, provider := range res.Providers {
 		monitorAuctionBlock(provider.Address(), true, time.Since(started))
 	}

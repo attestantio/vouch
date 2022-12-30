@@ -108,7 +108,7 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained graffiti")
 
-	if err := s.proposeBlock(ctx, started, duty, graffiti); err != nil {
+	if err := s.proposeBlock(ctx, duty, graffiti); err != nil {
 		log.Error().Err(err).Msg("Failed to propose block")
 		monitorBeaconBlockProposalCompleted(started, duty.Slot(), s.chainTime.StartOfSlot(duty.Slot()), "failed")
 		return
@@ -120,7 +120,6 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 
 // proposeBlock proposes a beacon block.
 func (s *Service) proposeBlock(ctx context.Context,
-	started time.Time,
 	duty *beaconblockproposer.Duty,
 	graffiti []byte,
 ) error {
@@ -129,7 +128,7 @@ func (s *Service) proposeBlock(ctx context.Context,
 
 	if s.blockAuctioneer != nil {
 		// There is a block auctioneer specified, try to propose the block with auction.
-		result := s.proposeBlockWithAuction(ctx, started, duty, graffiti)
+		result := s.proposeBlockWithAuction(ctx, duty, graffiti)
 		switch result {
 		case auctionResultSucceeded:
 			monitorBeaconBlockProposalSource("auction")
@@ -143,7 +142,7 @@ func (s *Service) proposeBlock(ctx context.Context,
 		}
 	}
 
-	err := s.proposeBlockWithoutAuction(ctx, started, duty, graffiti)
+	err := s.proposeBlockWithoutAuction(ctx, duty, graffiti)
 	if err != nil {
 		return err
 	}
@@ -154,7 +153,6 @@ func (s *Service) proposeBlock(ctx context.Context,
 
 // proposeBlockWithAuction proposes a block after going through an auction for the blockspace.
 func (s *Service) proposeBlockWithAuction(ctx context.Context,
-	started time.Time,
 	duty *beaconblockproposer.Duty,
 	graffiti []byte,
 ) auctionResult {
@@ -214,7 +212,6 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 }
 
 func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
-	started time.Time,
 	duty *beaconblockproposer.Duty,
 	graffiti []byte,
 ) error {
@@ -228,7 +225,7 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 	if proposal == nil {
 		return errors.New("obtained nil beacon block proposal")
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained proposal")
+	log.Trace().Msg("Obtained proposal")
 
 	proposalSlot, err := proposal.Slot()
 	if err != nil {
@@ -264,7 +261,7 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 	if err != nil {
 		return errors.Wrap(err, "failed to sign beacon block proposal")
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed proposal")
+	log.Trace().Msg("Signed proposal")
 
 	signedBlock := &spec.VersionedSignedBeaconBlock{
 		Version: proposal.Version,
@@ -365,7 +362,7 @@ func (s *Service) obtainBlindedProposal(ctx context.Context,
 
 	return proposal, nil
 }
-func (*Service) validateBlindedBeaconBlockProposal(ctx context.Context,
+func (*Service) validateBlindedBeaconBlockProposal(_ context.Context,
 	duty *beaconblockproposer.Duty,
 	auctionResults *blockauctioneer.Results,
 	proposal *api.VersionedBlindedBeaconBlock,
@@ -470,7 +467,7 @@ func (s *Service) signBlindedProposal(ctx context.Context,
 
 }
 
-func (s *Service) unblindBlock(ctx context.Context,
+func (*Service) unblindBlock(ctx context.Context,
 	block *api.VersionedSignedBlindedBeaconBlock,
 	providers []builderclient.UnblindedBlockProvider,
 ) (
