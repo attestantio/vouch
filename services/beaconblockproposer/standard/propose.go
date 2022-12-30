@@ -36,7 +36,6 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -106,6 +105,7 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	if len(graffiti) > 32 {
 		graffiti = graffiti[0:32]
 	}
+	span.AddEvent("TODO")
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained graffiti")
 
 	if err := s.proposeBlock(ctx, duty, graffiti); err != nil {
@@ -123,9 +123,6 @@ func (s *Service) proposeBlock(ctx context.Context,
 	duty *beaconblockproposer.Duty,
 	graffiti []byte,
 ) error {
-	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "proposeBlock")
-	defer span.End()
-
 	if s.blockAuctioneer != nil {
 		// There is a block auctioneer specified, try to propose the block with auction.
 		result := s.proposeBlockWithAuction(ctx, duty, graffiti)
@@ -492,11 +489,7 @@ func (*Service) unblindBlock(ctx context.Context,
 			var err error
 			for retries := 3; retries > 0; retries-- {
 				// Unblind the blinded block.
-				ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "UnblindBlock", trace.WithAttributes(
-					attribute.String("relay", providers[0].Address()),
-				))
 				signedBlock, err = providers[0].UnblindBlock(ctx, block)
-				span.End()
 
 				if !sem.TryAcquire(1) {
 					// We failed to acquire the semaphore, which means another relay has responded already.

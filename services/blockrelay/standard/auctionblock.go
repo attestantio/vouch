@@ -33,9 +33,6 @@ import (
 	"github.com/pkg/errors"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // zeroExecutionAddress is used for comparison purposes.
@@ -271,11 +268,6 @@ func (s *Service) builderBid(ctx context.Context,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
 ) {
-	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "builderBid", trace.WithAttributes(
-		attribute.String("relay", provider.Address()),
-	))
-	defer span.End()
-
 	log := log.With().Str("bidder", provider.Address()).Logger()
 	builderBid, err := provider.BuilderBid(ctx, slot, parentHash, pubkey)
 	if err != nil {
@@ -308,49 +300,36 @@ func (s *Service) builderBid(ctx context.Context,
 		return
 	}
 	if zeroValue.Cmp(value) == 0 {
-		span.SetStatus(codes.Error, "zero value")
 		errCh <- fmt.Errorf("%s: zero value", provider.Address())
 		return
 	}
 
-	span.SetAttributes(
-		attribute.String("relay", provider.Address()),
-		// Has to be a string due to the potential size being >maxint64.
-		attribute.String("value", value.ToBig().String()),
-	)
-
 	feeRecipient, err := builderBid.FeeRecipient()
 	if err != nil {
-		span.SetStatus(codes.Error, "invalid fee recipient")
 		errCh <- fmt.Errorf("%s: fee recipient: %v", provider.Address(), err)
 		return
 	}
 	if bytes.Equal(feeRecipient[:], zeroExecutionAddress[:]) {
-		span.SetStatus(codes.Error, "zero fee recipient")
 		errCh <- fmt.Errorf("%s: zero fee recipient", provider.Address())
 		return
 	}
 
 	timestamp, err := builderBid.Timestamp()
 	if err != nil {
-		span.SetStatus(codes.Error, "invalid timestamp")
 		errCh <- fmt.Errorf("%s: timestamp: %v", provider.Address(), err)
 		return
 	}
 	if uint64(s.chainTime.StartOfSlot(slot).Unix()) != timestamp {
-		span.SetStatus(codes.Error, "incorrect timestamp")
 		errCh <- fmt.Errorf("%s: provided timestamp %d for slot %d not expected value of %d", provider.Address(), timestamp, slot, s.chainTime.StartOfSlot(slot).Unix())
 		return
 	}
 
 	verified, err := s.verifyBidSignature(ctx, builderBid, provider)
 	if err != nil {
-		span.SetStatus(codes.Error, "invalid bid signature")
 		errCh <- errors.Wrap(err, "error verifying bid signature")
 		return
 	}
 	if !verified {
-		span.SetStatus(codes.Error, "incorrect bid signature")
 		log.Warn().Msg("Failed to verify bid signature")
 		errCh <- fmt.Errorf("%s: invalid signature", provider.Address())
 		return
