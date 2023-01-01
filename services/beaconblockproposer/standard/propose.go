@@ -489,7 +489,7 @@ func (*Service) unblindBlock(ctx context.Context,
 			var err error
 			for retries := 3; retries > 0; retries-- {
 				// Unblind the blinded block.
-				signedBlock, err = providers[0].UnblindBlock(ctx, block)
+				signedBlock, err = provider.UnblindBlock(ctx, block)
 
 				if !sem.TryAcquire(1) {
 					// We failed to acquire the semaphore, which means another relay has responded already.
