@@ -105,7 +105,7 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	if len(graffiti) > 32 {
 		graffiti = graffiti[0:32]
 	}
-	span.AddEvent("TODO")
+	span.AddEvent("Ready to propose")
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained graffiti")
 
 	if err := s.proposeBlock(ctx, duty, graffiti); err != nil {
