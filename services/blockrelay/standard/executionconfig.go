@@ -87,7 +87,7 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 	if err != nil {
 		monitorExecutionConfig(time.Since(started), false)
 		if s.executionConfig == nil {
-			log.Error().Err(err).Msg("Failed to obtain execution configuration; setting default configuration with fallback")
+			log.Error().Err(err).Msg("Failed to obtain execution configuration; setting default configuration with fallback values from configuration")
 			s.executionConfigMu.Lock()
 			s.executionConfig = &blockrelay.ExecutionConfig{
 				ProposerConfigs: make(map[phase0.BLSPubKey]*blockrelay.ProposerConfig),
@@ -106,7 +106,7 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 	if executionConfig == nil {
 		monitorExecutionConfig(time.Since(started), false)
 		if s.executionConfig == nil {
-			log.Error().Err(err).Msg("Obtained nil execution configuration; setting default configuration with fallback")
+			log.Error().Err(err).Msg("Obtained nil execution configuration; setting default configuration with fallback values from configuration")
 			s.executionConfigMu.Lock()
 			s.executionConfig = &blockrelay.ExecutionConfig{
 				ProposerConfigs: make(map[phase0.BLSPubKey]*blockrelay.ProposerConfig),

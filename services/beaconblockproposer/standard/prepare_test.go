@@ -85,7 +85,7 @@ func TestPrepare(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(nullmetrics.New(context.Background())),
 				standard.WithProposalDataProvider(consensusClient),
-				standard.WithChainTimeService(chainTime),
+				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
 				standard.WithBeaconBlockSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),

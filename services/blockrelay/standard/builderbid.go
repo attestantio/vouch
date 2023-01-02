@@ -63,7 +63,7 @@ func (s *Service) BuilderBid(ctx context.Context,
 	if e := log.Trace(); e.Enabled() {
 		data, err := json.Marshal(builderBid)
 		if err == nil {
-			e.RawJSON("bid", data).Msg("Builder bid obtained")
+			e.RawJSON("bid", data).Msg("Builder bid obtained to provide to requesting beacon node")
 		}
 	}
 

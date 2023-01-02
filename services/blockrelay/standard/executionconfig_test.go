@@ -174,7 +174,7 @@ func TestExecConfig(t *testing.T) {
 			execConfig: `{"default_config":{"fee_recipient":"0x0100000000000000000000000000000000000000","gas_limit":"10000000","builder":{"enabled":false}}}`,
 			logEntries: []map[string]interface{}{
 				{
-					"message": "Failed to obtain execution configuration; setting default configuration with fallback",
+					"message": "Failed to obtain execution configuration; setting default configuration with fallback values from configuration",
 				},
 			},
 		},
