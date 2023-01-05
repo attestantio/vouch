@@ -343,7 +343,7 @@ func (s *Service) builderBid(ctx context.Context,
 		return
 	}
 
-	verified, err := s.verifyBidSignature(ctx, builderBid, provider)
+	verified, err := s.verifyBidSignature(ctx, relayConfig, builderBid, provider)
 	if err != nil {
 		errCh <- errors.Wrap(err, "error verifying bid signature")
 		return
@@ -353,10 +353,11 @@ func (s *Service) builderBid(ctx context.Context,
 		errCh <- fmt.Errorf("%s: invalid signature", provider.Address())
 		return
 	}
+
 	respCh <- &builderBidResponse{
 		bid:      builderBid,
 		provider: provider,
-		score:    builderBid.Bellatrix.Message.Value.ToBig(),
+		score:    value.ToBig(),
 	}
 }
 
