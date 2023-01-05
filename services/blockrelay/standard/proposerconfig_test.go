@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
 	"github.com/attestantio/vouch/services/blockrelay/standard"
@@ -46,7 +47,7 @@ import (
 	standardmajordomo "github.com/wealdtech/go-majordomo/standard"
 )
 
-func TestExecConfig(t *testing.T) {
+func TestProposerConfig(t *testing.T) {
 	ctx := context.Background()
 
 	genesisTime := time.Now()
@@ -59,6 +60,7 @@ func TestExecConfig(t *testing.T) {
 	domainProvider := mock.NewDomainProvider()
 
 	mockValidatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
+	mockAccountsProvider := mockaccountmanager.NewAccountsProvider()
 	require.NoError(t, e2types.InitBLS())
 	store := scratch.New()
 	require.NoError(t, e2wallet.UseStore(store))
@@ -105,11 +107,11 @@ func TestExecConfig(t *testing.T) {
 	require.NoError(t, os.WriteFile(badConfigFile, []byte(`bad`), 0600))
 
 	tests := []struct {
-		name       string
-		params     []standard.Parameter
-		execConfig string
-		err        string
-		logEntries []map[string]interface{}
+		name           string
+		params         []standard.Parameter
+		proposerConfig string
+		err            string
+		logEntries     []map[string]interface{}
 	}{
 		{
 			name: "Fallback",
@@ -124,11 +126,12 @@ func TestExecConfig(t *testing.T) {
 				standard.WithFallbackFeeRecipient(bellatrix.ExecutionAddress{0x01}),
 				standard.WithFallbackGasLimit(10000000),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithAccountsProvider(mockAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
 				standard.WithSpecProvider(specProvider),
 				standard.WithDomainProvider(domainProvider),
 			},
-			execConfig: `{"default_config":{"fee_recipient":"0x0100000000000000000000000000000000000000","gas_limit":"10000000","builder":{"enabled":false}}}`,
+			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","relays":[]}`,
 		},
 		{
 			name: "File",
@@ -143,11 +146,12 @@ func TestExecConfig(t *testing.T) {
 				standard.WithFallbackFeeRecipient(bellatrix.ExecutionAddress{0x01}),
 				standard.WithFallbackGasLimit(10000000),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithAccountsProvider(mockAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
 				standard.WithSpecProvider(specProvider),
 				standard.WithDomainProvider(domainProvider),
 			},
-			execConfig: `{"default_config":{"fee_recipient":"0x0200000000000000000000000000000000000000","gas_limit":"20000000","builder":{"enabled":false}}}`,
+			proposerConfig: `{"fee_recipient":"0x0200000000000000000000000000000000000000","relays":[]}`,
 			logEntries: []map[string]interface{}{
 				{
 					"message": "Obtained configuration",
@@ -167,14 +171,15 @@ func TestExecConfig(t *testing.T) {
 				standard.WithFallbackFeeRecipient(bellatrix.ExecutionAddress{0x01}),
 				standard.WithFallbackGasLimit(10000000),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithAccountsProvider(mockAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
 				standard.WithSpecProvider(specProvider),
 				standard.WithDomainProvider(domainProvider),
 			},
-			execConfig: `{"default_config":{"fee_recipient":"0x0100000000000000000000000000000000000000","gas_limit":"10000000","builder":{"enabled":false}}}`,
+			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","relays":[]}`,
 			logEntries: []map[string]interface{}{
 				{
-					"message": "Failed to obtain execution configuration; setting default configuration with fallback values from configuration",
+					"message": "No execution configuration available; using fallback information",
 				},
 			},
 		},
@@ -185,14 +190,14 @@ func TestExecConfig(t *testing.T) {
 			capture := logger.NewLogCapture()
 			s, err := standard.New(ctx, test.params...)
 			require.NoError(t, err)
-			execConfig, err := s.ExecutionConfig(ctx)
+			proposerConfig, err := s.ProposerConfig(ctx, testAccount, phase0.BLSPubKey{})
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)
-				data, err := json.Marshal(execConfig)
+				data, err := json.Marshal(proposerConfig)
 				require.NoError(t, err)
-				require.Equal(t, test.execConfig, string(data))
+				require.Equal(t, test.proposerConfig, string(data))
 			}
 			for _, logEntry := range test.logEntries {
 				if !capture.HasLog(logEntry) {

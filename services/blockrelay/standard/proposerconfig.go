@@ -18,7 +18,6 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
-	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
@@ -33,7 +32,11 @@ func (s *Service) ProposerConfig(ctx context.Context,
 	s.executionConfigMu.RLock()
 	defer s.executionConfigMu.RUnlock()
 	if s.executionConfig == nil {
-		return nil, errors.New("no execution config at current")
+		log.Warn().Msg("No execution configuration available; using fallback information")
+		return &beaconblockproposer.ProposerConfig{
+			FeeRecipient: s.fallbackFeeRecipient,
+			Relays:       make([]*beaconblockproposer.RelayConfig, 0),
+		}, nil
 	}
 	return s.executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit)
 }
