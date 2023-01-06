@@ -9,6 +9,7 @@
   - update dirk module to reduce number of concurrent connections
   - provide timeout option for remote dirk interactions
   - unblind blocks from all relays that hold the desired payload
+  - provide more error information when beacon nodes fail to return expected information
 
 1.6.3:
   - fix crash attempting to store metrics when prometheus not enabled

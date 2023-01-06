@@ -34,6 +34,11 @@ type beaconBlockResponse struct {
 	score    float64
 }
 
+type beaconBlockError struct {
+	provider string
+	err      error
+}
+
 // BeaconBlockProposal provides the best beacon block proposal from a number of beacon nodes.
 func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*spec.VersionedBeaconBlock, error) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.best").Start(ctx, "BeaconBlockProposal", trace.WithAttributes(
@@ -54,7 +59,7 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 	requests := len(s.beaconBlockProposalProviders)
 
 	respCh := make(chan *beaconBlockResponse, requests)
-	errCh := make(chan error, requests)
+	errCh := make(chan *beaconBlockError, requests)
 	// Kick off the requests.
 	for name, provider := range s.beaconBlockProposalProviders {
 		providerGraffiti := graffiti
@@ -88,7 +93,13 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 		select {
 		case resp := <-respCh:
 			responded++
-			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", resp.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Response received")
 			if bestProposal == nil || resp.score > bestScore {
 				bestProposal = resp.proposal
 				bestScore = resp.score
@@ -96,14 +107,29 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 			}
 		case err := <-errCh:
 			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Err(err.err).
+				Msg("Error received")
 		case <-softCtx.Done():
 			// If we have any responses at this point we consider the non-responders timed out.
 			if responded > 0 {
 				timedOut = requests - responded - errored
-				log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Soft timeout reached with responses")
+				log.Debug().
+					Dur("elapsed", time.Since(started)).
+					Int("responded", responded).
+					Int("errored", errored).
+					Int("timed_out", timedOut).
+					Msg("Soft timeout reached with responses")
 			} else {
-				log.Debug().Dur("elapsed", time.Since(started)).Int("errored", errored).Msg("Soft timeout reached with no responses")
+				log.Debug().
+					Dur("elapsed", time.Since(started)).
+					Int("errored", errored).
+					Msg("Soft timeout reached with no responses")
 			}
 			// Set the number of requests that have soft timed out.
 			softTimedOut = requests - responded - errored - timedOut
@@ -116,7 +142,13 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 		select {
 		case resp := <-respCh:
 			responded++
-			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", resp.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Response received")
 			if bestProposal == nil || resp.score > bestScore {
 				bestProposal = resp.proposal
 				bestScore = resp.score
@@ -124,15 +156,32 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 			}
 		case err := <-errCh:
 			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Err(err.err).
+				Msg("Error received")
 		case <-ctx.Done():
 			// Anyone not responded by now is considered errored.
 			timedOut = requests - responded - errored
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Hard timeout reached")
 		}
 	}
 	cancel()
-	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Results")
+	log.Trace().
+		Dur("elapsed", time.Since(started)).
+		Int("responded", responded).
+		Int("errored", errored).
+		Int("timed_out", timedOut).
+		Msg("Results")
 
 	if bestProposal == nil {
 		return nil, errors.New("no proposals received")
@@ -150,7 +199,7 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 	name string,
 	provider eth2client.BeaconBlockProposalProvider,
 	respCh chan *beaconBlockResponse,
-	errCh chan error,
+	errCh chan *beaconBlockError,
 	slot phase0.Slot,
 	randaoReveal phase0.BLSSignature,
 	graffiti []byte,
@@ -163,12 +212,18 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 	proposal, err := provider.BeaconBlockProposal(ctx, slot, randaoReveal, graffiti)
 	s.clientMonitor.ClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
 	if err != nil {
-		errCh <- errors.Wrap(err, name)
+		errCh <- &beaconBlockError{
+			provider: name,
+			err:      err,
+		}
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
 	if proposal == nil {
-		errCh <- errors.New("beacon block proposal nil")
+		errCh <- &beaconBlockError{
+			provider: name,
+			err:      errors.New("beacon block proposal nil"),
+		}
 		return
 	}
 

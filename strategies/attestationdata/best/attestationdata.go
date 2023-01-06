@@ -32,6 +32,11 @@ type attestationDataResponse struct {
 	score           float64
 }
 
+type attestationDataError struct {
+	provider string
+	err      error
+}
+
 // AttestationData provides the best attestation data from a number of beacon nodes.
 func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committeeIndex phase0.CommitteeIndex) (*phase0.AttestationData, error) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.attestationdata.best").Start(ctx, "AttestationData", trace.WithAttributes(
@@ -52,7 +57,7 @@ func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committ
 	requests := len(s.attestationDataProviders)
 
 	respCh := make(chan *attestationDataResponse, requests)
-	errCh := make(chan error, requests)
+	errCh := make(chan *attestationDataError, requests)
 	// Kick off the requests.
 	for name, provider := range s.attestationDataProviders {
 		go s.attestationData(ctx, started, name, provider, respCh, errCh, slot, committeeIndex)
@@ -72,7 +77,13 @@ func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committ
 		select {
 		case resp := <-respCh:
 			responded++
-			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", resp.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Response received")
 			if bestAttestationData == nil || resp.score > bestScore {
 				bestAttestationData = resp.attestationData
 				bestScore = resp.score
@@ -80,14 +91,29 @@ func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committ
 			}
 		case err := <-errCh:
 			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Err(err.err).
+				Msg("Error received")
 		case <-softCtx.Done():
 			// If we have any responses at this point we consider the non-responders timed out.
 			if responded > 0 {
 				timedOut = requests - responded - errored
-				log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Soft timeout reached with responses")
+				log.Debug().
+					Dur("elapsed", time.Since(started)).
+					Int("responded", responded).
+					Int("errored", errored).
+					Int("timed_out", timedOut).
+					Msg("Soft timeout reached with responses")
 			} else {
-				log.Debug().Dur("elapsed", time.Since(started)).Int("errored", errored).Msg("Soft timeout reached with no responses")
+				log.Debug().
+					Dur("elapsed", time.Since(started)).
+					Int("errored", errored).
+					Msg("Soft timeout reached with no responses")
 			}
 			// Set the number of requests that have soft timed out.
 			softTimedOut = requests - responded - errored - timedOut
@@ -100,7 +126,13 @@ func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committ
 		select {
 		case resp := <-respCh:
 			responded++
-			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", resp.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Response received")
 			if bestAttestationData == nil || resp.score > bestScore {
 				bestAttestationData = resp.attestationData
 				bestScore = resp.score
@@ -108,15 +140,32 @@ func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committ
 			}
 		case err := <-errCh:
 			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Err(err.err).
+				Msg("Error received")
 		case <-ctx.Done():
 			// Anyone not responded by now is considered errored.
 			timedOut = requests - responded - errored
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Hard timeout reached")
 		}
 	}
 	cancel()
-	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Results")
+	log.Trace().
+		Dur("elapsed", time.Since(started)).
+		Int("responded", responded).
+		Int("errored", errored).
+		Int("timed_out", timedOut).
+		Msg("Results")
 
 	if bestAttestationData == nil {
 		return nil, errors.New("no attestations received")
@@ -134,7 +183,7 @@ func (s *Service) attestationData(ctx context.Context,
 	name string,
 	provider eth2client.AttestationDataProvider,
 	respCh chan *attestationDataResponse,
-	errCh chan error,
+	errCh chan *attestationDataError,
 	slot phase0.Slot,
 	committeeIndex phase0.CommitteeIndex,
 ) {
@@ -146,21 +195,33 @@ func (s *Service) attestationData(ctx context.Context,
 	attestationData, err := provider.AttestationData(ctx, slot, committeeIndex)
 	s.clientMonitor.ClientOperation(name, "attestation data", err == nil, time.Since(started))
 	if err != nil {
-		errCh <- errors.Wrap(err, name)
+		errCh <- &attestationDataError{
+			provider: name,
+			err:      err,
+		}
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")
 
 	if attestationData == nil {
-		errCh <- errors.New("attestation data nil")
+		errCh <- &attestationDataError{
+			provider: name,
+			err:      errors.New("attestation data nil"),
+		}
 		return
 	}
 	if attestationData.Target == nil {
-		errCh <- errors.New("attestation data target nil")
+		errCh <- &attestationDataError{
+			provider: name,
+			err:      errors.New("attestation data target nil"),
+		}
 		return
 	}
 	if attestationData.Target.Epoch != s.chainTime.SlotToEpoch(slot) {
-		errCh <- errors.New("attestation data slot/target epoch mismatch; abandoning")
+		errCh <- &attestationDataError{
+			provider: name,
+			err:      errors.New("attestation data slot/target epoch mismatch"),
+		}
 		return
 	}
 
