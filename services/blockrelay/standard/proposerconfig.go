@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mock
+package standard
 
 import (
 	"context"
@@ -21,26 +21,22 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
-// Service is a mock block relay.
-type Service struct{}
-
-// New creates a new mock block relay.
-func New() *Service {
-	return &Service{}
-}
-
-// SubmitValidatorRegistrations submits validator registrations for the given accounts.
-func (*Service) SubmitValidatorRegistrations(_ context.Context, _ map[phase0.ValidatorIndex]e2wtypes.Account) error {
-	return nil
-}
-
 // ProposerConfig returns the proposer configuration for the given validator.
-func (*Service) ProposerConfig(_ context.Context,
-	_ e2wtypes.Account,
-	_ phase0.BLSPubKey,
+func (s *Service) ProposerConfig(ctx context.Context,
+	account e2wtypes.Account,
+	pubkey phase0.BLSPubKey,
 ) (
 	*beaconblockproposer.ProposerConfig,
 	error,
 ) {
-	return nil, nil
+	s.executionConfigMu.RLock()
+	defer s.executionConfigMu.RUnlock()
+	if s.executionConfig == nil {
+		log.Warn().Msg("No execution configuration available; using fallback information")
+		return &beaconblockproposer.ProposerConfig{
+			FeeRecipient: s.fallbackFeeRecipient,
+			Relays:       make([]*beaconblockproposer.RelayConfig, 0),
+		}, nil
+	}
+	return s.executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit)
 }

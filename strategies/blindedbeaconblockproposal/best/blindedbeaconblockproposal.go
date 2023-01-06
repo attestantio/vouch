@@ -38,10 +38,18 @@ type beaconBlockResponse struct {
 }
 
 // BlindedBeaconBlockProposal provides the best blinded beacon block proposal from a number of beacon nodes.
-func (s *Service) BlindedBeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*api.VersionedBlindedBeaconBlock, error) {
-	ctx, span := otel.Tracer("attestantio.vouch.strategies.blindedbeaconblockproposal.best").Start(ctx, "BlindedBeaconBlockProposal", trace.WithAttributes(
-		attribute.Int64("slot", int64(slot)),
-	))
+func (s *Service) BlindedBeaconBlockProposal(ctx context.Context,
+	slot phase0.Slot,
+	randaoReveal phase0.BLSSignature,
+	graffiti []byte,
+) (
+	*api.VersionedBlindedBeaconBlock,
+	error,
+) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.blindedbeaconblockproposal.best").Start(ctx, "BlindedBeaconBlockProposal",
+		trace.WithAttributes(
+			attribute.Int64("slot", int64(slot)),
+		))
 	defer span.End()
 
 	started := time.Now()

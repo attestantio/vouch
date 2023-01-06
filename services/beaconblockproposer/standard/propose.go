@@ -163,6 +163,9 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		log.Error().Err(err).Msg("Failed to auction block")
 		return auctionResultFailedCanTryWithout
 	}
+	if auctionResults.Bid == nil {
+		return auctionResultNoBids
+	}
 
 	proposal, err := s.obtainBlindedProposal(ctx, duty, graffiti, auctionResults)
 	if err != nil {
@@ -318,7 +321,7 @@ func (s *Service) auctionBlock(ctx context.Context,
 		return nil, err
 	}
 	if auctionResults == nil || len(auctionResults.Values) == 0 {
-		return nil, errors.New("no bids obtained")
+		return &blockauctioneer.Results{}, nil
 	}
 
 	if e := log.Trace(); e.Enabled() {
@@ -359,6 +362,7 @@ func (s *Service) obtainBlindedProposal(ctx context.Context,
 
 	return proposal, nil
 }
+
 func (*Service) validateBlindedBeaconBlockProposal(_ context.Context,
 	duty *beaconblockproposer.Duty,
 	auctionResults *blockauctioneer.Results,
@@ -401,6 +405,7 @@ func (*Service) validateBlindedBeaconBlockProposal(_ context.Context,
 	}
 	if !bytes.Equal(proposalTransactionsRoot[:], auctionTransactionsRoot[:]) {
 		log.Debug().
+			Uint64("slot", uint64(duty.Slot())).
 			Str("proposal_transactions_root", fmt.Sprintf("%#x", proposalTransactionsRoot[:])).
 			Str("auction_transactions_root", fmt.Sprintf("%#x", auctionTransactionsRoot[:])).
 			Msg("Transactions root mismatch")

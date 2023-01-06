@@ -17,18 +17,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
 	builderclient "github.com/attestantio/go-builder-client"
-	"github.com/attestantio/go-builder-client/api"
+	builderapi "github.com/attestantio/go-builder-client/api"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-builder-client/spec"
+	builderspec "github.com/attestantio/go-builder-client/spec"
 	eth2client "github.com/attestantio/go-eth2-client"
-	consensusclientapi "github.com/attestantio/go-eth2-client/api"
-	consensusclientapiv1 "github.com/attestantio/go-eth2-client/api/v1"
-	consensusclientspec "github.com/attestantio/go-eth2-client/spec"
+	consensusapi "github.com/attestantio/go-eth2-client/api"
+	consensusapiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
@@ -110,86 +112,48 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 		return errors.New("no execution configuration; cannot submit validator registrations at current")
 	}
 
-	consensusRegistrations := make([]*consensusclientapi.VersionedSignedValidatorRegistration, 0, len(accounts))
-	signedRegistrations := make(map[string][]*api.VersionedSignedValidatorRegistration)
+	consensusRegistrations := make([]*consensusapi.VersionedSignedValidatorRegistration, 0, len(accounts))
+	relayRegistrations := make(map[string][]*builderapi.VersionedSignedValidatorRegistration)
 	var pubkey phase0.BLSPubKey
-	for index, account := range accounts {
+	for _, account := range accounts {
 		if provider, isProvider := account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
 			copy(pubkey[:], provider.CompositePublicKey().Marshal())
 		} else {
 			copy(pubkey[:], account.PublicKey().Marshal())
 		}
-		proposerConfig := s.executionConfig.ProposerConfig(pubkey)
-
-		// See if we already have a signed registration that matches this configuration.
-		s.signedValidatorRegistrationsMu.RLock()
-		signedRegistration, exists := s.signedValidatorRegistrations[pubkey]
-		s.signedValidatorRegistrationsMu.RUnlock()
-		if exists {
-			// See if we have a matching pre-signed registration for this validator.
-			if bytes.Equal(proposerConfig.FeeRecipient[:], signedRegistration.Message.FeeRecipient[:]) &&
-				proposerConfig.GasLimit == signedRegistration.Message.GasLimit {
-				monitorRegistrationsGeneration("cache")
-			} else {
-				signedRegistration = nil
-			}
+		proposerConfig, err := s.executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit)
+		if err != nil {
+			return errors.Wrap(err, "No proposer configuration; cannot submit validator registrations")
 		}
-		if signedRegistration == nil {
-			// Need to build and sign a new registration.
-			registration := &apiv1.ValidatorRegistration{
-				FeeRecipient: proposerConfig.FeeRecipient,
-				GasLimit:     proposerConfig.GasLimit,
-				Timestamp:    time.Now().Round(time.Second),
-				Pubkey:       pubkey,
-			}
-
-			sig, err := s.validatorRegistrationSigner.SignValidatorRegistration(ctx, account, &api.VersionedValidatorRegistration{
-				Version: spec.BuilderVersionV1,
-				V1:      registration,
-			})
+		for index, relay := range proposerConfig.Relays {
+			relayRegistration, consensusRegistration, err := s.generateValidatorRegistrationForRelay(ctx, account, pubkey, relay)
 			if err != nil {
-				// Log an error but continue.
-				log.Error().Err(err).Uint64("index", uint64(index)).Msg("Failed to sign validator registration")
+				// Recognise the error but continue, to submit as many validator registrations as possible.
+				log.Error().Str("relay", relay.Address).Err(err).Msg("Failed to generate registration; validator will not be registered with MEV relay")
 				continue
 			}
-
-			signedRegistration = &apiv1.SignedValidatorRegistration{
-				Message:   registration,
-				Signature: sig,
+			if e := log.Trace(); e.Enabled() {
+				data, err := json.Marshal(relayRegistration)
+				if err == nil {
+					e.Str("pubkey", fmt.Sprintf("%#x", pubkey)).Str("relay", relay.Address).RawJSON("registration", data).Msg("Registration")
+				}
 			}
-			s.signedValidatorRegistrationsMu.Lock()
-			s.signedValidatorRegistrations[pubkey] = signedRegistration
-			s.signedValidatorRegistrationsMu.Unlock()
-			monitorRegistrationsGeneration("generation")
-		}
-
-		versionedSignedRegistration := &api.VersionedSignedValidatorRegistration{
-			Version: spec.BuilderVersionV1,
-			V1:      signedRegistration,
-		}
-		for _, relay := range proposerConfig.Builder.Relays {
-			if _, exists := signedRegistrations[relay]; !exists {
-				signedRegistrations[relay] = make([]*api.VersionedSignedValidatorRegistration, 0)
+			// Add the relay registration to the appropriate queue.
+			if _, exists := relayRegistrations[relay.Address]; !exists {
+				relayRegistrations[relay.Address] = make([]*builderapi.VersionedSignedValidatorRegistration, 0)
 			}
-			signedRegistrations[relay] = append(signedRegistrations[relay], versionedSignedRegistration)
+			relayRegistrations[relay.Address] = append(relayRegistrations[relay.Address], relayRegistration)
+			// We only add the first relay's consensus registration, as they are used purely to alert
+			// the beacon node that the validator is expecting to use relays.
+			if index == 0 {
+				consensusRegistrations = append(consensusRegistrations, consensusRegistration)
+			}
 		}
-		consensusRegistrations = append(consensusRegistrations, &consensusclientapi.VersionedSignedValidatorRegistration{
-			Version: consensusclientspec.BuilderVersionV1,
-			V1: &consensusclientapiv1.SignedValidatorRegistration{
-				Message: &consensusclientapiv1.ValidatorRegistration{
-					FeeRecipient: signedRegistration.Message.FeeRecipient,
-					GasLimit:     signedRegistration.Message.GasLimit,
-					Timestamp:    signedRegistration.Message.Timestamp,
-					Pubkey:       signedRegistration.Message.Pubkey,
-				},
-				Signature: signedRegistration.Signature,
-			},
-		})
 	}
 	span.AddEvent("Generated registrations")
 
 	if e := log.Trace(); e.Enabled() {
-		data, err := json.Marshal(signedRegistrations)
+		data, err := json.Marshal(relayRegistrations)
 		if err == nil {
 			e.RawJSON("registrations", data).Msg("Generated registrations")
 		}
@@ -203,9 +167,9 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 
 	// Submit registrations in parallel to the builders.
 	var wg sync.WaitGroup
-	for builder, providerRegistrations := range signedRegistrations {
+	for builder, providerRegistrations := range relayRegistrations {
 		wg.Add(1)
-		go func(ctx context.Context, builder string, providerRegistrations []*api.VersionedSignedValidatorRegistration, monitor metrics.Service) {
+		go func(ctx context.Context, builder string, providerRegistrations []*builderapi.VersionedSignedValidatorRegistration, monitor metrics.Service) {
 			defer wg.Done()
 			ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "(submit relay registrations)", trace.WithAttributes(
 				attribute.String("relay", builder),
@@ -229,24 +193,99 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 		}(ctx, builder, providerRegistrations, s.monitor)
 	}
 	// Submit secondary registrations as well.
-	for _, submitter := range s.secondaryValidatorRegistrationsSubmitters {
-		wg.Add(1)
-		go func(ctx context.Context, submitter eth2client.ValidatorRegistrationsSubmitter, registrations []*consensusclientapi.VersionedSignedValidatorRegistration) {
-			defer wg.Done()
-			ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "(submit consensus registrations)", trace.WithAttributes(
-				attribute.String("node", submitter.(eth2client.Service).Address()),
-			))
-			defer span.End()
+	if len(consensusRegistrations) > 0 {
+		for _, submitter := range s.secondaryValidatorRegistrationsSubmitters {
+			wg.Add(1)
+			go func(ctx context.Context, submitter eth2client.ValidatorRegistrationsSubmitter, registrations []*consensusapi.VersionedSignedValidatorRegistration) {
+				defer wg.Done()
+				ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "(submit consensus registrations)", trace.WithAttributes(
+					attribute.String("node", submitter.(eth2client.Service).Address()),
+				))
+				defer span.End()
 
-			log.Trace().Str("client", submitter.(eth2client.Service).Address()).Msg("Submitting secondary validator registrations")
-			if err := submitter.SubmitValidatorRegistrations(ctx, consensusRegistrations); err != nil {
-				log.Error().Err(err).Str("client", submitter.(eth2client.Service).Address()).Msg("Failed to submit secondary validator registrations")
-				return
-			}
-		}(ctx, submitter, consensusRegistrations)
+				log.Trace().Str("client", submitter.(eth2client.Service).Address()).Msg("Submitting secondary validator registrations")
+				if err := submitter.SubmitValidatorRegistrations(ctx, registrations); err != nil {
+					log.Error().Err(err).Str("client", submitter.(eth2client.Service).Address()).Msg("Failed to submit secondary validator registrations")
+					return
+				}
+			}(ctx, submitter, consensusRegistrations)
+		}
 	}
 
 	wg.Wait()
+	span.AddEvent("Submitted registrations")
 
 	return nil
+}
+
+func (s *Service) generateValidatorRegistrationForRelay(ctx context.Context,
+	account e2wtypes.Account,
+	pubkey phase0.BLSPubKey,
+	relayConfig *beaconblockproposer.RelayConfig,
+) (
+	*builderapi.VersionedSignedValidatorRegistration,
+	*consensusapi.VersionedSignedValidatorRegistration,
+	error,
+) {
+	// See if we already have a signed registration that matches this configuration.
+	key := fmt.Sprintf("%x:%s", pubkey, relayConfig.Address)
+	s.signedValidatorRegistrationsMu.RLock()
+	signedRegistration, exists := s.signedValidatorRegistrations[key]
+	s.signedValidatorRegistrationsMu.RUnlock()
+	if exists {
+		// See if the details of the pre-signed registration match our parameters.
+		if bytes.Equal(relayConfig.FeeRecipient[:], signedRegistration.Message.FeeRecipient[:]) &&
+			relayConfig.GasLimit == signedRegistration.Message.GasLimit {
+			monitorRegistrationsGeneration("cache")
+		} else {
+			signedRegistration = nil
+		}
+	}
+	if signedRegistration == nil {
+		log.Trace().Msg("No signed registration; creating one")
+		// Need to build and sign a new registration.
+		registration := &apiv1.ValidatorRegistration{
+			FeeRecipient: relayConfig.FeeRecipient,
+			GasLimit:     relayConfig.GasLimit,
+			Timestamp:    time.Now().Round(time.Second),
+			Pubkey:       pubkey,
+		}
+
+		sig, err := s.validatorRegistrationSigner.SignValidatorRegistration(ctx, account, &builderapi.VersionedValidatorRegistration{
+			Version: builderspec.BuilderVersionV1,
+			V1:      registration,
+		})
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "failed to sign validator registration")
+		}
+
+		signedRegistration = &apiv1.SignedValidatorRegistration{
+			Message:   registration,
+			Signature: sig,
+		}
+		s.signedValidatorRegistrationsMu.Lock()
+		s.signedValidatorRegistrations[key] = signedRegistration
+		s.signedValidatorRegistrationsMu.Unlock()
+		monitorRegistrationsGeneration("generation")
+	}
+
+	relayRegistration := &builderapi.VersionedSignedValidatorRegistration{
+		Version: builderspec.BuilderVersionV1,
+		V1:      signedRegistration,
+	}
+
+	consensusRegistration := &consensusapi.VersionedSignedValidatorRegistration{
+		Version: consensusspec.BuilderVersionV1,
+		V1: &consensusapiv1.SignedValidatorRegistration{
+			Message: &consensusapiv1.ValidatorRegistration{
+				FeeRecipient: signedRegistration.Message.FeeRecipient,
+				GasLimit:     signedRegistration.Message.GasLimit,
+				Timestamp:    signedRegistration.Message.Timestamp,
+				Pubkey:       signedRegistration.Message.Pubkey,
+			},
+			Signature: signedRegistration.Signature,
+		},
+	}
+
+	return relayRegistration, consensusRegistration, nil
 }

@@ -11,13 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package blockrelay_test
+package v1_test
 
 import (
 	"encoding/json"
 	"testing"
 
-	"github.com/attestantio/vouch/services/blockrelay"
+	v1 "github.com/attestantio/vouch/services/blockrelay/v1"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
 )
@@ -35,7 +35,7 @@ func TestExecutionConfig(t *testing.T) {
 		{
 			name:  "JSONBad",
 			input: []byte("[]"),
-			err:   "invalid JSON: json: cannot unmarshal array into Go value of type blockrelay.executionConfigJSON",
+			err:   "invalid JSON: json: cannot unmarshal array into Go value of type v1.executionConfigJSON",
 		},
 		{
 			name:  "ProposerConfigKeyWrongType",
@@ -60,7 +60,7 @@ func TestExecutionConfig(t *testing.T) {
 		{
 			name:  "DefaultConfigWrongType",
 			input: []byte(`{"proposer_config":{"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":{"fee_recipient":"0x1111111111111111111111111111111111111111"}},"default_config":true}`),
-			err:   "invalid JSON: invalid JSON: json: cannot unmarshal bool into Go value of type blockrelay.proposerConfigJSON",
+			err:   "invalid JSON: invalid JSON: json: cannot unmarshal bool into Go value of type v1.proposerConfigJSON",
 		},
 		{
 			name:  "Minimal",
@@ -86,7 +86,7 @@ func TestExecutionConfig(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var res blockrelay.ExecutionConfig
+			var res v1.ExecutionConfig
 			err := json.Unmarshal(test.input, &res)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)

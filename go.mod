@@ -6,7 +6,7 @@ require (
 	github.com/attestantio/go-block-relay v0.1.7
 	github.com/attestantio/go-builder-client v0.2.5
 	github.com/attestantio/go-eth2-client v0.15.1
-	github.com/aws/aws-sdk-go v1.44.141
+	github.com/aws/aws-sdk-go v1.44.150
 	github.com/herumi/bls-eth-go-binary v1.28.1 // indirect
 	github.com/holiman/uint256 v1.2.1
 	github.com/jackc/puddle v1.3.0 // indirect
@@ -20,7 +20,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.14.0
 	github.com/stretchr/testify v1.8.1
-	github.com/wealdtech/go-bytesutil v1.1.1
+	github.com/wealdtech/go-bytesutil v1.2.0
 	github.com/wealdtech/go-eth2-types/v2 v2.8.0
 	github.com/wealdtech/go-eth2-wallet v1.15.0
 	github.com/wealdtech/go-eth2-wallet-dirk v1.4.1
@@ -30,7 +30,7 @@ require (
 	github.com/wealdtech/go-eth2-wallet-store-filesystem v1.17.0
 	github.com/wealdtech/go-eth2-wallet-store-scratch v1.7.0
 	github.com/wealdtech/go-eth2-wallet-types/v2 v2.10.0
-	github.com/wealdtech/go-majordomo v1.1.0
+	github.com/wealdtech/go-majordomo v1.1.1
 	go.opentelemetry.io/otel v1.11.2
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.11.2
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.11.2
@@ -44,6 +44,8 @@ require (
 	google.golang.org/grpc v1.51.0
 	gotest.tools v2.2.0+incompatible
 )
+
+require github.com/shopspring/decimal v1.3.1
 
 require (
 	cloud.google.com/go v0.107.0 // indirect
@@ -90,12 +92,13 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
-	github.com/petermattis/goid v0.0.0-20221018141743-354ef7f2fd21 // indirect
+	github.com/petermattis/goid v0.0.0-20221202122410-a449aaf35945 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.39.0 // indirect
 	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/shibukawa/configdir v0.0.0-20170330084843-e180dbdc8da0 // indirect
+	github.com/shopspring/decimal v1.3.1 // indirect
 	github.com/spf13/afero v1.9.3 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
@@ -103,9 +106,9 @@ require (
 	github.com/ugorji/go/codec v1.2.7 // indirect
 	github.com/wealdtech/eth2-signer-api v1.7.1 // indirect
 	github.com/wealdtech/go-ecodec v1.1.2 // indirect
-	github.com/wealdtech/go-eth2-util v1.7.0 // indirect
+	github.com/wealdtech/go-eth2-util v1.8.0 // indirect
 	github.com/wealdtech/go-eth2-wallet-distributed v1.1.4 // indirect
-	github.com/wealdtech/go-eth2-wallet-store-s3 v1.10.0 // indirect
+	github.com/wealdtech/go-eth2-wallet-store-s3 v1.11.0 // indirect
 	github.com/wealdtech/go-indexer v1.0.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.37.0 // indirect

@@ -14,84 +14,39 @@
 package blockrelay
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
 
-	"github.com/attestantio/go-eth2-client/spec/phase0"
+	v1 "github.com/attestantio/vouch/services/blockrelay/v1"
+	v2 "github.com/attestantio/vouch/services/blockrelay/v2"
 	"github.com/pkg/errors"
 )
 
-// ExecutionConfig is the execution configuration for validators.
-type ExecutionConfig struct {
-	ProposerConfigs map[phase0.BLSPubKey]*ProposerConfig
-	DefaultConfig   *ProposerConfig
+type executionConfigMetadataJSON struct {
+	Version int `json:"version"`
 }
 
-type executionConfigJSON struct {
-	ProposerConfigs map[string]*ProposerConfig `json:"proposer_config,omitempty"`
-	DefaultConfig   *ProposerConfig            `json:"default_config,omitempty"`
-}
-
-// MarshalJSON implements json.Marshaler.
-func (e *ExecutionConfig) MarshalJSON() ([]byte, error) {
-	proposerConfigs := make(map[string]*ProposerConfig)
-	for addr, proposerConfig := range e.ProposerConfigs {
-		proposerConfigs[fmt.Sprintf("%#x", addr)] = proposerConfig
+// UnmarshalJSON unmarshals an execution configurator.
+func UnmarshalJSON(data []byte) (ExecutionConfigurator, error) {
+	var metadata executionConfigMetadataJSON
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal metadata")
 	}
 
-	return json.Marshal(&executionConfigJSON{
-		ProposerConfigs: proposerConfigs,
-		DefaultConfig:   e.DefaultConfig,
-	})
-}
-
-// UnmarshalJSON implements json.Unmarshaler.
-func (e *ExecutionConfig) UnmarshalJSON(input []byte) error {
-	var data executionConfigJSON
-	if err := json.Unmarshal(input, &data); err != nil {
-		return errors.Wrap(err, "invalid JSON")
-	}
-
-	proposerConfigs := make(map[phase0.BLSPubKey]*ProposerConfig, len(data.ProposerConfigs))
-	for key, config := range data.ProposerConfigs {
-		pubkey, err := hex.DecodeString(strings.TrimPrefix(key, "0x"))
-		if err != nil {
-			return errors.Wrap(err, "failed to decode public key")
+	switch metadata.Version {
+	case 0:
+		var execConfigV1 v1.ExecutionConfig
+		if err := json.Unmarshal(data, &execConfigV1); err != nil {
+			return nil, errors.Wrap(err, "failed to unmarshal unversioned execution config")
 		}
-		pubKey := phase0.BLSPubKey{}
-		if len(pubkey) != len(pubKey) {
-			return fmt.Errorf("public key has %d bytes, should have %d", len(pubkey), len(pubKey))
+		return &execConfigV1, nil
+	case 2:
+		var execConfigV2 v2.ExecutionConfig
+		if err := json.Unmarshal(data, &execConfigV2); err != nil {
+			return nil, errors.Wrap(err, "failed to unmarshal version 2 execution config")
 		}
-
-		copy(pubKey[:], pubkey)
-		proposerConfigs[pubKey] = config
+		return &execConfigV2, nil
+	default:
+		return nil, fmt.Errorf("unhandled execution config version %d", metadata.Version)
 	}
-	e.ProposerConfigs = proposerConfigs
-
-	if data.DefaultConfig == nil {
-		return errors.New("default config missing")
-	}
-	e.DefaultConfig = data.DefaultConfig
-
-	return nil
-}
-
-// ProposerConfig provides the proposer configuration for a given public key.
-func (e *ExecutionConfig) ProposerConfig(pubkey phase0.BLSPubKey,
-) *ProposerConfig {
-	if _, exists := e.ProposerConfigs[pubkey]; exists {
-		return e.ProposerConfigs[pubkey]
-	}
-	return e.DefaultConfig
-}
-
-// String provides a string representation of the struct.
-func (e *ExecutionConfig) String() string {
-	data, err := json.Marshal(e)
-	if err != nil {
-		return fmt.Sprintf("ERR: %v\n", err)
-	}
-	return string(data)
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/blockrelay"
+	v2 "github.com/attestantio/vouch/services/blockrelay/v2"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
@@ -47,18 +48,19 @@ type Service struct {
 	clientCertURL                             string
 	clientKeyURL                              string
 	caCertURL                                 string
+	accountsProvider                          accountmanager.AccountsProvider
 	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	builderBidsCache                          map[string]map[string]*builderspec.VersionedSignedBuilderBid
 	builderBidsCacheMu                        sync.RWMutex
 	timeout                                   time.Duration
-	signedValidatorRegistrations              map[phase0.BLSPubKey]*apiv1.SignedValidatorRegistration
+	signedValidatorRegistrations              map[string]*apiv1.SignedValidatorRegistration
 	signedValidatorRegistrationsMu            sync.RWMutex
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 	logResults                                bool
 	applicationBuilderDomain                  phase0.Domain
 
-	executionConfig   *blockrelay.ExecutionConfig
+	executionConfig   blockrelay.ExecutionConfigurator
 	executionConfigMu sync.RWMutex
 
 	relayPubkeys   map[phase0.BLSPubKey]*e2types.BLSPublicKey
@@ -113,15 +115,17 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		caCertURL:                    parameters.caCertURL,
 		fallbackFeeRecipient:         parameters.fallbackFeeRecipient,
 		fallbackGasLimit:             parameters.fallbackGasLimit,
+		accountsProvider:             parameters.accountsProvider,
 		validatingAccountsProvider:   parameters.validatingAccountsProvider,
 		validatorRegistrationSigner:  parameters.validatorRegistrationSigner,
 		timeout:                      parameters.timeout,
-		signedValidatorRegistrations: make(map[phase0.BLSPubKey]*apiv1.SignedValidatorRegistration),
+		signedValidatorRegistrations: make(map[string]*apiv1.SignedValidatorRegistration),
 		secondaryValidatorRegistrationsSubmitters: parameters.secondaryValidatorRegistrationsSubmitters,
 		logResults:               parameters.logResults,
 		applicationBuilderDomain: domain,
 		builderBidsCache:         make(map[string]map[string]*builderspec.VersionedSignedBuilderBid),
 		relayPubkeys:             make(map[phase0.BLSPubKey]*e2types.BLSPublicKey),
+		executionConfig:          &v2.ExecutionConfig{Version: 2},
 	}
 
 	// Carry out initial fetch of execution configuration.
