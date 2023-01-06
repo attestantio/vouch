@@ -179,7 +179,7 @@ func TestProposerConfig(t *testing.T) {
 			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","relays":[]}`,
 			logEntries: []map[string]interface{}{
 				{
-					"message": "No execution configuration available; using fallback information",
+					"message": "Failed to obtain execution configuration",
 				},
 			},
 		},
