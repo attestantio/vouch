@@ -26,6 +26,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/blockrelay"
+	v2 "github.com/attestantio/vouch/services/blockrelay/v2"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
@@ -124,6 +125,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		applicationBuilderDomain: domain,
 		builderBidsCache:         make(map[string]map[string]*builderspec.VersionedSignedBuilderBid),
 		relayPubkeys:             make(map[phase0.BLSPubKey]*e2types.BLSPublicKey),
+		executionConfig:          &v2.ExecutionConfig{Version: 2},
 	}
 
 	// Carry out initial fetch of execution configuration.

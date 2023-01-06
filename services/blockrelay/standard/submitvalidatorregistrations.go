@@ -193,21 +193,23 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 		}(ctx, builder, providerRegistrations, s.monitor)
 	}
 	// Submit secondary registrations as well.
-	for _, submitter := range s.secondaryValidatorRegistrationsSubmitters {
-		wg.Add(1)
-		go func(ctx context.Context, submitter eth2client.ValidatorRegistrationsSubmitter, registrations []*consensusapi.VersionedSignedValidatorRegistration) {
-			defer wg.Done()
-			ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "(submit consensus registrations)", trace.WithAttributes(
-				attribute.String("node", submitter.(eth2client.Service).Address()),
-			))
-			defer span.End()
+	if len(consensusRegistrations) > 0 {
+		for _, submitter := range s.secondaryValidatorRegistrationsSubmitters {
+			wg.Add(1)
+			go func(ctx context.Context, submitter eth2client.ValidatorRegistrationsSubmitter, registrations []*consensusapi.VersionedSignedValidatorRegistration) {
+				defer wg.Done()
+				ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "(submit consensus registrations)", trace.WithAttributes(
+					attribute.String("node", submitter.(eth2client.Service).Address()),
+				))
+				defer span.End()
 
-			log.Trace().Str("client", submitter.(eth2client.Service).Address()).Msg("Submitting secondary validator registrations")
-			if err := submitter.SubmitValidatorRegistrations(ctx, registrations); err != nil {
-				log.Error().Err(err).Str("client", submitter.(eth2client.Service).Address()).Msg("Failed to submit secondary validator registrations")
-				return
-			}
-		}(ctx, submitter, consensusRegistrations)
+				log.Trace().Str("client", submitter.(eth2client.Service).Address()).Msg("Submitting secondary validator registrations")
+				if err := submitter.SubmitValidatorRegistrations(ctx, registrations); err != nil {
+					log.Error().Err(err).Str("client", submitter.(eth2client.Service).Address()).Msg("Failed to submit secondary validator registrations")
+					return
+				}
+			}(ctx, submitter, consensusRegistrations)
+		}
 	}
 
 	wg.Wait()

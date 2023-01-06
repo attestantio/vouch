@@ -422,7 +422,15 @@ func (s *Service) verifyBidSignature(_ context.Context,
 		return false, errors.Wrap(err, "invalid signature")
 	}
 
-	return sig.Verify(signingRoot[:], pubkey), nil
+	verified := sig.Verify(signingRoot[:], pubkey)
+	if !verified {
+		data, err := json.Marshal(bid)
+		if err == nil {
+			log.Debug().RawJSON("bid", data).Msg("Verification failure")
+		}
+	}
+
+	return verified, nil
 }
 
 // bidsEqual returns true if the two bids are equal.

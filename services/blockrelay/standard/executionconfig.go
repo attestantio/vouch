@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/attestantio/vouch/services/blockrelay"
-	v2 "github.com/attestantio/vouch/services/blockrelay/v2"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	httpconfidant "github.com/wealdtech/go-majordomo/confidants/http"
@@ -78,30 +77,29 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 		}
 	}
 
-	// Obtain the execution configuration, handling errors appropriately.
-	succeeded := true
-	executionConfig, err := s.obtainExecutionConfig(ctx, pubkeys)
-	if err != nil {
-		succeeded = false
-		log.Error().Err(err).Msg("Failed to obtain execution configuration")
-	}
-	if executionConfig == nil {
-		succeeded = false
-		log.Error().Err(err).Msg("Obtained nil execution configuration")
-	}
+	// Start with our current execution configuration.
+	s.executionConfigMu.RLock()
+	executionConfig := s.executionConfig
+	s.executionConfigMu.RUnlock()
 
-	if executionConfig == nil {
-		if s.executionConfig == nil {
-			log.Error().Err(err).Msg("Setting default configuration with fallback")
-			s.executionConfig = &v2.ExecutionConfig{
-				Version: 2,
-			}
-		} else {
-			log.Warn().Err(err).Msg("Retaining current configuration")
-			s.executionConfigMu.RLock()
+	if s.configURL == "" {
+		log.Trace().Msg("No config URL; using default configuration with fallback")
+	} else {
+		succeeded := true
+		// Obtain the execution configuration, handling errors appropriately.
+		executionConfig, err = s.obtainExecutionConfig(ctx, pubkeys)
+		if err != nil {
+			succeeded = false
+			log.Error().Str("config_url", s.configURL).Err(err).Msg("Failed to obtain execution configuration")
+			// Restore current execution configuration.
 			executionConfig = s.executionConfig
-			s.executionConfigMu.RUnlock()
+		} else if executionConfig == nil {
+			succeeded = false
+			log.Error().Str("config_url", s.configURL).Msg("Obtained nil execution configuration")
+			// Restore current execution configuration.
+			executionConfig = s.executionConfig
 		}
+		monitorExecutionConfig(time.Since(started), succeeded)
 	}
 
 	s.executionConfigMu.Lock()
@@ -109,8 +107,6 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 	s.executionConfigMu.Unlock()
 
 	log.Trace().Msg("Obtained configuration")
-
-	monitorExecutionConfig(time.Since(started), succeeded)
 }
 
 func (s *Service) obtainExecutionConfig(ctx context.Context,
