@@ -188,7 +188,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context,
 	go func() {
 		for {
 			runtime, err := runtimeFunc(ctx, runtimeData)
-			if err == scheduler.ErrNoMoreInstances {
+			if errors.Is(err, scheduler.ErrNoMoreInstances) {
 				log.Trace().Str("job", name).Msg("No more instances; period job stopping")
 				s.jobsMutex.Lock()
 				delete(s.jobs, name)

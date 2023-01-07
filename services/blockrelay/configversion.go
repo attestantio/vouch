@@ -52,7 +52,7 @@ func (c *ConfigVersion) UnmarshalJSON(input []byte) error {
 	return err
 }
 
-// String returns a string representation of the
+// String returns a string representation of the version.
 func (c *ConfigVersion) String() string {
 	if int(*c) >= len(configVersionStrings) {
 		return "unknown"

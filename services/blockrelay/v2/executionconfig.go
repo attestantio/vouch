@@ -142,7 +142,7 @@ func (e *ExecutionConfig) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-// ProposerConfig returns the proposer configuration for the given validator,
+// ProposerConfig returns the proposer configuration for the given validator.
 func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 	account e2wtypes.Account,
 	pubkey phase0.BLSPubKey,

@@ -74,11 +74,7 @@ func (s *Service) Subscribe(ctx context.Context,
 	log := log.With().Uint64("end_epoch", uint64(endEpoch)).Logger()
 	log.Trace().Msg("Subscribing")
 
-	subscriptions, err := s.calculateSubscriptions(ctx, endEpoch, duties)
-	if err != nil {
-		s.monitor.SyncCommitteeSubscriptionCompleted(started, "failed")
-		return errors.Wrap(err, "failed to calculate subscription duties")
-	}
+	subscriptions := s.calculateSubscriptions(ctx, endEpoch, duties)
 	log.Trace().Msg("Calculated subscription info")
 
 	if err := s.submitter.SubmitSyncCommitteeSubscriptions(ctx, subscriptions); err != nil {
@@ -98,10 +94,7 @@ func (s *Service) Subscribe(ctx context.Context,
 func (*Service) calculateSubscriptions(_ context.Context,
 	endEpoch phase0.Epoch,
 	duties []*api.SyncCommitteeDuty,
-) (
-	[]*api.SyncCommitteeSubscription,
-	error,
-) {
+) []*api.SyncCommitteeSubscription {
 	subscriptions := make([]*api.SyncCommitteeSubscription, 0, len(duties))
 	for _, duty := range duties {
 		subscriptions = append(subscriptions, &api.SyncCommitteeSubscription{
@@ -111,5 +104,5 @@ func (*Service) calculateSubscriptions(_ context.Context,
 		})
 	}
 
-	return subscriptions, nil
+	return subscriptions
 }

@@ -14,6 +14,8 @@
 package advanced
 
 import (
+	"errors"
+
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/rs/zerolog"
@@ -53,6 +55,7 @@ func WithMonitor(monitor metrics.SchedulerMonitor) Parameter {
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel: zerolog.GlobalLevel(),
+		monitor:  &nullmetrics.Service{},
 	}
 	for _, p := range params {
 		if params != nil {
@@ -61,7 +64,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 
 	if parameters.monitor == nil {
-		parameters.monitor = &nullmetrics.Service{}
+		return nil, errors.New("no monitor specified")
 	}
 
 	return &parameters, nil

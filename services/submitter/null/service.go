@@ -34,10 +34,7 @@ var log zerolog.Logger
 
 // New creates a new submitter.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
-	parameters, err := parseAndCheckParameters(params...)
-	if err != nil {
-		return nil, errors.Wrap(err, "problem with parameters")
-	}
+	parameters := parseAndCheckParameters(params...)
 
 	// Set logging.
 	log = zerologger.With().Str("service", "submitter").Str("impl", "null").Logger()

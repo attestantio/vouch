@@ -41,7 +41,7 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 }
 
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
-func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
+func parseAndCheckParameters(params ...Parameter) *parameters {
 	parameters := parameters{
 		logLevel: zerolog.GlobalLevel(),
 	}
@@ -51,5 +51,5 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
-	return &parameters, nil
+	return &parameters
 }

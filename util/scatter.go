@@ -27,7 +27,7 @@ type ScatterResult struct {
 	Extent interface{}
 }
 
-// Scatter scatters a computation across multiple goroutines, returning a set of per-worker results
+// Scatter scatters a computation across multiple goroutines, returning a set of per-worker results.
 func Scatter(inputLen int, concurrency int, work func(int, int, *sync.RWMutex) (interface{}, error)) ([]*ScatterResult, error) {
 	if inputLen <= 0 {
 		return nil, errors.New("no data with which to work")
