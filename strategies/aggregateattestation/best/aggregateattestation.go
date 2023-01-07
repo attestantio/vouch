@@ -32,6 +32,11 @@ type aggregateAttestationResponse struct {
 	score     float64
 }
 
+type aggregateAttestationError struct {
+	provider string
+	err      error
+}
+
 // AggregateAttestation provides the aggregate attestation from a number of beacon nodes.
 func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, attestationDataRoot phase0.Root) (*phase0.Attestation, error) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.aggregateattestation.best").Start(ctx, "AggregateAttestation", trace.WithAttributes(
@@ -52,7 +57,7 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 	requests := len(s.aggregateAttestationProviders)
 
 	respCh := make(chan *aggregateAttestationResponse, requests)
-	errCh := make(chan error, requests)
+	errCh := make(chan *aggregateAttestationError, requests)
 	// Kick off the requests.
 	for name, provider := range s.aggregateAttestationProviders {
 		go s.aggregateAttestation(ctx, started, name, provider, respCh, errCh, slot, attestationDataRoot)
@@ -72,7 +77,13 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 		select {
 		case resp := <-respCh:
 			responded++
-			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", resp.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Response received")
 			if bestAggregateAttestation == nil || resp.score > bestScore {
 				bestAggregateAttestation = resp.aggregate
 				bestScore = resp.score
@@ -80,14 +91,29 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 			}
 		case err := <-errCh:
 			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Err(err.err).
+				Msg("Error received")
 		case <-softCtx.Done():
 			// If we have any responses at this point we consider the non-responders timed out.
 			if responded > 0 {
 				timedOut = requests - responded - errored
-				log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Soft timeout reached with responses")
+				log.Debug().
+					Dur("elapsed", time.Since(started)).
+					Int("responded", responded).
+					Int("errored", errored).
+					Int("timed_out", timedOut).
+					Msg("Soft timeout reached with responses")
 			} else {
-				log.Debug().Dur("elapsed", time.Since(started)).Int("errored", errored).Msg("Soft timeout reached with no responses")
+				log.Debug().
+					Dur("elapsed", time.Since(started)).
+					Int("errored", errored).
+					Msg("Soft timeout reached with no responses")
 			}
 			// Set the number of requests that have soft timed out.
 			softTimedOut = requests - responded - errored - timedOut
@@ -100,7 +126,13 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 		select {
 		case resp := <-respCh:
 			responded++
-			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", resp.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Response received")
 			if bestAggregateAttestation == nil || resp.score > bestScore {
 				bestAggregateAttestation = resp.aggregate
 				bestScore = resp.score
@@ -108,20 +140,41 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 			}
 		case err := <-errCh:
 			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Err(err.err).
+				Msg("Error received")
 		case <-ctx.Done():
 			// Anyone not responded by now is considered errored.
 			timedOut = requests - responded - errored
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Hard timeout reached")
 		}
 	}
 	cancel()
-	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Results")
+	log.Trace().
+		Dur("elapsed", time.Since(started)).
+		Int("responded", responded).
+		Int("errored", errored).
+		Int("timed_out", timedOut).
+		Msg("Results")
 
 	if bestAggregateAttestation == nil {
 		return nil, errors.New("no aggregate attestations received")
 	}
-	log.Trace().Str("provider", bestProvider).Stringer("aggregate_attestation", bestAggregateAttestation).Float64("score", bestScore).Msg("Selected best aggregate attestation")
+	log.Trace().
+		Str("provider", bestProvider).
+		Stringer("aggregate_attestation", bestAggregateAttestation).
+		Float64("score", bestScore).
+		Msg("Selected best aggregate attestation")
 	if bestProvider != "" {
 		s.clientMonitor.StrategyOperation("best", bestProvider, "aggregate attestation", time.Since(started))
 	}
@@ -133,7 +186,7 @@ func (s *Service) aggregateAttestation(ctx context.Context,
 	name string,
 	provider eth2client.AggregateAttestationProvider,
 	respCh chan *aggregateAttestationResponse,
-	errCh chan error,
+	errCh chan *aggregateAttestationError,
 	slot phase0.Slot,
 	attestationDataRoot phase0.Root,
 ) {
@@ -145,12 +198,18 @@ func (s *Service) aggregateAttestation(ctx context.Context,
 	aggregate, err := provider.AggregateAttestation(ctx, slot, attestationDataRoot)
 	s.clientMonitor.ClientOperation(name, "aggregate attestation", err == nil, time.Since(started))
 	if err != nil {
-		errCh <- errors.Wrap(err, name)
+		errCh <- &aggregateAttestationError{
+			provider: name,
+			err:      err,
+		}
 		return
 	}
 	log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained aggregate attestation")
 	if aggregate == nil {
-		errCh <- errors.New("aggregate attestation nil")
+		errCh <- &aggregateAttestationError{
+			provider: name,
+			err:      errors.New("aggregate attestation nil"),
+		}
 		return
 	}
 

@@ -33,6 +33,11 @@ type syncCommitteeContributionResponse struct {
 	score        float64
 }
 
+type syncCommitteeContributionError struct {
+	provider string
+	err      error
+}
+
 // SyncCommitteeContribution provides the sync committee contribution from a number of beacon nodes.
 func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slot, subcommitteeIndex uint64, beaconBlockRoot phase0.Root) (*altair.SyncCommitteeContribution, error) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.synccommitteecontribution.best").Start(ctx, "SyncCommitteeContribution", trace.WithAttributes(
@@ -53,7 +58,7 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 	requests := len(s.syncCommitteeContributionProviders)
 
 	respCh := make(chan *syncCommitteeContributionResponse, requests)
-	errCh := make(chan error, requests)
+	errCh := make(chan *syncCommitteeContributionError, requests)
 	// Kick off the requests.
 	for name, provider := range s.syncCommitteeContributionProviders {
 		go s.syncCommitteeContribution(ctx, started, name, provider, respCh, errCh, slot, subcommitteeIndex, beaconBlockRoot)
@@ -73,7 +78,13 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 		select {
 		case resp := <-respCh:
 			responded++
-			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", resp.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Response received")
 			if bestSyncCommitteeContribution == nil || resp.score > bestScore {
 				bestSyncCommitteeContribution = resp.contribution
 				bestScore = resp.score
@@ -81,14 +92,29 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 			}
 		case err := <-errCh:
 			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Err(err.err).
+				Msg("Error received")
 		case <-softCtx.Done():
 			// If we have any responses at this point we consider the non-responders timed out.
 			if responded > 0 {
 				timedOut = requests - responded - errored
-				log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Soft timeout reached with responses")
+				log.Debug().
+					Dur("elapsed", time.Since(started)).
+					Int("responded", responded).
+					Int("errored", errored).
+					Int("timed_out", timedOut).
+					Msg("Soft timeout reached with responses")
 			} else {
-				log.Debug().Dur("elapsed", time.Since(started)).Int("errored", errored).Msg("Soft timeout reached with no responses")
+				log.Debug().
+					Dur("elapsed", time.Since(started)).
+					Int("errored", errored).
+					Msg("Soft timeout reached with no responses")
 			}
 			// Set the number of requests that have soft timed out.
 			softTimedOut = requests - responded - errored - timedOut
@@ -101,7 +127,13 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 		select {
 		case resp := <-respCh:
 			responded++
-			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", resp.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Response received")
 			if bestSyncCommitteeContribution == nil || resp.score > bestScore {
 				bestSyncCommitteeContribution = resp.contribution
 				bestScore = resp.score
@@ -109,15 +141,32 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 			}
 		case err := <-errCh:
 			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Err(err).Msg("Error received")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Err(err.err).
+				Msg("Error received")
 		case <-ctx.Done():
 			// Anyone not responded by now is considered errored.
 			timedOut = requests - responded - errored
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Hard timeout reached")
 		}
 	}
 	cancel()
-	log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Results")
+	log.Trace().
+		Dur("elapsed", time.Since(started)).
+		Int("responded", responded).
+		Int("errored", errored).
+		Int("timed_out", timedOut).
+		Msg("Results")
 
 	if bestSyncCommitteeContribution == nil {
 		return nil, errors.New("no sync committee contribution received")
@@ -135,7 +184,7 @@ func (s *Service) syncCommitteeContribution(ctx context.Context,
 	name string,
 	provider eth2client.SyncCommitteeContributionProvider,
 	respCh chan *syncCommitteeContributionResponse,
-	errCh chan error,
+	errCh chan *syncCommitteeContributionError,
 	slot phase0.Slot,
 	subcommitteeIndex uint64,
 	beaconBlockRoot phase0.Root,
@@ -148,12 +197,18 @@ func (s *Service) syncCommitteeContribution(ctx context.Context,
 	contribution, err := provider.SyncCommitteeContribution(ctx, slot, subcommitteeIndex, beaconBlockRoot)
 	s.clientMonitor.ClientOperation(name, "sync committee contribution", err == nil, time.Since(started))
 	if err != nil {
-		errCh <- err
+		errCh <- &syncCommitteeContributionError{
+			provider: name,
+			err:      err,
+		}
 		return
 	}
 	log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained sync committee contribution")
 	if contribution == nil {
-		errCh <- errors.New("sync committee contribution nil")
+		errCh <- &syncCommitteeContributionError{
+			provider: name,
+			err:      errors.New("sync committee contribution nil"),
+		}
 		return
 	}
 
