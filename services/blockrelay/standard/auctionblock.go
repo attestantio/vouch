@@ -315,6 +315,14 @@ func (s *Service) builderBid(ctx context.Context,
 		errCh <- fmt.Errorf("%s: zero value", provider.Address())
 		return
 	}
+	if value.ToBig().Cmp(relayConfig.MinValue.BigInt()) < 0 {
+		log.Debug().Stringer("value", value.ToBig()).Stringer("min_value", relayConfig.MinValue.BigInt()).Msg("Value below minimum; ignoring")
+		respCh <- &builderBidResponse{
+			provider: provider,
+			score:    big.NewInt(0),
+		}
+		return
+	}
 
 	feeRecipient, err := builderBid.FeeRecipient()
 	if err != nil {
