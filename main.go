@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -36,9 +36,13 @@ import (
 	"github.com/attestantio/vouch/services/accountmanager"
 	dirkaccountmanager "github.com/attestantio/vouch/services/accountmanager/dirk"
 	walletaccountmanager "github.com/attestantio/vouch/services/accountmanager/wallet"
+	"github.com/attestantio/vouch/services/attestationaggregator"
 	standardattestationaggregator "github.com/attestantio/vouch/services/attestationaggregator/standard"
+	"github.com/attestantio/vouch/services/attester"
 	standardattester "github.com/attestantio/vouch/services/attester/standard"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	standardbeaconblockproposer "github.com/attestantio/vouch/services/beaconblockproposer/standard"
+	"github.com/attestantio/vouch/services/beaconcommitteesubscriber"
 	standardbeaconcommitteesubscriber "github.com/attestantio/vouch/services/beaconcommitteesubscriber/standard"
 	"github.com/attestantio/vouch/services/blockrelay"
 	standardblockrelay "github.com/attestantio/vouch/services/blockrelay/standard"
@@ -135,10 +139,7 @@ func main2() int {
 	logModules()
 	log.Info().Str("version", ReleaseVersion).Msg("Starting vouch")
 
-	if err := initProfiling(); err != nil {
-		log.Error().Err(err).Msg("Failed to initialise profiling")
-		return 1
-	}
+	initProfiling()
 
 	if err := initTracing(ctx, majordomo); err != nil {
 		log.Error().Err(err).Msg("Failed to initialise tracing")
@@ -232,8 +233,8 @@ func fetchConfig() error {
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 
 	if err := viper.ReadInConfig(); err != nil {
-		switch err.(type) {
-		case viper.ConfigFileNotFoundError:
+		switch {
+		case errors.Is(err, viper.ConfigFileNotFoundError{}):
 			// It is allowable for Vouch to not have a configuration file, but only if
 			// we have the information from elsewhere (e.g. environment variables).  Check
 			// to see if we have any beacon nodes configured, as if not we aren't going to
@@ -242,14 +243,16 @@ func fetchConfig() error {
 				// Assume the underlying issue is that the configuration file is missing.
 				return errors.Wrap(err, "could not find the configuration file")
 			}
-		case viper.ConfigParseError:
+		case errors.Is(err, viper.ConfigParseError{}):
 			return errors.Wrap(err, "could not parse the configuration file")
-		case viper.RemoteConfigError:
+		case errors.Is(err, viper.RemoteConfigError("")):
 			return errors.Wrap(err, "could not find the remote configuration file")
-		case viper.UnsupportedConfigError:
+		case errors.Is(err, viper.UnsupportedConfigError("")):
 			return errors.Wrap(err, "unsupported configuration file format")
-		case viper.UnsupportedRemoteProviderError:
+		case errors.Is(err, viper.UnsupportedRemoteProviderError("")):
 			return errors.Wrap(err, "unsupported remote configuration provider")
+		default:
+			return err
 		}
 	}
 
@@ -257,7 +260,7 @@ func fetchConfig() error {
 }
 
 // initProfiling initialises the profiling server.
-func initProfiling() error {
+func initProfiling() {
 	profileAddress := viper.GetString("profile-address")
 	if profileAddress != "" {
 		go func() {
@@ -272,7 +275,6 @@ func initProfiling() error {
 			}
 		}()
 	}
-	return nil
 }
 
 func startClient(ctx context.Context) (eth2client.Service, error) {
@@ -308,206 +310,45 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	log.Trace().Msg("Selecting scheduler")
-	scheduler, err := selectScheduler(ctx, monitor)
+	scheduler, cacheSvc, signerSvc, accountManager, err := startSharedServices(ctx, eth2Client, majordomo, chainTime, monitor)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to select scheduler")
+		return nil, nil, err
 	}
 
-	log.Trace().Msg("Starting cache")
-	cacheSvc, err := startCache(ctx, monitor, chainTime, scheduler, eth2Client)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start cache")
-	}
-
-	log.Trace().Msg("Starting validators manager")
-	validatorsManager, err := startValidatorsManager(ctx, monitor, eth2Client)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start validators manager")
-	}
-
-	log.Trace().Msg("Starting signer")
-	signerSvc, err := startSigner(ctx, monitor, eth2Client)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start signer")
-	}
-
-	log.Trace().Msg("Starting account manager")
-	accountManager, err := startAccountManager(ctx, monitor, eth2Client, validatorsManager, majordomo, chainTime)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start account manager")
-	}
-
-	log.Trace().Msg("Selecting submitter strategy")
-	submitterStrategy, err := selectSubmitterStrategy(ctx, monitor, eth2Client)
+	submitter, err := selectSubmitterStrategy(ctx, monitor, eth2Client)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to select submitter")
 	}
 
-	log.Trace().Msg("Starting graffiti provider")
-	graffitiProvider, err := startGraffitiProvider(ctx, majordomo)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start graffiti provider")
-	}
-
-	blockRelay, err := startBlockRelay(ctx, monitor, majordomo, eth2Client, scheduler, chainTime, accountManager, signerSvc)
+	blockRelay, err := startBlockRelay(ctx, majordomo, monitor, eth2Client, scheduler, chainTime, accountManager, signerSvc)
 	if err != nil {
 		return nil, nil, err
 	}
-	log.Trace().Msg("Selecting beacon block proposal provider")
-	beaconBlockProposalProvider, err := selectBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime, cacheSvc)
+
+	beaconBlockProposer, attester, attestationAggregator, beaconCommitteeSubscriber, err := startSigningServices(ctx, majordomo, monitor, eth2Client, chainTime, cacheSvc, signerSvc, blockRelay, accountManager, submitter)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to select beacon block proposal provider")
+		return nil, nil, err
 	}
 
-	log.Trace().Msg("Selecting blinded beacon block proposal provider")
-	blindedBeaconBlockProposalProvider, err := selectBlindedBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime, cacheSvc)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to select blinded beacon block proposal provider")
-	}
-
-	beaconBlockProposer, err := standardbeaconblockproposer.New(ctx,
-		standardbeaconblockproposer.WithLogLevel(util.LogLevel("beaconblockproposer")),
-		standardbeaconblockproposer.WithChainTime(chainTime),
-		standardbeaconblockproposer.WithProposalDataProvider(beaconBlockProposalProvider),
-		standardbeaconblockproposer.WithBlindedProposalDataProvider(blindedBeaconBlockProposalProvider),
-		standardbeaconblockproposer.WithBlockAuctioneer(blockRelay.(blockauctioneer.BlockAuctioneer)),
-		standardbeaconblockproposer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-		standardbeaconblockproposer.WithExecutionChainHeadProvider(cacheSvc.(cache.ExecutionChainHeadProvider)),
-		standardbeaconblockproposer.WithGraffitiProvider(graffitiProvider),
-		standardbeaconblockproposer.WithMonitor(monitor),
-		standardbeaconblockproposer.WithBeaconBlockSubmitter(submitterStrategy.(submitter.BeaconBlockSubmitter)),
-		standardbeaconblockproposer.WithRANDAORevealSigner(signerSvc.(signer.RANDAORevealSigner)),
-		standardbeaconblockproposer.WithBeaconBlockSigner(signerSvc.(signer.BeaconBlockSigner)),
-	)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start beacon block proposer service")
-	}
-
-	log.Trace().Msg("Selecting attestation data provider")
-	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, eth2Client, chainTime, cacheSvc)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to select attestation data provider")
-	}
-
-	log.Trace().Msg("Starting attester")
-	attester, err := standardattester.New(ctx,
-		standardattester.WithLogLevel(util.LogLevel("attester")),
-		standardattester.WithProcessConcurrency(util.ProcessConcurrency("attester")),
-		standardattester.WithChainTimeService(chainTime),
-		standardattester.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
-		standardattester.WithAttestationDataProvider(attestationDataProvider),
-		standardattester.WithAttestationsSubmitter(submitterStrategy.(submitter.AttestationsSubmitter)),
-		standardattester.WithMonitor(monitor.(metrics.AttestationMonitor)),
-		standardattester.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-		standardattester.WithBeaconAttestationsSigner(signerSvc.(signer.BeaconAttestationsSigner)),
-	)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start attester service")
-	}
-
-	log.Trace().Msg("Selecting aggregate attestation provider")
-	aggregateAttestationProvider, err := selectAggregateAttestationProvider(ctx, monitor, eth2Client)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to select aggregate attestation provider")
-	}
-
-	log.Trace().Msg("Starting beacon attestation aggregator")
-	attestationAggregator, err := standardattestationaggregator.New(ctx,
-		standardattestationaggregator.WithLogLevel(util.LogLevel("attestationaggregator")),
-		standardattestationaggregator.WithTargetAggregatorsPerCommitteeProvider(eth2Client.(eth2client.TargetAggregatorsPerCommitteeProvider)),
-		standardattestationaggregator.WithAggregateAttestationProvider(aggregateAttestationProvider),
-		standardattestationaggregator.WithAggregateAttestationsSubmitter(submitterStrategy.(submitter.AggregateAttestationsSubmitter)),
-		standardattestationaggregator.WithMonitor(monitor.(metrics.AttestationAggregationMonitor)),
-		standardattestationaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-		standardattestationaggregator.WithSlotSelectionSigner(signerSvc.(signer.SlotSelectionSigner)),
-		standardattestationaggregator.WithAggregateAndProofSigner(signerSvc.(signer.AggregateAndProofSigner)),
-		standardattestationaggregator.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
-	)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start beacon attestation aggregator service")
-	}
-
-	log.Trace().Msg("Starting beacon committee subscriber service")
-	beaconCommitteeSubscriber, err := standardbeaconcommitteesubscriber.New(ctx,
-		standardbeaconcommitteesubscriber.WithLogLevel(util.LogLevel("beaconcommiteesubscriber")),
-		standardbeaconcommitteesubscriber.WithProcessConcurrency(util.ProcessConcurrency("beaconcommitteesubscriber")),
-		standardbeaconcommitteesubscriber.WithMonitor(monitor.(metrics.BeaconCommitteeSubscriptionMonitor)),
-		standardbeaconcommitteesubscriber.WithChainTimeService(chainTime),
-		standardbeaconcommitteesubscriber.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),
-		standardbeaconcommitteesubscriber.WithAttestationAggregator(attestationAggregator),
-		standardbeaconcommitteesubscriber.WithBeaconCommitteeSubmitter(submitterStrategy.(submitter.BeaconCommitteeSubscriptionsSubmitter)),
-	)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start beacon committee subscriber service")
-	}
-
-	// The following items are for Altair.  These are optional.
 	var syncCommitteeSubscriber synccommitteesubscriber.Service
 	var syncCommitteeMessenger synccommitteemessenger.Service
 	var syncCommitteeAggregator synccommitteeaggregator.Service
 	if altairCapable {
-		log.Trace().Msg("Starting sync committee subscriber service")
-		syncCommitteeSubscriber, err = standardsynccommitteesubscriber.New(ctx,
-			standardsynccommitteesubscriber.WithLogLevel(util.LogLevel("synccommiteesubscriber")),
-			standardsynccommitteesubscriber.WithMonitor(monitor.(metrics.SyncCommitteeSubscriptionMonitor)),
-			standardsynccommitteesubscriber.WithSyncCommitteeSubmitter(submitterStrategy.(submitter.SyncCommitteeSubscriptionsSubmitter)),
-		)
+		syncCommitteeSubscriber, syncCommitteeMessenger, syncCommitteeAggregator, err = startAltairServices(ctx, monitor, eth2Client, submitter, signerSvc, accountManager, chainTime)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to start beacon committee subscriber service")
-		}
-
-		log.Trace().Msg("Selecting sync committee contribution provider")
-		syncCommitteeContributionProvider, err := selectSyncCommitteeContributionProvider(ctx, monitor, eth2Client)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to select sync committee contribution provider")
-		}
-
-		log.Trace().Msg("Starting sync committee aggregator")
-		syncCommitteeAggregator, err = standardsynccommitteeaggregator.New(ctx,
-			standardsynccommitteeaggregator.WithLogLevel(util.LogLevel("synccommitteeaggregator")),
-			standardsynccommitteeaggregator.WithMonitor(monitor.(metrics.SyncCommitteeAggregationMonitor)),
-			standardsynccommitteeaggregator.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
-			standardsynccommitteeaggregator.WithBeaconBlockRootProvider(eth2Client.(eth2client.BeaconBlockRootProvider)),
-			standardsynccommitteeaggregator.WithContributionAndProofSigner(signerSvc.(signer.ContributionAndProofSigner)),
-			standardsynccommitteeaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-			standardsynccommitteeaggregator.WithSyncCommitteeContributionProvider(syncCommitteeContributionProvider),
-			standardsynccommitteeaggregator.WithSyncCommitteeContributionsSubmitter(submitterStrategy.(submitter.SyncCommitteeContributionsSubmitter)),
-		)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to start sync committee aggregator service")
-		}
-
-		log.Trace().Msg("Starting sync committee messenger")
-		syncCommitteeMessenger, err = standardsynccommitteemessenger.New(ctx,
-			standardsynccommitteemessenger.WithLogLevel(util.LogLevel("synccommitteemessenger")),
-			standardsynccommitteemessenger.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
-			standardsynccommitteemessenger.WithMonitor(monitor.(metrics.SyncCommitteeMessageMonitor)),
-			standardsynccommitteemessenger.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
-			standardsynccommitteemessenger.WithChainTimeService(chainTime),
-			standardsynccommitteemessenger.WithSyncCommitteeAggregator(syncCommitteeAggregator),
-			standardsynccommitteemessenger.WithBeaconBlockRootProvider(eth2Client.(eth2client.BeaconBlockRootProvider)),
-			standardsynccommitteemessenger.WithSyncCommitteeMessagesSubmitter(submitterStrategy.(submitter.SyncCommitteeMessagesSubmitter)),
-			standardsynccommitteemessenger.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-			standardsynccommitteemessenger.WithSyncCommitteeRootSigner(signerSvc.(signer.SyncCommitteeRootSigner)),
-			standardsynccommitteemessenger.WithSyncCommitteeSelectionSigner(signerSvc.(signer.SyncCommitteeSelectionSigner)),
-			standardsynccommitteemessenger.WithSyncCommitteeSubscriptionsSubmitter(submitterStrategy.(submitter.SyncCommitteeSubscriptionsSubmitter)),
-		)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to start sync committee messenger service")
+			return nil, nil, err
 		}
 	}
 
 	var proposalPreparer proposalpreparer.Service
 	if bellatrixCapable {
 		log.Trace().Msg("Starting proposals preparer")
-
 		proposalPreparer, err = standardproposalpreparer.New(ctx,
 			standardproposalpreparer.WithLogLevel(util.LogLevel("proposalspreparor")),
 			standardproposalpreparer.WithMonitor(monitor),
 			standardproposalpreparer.WithChainTimeService(chainTime),
 			standardproposalpreparer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-			standardproposalpreparer.WithProposalPreparationsSubmitter(submitterStrategy.(eth2client.ProposalPreparationsSubmitter)),
+			standardproposalpreparer.WithProposalPreparationsSubmitter(submitter.(eth2client.ProposalPreparationsSubmitter)),
 			standardproposalpreparer.WithExecutionConfigProvider(blockRelay.(blockrelay.ExecutionConfigProvider)),
 		)
 		if err != nil {
@@ -586,6 +427,253 @@ func startBasicServices(ctx context.Context,
 	setReady(false)
 
 	return eth2Client, chainTime, monitor, nil
+}
+
+func startSharedServices(ctx context.Context,
+	eth2Client eth2client.Service,
+	majordomo majordomo.Service,
+	chainTime chaintime.Service,
+	monitor metrics.Service,
+) (
+	scheduler.Service,
+	cache.Service,
+	signer.Service,
+	accountmanager.Service,
+	error,
+) {
+	log.Trace().Msg("Selecting scheduler")
+	scheduler, err := selectScheduler(ctx, monitor)
+	if err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to select scheduler")
+	}
+
+	log.Trace().Msg("Starting cache")
+	cacheSvc, err := startCache(ctx, monitor, chainTime, scheduler, eth2Client)
+	if err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to start cache")
+	}
+
+	log.Trace().Msg("Starting validators manager")
+	validatorsManager, err := startValidatorsManager(ctx, monitor, eth2Client)
+	if err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to start validators manager")
+	}
+
+	log.Trace().Msg("Starting signer")
+	signerSvc, err := startSigner(ctx, monitor, eth2Client)
+	if err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to start signer")
+	}
+
+	log.Trace().Msg("Starting account manager")
+	accountManager, err := startAccountManager(ctx, monitor, eth2Client, validatorsManager, majordomo, chainTime)
+	if err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to start account manager")
+	}
+
+	return scheduler, cacheSvc, signerSvc, accountManager, nil
+}
+
+func startProviders(ctx context.Context,
+	majordomo majordomo.Service,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+	chainTime chaintime.Service,
+	cache cache.Service,
+) (
+	graffitiprovider.Service,
+	eth2client.BeaconBlockProposalProvider,
+	eth2client.BlindedBeaconBlockProposalProvider,
+	eth2client.AttestationDataProvider,
+	eth2client.AggregateAttestationProvider,
+	error,
+) {
+	log.Trace().Msg("Starting graffiti provider")
+	graffitiProvider, err := startGraffitiProvider(ctx, majordomo)
+	if err != nil {
+		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to start graffiti provider")
+	}
+
+	log.Trace().Msg("Selecting beacon block proposal provider")
+	beaconBlockProposalProvider, err := selectBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
+	if err != nil {
+		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to select beacon block proposal provider")
+	}
+
+	log.Trace().Msg("Selecting blinded beacon block proposal provider")
+	blindedBeaconBlockProposalProvider, err := selectBlindedBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
+	if err != nil {
+		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to select blinded beacon block proposal provider")
+	}
+
+	log.Trace().Msg("Selecting attestation data provider")
+	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, eth2Client, chainTime, cache)
+	if err != nil {
+		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to select attestation data provider")
+	}
+
+	log.Trace().Msg("Selecting aggregate attestation provider")
+	aggregateAttestationProvider, err := selectAggregateAttestationProvider(ctx, monitor, eth2Client)
+	if err != nil {
+		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to select aggregate attestation provider")
+	}
+
+	return graffitiProvider, beaconBlockProposalProvider, blindedBeaconBlockProposalProvider, attestationDataProvider, aggregateAttestationProvider, nil
+}
+
+func startAltairServices(ctx context.Context,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+	submitterStrategy submitter.Service,
+	signerSvc signer.Service,
+	accountManager accountmanager.Service,
+	chainTime chaintime.Service,
+) (
+	synccommitteesubscriber.Service,
+	synccommitteemessenger.Service,
+	synccommitteeaggregator.Service,
+	error,
+) {
+	log.Trace().Msg("Starting sync committee subscriber service")
+	syncCommitteeSubscriber, err := standardsynccommitteesubscriber.New(ctx,
+		standardsynccommitteesubscriber.WithLogLevel(util.LogLevel("synccommiteesubscriber")),
+		standardsynccommitteesubscriber.WithMonitor(monitor.(metrics.SyncCommitteeSubscriptionMonitor)),
+		standardsynccommitteesubscriber.WithSyncCommitteeSubmitter(submitterStrategy.(submitter.SyncCommitteeSubscriptionsSubmitter)),
+	)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to start beacon committee subscriber service")
+	}
+
+	log.Trace().Msg("Selecting sync committee contribution provider")
+	syncCommitteeContributionProvider, err := selectSyncCommitteeContributionProvider(ctx, monitor, eth2Client)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to select sync committee contribution provider")
+	}
+
+	log.Trace().Msg("Starting sync committee aggregator")
+	syncCommitteeAggregator, err := standardsynccommitteeaggregator.New(ctx,
+		standardsynccommitteeaggregator.WithLogLevel(util.LogLevel("synccommitteeaggregator")),
+		standardsynccommitteeaggregator.WithMonitor(monitor.(metrics.SyncCommitteeAggregationMonitor)),
+		standardsynccommitteeaggregator.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
+		standardsynccommitteeaggregator.WithBeaconBlockRootProvider(eth2Client.(eth2client.BeaconBlockRootProvider)),
+		standardsynccommitteeaggregator.WithContributionAndProofSigner(signerSvc.(signer.ContributionAndProofSigner)),
+		standardsynccommitteeaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+		standardsynccommitteeaggregator.WithSyncCommitteeContributionProvider(syncCommitteeContributionProvider),
+		standardsynccommitteeaggregator.WithSyncCommitteeContributionsSubmitter(submitterStrategy.(submitter.SyncCommitteeContributionsSubmitter)),
+	)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to start sync committee aggregator service")
+	}
+
+	log.Trace().Msg("Starting sync committee messenger")
+	syncCommitteeMessenger, err := standardsynccommitteemessenger.New(ctx,
+		standardsynccommitteemessenger.WithLogLevel(util.LogLevel("synccommitteemessenger")),
+		standardsynccommitteemessenger.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
+		standardsynccommitteemessenger.WithMonitor(monitor.(metrics.SyncCommitteeMessageMonitor)),
+		standardsynccommitteemessenger.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
+		standardsynccommitteemessenger.WithChainTimeService(chainTime),
+		standardsynccommitteemessenger.WithSyncCommitteeAggregator(syncCommitteeAggregator),
+		standardsynccommitteemessenger.WithBeaconBlockRootProvider(eth2Client.(eth2client.BeaconBlockRootProvider)),
+		standardsynccommitteemessenger.WithSyncCommitteeMessagesSubmitter(submitterStrategy.(submitter.SyncCommitteeMessagesSubmitter)),
+		standardsynccommitteemessenger.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+		standardsynccommitteemessenger.WithSyncCommitteeRootSigner(signerSvc.(signer.SyncCommitteeRootSigner)),
+		standardsynccommitteemessenger.WithSyncCommitteeSelectionSigner(signerSvc.(signer.SyncCommitteeSelectionSigner)),
+		standardsynccommitteemessenger.WithSyncCommitteeSubscriptionsSubmitter(submitterStrategy.(submitter.SyncCommitteeSubscriptionsSubmitter)),
+	)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to start sync committee messenger service")
+	}
+
+	return syncCommitteeSubscriber, syncCommitteeMessenger, syncCommitteeAggregator, nil
+}
+
+func startSigningServices(ctx context.Context,
+	majordomo majordomo.Service,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+	chainTime chaintime.Service,
+	cacheSvc cache.Service,
+	signerSvc signer.Service,
+	blockRelay blockrelay.Service,
+	accountManager accountmanager.Service,
+	submitterStrategy submitter.Service,
+) (
+	beaconblockproposer.Service,
+	attester.Service,
+	attestationaggregator.Service,
+	beaconcommitteesubscriber.Service,
+	error,
+) {
+	graffitiProvider, beaconBlockProposalProvider, blindedBeaconBlockProposalProvider, attestationDataProvider, aggregateAttestationProvider, err := startProviders(ctx, majordomo, monitor, eth2Client, chainTime, cacheSvc)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	beaconBlockProposer, err := standardbeaconblockproposer.New(ctx,
+		standardbeaconblockproposer.WithLogLevel(util.LogLevel("beaconblockproposer")),
+		standardbeaconblockproposer.WithChainTime(chainTime),
+		standardbeaconblockproposer.WithProposalDataProvider(beaconBlockProposalProvider),
+		standardbeaconblockproposer.WithBlindedProposalDataProvider(blindedBeaconBlockProposalProvider),
+		standardbeaconblockproposer.WithBlockAuctioneer(blockRelay.(blockauctioneer.BlockAuctioneer)),
+		standardbeaconblockproposer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+		standardbeaconblockproposer.WithExecutionChainHeadProvider(cacheSvc.(cache.ExecutionChainHeadProvider)),
+		standardbeaconblockproposer.WithGraffitiProvider(graffitiProvider),
+		standardbeaconblockproposer.WithMonitor(monitor),
+		standardbeaconblockproposer.WithBeaconBlockSubmitter(submitterStrategy.(submitter.BeaconBlockSubmitter)),
+		standardbeaconblockproposer.WithRANDAORevealSigner(signerSvc.(signer.RANDAORevealSigner)),
+		standardbeaconblockproposer.WithBeaconBlockSigner(signerSvc.(signer.BeaconBlockSigner)),
+	)
+	if err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to start beacon block proposer service")
+	}
+
+	log.Trace().Msg("Starting attester")
+	attester, err := standardattester.New(ctx,
+		standardattester.WithLogLevel(util.LogLevel("attester")),
+		standardattester.WithProcessConcurrency(util.ProcessConcurrency("attester")),
+		standardattester.WithChainTimeService(chainTime),
+		standardattester.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
+		standardattester.WithAttestationDataProvider(attestationDataProvider),
+		standardattester.WithAttestationsSubmitter(submitterStrategy.(submitter.AttestationsSubmitter)),
+		standardattester.WithMonitor(monitor.(metrics.AttestationMonitor)),
+		standardattester.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+		standardattester.WithBeaconAttestationsSigner(signerSvc.(signer.BeaconAttestationsSigner)),
+	)
+	if err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to start attester service")
+	}
+
+	log.Trace().Msg("Starting beacon attestation aggregator")
+	attestationAggregator, err := standardattestationaggregator.New(ctx,
+		standardattestationaggregator.WithLogLevel(util.LogLevel("attestationaggregator")),
+		standardattestationaggregator.WithTargetAggregatorsPerCommitteeProvider(eth2Client.(eth2client.TargetAggregatorsPerCommitteeProvider)),
+		standardattestationaggregator.WithAggregateAttestationProvider(aggregateAttestationProvider),
+		standardattestationaggregator.WithAggregateAttestationsSubmitter(submitterStrategy.(submitter.AggregateAttestationsSubmitter)),
+		standardattestationaggregator.WithMonitor(monitor.(metrics.AttestationAggregationMonitor)),
+		standardattestationaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+		standardattestationaggregator.WithSlotSelectionSigner(signerSvc.(signer.SlotSelectionSigner)),
+		standardattestationaggregator.WithAggregateAndProofSigner(signerSvc.(signer.AggregateAndProofSigner)),
+		standardattestationaggregator.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
+	)
+	if err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to start beacon attestation aggregator service")
+	}
+
+	log.Trace().Msg("Starting beacon committee subscriber service")
+	beaconCommitteeSubscriber, err := standardbeaconcommitteesubscriber.New(ctx,
+		standardbeaconcommitteesubscriber.WithLogLevel(util.LogLevel("beaconcommiteesubscriber")),
+		standardbeaconcommitteesubscriber.WithProcessConcurrency(util.ProcessConcurrency("beaconcommitteesubscriber")),
+		standardbeaconcommitteesubscriber.WithMonitor(monitor.(metrics.BeaconCommitteeSubscriptionMonitor)),
+		standardbeaconcommitteesubscriber.WithChainTimeService(chainTime),
+		standardbeaconcommitteesubscriber.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),
+		standardbeaconcommitteesubscriber.WithAttestationAggregator(attestationAggregator),
+		standardbeaconcommitteesubscriber.WithBeaconCommitteeSubmitter(submitterStrategy.(submitter.BeaconCommitteeSubscriptionsSubmitter)),
+	)
+	if err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to start beacon committee subscriber service")
+	}
+
+	return beaconBlockProposer, attester, attestationAggregator, beaconCommitteeSubscriber, nil
 }
 
 // logModules logs a list of modules with their versions.
@@ -1194,6 +1282,8 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 
 // selectSubmitterStrategy selects the appropriate submitter strategy given user input.
 func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (submitter.Service, error) {
+	log.Trace().Msg("Selecting submitter strategy")
+
 	var submitter submitter.Service
 	var err error
 	switch viper.GetString("submitter.style") {
@@ -1360,8 +1450,8 @@ func consensusClientCapabilities(ctx context.Context, consensusClient eth2client
 }
 
 func startBlockRelay(ctx context.Context,
-	monitor metrics.Service,
 	majordomo majordomo.Service,
+	monitor metrics.Service,
 	eth2Client eth2client.Service,
 	scheduler scheduler.Service,
 	chainTime chaintime.Service,

@@ -127,9 +127,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
-	if err := s.refreshAccounts(ctx); err != nil {
-		return nil, errors.Wrap(err, "failed to fetch initial accounts")
-	}
+	s.refreshAccounts(ctx)
 	if err := s.refreshValidators(ctx); err != nil {
 		return nil, errors.Wrap(err, "failed to fetch initial validator states")
 	}
@@ -144,9 +142,7 @@ func (s *Service) Refresh(ctx context.Context) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "Refresh")
 	defer span.End()
 
-	if err := s.refreshAccounts(ctx); err != nil {
-		log.Error().Err(err).Msg("Failed to refresh accounts")
-	}
+	s.refreshAccounts(ctx)
 
 	s.mutex.RLock()
 	numAccounts := len(s.accounts)
@@ -160,7 +156,7 @@ func (s *Service) Refresh(ctx context.Context) {
 }
 
 // refreshAccounts refreshes the accounts from Dirk.
-func (s *Service) refreshAccounts(ctx context.Context) error {
+func (s *Service) refreshAccounts(ctx context.Context) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "refreshAccounts")
 	defer span.End()
 
@@ -205,11 +201,11 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained semaphore")
 			walletAccounts := s.fetchAccountsForWallet(ctx, wallets[i], verificationRegexes)
 			log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(walletAccounts)).Msg("Obtained accounts")
-			accountsMu.Lock()
+			mu.Lock()
 			for k, v := range walletAccounts {
 				accounts[k] = v
 			}
-			accountsMu.Unlock()
+			mu.Unlock()
 			log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(walletAccounts)).Msg("Imported accounts")
 		}(ctx, sem, &wg, i, &accountsMu)
 	}
@@ -220,12 +216,10 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 	if len(accounts) == 0 && len(s.accounts) != 0 {
 		s.mutex.Unlock()
 		log.Warn().Msg("No accounts obtained; retaining old list")
-		return nil
+		return
 	}
 	s.accounts = accounts
 	s.mutex.Unlock()
-
-	return nil
 }
 
 // openWallet opens a wallet, using an existing one if present.

@@ -173,7 +173,7 @@ func NewSyncCommitteeSubscriptionsSubmitter() eth2client.SyncCommitteeSubscripti
 	return &SyncCommitteeSubscriptionsSubmitter{}
 }
 
-// SubmitSyncCommitteeSubscriptions is a mock
+// SubmitSyncCommitteeSubscriptions is a mock.
 func (*SyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(_ context.Context, _ []*apiv1.SyncCommitteeSubscription) error {
 	return nil
 }
@@ -186,7 +186,7 @@ func NewErroringSyncCommitteeSubscriptionsSubmitter() eth2client.SyncCommitteeSu
 	return &ErroringSyncCommitteeSubscriptionsSubmitter{}
 }
 
-// SubmitSyncCommitteeSubscriptions is a mock
+// SubmitSyncCommitteeSubscriptions is a mock.
 func (*ErroringSyncCommitteeSubscriptionsSubmitter) SubmitSyncCommitteeSubscriptions(_ context.Context, _ []*apiv1.SyncCommitteeSubscription) error {
 	return errors.New("error")
 }
@@ -311,7 +311,7 @@ func NewEventsProvider() eth2client.EventsProvider {
 	return &EventsProvider{}
 }
 
-// Events is a mock
+// Events is a mock.
 func (*EventsProvider) Events(_ context.Context, _ []string, _ eth2client.EventHandlerFunc) error {
 	return nil
 }
@@ -732,7 +732,7 @@ type SleepyBeaconBlockProposalProvider struct {
 	next eth2client.BeaconBlockProposalProvider
 }
 
-// NewSleepyBeaconBlockProposalProvider returns a mock beacon block proposal
+// NewSleepyBeaconBlockProposalProvider returns a mock beacon block proposal.
 func NewSleepyBeaconBlockProposalProvider(wait time.Duration, next eth2client.BeaconBlockProposalProvider) eth2client.BeaconBlockProposalProvider {
 	return &SleepyBeaconBlockProposalProvider{
 		wait: wait,
@@ -890,7 +890,7 @@ type SleepyBlindedBeaconBlockProposalProvider struct {
 	next eth2client.BlindedBeaconBlockProposalProvider
 }
 
-// NewSleepyBlindedBeaconBlockProposalProvider returns a mock blinded beacon block proposal
+// NewSleepyBlindedBeaconBlockProposalProvider returns a mock blinded beacon block proposal.
 func NewSleepyBlindedBeaconBlockProposalProvider(wait time.Duration, next eth2client.BlindedBeaconBlockProposalProvider) eth2client.BlindedBeaconBlockProposalProvider {
 	return &SleepyBlindedBeaconBlockProposalProvider{
 		wait: wait,

@@ -107,9 +107,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		currentEpochProvider: parameters.currentEpochProvider,
 	}
 
-	if err := s.refreshAccounts(ctx); err != nil {
-		return nil, errors.Wrap(err, "failed to fetch accounts")
-	}
+	s.refreshAccounts(ctx)
 	if err := s.refreshValidators(ctx); err != nil {
 		return nil, errors.Wrap(err, "failed to fetch validator states")
 	}
@@ -124,16 +122,14 @@ func (s *Service) Refresh(ctx context.Context) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, "Refresh")
 	defer span.End()
 
-	if err := s.refreshAccounts(ctx); err != nil {
-		log.Error().Err(err).Msg("Failed to refresh accounts")
-	}
+	s.refreshAccounts(ctx)
 	if err := s.refreshValidators(ctx); err != nil {
 		log.Error().Err(err).Msg("Failed to refresh validators")
 	}
 }
 
 // refreshAccounts refreshes the accounts from local store.
-func (s *Service) refreshAccounts(ctx context.Context) error {
+func (s *Service) refreshAccounts(ctx context.Context) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, "refreshAccounts")
 	defer span.End()
 
@@ -178,8 +174,6 @@ func (s *Service) refreshAccounts(ctx context.Context) error {
 	s.mutex.Lock()
 	s.accounts = accounts
 	s.mutex.Unlock()
-
-	return nil
 }
 
 // refreshValidators refreshes the validator information for our known accounts.

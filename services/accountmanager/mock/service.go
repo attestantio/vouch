@@ -27,7 +27,7 @@ type validatingAccountsProvider struct {
 }
 
 // NewValidatingAccountsProvider is a mock.
-// nolint
+//nolint
 // skipcq: RVV-B0011
 func NewValidatingAccountsProvider() *validatingAccountsProvider {
 	return &validatingAccountsProvider{

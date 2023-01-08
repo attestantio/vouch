@@ -92,7 +92,6 @@ func (d *Duty) String() string {
 }
 
 // Tuples returns a slice of (validator index, committee index, validator position in committee) strings.
-// Useful for logging the
 func (d *Duty) Tuples() []string {
 	tuples := make([]string, len(d.committeeIndices))
 	for i := range d.committeeIndices {

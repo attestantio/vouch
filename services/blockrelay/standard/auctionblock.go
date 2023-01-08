@@ -71,10 +71,7 @@ func (s *Service) AuctionBlock(ctx context.Context,
 		return nil, nil
 	}
 
-	res, err := s.bestBuilderBid(ctx, slot, parentHash, pubkey, proposerConfig)
-	if err != nil {
-		return nil, err
-	}
+	res := s.bestBuilderBid(ctx, slot, parentHash, pubkey, proposerConfig)
 	if res == nil {
 		return nil, nil
 	}
@@ -129,10 +126,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
 	proposerConfig *beaconblockproposer.ProposerConfig,
-) (
-	*blockauctioneer.Results,
-	error,
-) {
+) *blockauctioneer.Results {
 	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "bestBuilderBid")
 	defer span.End()
 	started := time.Now()
@@ -255,8 +249,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	if res.Bid == nil {
 		log.Debug().Msg("No useful bids received")
 		monitorAuctionBlock("", false, time.Since(started))
-		// No result, but not an error.
-		return nil, nil
+		return nil
 	}
 
 	log.Trace().Stringer("bid", res.Bid).Msg("Selected best bid")
@@ -265,7 +258,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 		monitorAuctionBlock(provider.Address(), true, time.Since(started))
 	}
 
-	return res, nil
+	return res
 }
 
 func (s *Service) builderBid(ctx context.Context,
@@ -325,7 +318,7 @@ func (s *Service) builderBid(ctx context.Context,
 
 	feeRecipient, err := builderBid.FeeRecipient()
 	if err != nil {
-		errCh <- fmt.Errorf("%s: fee recipient: %v", provider.Address(), err)
+		errCh <- fmt.Errorf("%s: fee recipient: %w", provider.Address(), err)
 		return
 	}
 	if bytes.Equal(feeRecipient[:], zeroExecutionAddress[:]) {
@@ -335,7 +328,7 @@ func (s *Service) builderBid(ctx context.Context,
 
 	timestamp, err := builderBid.Timestamp()
 	if err != nil {
-		errCh <- fmt.Errorf("%s: timestamp: %v", provider.Address(), err)
+		errCh <- fmt.Errorf("%s: timestamp: %w", provider.Address(), err)
 		return
 	}
 	if uint64(s.chainTime.StartOfSlot(slot).Unix()) != timestamp {

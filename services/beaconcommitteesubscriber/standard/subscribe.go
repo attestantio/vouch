@@ -65,11 +65,7 @@ func (s *Service) Subscribe(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to merge attester duties")
 	}
 
-	subscriptionInfo, err := s.calculateSubscriptionInfo(ctx, accounts, duties)
-	if err != nil {
-		s.monitor.BeaconCommitteeSubscriptionCompleted(started, "failed")
-		return nil, errors.Wrap(err, "failed to calculate subscription duties")
-	}
+	subscriptionInfo := s.calculateSubscriptionInfo(ctx, accounts, duties)
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Calculated subscription info")
 
 	// Update metrics.
@@ -123,8 +119,7 @@ func (s *Service) Subscribe(ctx context.Context,
 func (s *Service) calculateSubscriptionInfo(ctx context.Context,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 	duties []*attester.Duty,
-) (map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
-
+) map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription {
 	// Map is slot => committee => info.
 	subscriptionInfo := make(map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription)
 	subscriptionInfoMutex := deadlock.RWMutex{}
@@ -199,5 +194,5 @@ func (s *Service) calculateSubscriptionInfo(ctx context.Context,
 	}
 	wg.Wait()
 
-	return subscriptionInfo, nil
+	return subscriptionInfo
 }

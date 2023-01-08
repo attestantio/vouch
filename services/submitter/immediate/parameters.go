@@ -83,28 +83,28 @@ func WithSyncCommitteeMessagesSubmitter(submitter eth2client.SyncCommitteeMessag
 	})
 }
 
-// WithSyncCommitteeSubscriptionsSubmitter sets the sync committee subscriptions submitter
+// WithSyncCommitteeSubscriptionsSubmitter sets the sync committee subscriptions submitter.
 func WithSyncCommitteeSubscriptionsSubmitter(submitter eth2client.SyncCommitteeSubscriptionsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.syncCommitteeSubscriptionsSubmitter = submitter
 	})
 }
 
-// WithSyncCommitteeContributionsSubmitter sets the sync committee contributions submitter
+// WithSyncCommitteeContributionsSubmitter sets the sync committee contributions submitter.
 func WithSyncCommitteeContributionsSubmitter(submitter eth2client.SyncCommitteeContributionsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.syncCommitteeContributionsSubmitter = submitter
 	})
 }
 
-// WithBeaconCommitteeSubscriptionsSubmitter sets the attestation subnet subscriptions submitter
+// WithBeaconCommitteeSubscriptionsSubmitter sets the attestation subnet subscriptions submitter.
 func WithBeaconCommitteeSubscriptionsSubmitter(submitter eth2client.BeaconCommitteeSubscriptionsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.beaconCommitteeSubscriptionsSubmitter = submitter
 	})
 }
 
-// WithAggregateAttestationsSubmitter sets the aggregate attestation submitter
+// WithAggregateAttestationsSubmitter sets the aggregate attestation submitter.
 func WithAggregateAttestationsSubmitter(submitter eth2client.AggregateAttestationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.aggregateAttestationsSubmitter = submitter

@@ -36,7 +36,6 @@ import (
 	zerologger "github.com/rs/zerolog/log"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
-	"golang.org/x/sync/semaphore"
 )
 
 // Service is a beacon block attester.
@@ -182,12 +181,10 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 	for validatorIndex := range duty.ContributionIndices() {
 		validatorIndices = append(validatorIndices, validatorIndex)
 	}
-	sem := semaphore.NewWeighted(s.processConcurrency)
 	var wg sync.WaitGroup
 	for i := range validatorIndices {
 		wg.Add(1)
 		go func(ctx context.Context,
-			sem *semaphore.Weighted,
 			wg *sync.WaitGroup,
 			i int,
 		) {
@@ -208,7 +205,7 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 			msgsMu.Lock()
 			msgs = append(msgs, msg)
 			msgsMu.Unlock()
-		}(ctx, sem, &wg, i)
+		}(ctx, &wg, i)
 	}
 	wg.Wait()
 

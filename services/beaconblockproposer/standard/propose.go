@@ -466,7 +466,6 @@ func (s *Service) signBlindedProposal(ctx context.Context,
 	}
 
 	return signedBlindedBlock, nil
-
 }
 
 func (*Service) unblindBlock(ctx context.Context,

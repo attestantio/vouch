@@ -40,13 +40,13 @@ var ErrJobRunning = errors.New("job running")
 // ErrJobFinalised is returned when the scheduler is asked to interact with a job that is finalised.
 var ErrJobFinalised = errors.New("job finalised")
 
-// ErrNoJobName is returned when an attempt is made to to control a job without a name.
+// ErrNoJobName is returned when an attempt is made to control a job without a name.
 var ErrNoJobName = errors.New("no job name")
 
-// ErrNoJobFunc is returned when an attempt is made to to run a nil job.
+// ErrNoJobFunc is returned when an attempt is made to run a nil job.
 var ErrNoJobFunc = errors.New("no job function")
 
-// ErrNoRuntimeFunc is returned when an attempt is made to to run a periodic job without a runtime function.
+// ErrNoRuntimeFunc is returned when an attempt is made to run a periodic job without a runtime function.
 var ErrNoRuntimeFunc = errors.New("no runtime function")
 
 // Service is the interface for schedulers.

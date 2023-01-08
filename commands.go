@@ -63,7 +63,7 @@ func proposerConfigCheck(ctx context.Context, majordomo majordomo.Service) bool 
 		fmt.Fprintf(os.Stderr, "Failed to start signer: %v\n", err)
 		return true
 	}
-	blockRelaySvc, err := startBlockRelay(ctx, monitor, majordomo, consensusClient, scheduler, chainTime, accountManager, signer)
+	blockRelaySvc, err := startBlockRelay(ctx, majordomo, monitor, consensusClient, scheduler, chainTime, accountManager, signer)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to start block relay: %v\n", err)
 		return true
