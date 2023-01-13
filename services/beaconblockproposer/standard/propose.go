@@ -22,6 +22,7 @@ import (
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	builderclient "github.com/attestantio/go-builder-client"
+	builderspec "github.com/attestantio/go-builder-client/spec"
 	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1bellatrix "github.com/attestantio/go-eth2-client/api/v1/bellatrix"
@@ -38,6 +39,11 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/sync/semaphore"
 )
+
+type BlindedBeaconBlockProposerWithExpectedPayload interface {
+	// BlindedBeaconBlockProposalWithExpectedPayload fetches a blinded proposed beacon block for signing.
+	BlindedBeaconBlockProposalWithExpectedPayload(context.Context, phase0.Slot, phase0.BLSSignature, []byte, *builderspec.VersionedSignedBuilderBid) (*api.VersionedBlindedBeaconBlock, error)
+}
 
 // auctionResult provides information on the result of an auction process.
 type auctionResult int
@@ -342,7 +348,14 @@ func (s *Service) obtainBlindedProposal(ctx context.Context,
 	*api.VersionedBlindedBeaconBlock,
 	error,
 ) {
-	proposal, err := s.blindedProposalProvider.BlindedBeaconBlockProposal(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti)
+	var proposal *api.VersionedBlindedBeaconBlock
+	var err error
+	if verifyingProvider, isProvider := s.blindedProposalProvider.(BlindedBeaconBlockProposerWithExpectedPayload); isProvider {
+		proposal, err = verifyingProvider.BlindedBeaconBlockProposalWithExpectedPayload(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti, auctionResults.Bid)
+	} else {
+		proposal, err = s.blindedProposalProvider.BlindedBeaconBlockProposal(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti)
+	}
+
 	if err != nil {
 		return nil, err
 	}
