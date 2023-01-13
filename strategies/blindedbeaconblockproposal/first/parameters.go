@@ -20,6 +20,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/pkg/errors"
@@ -29,6 +30,7 @@ import (
 type parameters struct {
 	logLevel                            zerolog.Level
 	clientMonitor                       metrics.ClientMonitor
+	chainTime                           chaintime.Service
 	blindedBeaconBlockProposalProviders map[string]eth2client.BlindedBeaconBlockProposalProvider
 	timeout                             time.Duration
 }
@@ -58,6 +60,13 @@ func WithClientMonitor(monitor metrics.ClientMonitor) Parameter {
 	})
 }
 
+// WithChainTimeService sets the chain time service.
+func WithChainTimeService(chainTime chaintime.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.chainTime = chainTime
+	})
+}
+
 // WithBlindedBeaconBlockProposalProviders sets the blinded beacon block proposal providers.
 func WithBlindedBeaconBlockProposalProviders(providers map[string]eth2client.BlindedBeaconBlockProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -84,6 +93,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
+	if parameters.chainTime == nil {
+		return nil, errors.New("no chain time service specified")
+	}
 	if parameters.blindedBeaconBlockProposalProviders == nil {
 		return nil, errors.New("no blinded beacon block proposal providers specified")
 	}

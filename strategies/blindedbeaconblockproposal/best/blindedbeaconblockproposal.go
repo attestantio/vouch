@@ -16,8 +16,10 @@ package best
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"time"
 
+	builderspec "github.com/attestantio/go-builder-client/spec"
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -47,6 +49,19 @@ func (s *Service) BlindedBeaconBlockProposal(ctx context.Context,
 	slot phase0.Slot,
 	randaoReveal phase0.BLSSignature,
 	graffiti []byte,
+) (
+	*api.VersionedBlindedBeaconBlock,
+	error,
+) {
+	return s.BlindedBeaconBlockProposalWithExpectedPayload(ctx, slot, randaoReveal, graffiti, nil)
+}
+
+// BlindedBeaconBlockProposalWithExpectedPayload fetches a blinded proposed beacon block for signing.
+func (s *Service) BlindedBeaconBlockProposalWithExpectedPayload(ctx context.Context,
+	slot phase0.Slot,
+	randaoReveal phase0.BLSSignature,
+	graffiti []byte,
+	bid *builderspec.VersionedSignedBuilderBid,
 ) (
 	*api.VersionedBlindedBeaconBlock,
 	error,
@@ -87,7 +102,7 @@ func (s *Service) BlindedBeaconBlockProposal(ctx context.Context,
 		if len(providerGraffiti) > 32 {
 			providerGraffiti = providerGraffiti[0:32]
 		}
-		go s.blindedBeaconBlockProposal(ctx, started, name, provider, respCh, errCh, slot, randaoReveal, providerGraffiti)
+		go s.blindedBeaconBlockProposal(ctx, started, name, provider, respCh, errCh, slot, randaoReveal, providerGraffiti, bid)
 	}
 
 	// Wait for all responses (or context done).
@@ -214,6 +229,7 @@ func (s *Service) blindedBeaconBlockProposal(ctx context.Context,
 	slot phase0.Slot,
 	randaoReveal phase0.BLSSignature,
 	graffiti []byte,
+	bid *builderspec.VersionedSignedBuilderBid,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.blindedbeaconblockproposal.best").Start(ctx, "blindedBeaconBlockProposal", trace.WithAttributes(
 		attribute.String("provider", name),
@@ -266,6 +282,26 @@ func (s *Service) blindedBeaconBlockProposal(ctx context.Context,
 			err:      errors.New("blinded beacon block response has incorrect timestamp"),
 		}
 		return
+	}
+	if bid != nil {
+		bidTransactionsRoot, err := bid.TransactionsRoot()
+		if err == nil {
+			proposalTransactionsRoot, err := proposal.TransactionsRoot()
+			if err != nil {
+				errCh <- &beaconBlockError{
+					provider: name,
+					err:      errors.Wrap(err, "failed to obtain transactions root"),
+				}
+				return
+			}
+			if !bytes.Equal(bidTransactionsRoot[:], proposalTransactionsRoot[:]) {
+				errCh <- &beaconBlockError{
+					provider: name,
+					err:      fmt.Errorf("proposal transactions root %#x does not match bid transactions root %#x", proposalTransactionsRoot, bidTransactionsRoot),
+				}
+				return
+			}
+		}
 	}
 
 	score := s.scoreBlindedBeaconBlockProposal(ctx, name, proposal)

@@ -14,12 +14,16 @@
 package first
 
 import (
+	"bytes"
 	"context"
 	"time"
 
+	builderspec "github.com/attestantio/go-builder-client/spec"
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -32,12 +36,15 @@ import (
 // Service is the provider for beacon block proposals.
 type Service struct {
 	clientMonitor                       metrics.ClientMonitor
+	chainTime                           chaintime.Service
 	blindedBeaconBlockProposalProviders map[string]eth2client.BlindedBeaconBlockProposalProvider
 	timeout                             time.Duration
 }
 
 // module-wide log.
 var log zerolog.Logger
+
+var zeroFeeRecipient bellatrix.ExecutionAddress
 
 // New creates a new beacon block propsal strategy.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
@@ -53,6 +60,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		chainTime:                           parameters.chainTime,
 		blindedBeaconBlockProposalProviders: parameters.blindedBeaconBlockProposalProviders,
 		timeout:                             parameters.timeout,
 		clientMonitor:                       parameters.clientMonitor,
@@ -63,6 +71,19 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 
 // BlindedBeaconBlockProposal provides the first blinded beacon block proposal from a number of beacon nodes.
 func (s *Service) BlindedBeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*api.VersionedBlindedBeaconBlock, error) {
+	return s.BlindedBeaconBlockProposalWithExpectedPayload(ctx, slot, randaoReveal, graffiti, nil)
+}
+
+// BlindedBeaconBlockProposalWithExpectedPayload fetches a blinded proposed beacon block for signing.
+func (s *Service) BlindedBeaconBlockProposalWithExpectedPayload(ctx context.Context,
+	slot phase0.Slot,
+	randaoReveal phase0.BLSSignature,
+	graffiti []byte,
+	bid *builderspec.VersionedSignedBuilderBid,
+) (
+	*api.VersionedBlindedBeaconBlock,
+	error,
+) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.blindedbeaconblockproposal.first").Start(ctx, "BlindedBeaconBlockProposal", trace.WithAttributes(
 		attribute.Int64("slot", int64(slot)),
 	))
@@ -89,6 +110,38 @@ func (s *Service) BlindedBeaconBlockProposal(ctx context.Context, slot phase0.Sl
 				return
 			}
 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained blinded beacon block proposal")
+			feeRecipient, err := proposal.FeeRecipient()
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to obtain blinded beacon block fee recipient")
+				return
+			}
+			if bytes.Equal(feeRecipient[:], zeroFeeRecipient[:]) {
+				log.Warn().Msg("Blinded beacon block proposal response has 0 fee recipient")
+				return
+			}
+			executionTimestamp, err := proposal.Timestamp()
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to obtain blinded beacon block timestamp")
+				return
+			}
+			if int64(executionTimestamp) != s.chainTime.StartOfSlot(slot).Unix() {
+				log.Warn().Msg("Blinded beacon block proposal response has incorrect timestamp")
+				return
+			}
+			if bid != nil {
+				bidTransactionsRoot, err := bid.TransactionsRoot()
+				if err == nil {
+					proposalTransactionsRoot, err := proposal.TransactionsRoot()
+					if err != nil {
+						log.Warn().Err(err).Msg("Failed to obtain blinded beacon block transactions root")
+						return
+					}
+					if !bytes.Equal(bidTransactionsRoot[:], proposalTransactionsRoot[:]) {
+						log.Warn().Stringer("proposal_transactions_root", proposalTransactionsRoot).Stringer("bid_transactions_root", bidTransactionsRoot).Msg("Transactions root mismatch")
+						return
+					}
+				}
+			}
 
 			ch <- proposal
 		}(ctx, name, provider, proposalCh)
