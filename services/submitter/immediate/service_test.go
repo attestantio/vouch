@@ -198,6 +198,7 @@ func TestService(t *testing.T) {
 		})
 	}
 }
+
 func TestInterfaces(t *testing.T) {
 	s, err := immediate.New(context.Background(),
 		immediate.WithLogLevel(zerolog.Disabled),

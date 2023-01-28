@@ -25,7 +25,6 @@ import (
 )
 
 func TestProcessConcurrency(t *testing.T) {
-
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 	viper.AutomaticEnv()
 

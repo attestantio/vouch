@@ -22,12 +22,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var bestBidRelayCount prometheus.Histogram
-var beaconBlockProposalProcessTimer prometheus.Histogram
-var beaconBlockProposalProcessRequests *prometheus.CounterVec
-var beaconBlockProposalMarkTimer prometheus.Histogram
-var beaconBlockProposalProcessLatestSlot prometheus.Gauge
-var beaconBlockProposalSource *prometheus.CounterVec
+var (
+	bestBidRelayCount                    prometheus.Histogram
+	beaconBlockProposalProcessTimer      prometheus.Histogram
+	beaconBlockProposalProcessRequests   *prometheus.CounterVec
+	beaconBlockProposalMarkTimer         prometheus.Histogram
+	beaconBlockProposalProcessLatestSlot prometheus.Gauge
+	beaconBlockProposalSource            *prometheus.CounterVec
+)
 
 func registerMetrics(ctx context.Context, monitor metrics.Service) error {
 	if bestBidRelayCount != nil {
@@ -45,42 +47,40 @@ func registerMetrics(ctx context.Context, monitor metrics.Service) error {
 }
 
 func registerPrometheusMetrics(_ context.Context) error {
-	beaconBlockProposalProcessTimer =
-		prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace: "vouch",
-			Subsystem: "beaconblockproposal_process",
-			Name:      "duration_seconds",
-			Help:      "The time vouch spends from starting the beacon block proposal process to submitting the beacon block.",
-			Buckets: []float64{
-				0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
-				1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0,
-			},
-		})
+	beaconBlockProposalProcessTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "vouch",
+		Subsystem: "beaconblockproposal_process",
+		Name:      "duration_seconds",
+		Help:      "The time vouch spends from starting the beacon block proposal process to submitting the beacon block.",
+		Buckets: []float64{
+			0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+			1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0,
+		},
+	})
 	if err := prometheus.Register(beaconBlockProposalProcessTimer); err != nil {
 		return err
 	}
 
-	beaconBlockProposalMarkTimer =
-		prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace: "vouch",
-			Subsystem: "beaconblockproposal",
-			Name:      "mark_seconds",
-			Help:      "The time in to the slot at which the beacon block was broadcast.",
-			Buckets: []float64{
-				0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
-				1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0,
-				2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0,
-				3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.0,
-				4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 5.0,
-				5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 6.0,
-				6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.0,
-				7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 8.0,
-				8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 9.0,
-				9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 10.0,
-				10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 11.0,
-				11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 12.0,
-			},
-		})
+	beaconBlockProposalMarkTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "vouch",
+		Subsystem: "beaconblockproposal",
+		Name:      "mark_seconds",
+		Help:      "The time in to the slot at which the beacon block was broadcast.",
+		Buckets: []float64{
+			0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+			1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0,
+			2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0,
+			3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.0,
+			4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 5.0,
+			5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 6.0,
+			6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.0,
+			7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 8.0,
+			8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 9.0,
+			9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 10.0,
+			10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 11.0,
+			11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 12.0,
+		},
+	})
 	if err := prometheus.Register(beaconBlockProposalMarkTimer); err != nil {
 		return err
 	}
@@ -115,16 +115,15 @@ func registerPrometheusMetrics(_ context.Context) error {
 		return err
 	}
 
-	bestBidRelayCount =
-		prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace: "vouch",
-			Subsystem: "beaconblockproposer",
-			Name:      "best_bid_relays",
-			Help:      "The number of relays that returned the best bid",
-			Buckets: []float64{
-				1, 2, 3, 4, 5, 6,
-			},
-		})
+	bestBidRelayCount = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "vouch",
+		Subsystem: "beaconblockproposer",
+		Name:      "best_bid_relays",
+		Help:      "The number of relays that returned the best bid",
+		Buckets: []float64{
+			1, 2, 3, 4, 5, 6,
+		},
+	})
 	return prometheus.Register(bestBidRelayCount)
 }
 

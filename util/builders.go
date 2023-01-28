@@ -23,8 +23,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-var builders map[string]builder.Service
-var buildersMu sync.Mutex
+var (
+	builders   map[string]builder.Service
+	buildersMu sync.Mutex
+)
 
 // FetchBuilderClient fetches a builder client, instantiating it if required.
 func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Service) (builder.Service, error) {

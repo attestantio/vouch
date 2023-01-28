@@ -22,16 +22,18 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var auctionBlockUsed *prometheus.CounterVec
-var auctionBlockTimer prometheus.Histogram
-var builderBidCounter *prometheus.CounterVec
-var builderBidTimer prometheus.Histogram
-var builderBidDeltas *prometheus.HistogramVec
-var executionConfigCounter *prometheus.CounterVec
-var executionConfigTimer prometheus.Histogram
-var validatorRegistrationsCounter *prometheus.CounterVec
-var validatorRegistrationsGeneration *prometheus.CounterVec
-var validatorRegistrationsTimer prometheus.Histogram
+var (
+	auctionBlockUsed                 *prometheus.CounterVec
+	auctionBlockTimer                prometheus.Histogram
+	builderBidCounter                *prometheus.CounterVec
+	builderBidTimer                  prometheus.Histogram
+	builderBidDeltas                 *prometheus.HistogramVec
+	executionConfigCounter           *prometheus.CounterVec
+	executionConfigTimer             prometheus.Histogram
+	validatorRegistrationsCounter    *prometheus.CounterVec
+	validatorRegistrationsGeneration *prometheus.CounterVec
+	validatorRegistrationsTimer      prometheus.Histogram
+)
 
 func registerMetrics(ctx context.Context, monitor metrics.Service) error {
 	if validatorRegistrationsTimer != nil {

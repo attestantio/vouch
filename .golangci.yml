@@ -143,7 +143,6 @@ linters:
     - gocognit
     - goconst
     - goerr113
-    - gofumpt
     - goheader
     - golint
     - gomnd

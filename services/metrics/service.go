@@ -118,9 +118,7 @@ type ClientMonitor interface {
 }
 
 // ValidatorsManagerMonitor provides methods to monitor the validators manager.
-type ValidatorsManagerMonitor interface {
-}
+type ValidatorsManagerMonitor interface{}
 
 // SignerMonitor provides methods to monitor signers.
-type SignerMonitor interface {
-}
+type SignerMonitor interface{}

@@ -181,6 +181,7 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 
 	return bestAggregateAttestation, nil
 }
+
 func (s *Service) aggregateAttestation(ctx context.Context,
 	started time.Time,
 	name string,
