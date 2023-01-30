@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,12 +18,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
 	mockattestationaggregator "github.com/attestantio/vouch/services/attestationaggregator/mock"
 	mockattester "github.com/attestantio/vouch/services/attester/mock"
 	mockbeaconblockproposer "github.com/attestantio/vouch/services/beaconblockproposer/mock"
 	mockbeaconcommitteesubscriber "github.com/attestantio/vouch/services/beaconcommitteesubscriber/mock"
+	"github.com/attestantio/vouch/services/cache"
+	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	"github.com/attestantio/vouch/services/controller/standard"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
@@ -67,6 +70,7 @@ func TestService(t *testing.T) {
 	mockBeaconBlockProposer := mockbeaconblockproposer.New()
 	mockEventsProvider := mock.NewEventsProvider()
 	mockBeaconCommitteeSubscriber := mockbeaconcommitteesubscriber.New()
+	mockBlockToSlotSetter := mockcache.New(map[phase0.Root]phase0.Slot{}).(cache.BlockRootToSlotSetter)
 
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithGenesisTimeProvider(genesisTimeProvider),
@@ -102,6 +106,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -133,6 +138,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -165,6 +171,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -196,6 +203,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -227,6 +235,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -258,6 +267,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -290,6 +300,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -321,6 +332,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -352,6 +364,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -383,6 +396,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -414,6 +428,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
 				standard.WithMaxProposalDelay(4 * time.Second),
@@ -444,6 +459,8 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -475,6 +492,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconBlockProposer(mockBeaconBlockProposer),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -506,6 +524,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconBlockProposer(mockBeaconBlockProposer),
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -537,6 +556,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconBlockProposer(mockBeaconBlockProposer),
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -546,6 +566,38 @@ func TestService(t *testing.T) {
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 			},
 			err: "problem with parameters: no accounts refresher specified",
+		},
+		{
+			name: "BlockToSlotSetterMissing",
+			params: []standard.Parameter{
+				standard.WithLogLevel(zerolog.Disabled),
+				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithSpecProvider(specProvider),
+				standard.WithChainTimeService(chainTime),
+				standard.WithProposerDutiesProvider(proposerDutiesProvider),
+				standard.WithAttesterDutiesProvider(attesterDutiesProvider),
+				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
+				standard.WithEventsProvider(mockEventsProvider),
+				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
+				standard.WithScheduler(mockScheduler),
+				standard.WithAttester(mockAttester),
+				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
+				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
+				standard.WithSyncCommitteeSubscriber(mockSyncCommitteeSubscriber),
+				standard.WithBeaconBlockProposer(mockBeaconBlockProposer),
+				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
+				standard.WithAttestationAggregator(mockAttestationAggregator),
+				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
+				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
+				standard.WithMaxAttestationDelay(4 * time.Second),
+				standard.WithMaxProposalDelay(4 * time.Second),
+				standard.WithMaxSyncCommitteeMessageDelay(4 * time.Second),
+				standard.WithAttestationAggregationDelay(8 * time.Second),
+				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
+			},
+			err: "problem with parameters: no block to slot setter specified",
 		},
 		{
 			name: "BeaconBlockHeadersProviderMissing",
@@ -569,6 +621,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
 				standard.WithMaxProposalDelay(4 * time.Second),
@@ -601,6 +654,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
 				standard.WithMaxProposalDelay(4 * time.Second),
@@ -633,6 +687,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithMaxAttestationDelay(4 * time.Second),
@@ -666,6 +721,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
 				standard.WithAttestationAggregator(mockAttestationAggregator),
 				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithReorgs(true),

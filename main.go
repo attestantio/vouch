@@ -373,6 +373,7 @@ func startServices(ctx context.Context,
 		standardcontroller.WithBeaconCommitteeSubscriber(beaconCommitteeSubscriber),
 		standardcontroller.WithSyncCommitteeSubscriber(syncCommitteeSubscriber),
 		standardcontroller.WithAccountsRefresher(accountManager.(accountmanager.Refresher)),
+		standardcontroller.WithBlockToSlotSetter(cacheSvc.(cache.BlockRootToSlotSetter)),
 		standardcontroller.WithMaxProposalDelay(viper.GetDuration("controller.max-proposal-delay")),
 		standardcontroller.WithMaxAttestationDelay(viper.GetDuration("controller.max-attestation-delay")),
 		standardcontroller.WithAttestationAggregationDelay(viper.GetDuration("controller.attestation-aggregation-delay")),
@@ -877,7 +878,6 @@ func startValidatorsManager(ctx context.Context, monitor metrics.Service, eth2Cl
 		standardvalidatorsmanager.WithValidatorsProvider(eth2Client.(eth2client.ValidatorsProvider)),
 		standardvalidatorsmanager.WithFarFutureEpoch(farFutureEpoch),
 	)
-
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start standard validators manager service")
 	}
@@ -892,7 +892,6 @@ func startSigner(ctx context.Context, monitor metrics.Service, eth2Client eth2cl
 		standardsigner.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardsigner.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
 	)
-
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start signer provider service")
 	}

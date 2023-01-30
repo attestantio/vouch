@@ -26,6 +26,7 @@ import (
 	"github.com/attestantio/vouch/services/attester"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/beaconcommitteesubscriber"
+	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/proposalpreparer"
@@ -71,6 +72,7 @@ type Service struct {
 	subscriptionInfos             map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription
 	subscriptionInfosMutex        sync.Mutex
 	accountsRefresher             accountmanager.Refresher
+	blockToSlotSetter             cache.BlockRootToSlotSetter
 	maxProposalDelay              time.Duration
 	maxAttestationDelay           time.Duration
 	attestationAggregationDelay   time.Duration
@@ -112,36 +114,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
-	spec, err := parameters.specProvider.Spec(ctx)
+	slotDuration, slotsPerEpoch, epochsPerSyncCommitteePeriod, err := obtainSpecValues(ctx, parameters.specProvider)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain spec")
-	}
-
-	tmp, exists := spec["SECONDS_PER_SLOT"]
-	if !exists {
-		return nil, errors.New("SECONDS_PER_SLOT not found in spec")
-	}
-	slotDuration, ok := tmp.(time.Duration)
-	if !ok {
-		return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
-	}
-
-	tmp, exists = spec["SLOTS_PER_EPOCH"]
-	if !exists {
-		return nil, errors.New("SLOTS_PER_EPOCH not found in spec")
-	}
-	slotsPerEpoch, ok := tmp.(uint64)
-	if !ok {
-		return nil, errors.New("SLOTS_PER_EPOCH of unexpected type")
-	}
-
-	var epochsPerSyncCommitteePeriod uint64
-	if tmp, exists := spec["EPOCHS_PER_SYNC_COMMITTEE_PERIOD"]; exists {
-		tmp2, ok := tmp.(uint64)
-		if !ok {
-			return nil, errors.New("EPOCHS_PER_SYNC_COMMITTEE_PERIOD of unexpected type")
-		}
-		epochsPerSyncCommitteePeriod = tmp2
+		return nil, err
 	}
 
 	// Handling altair if we have the service and spec to do so.
@@ -208,6 +183,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		attestationAggregator:         parameters.attestationAggregator,
 		beaconCommitteeSubscriber:     parameters.beaconCommitteeSubscriber,
 		accountsRefresher:             parameters.accountsRefresher,
+		blockToSlotSetter:             parameters.blockToSlotSetter,
 		maxProposalDelay:              parameters.maxProposalDelay,
 		maxAttestationDelay:           parameters.maxAttestationDelay,
 		attestationAggregationDelay:   parameters.attestationAggregationDelay,
@@ -228,6 +204,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	// This also allows us to re-request duties if the dependent roots change.
 	if err := parameters.eventsProvider.Events(ctx, []string{"head"}, s.HandleHeadEvent); err != nil {
 		return nil, errors.Wrap(err, "failed to add head event handler")
+	}
+
+	// Subscribe to block events.  This allows us to keep the cache for the block roots to slot number up to date.
+	if err := parameters.eventsProvider.Events(ctx, []string{"block"}, s.HandleBlockEvent); err != nil {
+		return nil, errors.Wrap(err, "failed to add block event handler")
 	}
 
 	// Start tickers, to carry out periodic operations.
@@ -615,4 +596,47 @@ func (s *Service) HasPendingAttestations(_ context.Context,
 	defer s.pendingAttestationsMutex.RUnlock()
 
 	return s.pendingAttestations[slot]
+}
+
+func obtainSpecValues(ctx context.Context,
+	specProvider eth2client.SpecProvider,
+) (
+	time.Duration,
+	uint64,
+	uint64,
+	error,
+) {
+	spec, err := specProvider.Spec(ctx)
+	if err != nil {
+		return 0, 0, 0, errors.Wrap(err, "failed to obtain spec")
+	}
+
+	tmp, exists := spec["SECONDS_PER_SLOT"]
+	if !exists {
+		return 0, 0, 0, errors.New("SECONDS_PER_SLOT not found in spec")
+	}
+	slotDuration, ok := tmp.(time.Duration)
+	if !ok {
+		return 0, 0, 0, errors.New("SECONDS_PER_SLOT of unexpected type")
+	}
+
+	tmp, exists = spec["SLOTS_PER_EPOCH"]
+	if !exists {
+		return 0, 0, 0, errors.New("SLOTS_PER_EPOCH not found in spec")
+	}
+	slotsPerEpoch, ok := tmp.(uint64)
+	if !ok {
+		return 0, 0, 0, errors.New("SLOTS_PER_EPOCH of unexpected type")
+	}
+
+	var epochsPerSyncCommitteePeriod uint64
+	if tmp, exists := spec["EPOCHS_PER_SYNC_COMMITTEE_PERIOD"]; exists {
+		tmp2, ok := tmp.(uint64)
+		if !ok {
+			return 0, 0, 0, errors.New("EPOCHS_PER_SYNC_COMMITTEE_PERIOD of unexpected type")
+		}
+		epochsPerSyncCommitteePeriod = tmp2
+	}
+
+	return slotDuration, slotsPerEpoch, epochsPerSyncCommitteePeriod, nil
 }

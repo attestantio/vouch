@@ -11,6 +11,7 @@
   - unblind blocks from all relays that hold the desired payload
   - provide more error information when beacon nodes fail to return expected information
   - reject blinded blocks with incorrect data before scoring
+  - update internal cache with events as they arrive for faster block proposal
 
 1.6.3:
   - fix crash attempting to store metrics when prometheus not enabled

@@ -26,6 +26,18 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// HandleBlockEvent handles the "block" events from the beacon node.
+func (s *Service) HandleBlockEvent(event *api.Event) {
+	if event.Data == nil {
+		return
+	}
+
+	data := event.Data.(*api.BlockEvent)
+	// We update the block to slot cache here, in an attempt to avoid
+	// unnecessary lookups.
+	s.blockToSlotSetter.SetBlockRootToSlot(data.Block, data.Slot)
+}
+
 // HandleHeadEvent handles the "head" events from the beacon node.
 func (s *Service) HandleHeadEvent(event *api.Event) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(context.Background(), "HandleHeadEvent")

@@ -42,6 +42,11 @@ func (s *Service) BlockRootToSlot(_ context.Context, root phase0.Root) (phase0.S
 	return 0, errors.New("not found")
 }
 
+// SetBlockRootToSlot sets the block root to slot mapping.
+func (s *Service) SetBlockRootToSlot(root phase0.Root, slot phase0.Slot) {
+	s.blockRootToSlotMap[root] = slot
+}
+
 // ExecutionChainHead provides the current execution chain head.
 func (*Service) ExecutionChainHead(_ context.Context) (phase0.Hash32, uint64) {
 	return phase0.Hash32{}, 0
