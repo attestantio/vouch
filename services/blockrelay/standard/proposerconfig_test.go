@@ -102,9 +102,9 @@ func TestProposerConfig(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(base)
 	configFile := filepath.Join(base, "config.json")
-	require.NoError(t, os.WriteFile(configFile, []byte(`{"default_config":{"fee_recipient":"0x0200000000000000000000000000000000000000","gas_limit":"20000000","builder":{"enabled":false}}}`), 0600))
+	require.NoError(t, os.WriteFile(configFile, []byte(`{"default_config":{"fee_recipient":"0x0200000000000000000000000000000000000000","gas_limit":"20000000","builder":{"enabled":false}}}`), 0o600))
 	badConfigFile := filepath.Join(base, "badconfig.json")
-	require.NoError(t, os.WriteFile(badConfigFile, []byte(`bad`), 0600))
+	require.NoError(t, os.WriteFile(badConfigFile, []byte(`bad`), 0o600))
 
 	tests := []struct {
 		name           string

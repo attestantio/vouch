@@ -236,6 +236,7 @@ func TestService(t *testing.T) {
 		})
 	}
 }
+
 func TestProposeNoRANDAOReveal(t *testing.T) {
 	ctx := context.Background()
 	capture := logger.NewLogCapture()

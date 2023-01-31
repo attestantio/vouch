@@ -22,9 +22,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var processTimer prometheus.Histogram
-var latestEpoch prometheus.Gauge
-var requestsProcessed *prometheus.CounterVec
+var (
+	processTimer      prometheus.Histogram
+	latestEpoch       prometheus.Gauge
+	requestsProcessed *prometheus.CounterVec
+)
 
 func registerMetrics(ctx context.Context, monitor metrics.Service) error {
 	if latestEpoch != nil {
@@ -42,17 +44,16 @@ func registerMetrics(ctx context.Context, monitor metrics.Service) error {
 }
 
 func registerPrometheusMetrics(_ context.Context) error {
-	processTimer =
-		prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace: "vouch",
-			Subsystem: "proposalpreparation_process",
-			Name:      "duration_seconds",
-			Help:      "The time vouch spends from starting the proposal preparation process to submitting the proposal preparations.",
-			Buckets: []float64{
-				0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
-				1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0,
-			},
-		})
+	processTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "vouch",
+		Subsystem: "proposalpreparation_process",
+		Name:      "duration_seconds",
+		Help:      "The time vouch spends from starting the proposal preparation process to submitting the proposal preparations.",
+		Buckets: []float64{
+			0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+			1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0,
+		},
+	})
 	if err := prometheus.Register(processTimer); err != nil {
 		return err
 	}

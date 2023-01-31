@@ -34,7 +34,7 @@ func initLogging() error {
 
 	// Change the output file.
 	if viper.GetString("log-file") != "" {
-		f, err := os.OpenFile(resolvePath(viper.GetString("log-file")), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		f, err := os.OpenFile(resolvePath(viper.GetString("log-file")), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		if err != nil {
 			return errors.Wrap(err, "failed to open log file")
 		}

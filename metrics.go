@@ -21,8 +21,10 @@ import (
 
 var metricsNamespace = "vouch"
 
-var releaseMetric *prometheus.GaugeVec
-var readyMetric prometheus.Gauge
+var (
+	releaseMetric *prometheus.GaugeVec
+	readyMetric   prometheus.Gauge
+)
 
 func registerMetrics(monitor metrics.Service) error {
 	if releaseMetric != nil {

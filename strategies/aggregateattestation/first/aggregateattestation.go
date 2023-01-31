@@ -44,7 +44,8 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 		go func(ctx context.Context,
 			name string,
 			provider eth2client.AggregateAttestationProvider,
-			ch chan *phase0.Attestation) {
+			ch chan *phase0.Attestation,
+		) {
 			log := log.With().Str("provider", name).Uint64("slot", uint64(slot)).Logger()
 
 			aggregate, err := provider.AggregateAttestation(ctx, slot, attestationDataRoot)

@@ -20,8 +20,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var blockRootToSlotProcessed *prometheus.CounterVec
-var blockRootToSlotEntries prometheus.Gauge
+var (
+	blockRootToSlotProcessed *prometheus.CounterVec
+	blockRootToSlotEntries   prometheus.Gauge
+)
 
 var executionChainHeadHeight prometheus.Gauge
 

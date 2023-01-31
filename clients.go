@@ -28,8 +28,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-var clients map[string]eth2client.Service
-var clientsMu sync.Mutex
+var (
+	clients   map[string]eth2client.Service
+	clientsMu sync.Mutex
+)
 
 // fetchClient fetches a client service, instantiating it if required.
 func fetchClient(ctx context.Context, address string) (eth2client.Service, error) {

@@ -46,7 +46,8 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 		go func(ctx context.Context,
 			name string,
 			provider eth2client.SyncCommitteeContributionProvider,
-			ch chan *altair.SyncCommitteeContribution) {
+			ch chan *altair.SyncCommitteeContribution,
+		) {
 			log := log.With().Str("provider", name).Uint64("slot", uint64(slot)).Uint64("subcommittee_index", subcommitteeIndex).Str("beacon_block_root", fmt.Sprintf("%#x", beaconBlockRoot)).Logger()
 
 			contribution, err := provider.SyncCommitteeContribution(ctx, slot, subcommitteeIndex, beaconBlockRoot)

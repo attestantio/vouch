@@ -290,7 +290,7 @@ func TestMultiline(t *testing.T) {
 			for expectedGraffiti := range test.expectedGraffitis {
 				obtainedGraffitis[expectedGraffiti] = true
 			}
-			err = ioutil.WriteFile(filepath.Join(tmpDir, test.name), []byte(test.content), 0600)
+			err = ioutil.WriteFile(filepath.Join(tmpDir, test.name), []byte(test.content), 0o600)
 			require.NoError(t, err)
 			svc, err := dynamic.New(ctx,
 				dynamic.WithLogLevel(zerolog.Disabled),

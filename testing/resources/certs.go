@@ -14,7 +14,7 @@
 package resources
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 )
 
@@ -526,53 +526,53 @@ var SignerKeys = map[uint64][]byte{
 
 // SetupCerts sets up a number of certificates on-disk in the provided location.
 func SetupCerts(base string) error {
-	if err := ioutil.WriteFile(filepath.Join(base, "ca.crt"), []byte(CACrt), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "ca.crt"), []byte(CACrt), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "signer-test01.crt"), []byte(SignerTest01Crt), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "signer-test01.crt"), []byte(SignerTest01Crt), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "signer-test01.key"), []byte(SignerTest01Key), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "signer-test01.key"), []byte(SignerTest01Key), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "signer-test02.crt"), []byte(SignerTest02Crt), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "signer-test02.crt"), []byte(SignerTest02Crt), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "signer-test02.key"), []byte(SignerTest02Key), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "signer-test02.key"), []byte(SignerTest02Key), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "signer-test03.crt"), []byte(SignerTest03Crt), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "signer-test03.crt"), []byte(SignerTest03Crt), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "signer-test03.key"), []byte(SignerTest03Key), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "signer-test03.key"), []byte(SignerTest03Key), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "signer-test04.crt"), []byte(SignerTest04Crt), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "signer-test04.crt"), []byte(SignerTest04Crt), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "signer-test04.key"), []byte(SignerTest04Key), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "signer-test04.key"), []byte(SignerTest04Key), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "signer-test05.crt"), []byte(SignerTest05Crt), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "signer-test05.crt"), []byte(SignerTest05Crt), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "signer-test05.key"), []byte(SignerTest05Key), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "signer-test05.key"), []byte(SignerTest05Key), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "client-test01.crt"), []byte(ClientTest01Crt), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "client-test01.crt"), []byte(ClientTest01Crt), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "client-test01.key"), []byte(ClientTest01Key), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "client-test01.key"), []byte(ClientTest01Key), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "client-test02.crt"), []byte(ClientTest02Crt), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "client-test02.crt"), []byte(ClientTest02Crt), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "client-test02.key"), []byte(ClientTest02Key), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "client-test02.key"), []byte(ClientTest02Key), 0o600); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(filepath.Join(base, "client-test03.crt"), []byte(ClientTest03Crt), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(base, "client-test03.crt"), []byte(ClientTest03Crt), 0o600); err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filepath.Join(base, "client-test03.key"), []byte(ClientTest03Key), 0600)
+	return os.WriteFile(filepath.Join(base, "client-test03.key"), []byte(ClientTest03Key), 0o600)
 }
