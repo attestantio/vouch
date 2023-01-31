@@ -185,8 +185,8 @@ Block proposers have the ability to alter the gas limit as part of their block p
     }
   },
   "default_config": {
-  "fee_recipient": "0x0123…cdef",
-  "gas_limit": "100000000",
+    "fee_recipient": "0x0123…cdef",
+    "gas_limit": "100000000",
     "builder": {
       "enabled": true,
       "relays": [
