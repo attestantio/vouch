@@ -43,7 +43,7 @@ func (s *Service) BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0
 		}
 
 		slot = block.Header.Message.Slot
-		s.setBlockRootToSlot(root, slot)
+		s.SetBlockRootToSlot(root, slot)
 
 		log.Trace().Str("root", fmt.Sprintf("%#x", root)).Uint64("slot", uint64(slot)).Msg("Obtained slot from block header")
 		monitorBlockRootToSlot("miss (block header)")
@@ -63,7 +63,7 @@ func (s *Service) BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0
 			return 0, errors.Wrap(err, "failed to obtain block slot")
 		}
 
-		s.setBlockRootToSlot(root, slot)
+		s.SetBlockRootToSlot(root, slot)
 
 		log.Trace().Str("root", fmt.Sprintf("%#x", root)).Uint64("slot", uint64(slot)).Msg("Obtained slot from block")
 		monitorBlockRootToSlot("miss (block)")
@@ -74,8 +74,8 @@ func (s *Service) BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0
 	return 0, errors.New("failed to obtain slot from cache or client")
 }
 
-// setBlockRootToSlot sets the block root.
-func (s *Service) setBlockRootToSlot(root phase0.Root, slot phase0.Slot) {
+// SetBlockRootToSlot sets the block root to slot mapping.
+func (s *Service) SetBlockRootToSlot(root phase0.Root, slot phase0.Slot) {
 	s.blockRootToSlotMu.Lock()
 	s.blockRootToSlot[root] = slot
 	monitorBlockRootToSlotEntriesUpdated(len(s.blockRootToSlot))
