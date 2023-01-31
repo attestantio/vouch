@@ -450,3 +450,19 @@ vouch --proposer-config-check 0x8021…8bbe | jq .
 (Note that in the above example the output is piped to `jq` to provide formatted output.  This step is unnecessary, and everything at and after the `|` character can be removed from the command if desired, or if `jq` is not installed on the server running Vouch.)
 
 This command should be run as the same user and in the same environment as the active Vouch process itself to ensure that the correct configuration information is used.  Note that this command can be run at the same time that a running Vouch instance is operating without interrupting it.
+
+# Transitioning from version 1 to version 2
+Version 2 is designed to provide higher flexibility and clarity than version 1.  Key differences are;
+- the default configuration is at the top level of the configuration rather than in a separate `default_config` object
+- per-relay configuration allows values such as the fee recipient and gas limit to be set, and provids new values such as minimum acceptable bid value
+- proposer overrides are supplied as a list, to make precedence rules clear
+- proposer overrides can be set at the wallet and account level
+
+In terms of migrating from version 1 to version 2, it is recommended that a new configuration is created to understand and take advantage of the features that are now available.  However, if a quick migration to version 2 is required the following steps should suffice:
+- move values in the `default_config` object to the top level of the configuration
+- move the `relays` from the `builder` object to the top level of the configuration
+- change each relay entry from being a simple string to an object whose `address` field is the previously mentioned string value
+- change the `proposer_config` key to `proposers`
+- change the `proposer_config` from an map to a list of objects, moving the existing keys to be the value of the `proposer` key in the subobjects
+- update relays in proposer entries the same way as was carried out for the default configuration
+- ensure that there is a `"version":2` key at the top level of the configuration
