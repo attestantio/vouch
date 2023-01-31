@@ -32,7 +32,7 @@ func (s *Service) handleBlock(event *apiv1.Event) {
 	data := event.Data.(*apiv1.BlockEvent)
 	log.Trace().Str("root", fmt.Sprintf("%#x", data.Block)).Uint64("slot", uint64(data.Slot)).Msg("Received block event")
 
-	s.setBlockRootToSlot(data.Block, data.Slot)
+	s.SetBlockRootToSlot(data.Block, data.Slot)
 }
 
 // handleHead handles a head update message.

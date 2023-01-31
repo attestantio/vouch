@@ -23,6 +23,7 @@ import (
 	"github.com/attestantio/vouch/services/attester"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/beaconcommitteesubscriber"
+	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/proposalpreparer"
@@ -56,6 +57,7 @@ type parameters struct {
 	attestationAggregator         attestationaggregator.Service
 	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
 	accountsRefresher             accountmanager.Refresher
+	blockToSlotSetter             cache.BlockRootToSlotSetter
 	maxProposalDelay              time.Duration
 	maxAttestationDelay           time.Duration
 	attestationAggregationDelay   time.Duration
@@ -222,6 +224,13 @@ func WithAccountsRefresher(refresher accountmanager.Refresher) Parameter {
 	})
 }
 
+// WithBlockToSlotSetter sets the setter for the block to slot cache.
+func WithBlockToSlotSetter(setter cache.BlockRootToSlotSetter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.blockToSlotSetter = setter
+	})
+}
+
 // WithMaxProposalDelay sets the maximum delay before proposing.
 func WithMaxProposalDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -320,6 +329,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.accountsRefresher == nil {
 		return nil, errors.New("no accounts refresher specified")
+	}
+	if parameters.blockToSlotSetter == nil {
+		return nil, errors.New("no block to slot setter specified")
 	}
 	spec, err := parameters.specProvider.Spec(context.Background())
 	if err != nil {

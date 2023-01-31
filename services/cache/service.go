@@ -28,6 +28,12 @@ type BlockRootToSlotProvider interface {
 	BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0.Slot, error)
 }
 
+// BlockRootToSlotSetter sets a known block root to its slot.
+type BlockRootToSlotSetter interface {
+	// SetBlockRootToSlot sets the block root to slot mapping.
+	SetBlockRootToSlot(root phase0.Root, slot phase0.Slot)
+}
+
 // ExecutionChainHeadProvider provides the current execution chain head.
 type ExecutionChainHeadProvider interface {
 	// ExecutionChainHead provides the current execution chain head.
