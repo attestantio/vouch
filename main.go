@@ -299,6 +299,17 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
+	// Some beacon nodes do not respond pre-genesis, so we must wait for genesis Before proceeding.
+	genesisTime := chainTime.GenesisTime()
+	now := time.Now()
+	waitedForGenesis := false
+	if now.Before(genesisTime) {
+		waitedForGenesis = true
+		// Wait for genesis.
+		log.Info().Str("genesis", fmt.Sprintf("%v", genesisTime)).Msg("Waiting for genesis")
+		time.Sleep(time.Until(genesisTime))
+	}
+
 	altairCapable, bellatrixCapable, _, err := consensusClientCapabilities(ctx, eth2Client)
 	if err != nil {
 		return nil, nil, err
@@ -356,6 +367,7 @@ func startServices(ctx context.Context,
 		standardcontroller.WithMonitor(monitor.(metrics.ControllerMonitor)),
 		standardcontroller.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardcontroller.WithChainTimeService(chainTime),
+		standardcontroller.WithWaitedForGenesis(waitedForGenesis),
 		standardcontroller.WithProposerDutiesProvider(eth2Client.(eth2client.ProposerDutiesProvider)),
 		standardcontroller.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),
 		standardcontroller.WithSyncCommitteeDutiesProvider(eth2Client.(eth2client.SyncCommitteeDutiesProvider)),
@@ -1415,7 +1427,7 @@ func consensusClientCapabilities(ctx context.Context, consensusClient eth2client
 	if err != nil {
 		return false, false, false, errors.Wrap(err, "failed to obtain spec")
 	}
-	if _, exists := spec["INACTIVITY_PENALTY_QUOTIENT_ALTAIR"]; exists {
+	if _, exists := spec["ALTAIR_INITIAL_EPOCH"]; exists {
 		altairCapable = true
 		log.Info().Msg("Client is Altair-capable")
 	} else {

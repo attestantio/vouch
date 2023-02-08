@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
-	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
@@ -49,10 +48,6 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
-
-	// Random seed for line selection in multi-line graaffiti input.
-	// skipcq: GO-S1033
-	rand.Seed(time.Now().UnixNano())
 
 	s := &Service{
 		location:  parameters.location,

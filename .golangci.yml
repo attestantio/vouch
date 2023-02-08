@@ -118,6 +118,10 @@ linters-settings:
         json: snake
         yaml: snake
 
+  nlreturn:
+    # Allow two-line blocks without requiring a newline
+    block-size: 3
+
 linters:
   # Enable all available linters.
   # Default: false
@@ -151,6 +155,7 @@ linters:
     - ireturn
     - lll
     - maligned
+    - musttag
     - nestif
     - nilnil
     - nlreturn
