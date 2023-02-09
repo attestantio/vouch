@@ -40,6 +40,7 @@ type parameters struct {
 	monitor                       metrics.ControllerMonitor
 	specProvider                  eth2client.SpecProvider
 	chainTimeService              chaintime.Service
+	waitedForGenesis              bool
 	proposerDutiesProvider        eth2client.ProposerDutiesProvider
 	attesterDutiesProvider        eth2client.AttesterDutiesProvider
 	syncCommitteeDutiesProvider   eth2client.SyncCommitteeDutiesProvider
@@ -102,6 +103,13 @@ func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 func WithChainTimeService(service chaintime.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.chainTimeService = service
+	})
+}
+
+// WithWaitedForGenesis is true if we waited for genesis.
+func WithWaitedForGenesis(waitedForGenesis bool) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.waitedForGenesis = waitedForGenesis
 	})
 }
 

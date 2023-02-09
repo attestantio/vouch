@@ -17,17 +17,9 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"time"
 
 	"github.com/rs/zerolog"
 )
-
-func init() {
-	// We seed math.rand here so that we can obtain different IDs for requests.
-	// This is purely used as a way to match request and response entries in logs, so there is no
-	// requirement for this to cryptographically secure.
-	rand.Seed(time.Now().UnixNano())
-}
 
 // LogWithID returns a new logger based on the supplied logger with an additional ID field.
 func LogWithID(_ context.Context, log zerolog.Logger, tag string) zerolog.Logger {

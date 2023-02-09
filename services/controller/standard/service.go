@@ -53,6 +53,7 @@ type Service struct {
 	slotsPerEpoch                 uint64
 	epochsPerSyncCommitteePeriod  uint64
 	chainTimeService              chaintime.Service
+	waitedForGenesis              bool
 	proposerDutiesProvider        eth2client.ProposerDutiesProvider
 	attesterDutiesProvider        eth2client.AttesterDutiesProvider
 	syncCommitteeDutiesProvider   eth2client.SyncCommitteeDutiesProvider
@@ -212,8 +213,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Start tickers, to carry out periodic operations.
-	waitedForGenesis, err := s.startTickers(ctx, handlingBellatrix)
-	if err != nil {
+	if err := s.startTickers(ctx, handlingBellatrix); err != nil {
 		return nil, errors.Wrap(err, "failed to start controller tickers")
 	}
 
@@ -231,8 +231,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain active validator indices for the next epoch")
 	}
-	go s.scheduleProposals(ctx, epoch, validatorIndices, !waitedForGenesis)
-	go s.scheduleAttestations(ctx, epoch, validatorIndices, !waitedForGenesis)
+	go s.scheduleProposals(ctx, epoch, validatorIndices, !s.waitedForGenesis)
+	go s.scheduleAttestations(ctx, epoch, validatorIndices, !s.waitedForGenesis)
 	if handlingAltair {
 		thisSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch) / s.epochsPerSyncCommitteePeriod)
 		go s.scheduleSyncCommitteeMessages(ctx, thisSyncCommitteePeriodStartEpoch, validatorIndices, true /* notCurrentSlot */)
@@ -276,41 +276,28 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 // startTickers starts the various tickers for the controller's operations.
 func (s *Service) startTickers(ctx context.Context,
 	handlingBellatrix bool,
-) (
-	bool,
-	error,
-) {
-	genesisTime := s.chainTimeService.GenesisTime()
-	now := time.Now()
-	waitedForGenesis := false
-	if now.Before(genesisTime) {
-		waitedForGenesis = true
-		// Wait for genesis.
-		log.Info().Str("genesis", fmt.Sprintf("%v", genesisTime)).Msg("Waiting for genesis")
-		time.Sleep(time.Until(genesisTime))
-	}
-
+) error {
 	// Start epoch ticker.
 	log.Trace().Msg("Starting epoch tickers")
-	if err := s.startEpochTicker(ctx, waitedForGenesis); err != nil {
-		return false, errors.Wrap(err, "failed to start epoch ticker")
+	if err := s.startEpochTicker(ctx); err != nil {
+		return errors.Wrap(err, "failed to start epoch ticker")
 	}
 
 	// Start account refresher.
 	log.Trace().Msg("Starting accounts refresher")
 	if err := s.startAccountsRefresher(ctx); err != nil {
-		return false, errors.Wrap(err, "failed to start accounts refresher")
+		return errors.Wrap(err, "failed to start accounts refresher")
 	}
 
 	// Start proposals preparer.
 	if handlingBellatrix {
 		log.Trace().Msg("Starting proposals preparer ticker")
 		if err := s.startProposalsPreparer(ctx); err != nil {
-			return false, errors.Wrap(err, "failed to start proposals preparer")
+			return errors.Wrap(err, "failed to start proposals preparer")
 		}
 	}
 
-	return waitedForGenesis, nil
+	return nil
 }
 
 type epochTickerData struct {
@@ -320,14 +307,14 @@ type epochTickerData struct {
 }
 
 // startEpochTicker starts a ticker that ticks at the beginning of each epoch.
-func (s *Service) startEpochTicker(ctx context.Context, waitedForGenesis bool) error {
+func (s *Service) startEpochTicker(ctx context.Context) error {
 	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
 		// Schedule for the beginning of the next epoch.
 		return s.chainTimeService.StartOfEpoch(s.chainTimeService.CurrentEpoch() + 1), nil
 	}
 	data := &epochTickerData{
 		latestEpochRan: -1,
-		atGenesis:      waitedForGenesis,
+		atGenesis:      s.waitedForGenesis,
 	}
 	if err := s.scheduler.SchedulePeriodicJob(ctx,
 		"Epoch",
