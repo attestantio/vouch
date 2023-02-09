@@ -167,8 +167,9 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 			continue
 		}
 		// Do not schedule aggregations for past slots.
-		if attestation.Data.Slot < s.chainTimeService.CurrentSlot() {
-			log.Debug().Uint64("current_slot", uint64(s.chainTimeService.CurrentSlot())).Msg("Aggregation in the past; not scheduling")
+		currentSlot := s.chainTimeService.CurrentSlot()
+		if attestation.Data.Slot < currentSlot {
+			log.Debug().Uint64("current_slot", uint64(currentSlot)).Msg("Aggregation in the past; not scheduling")
 			continue
 		}
 		info, exists := slotInfoMap[attestation.Data.Index]

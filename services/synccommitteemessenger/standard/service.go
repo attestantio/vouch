@@ -189,7 +189,7 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 			i int,
 		) {
 			defer wg.Done()
-			sig, err := s.contribute(ctx, duty.Account(validatorIndices[i]), s.chainTimeService.SlotToEpoch(duty.Slot()), *beaconBlockRoot)
+			sig, err := s.contribute(ctx, duty.Account(validatorIndices[i]), s.chainTimeService.SlotToEpoch(duty.Slot()+1), *beaconBlockRoot)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to sign sync committee message")
 				return

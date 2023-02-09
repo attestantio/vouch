@@ -101,7 +101,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.7.0-rc1"
+var ReleaseVersion = "1.7.0"
 
 func main() {
 	exitCode := main2()
@@ -299,15 +299,30 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	// Some beacon nodes do not respond pre-genesis, so we must wait for genesis Before proceeding.
+	// Some beacon nodes do not respond pre-genesis, so we must wait for genesis before proceeding.
 	genesisTime := chainTime.GenesisTime()
 	now := time.Now()
 	waitedForGenesis := false
 	if now.Before(genesisTime) {
 		waitedForGenesis = true
-		// Wait for genesis.
+		// Wait for genesis (or signal, or context cancel).
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 		log.Info().Str("genesis", fmt.Sprintf("%v", genesisTime)).Msg("Waiting for genesis")
-		time.Sleep(time.Until(genesisTime))
+		ctx, cancel := context.WithDeadline(ctx, genesisTime)
+		defer cancel()
+		select {
+		case <-sigCh:
+			return nil, nil, errors.New("signal received")
+		case <-ctx.Done():
+			//nolint:errorlint
+			switch ctx.Err() {
+			case context.DeadlineExceeded:
+				log.Info().Msg("Genesis time")
+			case context.Canceled:
+				return nil, nil, errors.New("context cancelled")
+			}
+		}
 	}
 
 	altairCapable, bellatrixCapable, _, err := consensusClientCapabilities(ctx, eth2Client)
