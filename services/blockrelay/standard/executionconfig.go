@@ -164,7 +164,7 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to obtain execution configuration")
 	}
 
-	log.Trace().Str("res", string(res)).Msg("Received response")
+	log.Trace().RawJSON("res", res).Msg("Received response")
 
 	executionConfig, err := blockrelay.UnmarshalJSON(res)
 	if err != nil {
