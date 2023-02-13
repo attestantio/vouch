@@ -187,7 +187,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 				res.Bid = resp.bid
 				bestScore = resp.score
 				res.Providers = []builderclient.BuilderBidProvider{resp.provider}
-			case resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
+			case res.Bid != nil && resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
 				log.Trace().Str("provider", resp.provider.Address()).Msg("Matching bid from different relay")
 				res.Providers = append(res.Providers, resp.provider)
 			default:
@@ -227,7 +227,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 				res.Bid = resp.bid
 				bestScore = resp.score
 				res.Providers = []builderclient.BuilderBidProvider{resp.provider}
-			case resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
+			case res.Bid != nil && resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
 				log.Trace().Str("provider", resp.provider.Address()).Msg("Matching bid from different relay")
 				res.Providers = append(res.Providers, resp.provider)
 			default:
