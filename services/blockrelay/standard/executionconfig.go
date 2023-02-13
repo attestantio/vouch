@@ -156,7 +156,7 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 		for _, pubkey := range pubkeys {
 			pubkeyStrs = append(pubkeyStrs, fmt.Sprintf("%#x", pubkey))
 		}
-		ctx = context.WithValue(ctx, &httpconfidant.Body{}, []byte(fmt.Sprintf(`["%s"]`, strings.Join(pubkeyStrs, `","`))))
+		ctx = context.WithValue(ctx, &httpconfidant.Body{}, []byte(fmt.Sprintf(`[%q]`, strings.Join(pubkeyStrs, `","`))))
 
 		res, err = s.majordomo.Fetch(ctx, s.configURL)
 	}
