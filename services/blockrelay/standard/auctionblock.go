@@ -169,7 +169,7 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 	errored := 0
 	timedOut := 0
 	softTimedOut := 0
-	bestScore := new(big.Int)
+	bestScore := big.NewInt(0)
 
 	// Loop 1: prior to soft timeout.
 	for responded+errored+timedOut+softTimedOut != requests {
@@ -182,12 +182,12 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 				continue
 			}
 			switch {
-			case res.Bid == nil || resp.score.Cmp(bestScore) > 0:
+			case resp.score.Cmp(bestScore) > 0:
 				log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("New winning bid")
 				res.Bid = resp.bid
 				bestScore = resp.score
 				res.Providers = []builderclient.BuilderBidProvider{resp.provider}
-			case resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
+			case res.Bid != nil && resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
 				log.Trace().Str("provider", resp.provider.Address()).Msg("Matching bid from different relay")
 				res.Providers = append(res.Providers, resp.provider)
 			default:
@@ -222,12 +222,12 @@ func (s *Service) bestBuilderBid(ctx context.Context,
 				continue
 			}
 			switch {
-			case res.Bid == nil || resp.score.Cmp(bestScore) > 0:
+			case resp.score.Cmp(bestScore) > 0:
 				log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("New winning bid")
 				res.Bid = resp.bid
 				bestScore = resp.score
 				res.Providers = []builderclient.BuilderBidProvider{resp.provider}
-			case resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
+			case res.Bid != nil && resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
 				log.Trace().Str("provider", resp.provider.Address()).Msg("Matching bid from different relay")
 				res.Providers = append(res.Providers, resp.provider)
 			default:

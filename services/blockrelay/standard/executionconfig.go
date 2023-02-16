@@ -156,7 +156,7 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 		for _, pubkey := range pubkeys {
 			pubkeyStrs = append(pubkeyStrs, fmt.Sprintf("%#x", pubkey))
 		}
-		ctx = context.WithValue(ctx, &httpconfidant.Body{}, []byte(fmt.Sprintf(`["%s"]`, strings.Join(pubkeyStrs, `","`))))
+		ctx = context.WithValue(ctx, &httpconfidant.Body{}, []byte(fmt.Sprintf(`[%q]`, strings.Join(pubkeyStrs, `","`))))
 
 		res, err = s.majordomo.Fetch(ctx, s.configURL)
 	}
@@ -164,7 +164,7 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to obtain execution configuration")
 	}
 
-	log.Trace().Str("res", string(res)).Msg("Received response")
+	log.Trace().RawJSON("res", res).Msg("Received response")
 
 	executionConfig, err := blockrelay.UnmarshalJSON(res)
 	if err != nil {
