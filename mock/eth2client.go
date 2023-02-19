@@ -1233,6 +1233,15 @@ func (*DomainProvider) Domain(_ context.Context, domainType phase0.DomainType, _
 	return domain, nil
 }
 
+// GenesisDomain is a mock.
+func (*DomainProvider) GenesisDomain(_ context.Context, domainType phase0.DomainType) (phase0.Domain, error) {
+	var domain phase0.Domain
+	// Put the domain type in the first four bytes, to differentiate signatures.
+	copy(domain[:], domainType[:])
+
+	return domain, nil
+}
+
 // ErroringDomainProvider is a mock for eth2client.DomainProvider.
 type ErroringDomainProvider struct{}
 
@@ -1243,6 +1252,11 @@ func NewErroringDomainProvider() eth2client.DomainProvider {
 
 // Domain is a mock.
 func (*ErroringDomainProvider) Domain(_ context.Context, _ phase0.DomainType, _ phase0.Epoch) (phase0.Domain, error) {
+	return phase0.Domain{}, errors.New("error")
+}
+
+// GenesisDomain is a mock.
+func (*ErroringDomainProvider) GenesisDomain(_ context.Context, _ phase0.DomainType) (phase0.Domain, error) {
 	return phase0.Domain{}, errors.New("error")
 }
 
