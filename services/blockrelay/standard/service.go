@@ -100,7 +100,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if !ok {
 		return nil, errors.New("unexpected type for application builder domain type")
 	}
-	domain, err := parameters.domainProvider.Domain(ctx, applicationBuilderDomainType, 0)
+	domain, err := parameters.domainProvider.GenesisDomain(ctx, applicationBuilderDomainType)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain application builder domain")
 	}
