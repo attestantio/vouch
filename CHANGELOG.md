@@ -1,4 +1,4 @@
-1.7.0:
+1.7.1:
   - provide full information for beacon committee subscriptions
   - verify bid signatures from relays if public key available
   - make execution configuration values hierarchical

@@ -101,7 +101,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.7.0"
+var ReleaseVersion = "1.7.1"
 
 func main() {
 	exitCode := main2()
@@ -1442,7 +1442,7 @@ func consensusClientCapabilities(ctx context.Context, consensusClient eth2client
 	if err != nil {
 		return false, false, false, errors.Wrap(err, "failed to obtain spec")
 	}
-	if _, exists := spec["ALTAIR_INITIAL_EPOCH"]; exists {
+	if _, exists := spec["ALTAIR_FORK_EPOCH"]; exists {
 		altairCapable = true
 		log.Info().Msg("Client is Altair-capable")
 	} else {
