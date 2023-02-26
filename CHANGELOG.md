@@ -1,3 +1,8 @@
+1.7.2:
+  - update dependencies
+  - provide more detail in logs on block proposal mismatches
+  - avoid potential failure when proposing local blocks
+
 1.7.1:
   - provide full information for beacon committee subscriptions
   - verify bid signatures from relays if public key available
