@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -108,6 +108,16 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 				Enabled: false,
 			},
 		}
+	}
+
+	// At this point we definitely have a proposer config, however
+	// if it was the default config it is possible that some elements
+	// are missing.  Fill them in here.
+	if proposerConfig.GasLimit == 0 {
+		proposerConfig.GasLimit = fallbackGasLimit
+	}
+	if proposerConfig.Builder == nil {
+		proposerConfig.Builder = &BuilderConfig{}
 	}
 
 	relays := make([]*beaconblockproposer.RelayConfig, 0)
