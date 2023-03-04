@@ -86,12 +86,12 @@ import (
 	firstsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/first"
 	"github.com/attestantio/vouch/util"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	homedir "github.com/mitchellh/go-homedir"
+	"github.com/mitchellh/go-homedir"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
-	majordomo "github.com/wealdtech/go-majordomo"
+	"github.com/wealdtech/go-majordomo"
 	asmconfidant "github.com/wealdtech/go-majordomo/confidants/asm"
 	directconfidant "github.com/wealdtech/go-majordomo/confidants/direct"
 	fileconfidant "github.com/wealdtech/go-majordomo/confidants/file"
@@ -230,7 +230,6 @@ func fetchConfig() error {
 	viper.SetDefault("blockrelay.timeout", 1*time.Second)
 	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(30000000))
-	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch {
@@ -248,6 +247,11 @@ func fetchConfig() error {
 		default:
 			return errors.Wrap(err, "failed to obtain configuration")
 		}
+	}
+
+	// Only set default timeout for dirk if dirk account manager is provided.
+	if viper.Get("accountmanager.dirk") != nil {
+		viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 	}
 
 	return nil
