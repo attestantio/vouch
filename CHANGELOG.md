@@ -1,3 +1,7 @@
+dev:
+  - do not start account managers unnecessarily
+  - fail if multiple account managers are defined
+
 1.7.2:
   - update dependencies
   - provide more detail in logs on block proposal mismatches
