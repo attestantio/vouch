@@ -896,6 +896,7 @@ func TestScore(t *testing.T) {
 				}),
 				WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				WithBlockRootToSlotCache(blockToSlotCache),
+				WithExecutionPayloadFactor(0.001),
 			)
 			require.NoError(t, err)
 			if test.priorBlocks != nil {
