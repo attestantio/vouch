@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -35,7 +35,6 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // Service is a beacon block attester.
@@ -223,11 +222,6 @@ func (s *Service) attest(
 	data *phase0.AttestationData,
 	started time.Time,
 ) ([]*phase0.Attestation, error) {
-	ctx, span := otel.Tracer("attestantio.vouch.services.attester.standard").Start(ctx, "attest", trace.WithAttributes(
-		attribute.Int64("slot", int64(duty.Slot())),
-	))
-	defer span.End()
-
 	// Sign the attestation for all validating accounts.
 	uintCommitteeIndices := make([]uint64, len(committeeIndices))
 	for i := range committeeIndices {
