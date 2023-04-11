@@ -1,3 +1,6 @@
+dev:
+  - add score of block proposals to tracing
+
 1.7.2:
   - update dependencies
   - provide more detail in logs on block proposal mismatches
