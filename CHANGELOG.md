@@ -1,6 +1,7 @@
-dev:
+1.7.4:
   - add score of block proposals to tracing
   - remove unnecessary trace item when attesting
+  - add execution payload metric to beacon block score
 
 1.7.3:
   - do not start account managers unnecessarily

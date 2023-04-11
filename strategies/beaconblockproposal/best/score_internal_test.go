@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,6 +21,8 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/cache"
@@ -782,6 +784,44 @@ func TestScore(t *testing.T) {
 				},
 			},
 			score: 0.4375,
+		},
+		{
+			name:        "ExecutionPayloadBellatrix",
+			priorBlocks: map[phase0.Root]*priorBlockVotes{},
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionBellatrix,
+				Bellatrix: &bellatrix.BeaconBlock{
+					Slot:       12345,
+					ParentRoot: testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
+					Body: &bellatrix.BeaconBlockBody{
+						Attestations:  []*phase0.Attestation{},
+						SyncAggregate: &altair.SyncAggregate{},
+						ExecutionPayload: &bellatrix.ExecutionPayload{
+							GasUsed: 15000000,
+						},
+					},
+				},
+			},
+			score: 15000.0,
+		},
+		{
+			name:        "ExecutionPayloadCapella",
+			priorBlocks: map[phase0.Root]*priorBlockVotes{},
+			block: &spec.VersionedBeaconBlock{
+				Version: spec.DataVersionCapella,
+				Capella: &capella.BeaconBlock{
+					Slot:       12345,
+					ParentRoot: testutil.HexToRoot("0x4444444444444444444444444444444444444444444444444444444444444444"),
+					Body: &capella.BeaconBlockBody{
+						Attestations:  []*phase0.Attestation{},
+						SyncAggregate: &altair.SyncAggregate{},
+						ExecutionPayload: &capella.ExecutionPayload{
+							GasUsed: 15000000,
+						},
+					},
+				},
+			},
+			score: 15000.0,
 		},
 		{
 			name: "InvalidVersion",

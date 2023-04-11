@@ -38,6 +38,7 @@ type Service struct {
 	signedBeaconBlockProvider    eth2client.SignedBeaconBlockProvider
 	timeout                      time.Duration
 	blockRootToSlotCache         cache.BlockRootToSlotProvider
+	executionPayloadFactor       float64
 
 	// Spec values for scoring proposals.
 	slotsPerEpoch      uint64
@@ -166,6 +167,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		proposerWeight:               proposerWeight,
 		weightDenominator:            weightDenominator,
 		priorBlocksVotes:             make(map[phase0.Root]*priorBlockVotes),
+		executionPayloadFactor:       parameters.executionPayloadFactor,
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 

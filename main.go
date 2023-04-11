@@ -231,6 +231,7 @@ func fetchConfig() error {
 	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(30000000))
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
+	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.001))
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch {
@@ -1157,6 +1158,7 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 			bestbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
 			bestbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.best")),
 			bestbeaconblockproposalstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+			bestbeaconblockproposalstrategy.WithExecutionPayloadFactor(viper.GetFloat64("strategies.beaconblockproposal.best.execution-payload-factor")),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start best beacon block proposal strategy")
