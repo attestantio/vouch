@@ -101,7 +101,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.7.3"
+var ReleaseVersion = "1.7.4-dev"
 
 func main() {
 	exitCode := main2()
@@ -927,8 +927,13 @@ func startSigner(ctx context.Context, monitor metrics.Service, eth2Client eth2cl
 
 // startAccountManager starts the appropriate account manager given user input.
 func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service, validatorsManager validatorsmanager.Service, majordomo majordomo.Service, chainTime chaintime.Service) (accountmanager.Service, error) {
+	if len(viper.GetStringSlice("accountmanager.dirk.accounts")) > 0 &&
+		len(viper.GetStringSlice("accountmanager.wallet.accounts")) > 0 {
+		return nil, errors.New("multiple account managers configured; Vouch only supports a single account manager")
+	}
+
 	var accountManager accountmanager.Service
-	if viper.Get("accountmanager.dirk") != nil {
+	if len(viper.GetStringSlice("accountmanager.dirk.accounts")) > 0 {
 		log.Info().Msg("Starting dirk account manager")
 		certPEMBlock, err := majordomo.Fetch(ctx, viper.GetString("accountmanager.dirk.client-cert"))
 		if err != nil {
@@ -967,7 +972,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 		return accountManager, nil
 	}
 
-	if viper.Get("accountmanager.wallet") != nil {
+	if len(viper.GetStringSlice("accountmanager.wallet.accounts")) > 0 {
 		log.Info().Msg("Starting wallet account manager")
 		var err error
 		passphrases := make([][]byte, 0)
