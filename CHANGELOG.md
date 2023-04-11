@@ -1,4 +1,7 @@
 dev:
+  - add score of block proposals to tracing
+
+1.7.3:
   - do not start account managers unnecessarily
   - fail if multiple account managers are defined
 
