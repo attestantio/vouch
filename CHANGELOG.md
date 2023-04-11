@@ -1,5 +1,6 @@
 dev:
   - add score of block proposals to tracing
+  - remove unnecessary trace item when attesting
 
 1.7.3:
   - do not start account managers unnecessarily
