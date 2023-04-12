@@ -132,7 +132,6 @@ linters:
     - contextcheck
     - cyclop
     - deadcode
-    - decorder
     - dupl
     - errchkjson
     - exhaustive

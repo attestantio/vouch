@@ -297,6 +297,14 @@ func (s *Service) scoreBellatrixBeaconBlockProposal(ctx context.Context,
 	// Add sync committee score.
 	syncCommitteeScore := float64(blockProposal.Body.SyncAggregate.SyncCommitteeBits.Count()) * float64(s.syncRewardWeight) / float64(s.weightDenominator)
 
+	// Add execution payload score.
+	executionPayloadScore := float64(0)
+	if blockProposal.Body.ExecutionPayload != nil {
+		// Value is based on the gas used.  Transactions are opaque, so we cannot see the gas price to calculate a true numerical value.
+		// We scale the gas used to normalise with the consensus value.
+		executionPayloadScore = float64(blockProposal.Body.ExecutionPayload.GasUsed) * s.executionPayloadFactor
+	}
+
 	log.Trace().
 		Uint64("slot", uint64(blockProposal.Slot)).
 		Uint64("parent_slot", uint64(parentSlot)).
@@ -306,10 +314,11 @@ func (s *Service) scoreBellatrixBeaconBlockProposal(ctx context.Context,
 		Float64("proposer_slashings", proposerSlashingScore).
 		Float64("attester_slashings", attesterSlashingScore).
 		Float64("sync_committee", syncCommitteeScore).
-		Float64("total", attestationScore+proposerSlashingScore+attesterSlashingScore+syncCommitteeScore).
+		Float64("execution_payload", executionPayloadScore).
+		Float64("total", attestationScore+proposerSlashingScore+attesterSlashingScore+syncCommitteeScore+executionPayloadScore).
 		Msg("Scored Bellatrix block")
 
-	return attestationScore + proposerSlashingScore + attesterSlashingScore + syncCommitteeScore
+	return attestationScore + proposerSlashingScore + attesterSlashingScore + syncCommitteeScore + executionPayloadScore
 }
 
 // scoreCapellaBeaconBlockPropsal generates a score for a capella beacon block.
@@ -388,6 +397,14 @@ func (s *Service) scoreCapellaBeaconBlockProposal(ctx context.Context,
 	// Add sync committee score.
 	syncCommitteeScore := float64(blockProposal.Body.SyncAggregate.SyncCommitteeBits.Count()) * float64(s.syncRewardWeight) / float64(s.weightDenominator)
 
+	// Add execution payload score.
+	executionPayloadScore := float64(0)
+	if blockProposal.Body.ExecutionPayload != nil {
+		// Value is based on the gas used.  Transactions are opaque, so we cannot see the gas price to calculate a true numerical value.
+		// We scale the gas used to normalise with the consensus value.
+		executionPayloadScore = float64(blockProposal.Body.ExecutionPayload.GasUsed) * s.executionPayloadFactor
+	}
+
 	log.Trace().
 		Uint64("slot", uint64(blockProposal.Slot)).
 		Uint64("parent_slot", uint64(parentSlot)).
@@ -397,10 +414,11 @@ func (s *Service) scoreCapellaBeaconBlockProposal(ctx context.Context,
 		Float64("proposer_slashings", proposerSlashingScore).
 		Float64("attester_slashings", attesterSlashingScore).
 		Float64("sync_committee", syncCommitteeScore).
-		Float64("total", attestationScore+proposerSlashingScore+attesterSlashingScore+syncCommitteeScore).
+		Float64("execution_payload", executionPayloadScore).
+		Float64("total", attestationScore+proposerSlashingScore+attesterSlashingScore+syncCommitteeScore+executionPayloadScore).
 		Msg("Scored Capella block")
 
-	return attestationScore + proposerSlashingScore + attesterSlashingScore + syncCommitteeScore
+	return attestationScore + proposerSlashingScore + attesterSlashingScore + syncCommitteeScore + executionPayloadScore
 }
 
 func scoreSlashings(attesterSlashings []*phase0.AttesterSlashing,
