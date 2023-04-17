@@ -1,4 +1,4 @@
-1.7.4:
+1.7.5:
   - add score of block proposals to tracing
   - remove unnecessary trace item when attesting
   - add execution payload metric to beacon block score
