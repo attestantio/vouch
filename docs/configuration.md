@@ -133,6 +133,15 @@ strategies:
 blockrelay:
   fallback-fee-recipient: '0x0000000000000000000000000000000000000001'
 
+# tracing sends OTLP trace data for all operations to the supplied endpoint.
+tracing:
+  # Address is the host and port of an OTLP trace receiver.
+  address: 'server:4317'
+  # If the endpoint is secure you will need to supply a client certificate and key, and optionall a CA certificate.
+  client-cert: 'file:///home/vouch/certs/server.crt'
+  client-key: 'file:///home/vouch/certs/server.key'
+  ca-cert: 'file:///home/vouch/certs/ca.crt'
+
 ```
 
 ## Hierarchical configuration.
