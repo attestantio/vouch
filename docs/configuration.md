@@ -205,7 +205,10 @@ Modules levels are used for each module, overriding the global log level.  The a
   - **majordomo** accesss to secrets
   - **scheduler** starting internal jobs such as proposing a block at the appropriate time
   - **signer** carries out signing activities
-  - **strategies.beaconblockproposer** decisions on how to obtain information from multiple beacon nodes
+  - **strategies.attestationdata** decisions on how to obtain information from multiple beacon nodes
+  - **strategies.aggregateattestation** decisions on how to obtain information from multiple beacon nodes
+  - **strategies.beaconblockproposal** decisions on how to obtain information from multiple beacon nodes
+  - **strategies.blindedbeaconblockproposal** decisions on how to obtain information from multiple beacon nodes
   - **strategies.synccommitteecontribution** decisions on how to obtain information from multiple beacon nodes
   - **submitter** decisions on how to submit information to multiple beacon nodes
   - **validatorsmanager** obtaining validator state from beacon nodes and providing it to other modules
