@@ -189,7 +189,7 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 		accountName = fmt.Sprintf("<unknown>/%s", account.Name())
 	}
 	for _, proposerConfig := range e.Proposers {
-		match := false
+		var match bool
 		switch {
 		case proposerConfig.Account != nil:
 			match = proposerConfig.Account.Match([]byte(accountName))

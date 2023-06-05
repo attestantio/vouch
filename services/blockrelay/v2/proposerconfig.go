@@ -53,7 +53,7 @@ type proposerConfigJSON struct {
 
 // MarshalJSON implements json.Marshaler.
 func (p *ProposerConfig) MarshalJSON() ([]byte, error) {
-	proposer := ""
+	var proposer string
 	if p.Account != nil {
 		proposer = p.Account.String()
 	} else {
