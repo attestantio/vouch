@@ -59,19 +59,19 @@ type executionConfigJSON struct {
 
 // MarshalJSON implements json.Marshaler.
 func (e *ExecutionConfig) MarshalJSON() ([]byte, error) {
-	feeRecipient := ""
+	var feeRecipient string
 	if e.FeeRecipient != nil {
 		feeRecipient = fmt.Sprintf("%#x", *e.FeeRecipient)
 	}
-	gasLimit := ""
+	var gasLimit string
 	if e.GasLimit != nil {
 		gasLimit = fmt.Sprintf("%d", *e.GasLimit)
 	}
-	grace := ""
+	var grace string
 	if e.Grace != nil {
 		grace = fmt.Sprintf("%d", e.Grace.Milliseconds())
 	}
-	minValue := ""
+	var minValue string
 	if e.MinValue != nil {
 		minValue = fmt.Sprintf("%v", e.MinValue.Div(weiPerETH))
 	}
