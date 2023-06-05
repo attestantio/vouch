@@ -192,7 +192,7 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 		var match bool
 		switch {
 		case proposerConfig.Account != nil:
-			match = proposerConfig.Account.Match([]byte(accountName))
+			match = proposerConfig.Account.MatchString(accountName)
 		case !bytes.Equal(proposerConfig.Validator[:], zeroPubkey[:]):
 			match = bytes.Equal(proposerConfig.Validator[:], pubkey[:])
 		default:
