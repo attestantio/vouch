@@ -101,8 +101,9 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 	// Shut down cleanly on exit.
 	go func(ctx context.Context) {
 		<-ctx.Done()
-		ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
+		//nolint:contextcheck
 		if err := tp.Shutdown(ctx); err != nil {
 			log.Error().Err(err).Msg("Failed to shut down tracing")
 		} else {

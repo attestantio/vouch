@@ -37,7 +37,7 @@ type builderConfigJSON struct {
 
 // MarshalJSON implements json.Marshaler.
 func (b *BuilderConfig) MarshalJSON() ([]byte, error) {
-	grace := ""
+	var grace string
 	if b.Grace > 0 {
 		grace = fmt.Sprintf("%d", b.Grace.Milliseconds())
 	}

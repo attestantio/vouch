@@ -46,15 +46,15 @@ type relayConfigJSON struct {
 
 // MarshalJSON implements json.Marshaler.
 func (r *RelayConfig) MarshalJSON() ([]byte, error) {
-	publicKey := ""
+	var publicKey string
 	if r.PublicKey != nil {
 		publicKey = fmt.Sprintf("%#x", *r.PublicKey)
 	}
-	grace := ""
+	var grace string
 	if r.Grace != 0 {
 		grace = fmt.Sprintf("%d", r.Grace.Milliseconds())
 	}
-	minValue := ""
+	var minValue string
 	if !r.MinValue.Equal(decimal.Zero) {
 		minValue = fmt.Sprintf("%v", r.MinValue.Div(weiPerETH))
 	}

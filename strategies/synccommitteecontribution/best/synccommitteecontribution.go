@@ -71,7 +71,7 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 	softTimedOut := 0
 	bestScore := float64(0)
 	var bestSyncCommitteeContribution *altair.SyncCommitteeContribution
-	bestProvider := ""
+	var bestProvider string
 
 	// Loop 1: prior to soft timeout.
 	for responded+errored+timedOut+softTimedOut != requests {

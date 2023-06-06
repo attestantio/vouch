@@ -70,7 +70,7 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 	softTimedOut := 0
 	bestScore := float64(0)
 	var bestAggregateAttestation *phase0.Attestation
-	bestProvider := ""
+	var bestProvider string
 
 	// Loop 1: prior to soft timeout.
 	for responded+errored+timedOut+softTimedOut != requests {
