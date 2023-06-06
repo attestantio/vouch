@@ -59,6 +59,7 @@ type Service struct {
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 	logResults                                bool
 	applicationBuilderDomain                  phase0.Domain
+	releaseVersion                            string
 
 	executionConfig   blockrelay.ExecutionConfigurator
 	executionConfigMu sync.RWMutex
@@ -123,6 +124,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		secondaryValidatorRegistrationsSubmitters: parameters.secondaryValidatorRegistrationsSubmitters,
 		logResults:               parameters.logResults,
 		applicationBuilderDomain: domain,
+		releaseVersion:           parameters.releaseVersion,
 		builderBidsCache:         make(map[string]map[string]*builderspec.VersionedSignedBuilderBid),
 		relayPubkeys:             make(map[phase0.BLSPubKey]*e2types.BLSPublicKey),
 		executionConfig:          &v2.ExecutionConfig{Version: 2},

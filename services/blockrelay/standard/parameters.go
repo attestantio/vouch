@@ -51,6 +51,7 @@ type parameters struct {
 	specProvider                              consensusclient.SpecProvider
 	domainProvider                            consensusclient.DomainProvider
 	timeout                                   time.Duration
+	releaseVersion                            string
 }
 
 // Parameter is the interface for service parameters.
@@ -204,6 +205,13 @@ func WithDomainProvider(provider consensusclient.DomainProvider) Parameter {
 	})
 }
 
+// WithReleaseVersion sets the release version for Vouch.
+func WithReleaseVersion(version string) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.releaseVersion = version
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -255,6 +263,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.domainProvider == nil {
 		return nil, errors.New("no domain provider specified")
+	}
+	if parameters.releaseVersion == "" {
+		return nil, errors.New("no release version specified")
 	}
 
 	return &parameters, nil
