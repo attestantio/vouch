@@ -2,6 +2,7 @@
   - add score of block proposals to tracing
   - remove unnecessary trace item when attesting
   - add execution payload metric to beacon block score
+  - add User-Agent header to HTTP requests
 
 1.7.3:
   - do not start account managers unnecessarily

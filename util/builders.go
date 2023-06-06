@@ -15,6 +15,7 @@ package util
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	builder "github.com/attestantio/go-builder-client"
@@ -29,7 +30,7 @@ var (
 )
 
 // FetchBuilderClient fetches a builder client, instantiating it if required.
-func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Service) (builder.Service, error) {
+func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Service, releaseVersion string) (builder.Service, error) {
 	if address == "" {
 		return nil, errors.New("no address supplied")
 	}
@@ -48,7 +49,11 @@ func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Ser
 			httpclient.WithMonitor(monitor),
 			httpclient.WithLogLevel(LogLevel("builderclient")),
 			httpclient.WithTimeout(Timeout("builderclient")),
-			httpclient.WithAddress(address))
+			httpclient.WithAddress(address),
+			httpclient.WithExtraHeaders(map[string]string{
+				"User-Agent": fmt.Sprintf("Vouch/%s", releaseVersion),
+			}),
+		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate builder client")
 		}

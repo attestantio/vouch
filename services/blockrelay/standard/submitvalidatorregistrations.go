@@ -176,7 +176,7 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 			))
 			defer span.End()
 
-			client, err := util.FetchBuilderClient(ctx, builder, monitor)
+			client, err := util.FetchBuilderClient(ctx, builder, monitor, s.releaseVersion)
 			if err != nil {
 				log.Error().Err(err).Str("builder", builder).Msg("Failed to fetch builder client")
 				return
