@@ -130,6 +130,7 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithValidatorRegistrationSigner(mockSigner),
 				standard.WithSpecProvider(specProvider),
 				standard.WithDomainProvider(domainProvider),
+				standard.WithReleaseVersion("test"),
 			},
 			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","relays":[]}`,
 		},
@@ -150,6 +151,7 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithValidatorRegistrationSigner(mockSigner),
 				standard.WithSpecProvider(specProvider),
 				standard.WithDomainProvider(domainProvider),
+				standard.WithReleaseVersion("test"),
 			},
 			proposerConfig: `{"fee_recipient":"0x0200000000000000000000000000000000000000","relays":[]}`,
 			logEntries: []map[string]interface{}{
@@ -175,6 +177,7 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithValidatorRegistrationSigner(mockSigner),
 				standard.WithSpecProvider(specProvider),
 				standard.WithDomainProvider(domainProvider),
+				standard.WithReleaseVersion("test"),
 			},
 			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","relays":[]}`,
 			logEntries: []map[string]interface{}{
