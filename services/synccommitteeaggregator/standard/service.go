@@ -190,7 +190,13 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 				Contribution:    contribution,
 				SelectionProof:  duty.SelectionProofs[validatorIndex][subcommitteeIndex],
 			}
-			sig, err := s.contributionAndProofSigner.SignContributionAndProof(ctx, duty.Accounts[validatorIndex], contributionAndProof)
+			account, exists := duty.Accounts[validatorIndex]
+			if !exists {
+				log.Debug().Msg("Account nil; likely exited validator still in sync committee")
+				s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "exited")
+				return
+			}
+			sig, err := s.contributionAndProofSigner.SignContributionAndProof(ctx, account, contributionAndProof)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain signature of contribution and proof")
 				s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed")

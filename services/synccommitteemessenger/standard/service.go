@@ -189,7 +189,12 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 			i int,
 		) {
 			defer wg.Done()
-			sig, err := s.contribute(ctx, duty.Account(validatorIndices[i]), s.chainTimeService.SlotToEpoch(duty.Slot()+1), *beaconBlockRoot)
+			account := duty.Account(validatorIndices[i])
+			if account == nil {
+				log.Debug().Msg("Account nil; likely exited validator still in sync committee")
+				return
+			}
+			sig, err := s.contribute(ctx, account, s.chainTimeService.SlotToEpoch(duty.Slot()+1), *beaconBlockRoot)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to sign sync committee message")
 				return
@@ -238,6 +243,11 @@ func (s *Service) contribute(ctx context.Context,
 }
 
 func (s *Service) isAggregator(ctx context.Context, account e2wtypes.Account, slot phase0.Slot, subcommitteeIndex uint64) (bool, phase0.BLSSignature, error) {
+	if account == nil {
+		log.Debug().Msg("Account nil; likely exited validator still in sync committee")
+		return false, phase0.BLSSignature{}, nil
+	}
+
 	modulo := s.syncCommitteeSize / s.syncCommitteeSubnetCount / s.targetAggregatorsPerSyncCommittee
 	if modulo < 1 {
 		modulo = 1

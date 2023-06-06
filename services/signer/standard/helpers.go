@@ -31,6 +31,9 @@ func (*Service) sign(ctx context.Context,
 	phase0.BLSSignature,
 	error,
 ) {
+	if account == nil {
+		return phase0.BLSSignature{}, errors.New("account is nil; cannot sign")
+	}
 	var sig e2types.Signature
 	if protectingSigner, isProtectingSigner := account.(e2wtypes.AccountProtectingSigner); isProtectingSigner {
 		var err error
