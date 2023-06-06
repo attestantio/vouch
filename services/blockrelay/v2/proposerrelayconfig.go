@@ -47,23 +47,23 @@ type proposerRelayConfigJSON struct {
 
 // MarshalJSON implements json.Marshaler.
 func (c *ProposerRelayConfig) MarshalJSON() ([]byte, error) {
-	publicKey := ""
+	var publicKey string
 	if c.PublicKey != nil {
 		publicKey = fmt.Sprintf("%#x", *c.PublicKey)
 	}
-	feeRecipient := ""
+	var feeRecipient string
 	if c.FeeRecipient != nil {
 		feeRecipient = fmt.Sprintf("%#x", *c.FeeRecipient)
 	}
-	gasLimit := ""
+	var gasLimit string
 	if c.GasLimit != nil {
 		gasLimit = fmt.Sprintf("%d", *c.GasLimit)
 	}
-	grace := ""
+	var grace string
 	if c.Grace != nil {
 		grace = fmt.Sprintf("%d", c.Grace.Milliseconds())
 	}
-	minValue := ""
+	var minValue string
 	if c.MinValue != nil {
 		minValue = fmt.Sprintf("%v", c.MinValue.Div(weiPerETH))
 	}

@@ -86,7 +86,7 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 	softTimedOut := 0
 	bestScore := float64(0)
 	var bestProposal *spec.VersionedBeaconBlock
-	bestProvider := ""
+	var bestProvider string
 
 	// Loop 1: prior to soft timeout.
 	for responded+errored+timedOut+softTimedOut != requests {

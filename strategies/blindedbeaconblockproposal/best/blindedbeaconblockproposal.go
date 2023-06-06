@@ -112,7 +112,7 @@ func (s *Service) BlindedBeaconBlockProposalWithExpectedPayload(ctx context.Cont
 	softTimedOut := 0
 	bestScore := float64(0)
 	var bestProposal *api.VersionedBlindedBeaconBlock
-	bestProvider := ""
+	var bestProvider string
 
 	// Loop 1: prior to soft timeout.
 	for responded+errored+timedOut+softTimedOut != requests {

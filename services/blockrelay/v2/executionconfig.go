@@ -59,19 +59,19 @@ type executionConfigJSON struct {
 
 // MarshalJSON implements json.Marshaler.
 func (e *ExecutionConfig) MarshalJSON() ([]byte, error) {
-	feeRecipient := ""
+	var feeRecipient string
 	if e.FeeRecipient != nil {
 		feeRecipient = fmt.Sprintf("%#x", *e.FeeRecipient)
 	}
-	gasLimit := ""
+	var gasLimit string
 	if e.GasLimit != nil {
 		gasLimit = fmt.Sprintf("%d", *e.GasLimit)
 	}
-	grace := ""
+	var grace string
 	if e.Grace != nil {
 		grace = fmt.Sprintf("%d", e.Grace.Milliseconds())
 	}
-	minValue := ""
+	var minValue string
 	if e.MinValue != nil {
 		minValue = fmt.Sprintf("%v", e.MinValue.Div(weiPerETH))
 	}
@@ -189,10 +189,10 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 		accountName = fmt.Sprintf("<unknown>/%s", account.Name())
 	}
 	for _, proposerConfig := range e.Proposers {
-		match := false
+		var match bool
 		switch {
 		case proposerConfig.Account != nil:
-			match = proposerConfig.Account.Match([]byte(accountName))
+			match = proposerConfig.Account.MatchString(accountName)
 		case !bytes.Equal(proposerConfig.Validator[:], zeroPubkey[:]):
 			match = bytes.Equal(proposerConfig.Validator[:], pubkey[:])
 		default:

@@ -53,25 +53,25 @@ type proposerConfigJSON struct {
 
 // MarshalJSON implements json.Marshaler.
 func (p *ProposerConfig) MarshalJSON() ([]byte, error) {
-	proposer := ""
+	var proposer string
 	if p.Account != nil {
 		proposer = p.Account.String()
 	} else {
 		proposer = fmt.Sprintf("%#x", p.Validator)
 	}
-	feeRecipient := ""
+	var feeRecipient string
 	if p.FeeRecipient != nil {
 		feeRecipient = fmt.Sprintf("%#x", *p.FeeRecipient)
 	}
-	gasLimit := ""
+	var gasLimit string
 	if p.GasLimit != nil {
 		gasLimit = fmt.Sprintf("%d", *p.GasLimit)
 	}
-	grace := ""
+	var grace string
 	if p.Grace != nil {
 		grace = fmt.Sprintf("%d", p.Grace.Milliseconds())
 	}
-	minValue := ""
+	var minValue string
 	if p.MinValue != nil {
 		minValue = fmt.Sprintf("%v", p.MinValue.Div(weiPerETH))
 	}

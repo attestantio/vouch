@@ -132,6 +132,7 @@ linters:
     - contextcheck
     - cyclop
     - deadcode
+    - depguard
     - dupl
     - errchkjson
     - exhaustive
@@ -142,7 +143,6 @@ linters:
     - funlen
     - gci
     - gochecknoglobals
-    - gochecknoinits
     - gocognit
     - goconst
     - goerr113
@@ -160,12 +160,9 @@ linters:
     - nlreturn
     - nosnakecase
     - promlinter
-    - rowserrcheck
     - scopelint
-    - sqlclosecheck
     - structcheck
     - varcheck
     - varnamelen
-    - wastedassign
     - wrapcheck
     - wsl

@@ -427,7 +427,7 @@ func (*Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wall
 		name := fmt.Sprintf("%s/%s", wallet.Name(), account.Name())
 		verified := false
 		for _, verificationRegex := range verificationRegexes {
-			if verificationRegex.Match([]byte(name)) {
+			if verificationRegex.MatchString(name) {
 				verified = true
 				break
 			}

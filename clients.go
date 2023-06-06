@@ -52,7 +52,11 @@ func fetchClient(ctx context.Context, address string) (eth2client.Service, error
 		client, err = httpclient.New(ctx,
 			httpclient.WithLogLevel(util.LogLevel("eth2client")),
 			httpclient.WithTimeout(util.Timeout("eth2client")),
-			httpclient.WithAddress(address))
+			httpclient.WithAddress(address),
+			httpclient.WithExtraHeaders(map[string]string{
+				"User-Agent": fmt.Sprintf("Vouch/%s", ReleaseVersion),
+			}),
+		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate consensus client")
 		}
@@ -86,7 +90,11 @@ func fetchMultiClient(ctx context.Context, addresses []string) (eth2client.Servi
 			multiclient.WithMonitor(monitor),
 			multiclient.WithLogLevel(util.LogLevel("eth2client")),
 			multiclient.WithTimeout(util.Timeout("eth2client")),
-			multiclient.WithAddresses(addresses))
+			multiclient.WithAddresses(addresses),
+			multiclient.WithExtraHeaders(map[string]string{
+				"User-Agent": fmt.Sprintf("Vouch/%s", ReleaseVersion),
+			}),
+		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate multiclient")
 		}

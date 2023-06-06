@@ -101,7 +101,8 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.7.6"
+
+var ReleaseVersion = "1.7.6-dev"
 
 func main() {
 	exitCode := main2()
@@ -1549,6 +1550,7 @@ func startBlockRelay(ctx context.Context,
 		standardblockrelay.WithLogResults(viper.GetBool("blockrelay.log-results")),
 		standardblockrelay.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardblockrelay.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
+		standardblockrelay.WithReleaseVersion(ReleaseVersion),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start block relay")
