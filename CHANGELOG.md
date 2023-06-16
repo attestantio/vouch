@@ -3,6 +3,7 @@
   - remove unnecessary trace item when attesting
   - add execution payload metric to beacon block score
   - add User-Agent header to HTTP requests
+  - controller only uses beacon nodes that are used for attestation data
 
 1.7.3:
   - do not start account managers unnecessarily

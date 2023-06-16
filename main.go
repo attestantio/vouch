@@ -378,6 +378,21 @@ func startServices(ctx context.Context,
 		}
 	}
 
+	// The events provider for the controller should only use beacon nodes that are used for attestation data.
+	var eventsBeaconNodeAddresses []string
+	switch {
+	case viper.Get("strategies.attestationdata.best") != nil:
+		eventsBeaconNodeAddresses = util.BeaconNodeAddresses("strategies.attestationdata.best")
+	case viper.Get("strategies.attestationdata.first") != nil:
+		eventsBeaconNodeAddresses = util.BeaconNodeAddresses("strategies.attestationdata.first")
+	default:
+		eventsBeaconNodeAddresses = util.BeaconNodeAddresses("strategies.attestationdata")
+	}
+	eventsConsensusClient, err := fetchMultiClient(ctx, eventsBeaconNodeAddresses)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to fetch multiclient for controller")
+	}
+
 	log.Trace().Msg("Starting controller")
 	controller, err := standardcontroller.New(ctx,
 		standardcontroller.WithLogLevel(util.LogLevel("controller")),
@@ -388,7 +403,7 @@ func startServices(ctx context.Context,
 		standardcontroller.WithProposerDutiesProvider(eth2Client.(eth2client.ProposerDutiesProvider)),
 		standardcontroller.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),
 		standardcontroller.WithSyncCommitteeDutiesProvider(eth2Client.(eth2client.SyncCommitteeDutiesProvider)),
-		standardcontroller.WithEventsProvider(eth2Client.(eth2client.EventsProvider)),
+		standardcontroller.WithEventsProvider(eventsConsensusClient.(eth2client.EventsProvider)),
 		standardcontroller.WithScheduler(scheduler),
 		standardcontroller.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardcontroller.WithAttester(attester),
