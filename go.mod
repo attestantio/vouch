@@ -21,7 +21,7 @@ require (
 	github.com/wealdtech/go-bytesutil v1.2.1
 	github.com/wealdtech/go-eth2-types/v2 v2.8.1
 	github.com/wealdtech/go-eth2-wallet v1.15.1
-	github.com/wealdtech/go-eth2-wallet-dirk v1.4.3
+	github.com/wealdtech/go-eth2-wallet-dirk v1.4.4
 	github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.3.1
 	github.com/wealdtech/go-eth2-wallet-hd/v2 v2.6.1
 	github.com/wealdtech/go-eth2-wallet-nd/v2 v2.4.1
@@ -74,11 +74,11 @@ require (
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
-	github.com/herumi/bls-eth-go-binary v1.29.1 // indirect
+	github.com/herumi/bls-eth-go-binary v1.31.0 // indirect
 	github.com/jackc/puddle v1.3.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.4 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/leodido/go-urn v1.2.4 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
@@ -117,7 +117,7 @@ require (
 	golang.org/x/crypto v0.9.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
-	golang.org/x/sys v0.8.0 // indirect
+	golang.org/x/sys v0.9.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/api v0.125.0 // indirect
