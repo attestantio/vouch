@@ -49,6 +49,11 @@ func (s *Service) handleHead(event *apiv1.Event) {
 		log.Error().Err(err).Msg("Failed to obtain head block")
 		return
 	}
+	if block == nil {
+		log.Warn().Uint64("slot", uint64(data.Slot)).Stringer("root", data.Block).Msg("Obtained nil head block")
+		return
+	}
+
 	s.updateExecutionHeadFromBlock(block)
 }
 
