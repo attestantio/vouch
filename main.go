@@ -233,6 +233,7 @@ func fetchConfig() error {
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(30000000))
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.001))
+	viper.SetDefault("strategies.blindedbeaconblockproposal.best.execution-payload-factor", float64(0.001))
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch {
@@ -327,7 +328,7 @@ func startServices(ctx context.Context,
 		}
 	}
 
-	altairCapable, bellatrixCapable, _, err := consensusClientCapabilities(ctx, eth2Client)
+	altairCapable, bellatrixCapable, _, _, err := consensusClientCapabilities(ctx, eth2Client)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1237,6 +1238,7 @@ func selectBlindedBeaconBlockProposalProvider(ctx context.Context,
 			bestblindedbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
 			bestblindedbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.blindedbeaconblockproposal.best")),
 			bestblindedbeaconblockproposalstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+			bestblindedbeaconblockproposalstrategy.WithExecutionPayloadFactor(viper.GetFloat64("strategies.blindedbeaconblockproposal.best.execution-payload-factor")),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start best blinded beacon block proposal strategy")
@@ -1458,12 +1460,12 @@ func runCommands(ctx context.Context,
 	return false
 }
 
-func consensusClientCapabilities(ctx context.Context, consensusClient eth2client.Service) (bool, bool, bool, error) {
+func consensusClientCapabilities(ctx context.Context, consensusClient eth2client.Service) (bool, bool, bool, bool, error) {
 	// Decide if the ETH2 client is capable of Altair.
 	altairCapable := false
 	spec, err := consensusClient.(eth2client.SpecProvider).Spec(ctx)
 	if err != nil {
-		return false, false, false, errors.Wrap(err, "failed to obtain spec")
+		return false, false, false, false, errors.Wrap(err, "failed to obtain spec")
 	}
 	if _, exists := spec["ALTAIR_FORK_EPOCH"]; exists {
 		altairCapable = true
@@ -1490,7 +1492,16 @@ func consensusClientCapabilities(ctx context.Context, consensusClient eth2client
 		log.Info().Msg("Client is not Capella-capable")
 	}
 
-	return altairCapable, bellatrixCapable, capellaCapable, nil
+	// Decide if the ETH2 client is capabale of Deneb.
+	denebCapable := false
+	if _, exists := spec["DENEB_FORK_EPOCH"]; exists {
+		denebCapable = true
+		log.Info().Msg("Client is Deneb-capable")
+	} else {
+		log.Info().Msg("Client is not Deneb-capable")
+	}
+
+	return altairCapable, bellatrixCapable, capellaCapable, denebCapable, nil
 }
 
 func startBlockRelay(ctx context.Context,

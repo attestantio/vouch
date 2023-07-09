@@ -35,4 +35,6 @@ type Service interface {
 	SlotToEpoch(slot phase0.Slot) phase0.Epoch
 	// FirstSlotOfEpoch provides the first slot of the given epoch.
 	FirstSlotOfEpoch(epoch phase0.Epoch) phase0.Slot
+	// LastSlotOfEpoch provides the last slot of the given epoch.
+	LastSlotOfEpoch(epoch phase0.Epoch) phase0.Slot
 }

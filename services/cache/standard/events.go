@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,7 +21,10 @@ import (
 	consensusclient "github.com/attestantio/go-eth2-client"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
+
+var zeroRoot phase0.Root
 
 // handleBlock handles a block update message.
 func (s *Service) handleBlock(event *apiv1.Event) {
@@ -65,7 +68,7 @@ func (s *Service) updateExecutionHeadFromBlock(block *spec.VersionedSignedBeacon
 		// Potentially execution information available.
 		if block.Bellatrix != nil && block.Bellatrix.Message != nil && block.Bellatrix.Message.Body != nil {
 			executionPayload := block.Bellatrix.Message.Body.ExecutionPayload
-			if executionPayload != nil && !bytes.Equal(executionPayload.StateRoot[:], []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) {
+			if executionPayload != nil && !bytes.Equal(executionPayload.StateRoot[:], zeroRoot[:]) {
 				log.Trace().Uint64("height", executionPayload.BlockNumber).Str("hash", fmt.Sprintf("%#x", executionPayload.BlockHash)).Msg("Updating execution chain head")
 				s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
 			}
@@ -73,7 +76,14 @@ func (s *Service) updateExecutionHeadFromBlock(block *spec.VersionedSignedBeacon
 	case spec.DataVersionCapella:
 		// Execution information available.
 		executionPayload := block.Capella.Message.Body.ExecutionPayload
-		if executionPayload != nil && !bytes.Equal(executionPayload.StateRoot[:], []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) {
+		if executionPayload != nil && !bytes.Equal(executionPayload.StateRoot[:], zeroRoot[:]) {
+			log.Trace().Uint64("height", executionPayload.BlockNumber).Str("hash", fmt.Sprintf("%#x", executionPayload.BlockHash)).Msg("Updating execution chain head")
+			s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
+		}
+	case spec.DataVersionDeneb:
+		// Execution information available.
+		executionPayload := block.Deneb.Message.Body.ExecutionPayload
+		if executionPayload != nil && !bytes.Equal(executionPayload.StateRoot[:], zeroRoot[:]) {
 			log.Trace().Uint64("height", executionPayload.BlockNumber).Str("hash", fmt.Sprintf("%#x", executionPayload.BlockHash)).Msg("Updating execution chain head")
 			s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
 		}

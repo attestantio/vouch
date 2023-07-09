@@ -39,6 +39,7 @@ type parameters struct {
 	signedBeaconBlockProvider           eth2client.SignedBeaconBlockProvider
 	timeout                             time.Duration
 	blockRootToSlotCache                cache.BlockRootToSlotProvider
+	executionPayloadFactor              float64
 }
 
 // Parameter is the interface for service parameters.
@@ -119,6 +120,13 @@ func WithSignedBeaconBlockProvider(provider eth2client.SignedBeaconBlockProvider
 func WithBlockRootToSlotCache(cache cache.BlockRootToSlotProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.blockRootToSlotCache = cache
+	})
+}
+
+// WithExecutionPayloadFactor sets the relative weight of execution payload gas to block score.
+func WithExecutionPayloadFactor(factor float64) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.executionPayloadFactor = factor
 	})
 }
 

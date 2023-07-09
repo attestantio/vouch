@@ -87,6 +87,7 @@ type Service struct {
 	handlingBellatrix  bool
 	bellatrixForkEpoch phase0.Epoch
 	capellaForkEpoch   phase0.Epoch
+	denebForkEpoch     phase0.Epoch
 
 	// Tracking for reorgs.
 	lastBlockRoot             phase0.Root
@@ -162,6 +163,15 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log.Trace().Uint64("epoch", uint64(capellaForkEpoch)).Msg("Obtained Capella fork epoch")
 	}
 
+	// Fetch the Deneb fork epoch from the fork schedule.
+	var denebForkEpoch phase0.Epoch
+	denebForkEpoch, err = fetchDenebForkEpoch(ctx, parameters.specProvider)
+	if err != nil {
+		denebForkEpoch = 0xffffffffffffffff
+	} else {
+		log.Trace().Uint64("epoch", uint64(denebForkEpoch)).Msg("Obtained Deneb fork epoch")
+	}
+
 	s := &Service{
 		monitor:                       parameters.monitor,
 		slotDuration:                  slotDuration,
@@ -197,6 +207,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		handlingBellatrix:             handlingBellatrix,
 		bellatrixForkEpoch:            bellatrixForkEpoch,
 		capellaForkEpoch:              capellaForkEpoch,
+		denebForkEpoch:                denebForkEpoch,
 		pendingAttestations:           make(map[phase0.Slot]bool),
 	}
 
@@ -530,6 +541,30 @@ func fetchCapellaForkEpoch(ctx context.Context,
 	if !isEpoch {
 		//nolint:revive
 		return 0, errors.New("CAPELLA_FORK_EPOCH is not a uint64!")
+	}
+
+	return phase0.Epoch(epoch), nil
+}
+
+func fetchDenebForkEpoch(ctx context.Context,
+	specProvider eth2client.SpecProvider,
+) (
+	phase0.Epoch,
+	error,
+) {
+	// Fetch the fork version.
+	spec, err := specProvider.Spec(ctx)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to obtain spec")
+	}
+	tmp, exists := spec["DENEB_FORK_EPOCH"]
+	if !exists {
+		return 0, errors.New("deneb fork version not known by chain")
+	}
+	epoch, isEpoch := tmp.(uint64)
+	if !isEpoch {
+		//nolint:revive
+		return 0, errors.New("DENEB_FORK_EPOCH is not a uint64!")
 	}
 
 	return phase0.Epoch(epoch), nil

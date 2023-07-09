@@ -255,3 +255,41 @@ func TestFirstSlotOfEpoch(t *testing.T) {
 		})
 	}
 }
+
+func TestLastSlotOfEpoch(t *testing.T) {
+	tests := []struct {
+		name  string
+		epoch phase0.Epoch
+		slot  phase0.Slot
+	}{
+		{
+			name:  "Zero",
+			epoch: 0,
+			slot:  31,
+		},
+		{
+			name:  "One",
+			epoch: 1,
+			slot:  63,
+		},
+		{
+			name:  "OneThousand",
+			epoch: 1000,
+			slot:  32031,
+		},
+	}
+
+	slotDuration := 12 * time.Second
+	slotsPerEpoch := uint64(32)
+	genesisTime := time.Now()
+
+	s, err := createMockService(slotDuration, slotsPerEpoch, genesisTime)
+	require.NoError(t, err)
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			slot := s.LastSlotOfEpoch(test.epoch)
+			assert.Equal(t, test.slot, slot)
+		})
+	}
+}

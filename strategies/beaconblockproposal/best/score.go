@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -23,6 +23,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prysmaticlabs/go-bitfield"
 )
@@ -62,6 +63,8 @@ func (s *Service) scoreBeaconBlockProposal(ctx context.Context,
 		return s.scoreBellatrixBeaconBlockProposal(ctx, name, parentSlot, blockProposal.Bellatrix)
 	case spec.DataVersionCapella:
 		return s.scoreCapellaBeaconBlockProposal(ctx, name, parentSlot, blockProposal.Capella)
+	case spec.DataVersionDeneb:
+		return s.scoreDenebBeaconBlockProposal(ctx, name, parentSlot, blockProposal.Deneb)
 	default:
 		log.Error().Int("version", int(blockProposal.Version)).Msg("Unhandled block version")
 		return 0
@@ -421,6 +424,108 @@ func (s *Service) scoreCapellaBeaconBlockProposal(ctx context.Context,
 	return attestationScore + proposerSlashingScore + attesterSlashingScore + syncCommitteeScore + executionPayloadScore
 }
 
+// scoreDenebBeaconBlockPropsal generates a score for a deneb beacon block.
+func (s *Service) scoreDenebBeaconBlockProposal(ctx context.Context,
+	name string,
+	parentSlot phase0.Slot,
+	blockProposal *deneb.BeaconBlock,
+) float64 {
+	attestationScore := float64(0)
+	immediateAttestationScore := float64(0)
+
+	// We need to avoid duplicates in attestations.
+	// Map is attestation slot -> committee index -> validator committee index -> aggregate.
+	attested := make(map[phase0.Slot]map[phase0.CommitteeIndex]bitfield.Bitlist)
+	for _, attestation := range blockProposal.Body.Attestations {
+		data := attestation.Data
+		if _, exists := attested[data.Slot]; !exists {
+			attested[data.Slot] = make(map[phase0.CommitteeIndex]bitfield.Bitlist)
+		}
+		if _, exists := attested[data.Slot][data.Index]; !exists {
+			if !exists {
+				attested[data.Slot][data.Index] = bitfield.NewBitlist(attestation.AggregationBits.Len())
+			}
+		}
+
+		priorVotes, err := s.priorVotesForAttestation(ctx, attestation, blockProposal.ParentRoot)
+		if err != nil {
+			log.Debug().Err(err).Msg("Failed to obtain prior votes for attestation; assuming no votes")
+		}
+
+		votes := 0
+		for i := uint64(0); i < attestation.AggregationBits.Len(); i++ {
+			if attestation.AggregationBits.BitAt(i) {
+				if attested[attestation.Data.Slot][attestation.Data.Index].BitAt(i) {
+					// Already attested in this block; skip.
+					continue
+				}
+				if priorVotes.BitAt(i) {
+					// Attested in a previous block; skip.
+					continue
+				}
+				votes++
+				attested[attestation.Data.Slot][attestation.Data.Index].SetBitAt(i, true)
+			}
+		}
+
+		// Now we know how many new votes are in this attestation we can score it.
+		// We can calculate if the head vote is correct, but not target so for the
+		// purposes of the calculation we assume that it is.
+
+		headCorrect := denebHeadCorrect(blockProposal, attestation)
+		targetCorrect := s.denebTargetCorrect(ctx, attestation)
+		inclusionDistance := blockProposal.Slot - attestation.Data.Slot
+
+		score := 0.0
+		if targetCorrect {
+			// Target is correct (and timely).
+			score += float64(s.timelyTargetWeight) / float64(s.weightDenominator)
+		}
+		if inclusionDistance <= 5 {
+			// Source is timely.
+			score += float64(s.timelySourceWeight) / float64(s.weightDenominator)
+		}
+		if headCorrect && inclusionDistance == 1 {
+			score += float64(s.timelyHeadWeight) / float64(s.weightDenominator)
+		}
+		score *= float64(votes)
+		attestationScore += score
+		if inclusionDistance == 1 {
+			immediateAttestationScore += score
+		}
+	}
+
+	attesterSlashingScore, proposerSlashingScore := scoreSlashings(blockProposal.Body.AttesterSlashings, blockProposal.Body.ProposerSlashings)
+
+	// Add sync committee score.
+	syncCommitteeScore := float64(blockProposal.Body.SyncAggregate.SyncCommitteeBits.Count()) * float64(s.syncRewardWeight) / float64(s.weightDenominator)
+
+	// Add execution payload score.
+	executionPayloadScore := float64(0)
+	if blockProposal.Body.ExecutionPayload != nil {
+		// Value is based on the gas used.  Transactions are opaque, so we cannot see the gas price to calculate a true numerical value.
+		// We scale the gas used to normalise with the consensus value.
+		executionPayloadScore = float64(blockProposal.Body.ExecutionPayload.GasUsed) * s.executionPayloadFactor
+		// TODO decide if we need a different factor here.
+		executionPayloadScore += float64(blockProposal.Body.ExecutionPayload.DataGasUsed) * s.executionPayloadFactor
+	}
+
+	log.Trace().
+		Uint64("slot", uint64(blockProposal.Slot)).
+		Uint64("parent_slot", uint64(parentSlot)).
+		Str("provider", name).
+		Float64("immediate_attestations", immediateAttestationScore).
+		Float64("attestations", attestationScore).
+		Float64("proposer_slashings", proposerSlashingScore).
+		Float64("attester_slashings", attesterSlashingScore).
+		Float64("sync_committee", syncCommitteeScore).
+		Float64("execution_payload", executionPayloadScore).
+		Float64("total", attestationScore+proposerSlashingScore+attesterSlashingScore+syncCommitteeScore+executionPayloadScore).
+		Msg("Scored Deneb block")
+
+	return attestationScore + proposerSlashingScore + attesterSlashingScore + syncCommitteeScore + executionPayloadScore
+}
+
 func scoreSlashings(attesterSlashings []*phase0.AttesterSlashing,
 	proposerSlashings []*phase0.ProposerSlashing,
 ) (float64, float64) {
@@ -545,6 +650,36 @@ func (s *Service) capellaTargetCorrect(ctx context.Context,
 ) bool {
 	// Same as Altair.
 	return s.altairTargetCorrect(ctx, attestation)
+}
+
+// denebHeadCorrect calculates if the head of a Deneb attestation is correct.
+func denebHeadCorrect(blockProposal *deneb.BeaconBlock, attestation *phase0.Attestation) bool {
+	return bytes.Equal(blockProposal.ParentRoot[:], attestation.Data.BeaconBlockRoot[:])
+}
+
+// denebTargetCorrect calculates if the target of a Deneb attestation is correct.
+func (s *Service) denebTargetCorrect(_ context.Context,
+	attestation *phase0.Attestation,
+) bool {
+	// TODO not the same as altair.
+	s.priorBlocksVotesMu.RLock()
+	defer s.priorBlocksVotesMu.RUnlock()
+	root := attestation.Data.BeaconBlockRoot
+	maxSlot := s.chainTime.LastSlotOfEpoch(attestation.Data.Target.Epoch + 1)
+	for {
+		priorBlock, exists := s.priorBlocksVotes[root]
+		if !exists {
+			// We don't have data on this block, assume the target is correct.
+			// (We could assume the target is incorrect in this situation, but that
+			// would give false incorrects whilst the prior block cache warms up.)
+			log.Trace().Uint64("attestation_slot", uint64(attestation.Data.Slot)).Uint64("max_slot", uint64(maxSlot)).Str("root", fmt.Sprintf("%#x", root)).Msg("Root does not exist, assuming true")
+			return true
+		}
+		if priorBlock.slot <= maxSlot {
+			return bytes.Equal(attestation.Data.Target.Root[:], priorBlock.root[:])
+		}
+		root = priorBlock.parent
+	}
 }
 
 // intersection returns a list of items common between the two sets.

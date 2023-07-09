@@ -181,12 +181,12 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 			accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []phase0.ValidatorIndex{info.Duty.ValidatorIndex})
 			if err != nil {
 				// Don't return here; we want to try to set up as many aggregator jobs as possible.
-				log.Error().Err(err).Msg("Failed to obtain accounts")
+				log.Error().Uint64("validator_index", uint64(info.Duty.ValidatorIndex)).Err(err).Msg("Failed to obtain accounts")
 				continue
 			}
 			if len(accounts) == 0 {
 				// Don't return here; we want to try to set up as many aggregator jobs as possible.
-				log.Error().Msg("Failed to obtain account of attester")
+				log.Error().Uint64("validator_index", uint64(info.Duty.ValidatorIndex)).Msg("Failed to obtain account of attestation aggregator")
 				continue
 			}
 			attestationDataRoot, err := attestation.Data.HashTreeRoot()

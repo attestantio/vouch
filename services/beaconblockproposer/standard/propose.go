@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -27,10 +27,12 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1bellatrix "github.com/attestantio/go-eth2-client/api/v1/bellatrix"
 	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
+	apiv1deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/pkg/errors"
@@ -293,6 +295,11 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 			Message:   proposal.Capella,
 			Signature: sig,
 		}
+	case spec.DataVersionDeneb:
+		signedBlock.Deneb = &deneb.SignedBeaconBlock{
+			Message:   proposal.Deneb,
+			Signature: sig,
+		}
 	default:
 		return errors.New("unknown proposal version")
 	}
@@ -421,7 +428,7 @@ func (*Service) validateBlindedBeaconBlockProposal(_ context.Context,
 			Uint64("slot", uint64(duty.Slot())).
 			Str("proposal_transactions_root", fmt.Sprintf("%#x", proposalTransactionsRoot[:])).
 			Str("auction_transactions_root", fmt.Sprintf("%#x", auctionTransactionsRoot[:])).
-			Msg("Transactions root mismatch")
+			Msg("Beacon node used inaccessible execution payload")
 		return errors.New("transactions root mismatch")
 	}
 
@@ -472,6 +479,11 @@ func (s *Service) signBlindedProposal(ctx context.Context,
 	case spec.DataVersionCapella:
 		signedBlindedBlock.Capella = &apiv1capella.SignedBlindedBeaconBlock{
 			Message:   proposal.Capella,
+			Signature: sig,
+		}
+	case spec.DataVersionDeneb:
+		signedBlindedBlock.Deneb = &apiv1deneb.SignedBlindedBeaconBlock{
+			Message:   proposal.Deneb,
 			Signature: sig,
 		}
 	default:
