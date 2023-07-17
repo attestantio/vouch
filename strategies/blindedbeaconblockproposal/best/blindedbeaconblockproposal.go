@@ -305,6 +305,7 @@ func (s *Service) blindedBeaconBlockProposal(ctx context.Context,
 	}
 
 	score := s.scoreBlindedBeaconBlockProposal(ctx, name, proposal)
+	span.SetAttributes(attribute.Float64("score", score))
 	respCh <- &beaconBlockResponse{
 		provider: name,
 		proposal: proposal,

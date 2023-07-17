@@ -2,6 +2,7 @@ dev:
   - add User-Agent header to HTTP requests
   - controller only uses beacon nodes that are used for attestation data
   - fix crash if beacon node returns nil block during cache update
+  - add score to blinded block proposal trace
 
 1.7.5:
   - add score of block proposals to tracing
