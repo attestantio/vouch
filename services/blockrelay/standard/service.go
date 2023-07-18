@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -35,6 +35,7 @@ import (
 	zerologger "github.com/rs/zerolog/log"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 	"github.com/wealdtech/go-majordomo"
+	"golang.org/x/sync/semaphore"
 )
 
 // Service is the builder service for Vouch.
@@ -54,7 +55,7 @@ type Service struct {
 	builderBidsCache                          map[string]map[string]*builderspec.VersionedSignedBuilderBid
 	builderBidsCacheMu                        sync.RWMutex
 	timeout                                   time.Duration
-	signedValidatorRegistrations              map[string]*apiv1.SignedValidatorRegistration
+	signedValidatorRegistrations              map[phase0.Root]*apiv1.SignedValidatorRegistration
 	signedValidatorRegistrationsMu            sync.RWMutex
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 	logResults                                bool
@@ -66,6 +67,7 @@ type Service struct {
 
 	relayPubkeys   map[phase0.BLSPubKey]*e2types.BLSPublicKey
 	relayPubkeysMu sync.RWMutex
+	activitySem    *semaphore.Weighted
 }
 
 // module-wide log.
@@ -120,7 +122,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		validatingAccountsProvider:   parameters.validatingAccountsProvider,
 		validatorRegistrationSigner:  parameters.validatorRegistrationSigner,
 		timeout:                      parameters.timeout,
-		signedValidatorRegistrations: make(map[string]*apiv1.SignedValidatorRegistration),
+		signedValidatorRegistrations: make(map[phase0.Root]*apiv1.SignedValidatorRegistration),
 		secondaryValidatorRegistrationsSubmitters: parameters.secondaryValidatorRegistrationsSubmitters,
 		logResults:               parameters.logResults,
 		applicationBuilderDomain: domain,
@@ -128,6 +130,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		builderBidsCache:         make(map[string]map[string]*builderspec.VersionedSignedBuilderBid),
 		relayPubkeys:             make(map[phase0.BLSPubKey]*e2types.BLSPublicKey),
 		executionConfig:          &v2.ExecutionConfig{Version: 2},
+		activitySem:              semaphore.NewWeighted(1),
 	}
 
 	// Carry out initial fetch of execution configuration.
