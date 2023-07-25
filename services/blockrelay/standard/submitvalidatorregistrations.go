@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,7 +14,6 @@
 package standard
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -69,6 +68,13 @@ func (s *Service) submitValidatorRegistrations(ctx context.Context,
 	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "submitValidatorRegistrations")
 	defer span.End()
 	started := time.Now()
+
+	// Only allow a single registration at a time.
+	if !s.activitySem.TryAcquire(1) {
+		log.Trace().Msg("Another validator registration submission in progress; skipping")
+		return
+	}
+	defer s.activitySem.Release(1)
 
 	epoch := s.chainTime.CurrentEpoch()
 
@@ -227,30 +233,28 @@ func (s *Service) generateValidatorRegistrationForRelay(ctx context.Context,
 	*consensusapi.VersionedSignedValidatorRegistration,
 	error,
 ) {
+	// Create a registration without a timestamp, to allow matching its hash
+	// with an existing registration (also registered without timestamp).
+	registration := &apiv1.ValidatorRegistration{
+		FeeRecipient: relayConfig.FeeRecipient,
+		GasLimit:     relayConfig.GasLimit,
+		Pubkey:       pubkey,
+	}
+	registrationRoot, err := registration.HashTreeRoot()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to obtain hash tree root of registration")
+	}
+	// Now add the timestamp, for completeness of the struct.
+	registration.Timestamp = time.Now().Round(time.Second)
+
 	// See if we already have a signed registration that matches this configuration.
-	key := fmt.Sprintf("%x:%s", pubkey, relayConfig.Address)
 	s.signedValidatorRegistrationsMu.RLock()
-	signedRegistration, exists := s.signedValidatorRegistrations[key]
+	signedRegistration, exists := s.signedValidatorRegistrations[registrationRoot]
 	s.signedValidatorRegistrationsMu.RUnlock()
 	if exists {
-		// See if the details of the pre-signed registration match our parameters.
-		if bytes.Equal(relayConfig.FeeRecipient[:], signedRegistration.Message.FeeRecipient[:]) &&
-			relayConfig.GasLimit == signedRegistration.Message.GasLimit {
-			monitorRegistrationsGeneration("cache")
-		} else {
-			signedRegistration = nil
-		}
-	}
-	if signedRegistration == nil {
-		log.Trace().Msg("No signed registration; creating one")
-		// Need to build and sign a new registration.
-		registration := &apiv1.ValidatorRegistration{
-			FeeRecipient: relayConfig.FeeRecipient,
-			GasLimit:     relayConfig.GasLimit,
-			Timestamp:    time.Now().Round(time.Second),
-			Pubkey:       pubkey,
-		}
-
+		monitorRegistrationsGeneration("cache")
+	} else {
+		log.Trace().Msg("Signing the validator registration")
 		sig, err := s.validatorRegistrationSigner.SignValidatorRegistration(ctx, account, &builderapi.VersionedValidatorRegistration{
 			Version: builderspec.BuilderVersionV1,
 			V1:      registration,
@@ -264,7 +268,7 @@ func (s *Service) generateValidatorRegistrationForRelay(ctx context.Context,
 			Signature: sig,
 		}
 		s.signedValidatorRegistrationsMu.Lock()
-		s.signedValidatorRegistrations[key] = signedRegistration
+		s.signedValidatorRegistrations[registrationRoot] = signedRegistration
 		s.signedValidatorRegistrationsMu.Unlock()
 		monitorRegistrationsGeneration("generation")
 	}
