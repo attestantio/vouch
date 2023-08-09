@@ -4,6 +4,7 @@ dev:
   - fix crash if beacon node returns nil block during cache update
   - add score to blinded block proposal trace
   - increase speed of validator registration generation, reduce memory usage
+  - add strategies to obtain the beacon block root
 
 1.7.5:
   - add score of block proposals to tracing
