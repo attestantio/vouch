@@ -97,6 +97,16 @@ strategies:
     # This allows Vouch to remain responsive in the situation where some beacon nodes are significantly slower than others, for
     # example if one is remote.
     timeout: '2s'
+  # The beaconblockroot strategy obtains the beacon block root from multiple beacon nodes.
+  beaconblockroot:
+    # style can be 'first', which uses the first returned, 'latest', which uses the latest returned, or 'majority', which uses
+    # the one returned by most nodes (taking the latest in case of a tie).
+    style: 'latest'
+    # beacon-node-addresses are the addresses from which to receive beacon block roots.
+    beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
+    # timeout defines the maximum amount of time the strategy will wait for a response.  Different strategies may return earlier
+    # if they have obtained enoguh information from their beacon node(s).
+    timeout: '2s'
   # The blindedbeaconblockproposal strategy obtains blinded beacon block proposals from multiple beacon nodes when using the block
   # relay module to obtain execution payloads from MEV relays.
   blindedbeaconblockproposal:

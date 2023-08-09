@@ -80,6 +80,8 @@ import (
 	firstattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/first"
 	bestbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	firstbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/first"
+	firstbeaconblockrootstrategy "github.com/attestantio/vouch/strategies/beaconblockroot/first"
+	majoritybeaconblockrootstrategy "github.com/attestantio/vouch/strategies/beaconblockroot/majority"
 	bestblindedbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/blindedbeaconblockproposal/best"
 	firstblindedbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/blindedbeaconblockproposal/first"
 	bestsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/best"
@@ -356,7 +358,7 @@ func startServices(ctx context.Context,
 	var syncCommitteeMessenger synccommitteemessenger.Service
 	var syncCommitteeAggregator synccommitteeaggregator.Service
 	if altairCapable {
-		syncCommitteeSubscriber, syncCommitteeMessenger, syncCommitteeAggregator, err = startAltairServices(ctx, monitor, eth2Client, submitter, signerSvc, accountManager, chainTime)
+		syncCommitteeSubscriber, syncCommitteeMessenger, syncCommitteeAggregator, err = startAltairServices(ctx, monitor, eth2Client, submitter, signerSvc, accountManager, chainTime, cacheSvc)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -567,6 +569,7 @@ func startAltairServices(ctx context.Context,
 	signerSvc signer.Service,
 	accountManager accountmanager.Service,
 	chainTime chaintime.Service,
+	cacheSvc cache.Service,
 ) (
 	synccommitteesubscriber.Service,
 	synccommitteemessenger.Service,
@@ -604,6 +607,12 @@ func startAltairServices(ctx context.Context,
 		return nil, nil, nil, errors.Wrap(err, "failed to start sync committee aggregator service")
 	}
 
+	log.Trace().Msg("Selecting beacon block root provider")
+	beaconBlockRootProvider, err := selectBeaconBlockRootProvider(ctx, monitor, eth2Client, cacheSvc)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to select beacon block root provider")
+	}
+
 	log.Trace().Msg("Starting sync committee messenger")
 	syncCommitteeMessenger, err := standardsynccommitteemessenger.New(ctx,
 		standardsynccommitteemessenger.WithLogLevel(util.LogLevel("synccommitteemessenger")),
@@ -612,7 +621,7 @@ func startAltairServices(ctx context.Context,
 		standardsynccommitteemessenger.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardsynccommitteemessenger.WithChainTimeService(chainTime),
 		standardsynccommitteemessenger.WithSyncCommitteeAggregator(syncCommitteeAggregator),
-		standardsynccommitteemessenger.WithBeaconBlockRootProvider(eth2Client.(eth2client.BeaconBlockRootProvider)),
+		standardsynccommitteemessenger.WithBeaconBlockRootProvider(beaconBlockRootProvider),
 		standardsynccommitteemessenger.WithSyncCommitteeMessagesSubmitter(submitterStrategy.(submitter.SyncCommitteeMessagesSubmitter)),
 		standardsynccommitteemessenger.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardsynccommitteemessenger.WithSyncCommitteeRootSigner(signerSvc.(signer.SyncCommitteeRootSigner)),
@@ -1322,6 +1331,64 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 	}
 
 	return syncCommitteeContributionProvider, nil
+}
+
+// selectBeaconBlockRootProvider selects the appropriate beacon block root provider given user input.
+func selectBeaconBlockRootProvider(ctx context.Context,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+	cacheSvc cache.Service,
+) (eth2client.BeaconBlockRootProvider, error) {
+	var beaconBlockRootProvider eth2client.BeaconBlockRootProvider
+	var err error
+	switch viper.GetString("strategies.beaconblockroot.style") {
+	case "majority":
+		log.Info().Msg("Starting majority beacon block root strategy")
+		beaconBlockRootProviders := make(map[string]eth2client.BeaconBlockRootProvider)
+		for _, address := range util.BeaconNodeAddresses("strategies.beaconblockroot.majority") {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block root strategy", address))
+			}
+			beaconBlockRootProviders[address] = client.(eth2client.BeaconBlockRootProvider)
+		}
+
+		beaconBlockRootProvider, err = majoritybeaconblockrootstrategy.New(ctx,
+			majoritybeaconblockrootstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			majoritybeaconblockrootstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.beaconblockroot.best")),
+			majoritybeaconblockrootstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockroot.best")),
+			majoritybeaconblockrootstrategy.WithBeaconBlockRootProviders(beaconBlockRootProviders),
+			majoritybeaconblockrootstrategy.WithTimeout(util.Timeout("strategies.beaconblockroot.best")),
+			majoritybeaconblockrootstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start best sync committee contribution strategy")
+		}
+	case "first":
+		log.Info().Msg("Starting first beacon block root strategy")
+		beaconBlockRootProviders := make(map[string]eth2client.BeaconBlockRootProvider)
+		for _, address := range util.BeaconNodeAddresses("strategies.beaconblockroot.first") {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block root strategy", address))
+			}
+			beaconBlockRootProviders[address] = client.(eth2client.BeaconBlockRootProvider)
+		}
+		beaconBlockRootProvider, err = firstbeaconblockrootstrategy.New(ctx,
+			firstbeaconblockrootstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			firstbeaconblockrootstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockroot.first")),
+			firstbeaconblockrootstrategy.WithBeaconBlockRootProviders(beaconBlockRootProviders),
+			firstbeaconblockrootstrategy.WithTimeout(util.Timeout("strategies.beaconblockroot.first")),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start first beacon block root strategy")
+		}
+	default:
+		log.Info().Msg("Starting simple beacon block root strategy")
+		beaconBlockRootProvider = eth2Client.(eth2client.BeaconBlockRootProvider)
+	}
+
+	return beaconBlockRootProvider, nil
 }
 
 // selectSubmitterStrategy selects the appropriate submitter strategy given user input.

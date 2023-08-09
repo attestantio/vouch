@@ -746,6 +746,70 @@ func (m *SleepyBeaconBlockProposalProvider) BeaconBlockProposal(ctx context.Cont
 	return m.next.BeaconBlockProposal(ctx, slot, randaoReveal, graffiti)
 }
 
+// BeaconBlockRootProvider is a mock for eth2client.BeaconBlockRootProvider.
+type BeaconBlockRootProvider struct{}
+
+// NewBeaconBlockRootProvider returns a mock beacon block proposal provider.
+func NewBeaconBlockRootProvider() eth2client.BeaconBlockRootProvider {
+	return &BeaconBlockRootProvider{}
+}
+
+// BeaconBlockRoot is a mock.
+func (*BeaconBlockRootProvider) BeaconBlockRoot(_ context.Context, _ string) (*phase0.Root, error) {
+	root := phase0.Root([32]byte{
+		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+		0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+	})
+
+	return &root, nil
+}
+
+// ErroringBeaconBlockRootProvider is a mock for eth2client.BeaconBlockRootProvider.
+type ErroringBeaconBlockRootProvider struct{}
+
+// NewErroringBeaconBlockRootProvider returns a mock beacon block proposal provider.
+func NewErroringBeaconBlockRootProvider() eth2client.BeaconBlockRootProvider {
+	return &ErroringBeaconBlockRootProvider{}
+}
+
+// BeaconBlockRoot is a mock.
+func (*ErroringBeaconBlockRootProvider) BeaconBlockRoot(_ context.Context, _ string) (*phase0.Root, error) {
+	return nil, errors.New("error")
+}
+
+// NilBeaconBlockRootProvider is a mock for eth2client.BeaconBlockRootProvider.
+type NilBeaconBlockRootProvider struct{}
+
+// NewNilBeaconBlockRootProvider returns a mock beacon block proposal provider.
+func NewNilBeaconBlockRootProvider() eth2client.BeaconBlockRootProvider {
+	return &NilBeaconBlockRootProvider{}
+}
+
+// BeaconBlockRoot is a mock.
+func (*NilBeaconBlockRootProvider) BeaconBlockRoot(_ context.Context, _ string) (*phase0.Root, error) {
+	return nil, nil
+}
+
+// SleepyBeaconBlockRootProvider is a mock for eth2client.BeaconBlockRootProvider.
+type SleepyBeaconBlockRootProvider struct {
+	wait time.Duration
+	next eth2client.BeaconBlockRootProvider
+}
+
+// NewSleepyBeaconBlockRootProvider returns a mock beacon block root.
+func NewSleepyBeaconBlockRootProvider(wait time.Duration, next eth2client.BeaconBlockRootProvider) eth2client.BeaconBlockRootProvider {
+	return &SleepyBeaconBlockRootProvider{
+		wait: wait,
+		next: next,
+	}
+}
+
+// BeaconBlockRoot is a mock.
+func (m *SleepyBeaconBlockRootProvider) BeaconBlockRoot(ctx context.Context, blockID string) (*phase0.Root, error) {
+	time.Sleep(m.wait)
+	return m.next.BeaconBlockRoot(ctx, blockID)
+}
+
 // BlindedBeaconBlockProposalProvider is a mock for eth2client.BlindedBeaconBlockProposalProvider.
 type BlindedBeaconBlockProposalProvider struct {
 	chainTime chaintime.Service
