@@ -323,7 +323,7 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 	validatingAccounts := make(map[phase0.ValidatorIndex]e2wtypes.Account)
 	s.mutex.RLock()
 	for index, validator := range validators {
-		state := api.ValidatorToState(validator, epoch, s.farFutureEpoch)
+		state := api.ValidatorToState(validator, nil, epoch, s.farFutureEpoch)
 		stateCount[state]++
 		if state == api.ValidatorStateActiveOngoing || state == api.ValidatorStateActiveExiting {
 			account := s.accounts[validator.PublicKey]
@@ -373,7 +373,7 @@ func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch p
 		if _, present := indexPresenceMap[index]; !present {
 			continue
 		}
-		state := api.ValidatorToState(validator, epoch, s.farFutureEpoch)
+		state := api.ValidatorToState(validator, nil, epoch, s.farFutureEpoch)
 		if state == api.ValidatorStateActiveOngoing || state == api.ValidatorStateActiveExiting {
 			s.mutex.RLock()
 			validatingAccounts[index] = s.accounts[validator.PublicKey]
