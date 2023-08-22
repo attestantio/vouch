@@ -69,11 +69,12 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(duties)).Msg("Merged attester duties")
 
 	if e := log.Trace(); e.Enabled() {
+		e.Msg("Received attester duties")
 		for _, duty := range duties {
 			log.Trace().
 				Uint64("slot", uint64(duty.Slot())).
 				Strs("duties", duty.Tuples()).
-				Msg("Received attester duties")
+				Msg("Attester duties for slot")
 		}
 	}
 

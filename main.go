@@ -730,13 +730,11 @@ func logModules() {
 	if ok {
 		log.Trace().Str("path", buildInfo.Path).Msg("Main package")
 		for _, dep := range buildInfo.Deps {
-			log := log.Trace()
-			if dep.Replace == nil {
-				log = log.Str("path", dep.Path).Str("version", dep.Version)
-			} else {
-				log = log.Str("path", dep.Replace.Path).Str("version", dep.Replace.Version)
+			path := dep.Path
+			if dep.Replace != nil {
+				path = dep.Replace.Path
 			}
-			log.Msg("Dependency")
+			log.Trace().Str("path", path).Str("version", dep.Version).Msg("Dependency")
 		}
 	}
 }

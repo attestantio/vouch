@@ -544,7 +544,7 @@ func (*Service) unblindBlock(ctx context.Context,
 		if e := log.Trace(); e.Enabled() {
 			data, err := json.Marshal(signedBlock)
 			if err == nil {
-				log.Trace().RawJSON("signed_block", data).Msg("Recomposed block to submit")
+				e.RawJSON("signed_block", data).Msg("Recomposed block to submit")
 			}
 		}
 		return signedBlock, nil
