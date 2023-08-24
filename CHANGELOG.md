@@ -1,10 +1,11 @@
-dev:
+1.7.6:
   - add User-Agent header to HTTP requests
   - controller only uses beacon nodes that are used for attestation data
   - fix crash if beacon node returns nil block during cache update
   - add score to blinded block proposal trace
   - increase speed of validator registration generation, reduce memory usage
   - add strategies to obtain the beacon block root
+  - add bid selection trace attributes to AuctionBlock
 
 1.7.5:
   - add score of block proposals to tracing
