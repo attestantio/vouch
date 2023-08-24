@@ -33,5 +33,5 @@ func (s *Service) ValidatorStateAtEpoch(ctx context.Context, index phase0.Valida
 	if !exists {
 		return api.ValidatorStateUnknown, errors.New("not found")
 	}
-	return api.ValidatorToState(validator, epoch, s.farFutureEpoch), nil
+	return api.ValidatorToState(validator, nil, epoch, s.farFutureEpoch), nil
 }
