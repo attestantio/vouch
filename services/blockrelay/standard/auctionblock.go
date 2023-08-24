@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -92,22 +92,33 @@ func (s *Service) AuctionBlock(ctx context.Context,
 		selectedProviders[strings.ToLower(provider.Address())] = struct{}{}
 	}
 
-	// Update metrics.
-	val, err := res.Bid.Value()
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to obtain bid value")
-	} else {
-		for provider, value := range res.Values {
-			delta := new(big.Int).Sub(val.ToBig(), value)
-			_, isSelected := selectedProviders[strings.ToLower(provider)]
-			if !isSelected {
-				monitorBuilderBidDelta(provider, delta)
+	if res.Bid != nil {
+		val, err := res.Bid.Value()
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to obtain bid value")
+		} else {
+			// Update metrics.
+			for provider, value := range res.Values {
+				delta := new(big.Int).Sub(val.ToBig(), value)
+				_, isSelected := selectedProviders[strings.ToLower(provider)]
+				if !isSelected {
+					monitorBuilderBidDelta(provider, delta)
+				}
+				if s.logResults {
+					log.Info().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", isSelected).Msg("Auction participant")
+				} else {
+					log.Trace().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", isSelected).Msg("Auction participant")
+				}
 			}
-			if s.logResults {
-				log.Info().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", isSelected).Msg("Auction participant")
-			} else {
-				log.Trace().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", isSelected).Msg("Auction participant")
+
+			// Add result to trace.
+			// Has to be a string due to the potential size being >maxint64.
+			span.SetAttributes(attribute.String("value", val.ToBig().String()))
+			providerAddresses := make([]string, 0, len(selectedProviders))
+			for k := range selectedProviders {
+				providerAddresses = append(providerAddresses, k)
 			}
+			span.SetAttributes(attribute.StringSlice("providers", providerAddresses))
 		}
 	}
 
