@@ -48,15 +48,13 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 		return nil, errors.New("no accounts supplied")
 	}
 
-	log := log.With().Uint64("slot", uint64(slot)).Logger()
-
 	signatureDomain, err := s.domainProvider.Domain(ctx,
 		s.beaconAttesterDomainType,
 		phase0.Epoch(slot/s.slotsPerEpoch))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
 	}
-	log.Trace().Str("domain_type", fmt.Sprintf("%#x", s.beaconAttesterDomainType)).Uint64("epoch", uint64(slot/s.slotsPerEpoch)).Str("domain", fmt.Sprintf("%#x", signatureDomain)).Msg("Obtained signature domain")
+	log.Trace().Str("domain_type", fmt.Sprintf("%#x", s.beaconAttesterDomainType)).Uint64("slot", uint64(slot)).Uint64("epoch", uint64(slot/s.slotsPerEpoch)).Str("domain", fmt.Sprintf("%#x", signatureDomain)).Msg("Obtained signature domain")
 
 	// Need to break the single request in to two: those for accounts and those for distributed accounts.
 	// This is because they operate differently (single shot Vs. threshold signing).
@@ -86,8 +84,7 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 	if len(signingAccounts) > 0 {
 		signatures, err := s.signBeaconAttestations(ctx, signingAccounts, slot, accountCommitteeIndices, blockRoot, sourceEpoch, sourceRoot, targetEpoch, targetRoot, signatureDomain)
 		if err != nil {
-			log.Debug().Err(err).Msg("Failed to obtain signatures for individual accounts")
-			return nil, err
+			return nil, errors.Wrap(err, "failed to sign for individual accounts")
 		}
 		for i := range signatures {
 			sigs[accountSigMap[i]] = signatures[i]
@@ -96,8 +93,7 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 	if len(signingDistributedAccounts) > 0 {
 		signatures, err := s.signBeaconAttestations(ctx, signingDistributedAccounts, slot, distributedAccountCommitteeIndices, blockRoot, sourceEpoch, sourceRoot, targetEpoch, targetRoot, signatureDomain)
 		if err != nil {
-			log.Debug().Err(err).Msg("Failed to obtain signatures for distributed accounts")
-			return nil, err
+			return nil, errors.Wrap(err, "failed to sign for distributed accounts")
 		}
 		for i := range signatures {
 			sigs[distributedAccountSigMap[i]] = signatures[i]
