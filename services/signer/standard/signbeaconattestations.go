@@ -48,13 +48,15 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 		return nil, errors.New("no accounts supplied")
 	}
 
+	log := log.With().Uint64("slot", uint64(slot)).Logger()
+
 	signatureDomain, err := s.domainProvider.Domain(ctx,
 		s.beaconAttesterDomainType,
 		phase0.Epoch(slot/s.slotsPerEpoch))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
 	}
-	log.Trace().Str("domain_type", fmt.Sprintf("%#x", s.beaconAttesterDomainType)).Uint64("slot", uint64(slot)).Uint64("epoch", uint64(slot/s.slotsPerEpoch)).Str("domain", fmt.Sprintf("%#x", signatureDomain)).Msg("Obtained signature domain")
+	log.Trace().Str("domain_type", fmt.Sprintf("%#x", s.beaconAttesterDomainType)).Uint64("epoch", uint64(slot/s.slotsPerEpoch)).Str("domain", fmt.Sprintf("%#x", signatureDomain)).Msg("Obtained signature domain")
 
 	// Need to break the single request in to two: those for accounts and those for distributed accounts.
 	// This is because they operate differently (single shot Vs. threshold signing).
@@ -77,10 +79,14 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 		}
 	}
 
+	// Because this function returns all or none of the signatures we run these in series.  This ensures that we don't
+	// end up in a situation where one Vouch instance obtains signatures for individual accounts and the other for distributed accounts,
+	// which would result in neither of them returning the full set of signatures and hence both erroring out.
 	sigs := make([]phase0.BLSSignature, len(accounts))
 	if len(signingAccounts) > 0 {
 		signatures, err := s.signBeaconAttestations(ctx, signingAccounts, slot, accountCommitteeIndices, blockRoot, sourceEpoch, sourceRoot, targetEpoch, targetRoot, signatureDomain)
 		if err != nil {
+			log.Debug().Err(err).Msg("Failed to obtain signatures for individual accounts")
 			return nil, err
 		}
 		for i := range signatures {
@@ -90,6 +96,7 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 	if len(signingDistributedAccounts) > 0 {
 		signatures, err := s.signBeaconAttestations(ctx, signingDistributedAccounts, slot, distributedAccountCommitteeIndices, blockRoot, sourceEpoch, sourceRoot, targetEpoch, targetRoot, signatureDomain)
 		if err != nil {
+			log.Debug().Err(err).Msg("Failed to obtain signatures for distributed accounts")
 			return nil, err
 		}
 		for i := range signatures {
