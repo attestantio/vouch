@@ -1,3 +1,5 @@
+dev:
+
 1.7.6:
   - add User-Agent header to HTTP requests
   - controller only uses beacon nodes that are used for attestation data

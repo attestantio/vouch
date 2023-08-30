@@ -21,6 +21,11 @@ import (
 )
 
 func TestCalculateExtentSize(t *testing.T) {
+	cpuExtentSize := 1024 / runtime.GOMAXPROCS(0)
+	if 1024%runtime.GOMAXPROCS(0) != 0 {
+		cpuExtentSize++
+	}
+
 	tests := []struct {
 		name               string
 		items              int
@@ -43,7 +48,7 @@ func TestCalculateExtentSize(t *testing.T) {
 			name:               "CPUs",
 			items:              1024,
 			desiredConcurrency: -1,
-			extentSize:         1024 / runtime.GOMAXPROCS(0),
+			extentSize:         cpuExtentSize,
 		},
 		{
 			name:               "Specific",

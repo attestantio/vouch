@@ -628,7 +628,6 @@ func TestService(t *testing.T) {
 				standard.WithMaxSyncCommitteeMessageDelay(4 * time.Second),
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
-				standard.WithReorgs(false),
 			},
 			err: "problem with parameters: no beacon block headers provider specified",
 		},
@@ -661,7 +660,6 @@ func TestService(t *testing.T) {
 				standard.WithMaxSyncCommitteeMessageDelay(4 * time.Second),
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
-				standard.WithReorgs(false),
 			},
 			err: "problem with parameters: no signed beacon block provider specified",
 		},
@@ -696,7 +694,6 @@ func TestService(t *testing.T) {
 				standard.WithMaxSyncCommitteeMessageDelay(4 * time.Second),
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
-				standard.WithReorgs(false),
 			},
 		},
 		{
@@ -724,7 +721,6 @@ func TestService(t *testing.T) {
 				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
-				standard.WithReorgs(true),
 			},
 		},
 	}

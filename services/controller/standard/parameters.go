@@ -64,7 +64,6 @@ type parameters struct {
 	attestationAggregationDelay   time.Duration
 	maxSyncCommitteeMessageDelay  time.Duration
 	syncCommitteeAggregationDelay time.Duration
-	reorgs                        bool
 }
 
 // Parameter is the interface for service parameters.
@@ -271,13 +270,6 @@ func WithMaxSyncCommitteeMessageDelay(delay time.Duration) Parameter {
 func WithSyncCommitteeAggregationDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.syncCommitteeAggregationDelay = delay
-	})
-}
-
-// WithReorgs sets or unsets reorgs.
-func WithReorgs(reorgs bool) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.reorgs = reorgs
 	})
 }
 

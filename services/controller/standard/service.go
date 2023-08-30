@@ -79,7 +79,6 @@ type Service struct {
 	attestationAggregationDelay   time.Duration
 	maxSyncCommitteeMessageDelay  time.Duration
 	syncCommitteeAggregationDelay time.Duration
-	reorgs                        bool
 
 	// Hard fork control
 	handlingAltair     bool
@@ -190,7 +189,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		attestationAggregationDelay:   parameters.attestationAggregationDelay,
 		maxSyncCommitteeMessageDelay:  parameters.maxSyncCommitteeMessageDelay,
 		syncCommitteeAggregationDelay: parameters.syncCommitteeAggregationDelay,
-		reorgs:                        parameters.reorgs,
 		subscriptionInfos:             make(map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
 		handlingAltair:                handlingAltair,
 		altairForkEpoch:               altairForkEpoch,

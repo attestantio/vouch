@@ -530,7 +530,7 @@ func (*Service) unblindBlock(ctx context.Context,
 
 			log.Trace().Msg("Unblinded block")
 			// Acquire the semaphore to confirm that a block has been received.
-			// Use TryAcquire in case two proviers return the block at the same time.
+			// Use TryAcquire in case two providers return the block at the same time.
 			sem.TryAcquire(1)
 			ch <- signedBlock
 		}(ctx, provider, respCh)
