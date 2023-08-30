@@ -103,8 +103,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-
-var ReleaseVersion = "1.7.6"
+var ReleaseVersion = "1.8.0-dev"
 
 func main() {
 	exitCode := main2()
@@ -425,7 +424,6 @@ func startServices(ctx context.Context,
 		standardcontroller.WithAttestationAggregationDelay(viper.GetDuration("controller.attestation-aggregation-delay")),
 		standardcontroller.WithMaxSyncCommitteeMessageDelay(viper.GetDuration("controller.max-sync-committee-message-delay")),
 		standardcontroller.WithSyncCommitteeAggregationDelay(viper.GetDuration("controller.sync-committee-aggregation-delay")),
-		standardcontroller.WithReorgs(viper.GetBool("controller.reorgs")),
 	)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to start controller service")

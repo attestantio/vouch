@@ -81,7 +81,7 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	}
 
 	// Check to see if there is a reorganisation that requires re-fetching duties.
-	if s.reorgs && s.lastBlockEpoch != 0 {
+	if s.lastBlockEpoch != 0 {
 		if epoch > s.lastBlockEpoch {
 			log.Trace().
 				Str("old_previous_dependent_root", fmt.Sprintf("%#x", s.previousDutyDependentRoot)).
@@ -125,7 +125,7 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	s.currentDutyDependentRoot = data.CurrentDutyDependentRoot
 
 	// We give the block some time to propagate around the rest of the
-	// nodes before kicking off attestations for the block's slot.
+	// nodes before kicking off attestations and sync committees for the block's slot.
 	time.Sleep(200 * time.Millisecond)
 	jobName := fmt.Sprintf("Attestations for slot %d", data.Slot)
 	if s.scheduler.JobExists(ctx, jobName) {
@@ -151,7 +151,7 @@ func (s *Service) handlePreviousDependentRootChanged(ctx context.Context) {
 	go s.refreshAttesterDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
 }
 
-// handlePreviousDependentRootChanged handles the situation where the current
+// handleCurrentDependentRootChanged handles the situation where the current
 // dependent root changed.
 func (s *Service) handleCurrentDependentRootChanged(ctx context.Context) {
 	// Refreshes run in parallel.

@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,12 +16,14 @@ package util
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"sync"
 
 	builder "github.com/attestantio/go-builder-client"
 	httpclient "github.com/attestantio/go-builder-client/http"
 	"github.com/attestantio/go-eth2-client/metrics"
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -41,6 +43,11 @@ func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Ser
 		builders = make(map[string]builder.Service)
 	}
 
+	extraHeaders, err := builderClientHeaders(address, releaseVersion)
+	if err != nil {
+		return nil, err
+	}
+
 	var client builder.Service
 	var exists bool
 	if client, exists = builders[address]; !exists {
@@ -50,9 +57,7 @@ func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Ser
 			httpclient.WithLogLevel(LogLevel("builderclient")),
 			httpclient.WithTimeout(Timeout("builderclient")),
 			httpclient.WithAddress(address),
-			httpclient.WithExtraHeaders(map[string]string{
-				"User-Agent": fmt.Sprintf("Vouch/%s", releaseVersion),
-			}),
+			httpclient.WithExtraHeaders(extraHeaders),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate builder client")
@@ -60,4 +65,28 @@ func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Ser
 		builders[address] = client
 	}
 	return client, nil
+}
+
+func builderClientHeaders(address string, releaseVersion string) (map[string]string, error) {
+	// Vouch version for initial header.
+	extraHeaders := map[string]string{
+		"User-Agent": fmt.Sprintf("Vouch/%s", releaseVersion),
+	}
+
+	// Generic user-defined headers for all clients.
+	for k, v := range viper.GetStringMapString("builderclient.headers.all") {
+		extraHeaders[k] = v
+	}
+
+	parsedAddress, err := url.Parse(address)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse address")
+	}
+
+	// Specific headers for this client.
+	for k, v := range viper.GetStringMapString(fmt.Sprintf("builderclient.headers.%s", parsedAddress.Host)) {
+		extraHeaders[k] = v
+	}
+
+	return extraHeaders, nil
 }
