@@ -105,7 +105,7 @@ strategies:
     # beacon-node-addresses are the addresses from which to receive beacon block roots.
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
     # timeout defines the maximum amount of time the strategy will wait for a response.  Different strategies may return earlier
-    # if they have obtained enoguh information from their beacon node(s).
+    # if they have obtained enough information from their beacon node(s).
     timeout: '2s'
   # The blindedbeaconblockproposal strategy obtains blinded beacon block proposals from multiple beacon nodes when using the block
   # relay module to obtain execution payloads from MEV relays.
@@ -147,11 +147,12 @@ strategies:
 blockrelay:
   fallback-fee-recipient: '0x0000000000000000000000000000000000000001'
 
-# tracing sends OTLP trace data for all operations to the supplied endpoint.
+# tracing sends OTLP trace data to the supplied endpoint.
 tracing:
   # Address is the host and port of an OTLP trace receiver.
   address: 'server:4317'
-  # If the endpoint is secure you will need to supply a client certificate and key, and optionall a CA certificate.
+  # If the endpoint is secure you will need to supply a client certificate and key, and optionally a CA certificate if your client
+  # certificate is issued by a private certificate authority.
   client-cert: 'file:///home/vouch/certs/server.crt'
   client-key: 'file:///home/vouch/certs/server.key'
   ca-cert: 'file:///home/vouch/certs/ca.crt'
