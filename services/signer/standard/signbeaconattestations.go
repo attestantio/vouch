@@ -77,11 +77,14 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 		}
 	}
 
+	// Because this function returns all or none of the signatures we run these in series.  This ensures that we don't
+	// end up in a situation where one Vouch instance obtains signatures for individual accounts and the other for distributed accounts,
+	// which would result in neither of them returning the full set of signatures and hence both erroring out.
 	sigs := make([]phase0.BLSSignature, len(accounts))
 	if len(signingAccounts) > 0 {
 		signatures, err := s.signBeaconAttestations(ctx, signingAccounts, slot, accountCommitteeIndices, blockRoot, sourceEpoch, sourceRoot, targetEpoch, targetRoot, signatureDomain)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to sign for individual accounts")
 		}
 		for i := range signatures {
 			sigs[accountSigMap[i]] = signatures[i]
@@ -90,7 +93,7 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 	if len(signingDistributedAccounts) > 0 {
 		signatures, err := s.signBeaconAttestations(ctx, signingDistributedAccounts, slot, distributedAccountCommitteeIndices, blockRoot, sourceEpoch, sourceRoot, targetEpoch, targetRoot, signatureDomain)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to sign for distributed accounts")
 		}
 		for i := range signatures {
 			sigs[distributedAccountSigMap[i]] = signatures[i]
