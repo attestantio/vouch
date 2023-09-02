@@ -298,7 +298,7 @@ It is also possible to add and remove relays for a particular proposer, for exam
 
 In this case the validator whose public key is `0x8021…8bbe` will use relays 1 and 3, and not relay 2.
 
-Finally, it is possible for a proposer to use their own unique relay configuration, for example:
+It is possible for a proposer to use their own unique relay configuration, for example:
 
 ```json
 {

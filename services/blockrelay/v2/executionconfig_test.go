@@ -577,8 +577,9 @@ func TestConfig(t *testing.T) {
 					{
 						Address:      "https://relay3.com/",
 						FeeRecipient: feeRecipient3,
-						GasLimit:     gasLimit1,
-						MinValue:     decimal.Zero,
+						GasLimit:     gasLimit3,
+						Grace:        grace2,
+						MinValue:     minValue2,
 					},
 				},
 			},

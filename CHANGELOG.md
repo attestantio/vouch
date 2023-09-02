@@ -1,4 +1,5 @@
 dev:
+  - ensure relay configuration inherits all configuration values as expected
 
 1.7.6:
   - add User-Agent header to HTTP requests
