@@ -166,14 +166,17 @@ func TestConfig(t *testing.T) {
 	feeRecipient3 := bellatrix.ExecutionAddress{0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03}
 	feeRecipient4 := bellatrix.ExecutionAddress{0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04}
 
+	gasLimit0 := uint64(0)
 	gasLimit1 := uint64(1000000)
 	gasLimit2 := uint64(2000000)
 	gasLimit3 := uint64(3000000)
 	gasLimit4 := uint64(4000000)
 
+	grace0 := 0 * time.Second
 	grace1 := time.Second
 	grace2 := 2 * time.Second
 
+	minValue0 := decimal.Zero
 	minValue1 := decimal.New(1, 0)
 	minValue2 := decimal.New(2, 0)
 
@@ -577,8 +580,9 @@ func TestConfig(t *testing.T) {
 					{
 						Address:      "https://relay3.com/",
 						FeeRecipient: feeRecipient3,
-						GasLimit:     gasLimit1,
-						MinValue:     decimal.Zero,
+						GasLimit:     gasLimit3,
+						Grace:        grace2,
+						MinValue:     minValue2,
 					},
 				},
 			},
@@ -626,6 +630,45 @@ func TestConfig(t *testing.T) {
 						GasLimit:     gasLimit4,
 						Grace:        grace2,
 						MinValue:     minValue2,
+					},
+				},
+			},
+		},
+		{
+			name: "ProposerValidatorRelayExplicitZeros",
+			executionConfig: &v2.ExecutionConfig{
+				Proposers: []*v2.ProposerConfig{
+					{
+						Validator:    pubkey1,
+						FeeRecipient: &feeRecipient3,
+						GasLimit:     &gasLimit3,
+						Grace:        &grace2,
+						MinValue:     &minValue2,
+						ResetRelays:  true,
+						Relays: map[string]*v2.ProposerRelayConfig{
+							"https://relay1.com/": {
+								FeeRecipient: &feeRecipient4,
+								GasLimit:     &gasLimit0,
+								Grace:        &grace0,
+								MinValue:     &minValue0,
+							},
+						},
+					},
+				},
+			},
+			account:              account1,
+			pubkey:               pubkey1,
+			fallbackFeeRecipient: feeRecipient1,
+			fallbackGasLimit:     gasLimit1,
+			expected: &beaconblockproposer.ProposerConfig{
+				FeeRecipient: feeRecipient3,
+				Relays: []*beaconblockproposer.RelayConfig{
+					{
+						Address:      "https://relay1.com/",
+						FeeRecipient: feeRecipient4,
+						GasLimit:     gasLimit0,
+						Grace:        grace0,
+						MinValue:     minValue0,
 					},
 				},
 			},

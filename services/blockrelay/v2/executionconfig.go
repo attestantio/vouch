@@ -152,10 +152,10 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 	*beaconblockproposer.ProposerConfig,
 	error,
 ) {
+	// Set base configuration without relays.
 	config := &beaconblockproposer.ProposerConfig{
 		Relays: make([]*beaconblockproposer.RelayConfig, 0),
 	}
-
 	if e.FeeRecipient == nil {
 		config.FeeRecipient = fallbackFeeRecipient
 	} else {
@@ -181,7 +181,7 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 		config.Relays = append(config.Relays, configRelay)
 	}
 
-	// Work through the proposer-specific options to see if one matches.
+	// Work through the proposer-specific configurations to see if one matches.
 	var accountName string
 	if provider, isProvider := account.(e2wtypes.AccountWalletProvider); isProvider {
 		accountName = fmt.Sprintf("%s/%s", provider.Wallet().Name(), account.Name())
@@ -202,7 +202,7 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 			continue
 		}
 
-		// Update from proposer-level info.
+		// Update from proposer-specific configuration.
 		if proposerConfig.FeeRecipient != nil {
 			config.FeeRecipient = *proposerConfig.FeeRecipient
 			for _, configRelay := range config.Relays {
@@ -251,22 +251,7 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 		// Add new relays.
 		for address, proposerRelayConfig := range proposerConfig.Relays {
 			if _, alreadyUpdated := updated[address]; !alreadyUpdated {
-				configRelay := &beaconblockproposer.RelayConfig{
-					Address: address,
-				}
-				if e.Grace == nil {
-					configRelay.Grace = 0
-				} else {
-					configRelay.Grace = *e.Grace
-				}
-				if e.MinValue == nil {
-					configRelay.MinValue = decimal.Zero
-				} else {
-					configRelay.MinValue = *e.MinValue
-				}
-				setRelayConfig(configRelay, &BaseRelayConfig{}, config.FeeRecipient, fallbackGasLimit)
-				updateRelayConfig(configRelay, proposerRelayConfig)
-				relays = append(relays, configRelay)
+				relays = append(relays, e.generateRelayConfig(address, proposerConfig, proposerRelayConfig, fallbackFeeRecipient, fallbackGasLimit))
 			}
 		}
 		config.Relays = relays
@@ -276,6 +261,85 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 	}
 
 	return config, nil
+}
+
+// generateRelayConfig generates a relay configuration from the various
+// tiers of existing information.
+func (e *ExecutionConfig) generateRelayConfig(
+	address string,
+	proposerConfig *ProposerConfig,
+	proposerRelayConfig *ProposerRelayConfig,
+	fallbackFeeRecipient bellatrix.ExecutionAddress,
+	fallbackGasLimit uint64,
+) *beaconblockproposer.RelayConfig {
+	relayConfig := &beaconblockproposer.RelayConfig{
+		Address:   address,
+		PublicKey: proposerRelayConfig.PublicKey,
+	}
+
+	switch {
+	case proposerRelayConfig.FeeRecipient != nil:
+		// Fetch from proposer relay config.
+		relayConfig.FeeRecipient = *proposerRelayConfig.FeeRecipient
+	case proposerConfig.FeeRecipient != nil:
+		// Fetch from proposer config.
+		relayConfig.FeeRecipient = *proposerConfig.FeeRecipient
+	case e.FeeRecipient != nil:
+		// Fetch from execution config.
+		relayConfig.FeeRecipient = *e.FeeRecipient
+	default:
+		// No value; set to default
+		relayConfig.FeeRecipient = fallbackFeeRecipient
+	}
+
+	switch {
+	case proposerRelayConfig.Grace != nil:
+		// Fetch from proposer relay config.
+		relayConfig.Grace = *proposerRelayConfig.Grace
+	case proposerConfig.Grace != nil:
+		// Fetch from proposer config.
+		relayConfig.Grace = *proposerConfig.Grace
+	case e.Grace != nil:
+		// Fetch from execution config.
+		relayConfig.Grace = *e.Grace
+	default:
+		// No value; set to zero.
+		relayConfig.Grace = 0
+	}
+
+	switch {
+	case proposerRelayConfig.GasLimit != nil:
+		// Fetch from proposer relay config.
+		relayConfig.GasLimit = *proposerRelayConfig.GasLimit
+	case proposerConfig.GasLimit != nil:
+		// Fetch from proposer config.
+		relayConfig.GasLimit = *proposerConfig.GasLimit
+	case e.GasLimit != nil:
+		// Fetch from execution config.
+		relayConfig.GasLimit = *e.GasLimit
+	default:
+		// No value; set to default.
+		relayConfig.GasLimit = fallbackGasLimit
+	}
+
+	switch {
+	case relayConfig.MinValue.Sign() == 1:
+		// Already set; nothing to do.
+	case proposerRelayConfig.MinValue != nil:
+		// Fetch from proposer relay config.
+		relayConfig.MinValue = *proposerRelayConfig.MinValue
+	case proposerConfig.MinValue != nil:
+		// Fetch from proposer config.
+		relayConfig.MinValue = *proposerConfig.MinValue
+	case e.MinValue != nil:
+		// Fetch from execution config.
+		relayConfig.MinValue = *e.MinValue
+	default:
+		// No value; set to zero.
+		relayConfig.MinValue = decimal.Zero
+	}
+
+	return relayConfig
 }
 
 // setRelayConfig sets the base configuration for a relay.
