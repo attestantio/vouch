@@ -301,7 +301,7 @@ func (s *Service) obtainBid(ctx context.Context,
 	return builderBid, nil
 }
 
-func (s *Service) getBidValue(_ context.Context,
+func (*Service) getBidValue(_ context.Context,
 	bid *builderspec.VersionedSignedBuilderBid,
 ) (
 	*uint256.Int,
