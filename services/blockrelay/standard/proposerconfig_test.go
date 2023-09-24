@@ -56,8 +56,6 @@ func TestProposerConfig(t *testing.T) {
 	genesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
 	slotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
 	slotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
-	specProvider := mock.NewSpecProvider()
-	domainProvider := mock.NewDomainProvider()
 
 	mockValidatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
 	mockAccountsProvider := mockaccountmanager.NewAccountsProvider()
@@ -128,9 +126,8 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithAccountsProvider(mockAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
-				standard.WithSpecProvider(specProvider),
-				standard.WithDomainProvider(domainProvider),
 				standard.WithReleaseVersion("test"),
+				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
 			},
 			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","relays":[]}`,
 		},
@@ -149,9 +146,8 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithAccountsProvider(mockAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
-				standard.WithSpecProvider(specProvider),
-				standard.WithDomainProvider(domainProvider),
 				standard.WithReleaseVersion("test"),
+				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
 			},
 			proposerConfig: `{"fee_recipient":"0x0200000000000000000000000000000000000000","relays":[]}`,
 			logEntries: []map[string]interface{}{
@@ -175,9 +171,8 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithAccountsProvider(mockAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
-				standard.WithSpecProvider(specProvider),
-				standard.WithDomainProvider(domainProvider),
 				standard.WithReleaseVersion("test"),
+				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
 			},
 			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","relays":[]}`,
 			logEntries: []map[string]interface{}{
