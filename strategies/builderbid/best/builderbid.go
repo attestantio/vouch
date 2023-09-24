@@ -30,6 +30,7 @@ import (
 	"github.com/attestantio/vouch/util"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -218,12 +219,11 @@ func (s *Service) builderBid(ctx context.Context,
 		span.AddEvent("grace period over")
 	}
 
-	log := s.log.With().Str("bidder", provider.Address()).Logger()
-	builderBid, err := provider.BuilderBid(ctx, slot, parentHash, pubkey)
+	builderBid, err := s.obtainBid(ctx, provider, slot, parentHash, pubkey)
 	if err != nil {
 		errCh <- &builderBidError{
 			provider: provider,
-			err:      errors.Wrap(err, "failed to obtain builder bid"),
+			err:      err,
 		}
 		return
 	}
@@ -234,40 +234,16 @@ func (s *Service) builderBid(ctx context.Context,
 		}
 		return
 	}
-	if e := log.Trace(); e.Enabled() {
-		data, err := json.Marshal(builderBid)
-		if err != nil {
-			errCh <- &builderBidError{
-				provider: provider,
-				err:      errors.Wrap(err, "cannot marshal bid"),
-			}
-			return
-		}
-		e.RawJSON("builder_bid", data).Msg("Obtained builder bid")
-	}
-	if builderBid.IsEmpty() {
+
+	value, err := s.getBidValue(ctx, builderBid)
+	if err != nil {
 		errCh <- &builderBidError{
 			provider: provider,
-			err:      errors.New("builder bid empty"),
+			err:      err,
 		}
 		return
 	}
 
-	value, err := builderBid.Value()
-	if err != nil {
-		errCh <- &builderBidError{
-			provider: provider,
-			err:      fmt.Errorf("value: %w", err),
-		}
-		return
-	}
-	if zeroValue.Cmp(value) == 0 {
-		errCh <- &builderBidError{
-			provider: provider,
-			err:      errors.New("zero value"),
-		}
-		return
-	}
 	if value.ToBig().Cmp(relayConfig.MinValue.BigInt()) < 0 {
 		log.Debug().Stringer("value", value.ToBig()).Stringer("min_value", relayConfig.MinValue.BigInt()).Msg("Value below minimum; ignoring")
 		respCh <- &builderBidResponse{
@@ -277,51 +253,10 @@ func (s *Service) builderBid(ctx context.Context,
 		return
 	}
 
-	feeRecipient, err := builderBid.FeeRecipient()
-	if err != nil {
+	if err := s.verifyBidDetails(ctx, builderBid, slot, relayConfig, provider); err != nil {
 		errCh <- &builderBidError{
 			provider: provider,
-			err:      fmt.Errorf("fee recipient: %w", err),
-		}
-		return
-	}
-	if bytes.Equal(feeRecipient[:], zeroExecutionAddress[:]) {
-		errCh <- &builderBidError{
-			provider: provider,
-			err:      errors.New("zero fee recipient"),
-		}
-		return
-	}
-
-	timestamp, err := builderBid.Timestamp()
-	if err != nil {
-		errCh <- &builderBidError{
-			provider: provider,
-			err:      fmt.Errorf("timestamp: %w", err),
-		}
-		return
-	}
-	if uint64(s.chainTime.StartOfSlot(slot).Unix()) != timestamp {
-		errCh <- &builderBidError{
-			provider: provider,
-			err:      fmt.Errorf("provided timestamp %d for slot %d not expected value of %d", timestamp, slot, s.chainTime.StartOfSlot(slot).Unix()),
-		}
-		return
-	}
-
-	verified, err := s.verifyBidSignature(ctx, relayConfig, builderBid, provider)
-	if err != nil {
-		errCh <- &builderBidError{
-			provider: provider,
-			err:      errors.Wrap(err, "error verifying bid signature"),
-		}
-		return
-	}
-	if !verified {
-		log.Warn().Msg("Failed to verify bid signature")
-		errCh <- &builderBidError{
-			provider: provider,
-			err:      fmt.Errorf("%s: invalid signature", provider.Address()),
+			err:      err,
 		}
 		return
 	}
@@ -331,6 +266,90 @@ func (s *Service) builderBid(ctx context.Context,
 		provider: provider,
 		score:    value.ToBig(),
 	}
+}
+
+func (s *Service) obtainBid(ctx context.Context,
+	provider builderclient.BuilderBidProvider,
+	slot phase0.Slot,
+	parentHash phase0.Hash32,
+	pubkey phase0.BLSPubKey,
+) (
+	*builderspec.VersionedSignedBuilderBid,
+	error,
+) {
+	log := s.log.With().Str("bidder", provider.Address()).Logger()
+	builderBid, err := provider.BuilderBid(ctx, slot, parentHash, pubkey)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain builder bid")
+	}
+	if builderBid == nil {
+		return nil, nil
+	}
+
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(builderBid)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to unmarshal bid")
+		}
+		e.RawJSON("builder_bid", data).Msg("Obtained builder bid")
+	}
+
+	if builderBid.IsEmpty() {
+		return nil, errors.New("builder bid empty")
+	}
+
+	return builderBid, nil
+}
+
+func (s *Service) getBidValue(_ context.Context,
+	bid *builderspec.VersionedSignedBuilderBid,
+) (
+	*uint256.Int,
+	error,
+) {
+	value, err := bid.Value()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain bid value")
+	}
+	if zeroValue.Cmp(value) == 0 {
+		return nil, errors.New("bid has 0 value")
+	}
+
+	return value, nil
+}
+
+func (s *Service) verifyBidDetails(ctx context.Context,
+	bid *builderspec.VersionedSignedBuilderBid,
+	slot phase0.Slot,
+	relayConfig *beaconblockproposer.RelayConfig,
+	provider builderclient.BuilderBidProvider,
+) error {
+	feeRecipient, err := bid.FeeRecipient()
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain builder bid fee recipient")
+	}
+	if bytes.Equal(feeRecipient[:], zeroExecutionAddress[:]) {
+		return errors.New("zero fee recipient")
+	}
+
+	timestamp, err := bid.Timestamp()
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain builder bid timestamp")
+	}
+	if uint64(s.chainTime.StartOfSlot(slot).Unix()) != timestamp {
+		return fmt.Errorf("provided timestamp %d for slot %d not expected value of %d", timestamp, slot, s.chainTime.StartOfSlot(slot).Unix())
+	}
+
+	verified, err := s.verifyBidSignature(ctx, relayConfig, bid, provider)
+	if err != nil {
+		return err
+	}
+	if !verified {
+		s.log.Warn().Msg("Failed to verify bid signature")
+		return errors.New("invalid signature")
+	}
+
+	return nil
 }
 
 // verifyBidSignature verifies the signature of a bid to ensure it comes from the expected source.

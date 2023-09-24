@@ -24,7 +24,7 @@ import (
 type BuilderBidProvider struct{}
 
 // BuilderBid returns a builder bid.
-func (b BuilderBidProvider) BuilderBid(_ context.Context,
+func (BuilderBidProvider) BuilderBid(_ context.Context,
 	_ phase0.Slot,
 	_ phase0.Hash32,
 	_ phase0.BLSPubKey,

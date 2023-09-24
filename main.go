@@ -1398,93 +1398,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 	switch viper.GetString("submitter.style") {
 	case "multinode", "all":
 		log.Info().Msg("Starting multinode submitter strategy")
-
-		aggregateAttestationSubmitters := make(map[string]eth2client.AggregateAttestationsSubmitter)
-		for _, address := range util.BeaconNodeAddresses("submitter.aggregateattestation.multinode") {
-			client, err := fetchClient(ctx, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for aggregate attestation submitter strategy", address))
-			}
-			aggregateAttestationSubmitters[address] = client.(eth2client.AggregateAttestationsSubmitter)
-		}
-
-		attestationsSubmitters := make(map[string]eth2client.AttestationsSubmitter)
-		for _, address := range util.BeaconNodeAddresses("submitter.attestation.multinode") {
-			client, err := fetchClient(ctx, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for attestation submitter strategy", address))
-			}
-			attestationsSubmitters[address] = client.(eth2client.AttestationsSubmitter)
-		}
-
-		beaconBlockSubmitters := make(map[string]eth2client.BeaconBlockSubmitter)
-		for _, address := range util.BeaconNodeAddresses("submitter.beaconblock.multinode") {
-			client, err := fetchClient(ctx, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block submitter strategy", address))
-			}
-			beaconBlockSubmitters[address] = client.(eth2client.BeaconBlockSubmitter)
-		}
-
-		beaconCommitteeSubscriptionsSubmitters := make(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter)
-		for _, address := range util.BeaconNodeAddresses("submitter.beaconcommitteesubscription.multinode") {
-			client, err := fetchClient(ctx, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon committee subscription submitter strategy", address))
-			}
-			beaconCommitteeSubscriptionsSubmitters[address] = client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)
-		}
-
-		proposalPreparationSubmitters := make(map[string]eth2client.ProposalPreparationsSubmitter)
-		for _, address := range util.BeaconNodeAddresses("submitter.proposalpreparation.multinode") {
-			client, err := fetchClient(ctx, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for proposal preparation submitter strategy", address))
-			}
-			proposalPreparationSubmitters[address] = client.(eth2client.ProposalPreparationsSubmitter)
-		}
-
-		syncCommitteeContributionsSubmitters := make(map[string]eth2client.SyncCommitteeContributionsSubmitter)
-		for _, address := range util.BeaconNodeAddresses("submitter.synccommitteecontribution.multinode") {
-			client, err := fetchClient(ctx, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for sync committee contribution submitter strategy", address))
-			}
-			syncCommitteeContributionsSubmitters[address] = client.(eth2client.SyncCommitteeContributionsSubmitter)
-		}
-
-		syncCommitteeMessagesSubmitters := make(map[string]eth2client.SyncCommitteeMessagesSubmitter)
-		for _, address := range util.BeaconNodeAddresses("submitter.synccommitteemessage.multinode") {
-			client, err := fetchClient(ctx, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for sync committee message submitter strategy", address))
-			}
-			syncCommitteeMessagesSubmitters[address] = client.(eth2client.SyncCommitteeMessagesSubmitter)
-		}
-
-		syncCommitteeSubscriptionsSubmitters := make(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter)
-		for _, address := range util.BeaconNodeAddresses("submitter.synccommitteesubscription.multinode") {
-			client, err := fetchClient(ctx, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for sync committee subscription submitter strategy", address))
-			}
-			syncCommitteeSubscriptionsSubmitters[address] = client.(eth2client.SyncCommitteeSubscriptionsSubmitter)
-		}
-
-		submitter, err = multinodesubmitter.New(ctx,
-			multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
-			multinodesubmitter.WithLogLevel(util.LogLevel("submitter.multinode")),
-			multinodesubmitter.WithTimeout(util.Timeout("submitter.multinode")),
-			multinodesubmitter.WithBeaconBlockSubmitters(beaconBlockSubmitters),
-			multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),
-			multinodesubmitter.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
-			multinodesubmitter.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-			multinodesubmitter.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
-			multinodesubmitter.WithAggregateAttestationsSubmitters(aggregateAttestationSubmitters),
-			multinodesubmitter.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
-			multinodesubmitter.WithProposalPreparationsSubmitters(proposalPreparationSubmitters),
-		)
+		submitter, err = startMultinodeSubmitter(ctx, monitor)
 	default:
 		log.Info().Msg("Starting standard submitter strategy")
 		submitter, err = immediatesubmitter.New(ctx,
@@ -1503,6 +1417,105 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start submitter service")
 	}
+	return submitter, nil
+}
+
+func startMultinodeSubmitter(ctx context.Context,
+	monitor metrics.Service,
+) (
+	submitter.Service,
+	error,
+) {
+	aggregateAttestationSubmitters := make(map[string]eth2client.AggregateAttestationsSubmitter)
+	for _, address := range util.BeaconNodeAddresses("submitter.aggregateattestation.multinode") {
+		client, err := fetchClient(ctx, address)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for aggregate attestation submitter strategy", address))
+		}
+		aggregateAttestationSubmitters[address] = client.(eth2client.AggregateAttestationsSubmitter)
+	}
+
+	attestationsSubmitters := make(map[string]eth2client.AttestationsSubmitter)
+	for _, address := range util.BeaconNodeAddresses("submitter.attestation.multinode") {
+		client, err := fetchClient(ctx, address)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for attestation submitter strategy", address))
+		}
+		attestationsSubmitters[address] = client.(eth2client.AttestationsSubmitter)
+	}
+
+	beaconBlockSubmitters := make(map[string]eth2client.BeaconBlockSubmitter)
+	for _, address := range util.BeaconNodeAddresses("submitter.beaconblock.multinode") {
+		client, err := fetchClient(ctx, address)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block submitter strategy", address))
+		}
+		beaconBlockSubmitters[address] = client.(eth2client.BeaconBlockSubmitter)
+	}
+
+	beaconCommitteeSubscriptionsSubmitters := make(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter)
+	for _, address := range util.BeaconNodeAddresses("submitter.beaconcommitteesubscription.multinode") {
+		client, err := fetchClient(ctx, address)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon committee subscription submitter strategy", address))
+		}
+		beaconCommitteeSubscriptionsSubmitters[address] = client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)
+	}
+
+	proposalPreparationSubmitters := make(map[string]eth2client.ProposalPreparationsSubmitter)
+	for _, address := range util.BeaconNodeAddresses("submitter.proposalpreparation.multinode") {
+		client, err := fetchClient(ctx, address)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for proposal preparation submitter strategy", address))
+		}
+		proposalPreparationSubmitters[address] = client.(eth2client.ProposalPreparationsSubmitter)
+	}
+
+	syncCommitteeContributionsSubmitters := make(map[string]eth2client.SyncCommitteeContributionsSubmitter)
+	for _, address := range util.BeaconNodeAddresses("submitter.synccommitteecontribution.multinode") {
+		client, err := fetchClient(ctx, address)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for sync committee contribution submitter strategy", address))
+		}
+		syncCommitteeContributionsSubmitters[address] = client.(eth2client.SyncCommitteeContributionsSubmitter)
+	}
+
+	syncCommitteeMessagesSubmitters := make(map[string]eth2client.SyncCommitteeMessagesSubmitter)
+	for _, address := range util.BeaconNodeAddresses("submitter.synccommitteemessage.multinode") {
+		client, err := fetchClient(ctx, address)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for sync committee message submitter strategy", address))
+		}
+		syncCommitteeMessagesSubmitters[address] = client.(eth2client.SyncCommitteeMessagesSubmitter)
+	}
+
+	syncCommitteeSubscriptionsSubmitters := make(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter)
+	for _, address := range util.BeaconNodeAddresses("submitter.synccommitteesubscription.multinode") {
+		client, err := fetchClient(ctx, address)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for sync committee subscription submitter strategy", address))
+		}
+		syncCommitteeSubscriptionsSubmitters[address] = client.(eth2client.SyncCommitteeSubscriptionsSubmitter)
+	}
+
+	submitter, err := multinodesubmitter.New(ctx,
+		multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+		multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
+		multinodesubmitter.WithLogLevel(util.LogLevel("submitter.multinode")),
+		multinodesubmitter.WithTimeout(util.Timeout("submitter.multinode")),
+		multinodesubmitter.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+		multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),
+		multinodesubmitter.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
+		multinodesubmitter.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
+		multinodesubmitter.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
+		multinodesubmitter.WithAggregateAttestationsSubmitters(aggregateAttestationSubmitters),
+		multinodesubmitter.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
+		multinodesubmitter.WithProposalPreparationsSubmitters(proposalPreparationSubmitters),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return submitter, nil
 }
 
