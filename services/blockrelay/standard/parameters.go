@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -25,6 +25,7 @@ import (
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/scheduler"
 	"github.com/attestantio/vouch/services/signer"
+	"github.com/attestantio/vouch/strategies/builderbid"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/wealdtech/go-majordomo"
@@ -48,10 +49,9 @@ type parameters struct {
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 	logResults                                bool
-	specProvider                              consensusclient.SpecProvider
-	domainProvider                            consensusclient.DomainProvider
 	timeout                                   time.Duration
 	releaseVersion                            string
+	builderBidProvider                        builderbid.Provider
 }
 
 // Parameter is the interface for service parameters.
@@ -191,26 +191,22 @@ func WithLogResults(logResults bool) Parameter {
 	})
 }
 
-// WithSpecProvider sets the spec provider.
-func WithSpecProvider(provider consensusclient.SpecProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.specProvider = provider
-	})
-}
-
-// WithDomainProvider sets the signature domain provider.
-func WithDomainProvider(provider consensusclient.DomainProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.domainProvider = provider
-	})
-}
-
 // WithReleaseVersion sets the release version for Vouch.
 func WithReleaseVersion(version string) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.releaseVersion = version
 	})
 }
+
+// WithBuilderBidProvider sets builder bid provider.
+func WithBuilderBidProvider(provider builderbid.Provider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.builderBidProvider = provider
+	})
+}
+
+// zeroExecutionAddress is used for comparison purposes.
+var zeroExecutionAddress bellatrix.ExecutionAddress
 
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
@@ -258,14 +254,11 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		return nil, errors.New("listen address malformed")
 	}
 	// config URL can be empty.
-	if parameters.specProvider == nil {
-		return nil, errors.New("no spec provider specified")
-	}
-	if parameters.domainProvider == nil {
-		return nil, errors.New("no domain provider specified")
-	}
 	if parameters.releaseVersion == "" {
 		return nil, errors.New("no release version specified")
+	}
+	if parameters.builderBidProvider == nil {
+		return nil, errors.New("no builder bid provider specified")
 	}
 
 	return &parameters, nil

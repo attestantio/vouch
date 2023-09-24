@@ -48,10 +48,8 @@ func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Ser
 		return nil, err
 	}
 
-	var client builder.Service
-	var exists bool
-	if client, exists = builders[address]; !exists {
-		var err error
+	client, exists := builders[address]
+	if !exists {
 		client, err = httpclient.New(ctx,
 			httpclient.WithMonitor(monitor),
 			httpclient.WithLogLevel(LogLevel("builderclient")),
@@ -64,6 +62,7 @@ func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Ser
 		}
 		builders[address] = client
 	}
+
 	return client, nil
 }
 

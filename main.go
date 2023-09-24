@@ -84,6 +84,8 @@ import (
 	majoritybeaconblockrootstrategy "github.com/attestantio/vouch/strategies/beaconblockroot/majority"
 	bestblindedbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/blindedbeaconblockproposal/best"
 	firstblindedbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/blindedbeaconblockproposal/first"
+	"github.com/attestantio/vouch/strategies/builderbid"
+	bestbuilderbidstrategy "github.com/attestantio/vouch/strategies/builderbid/best"
 	bestsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/best"
 	firstsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/first"
 	"github.com/attestantio/vouch/util"
@@ -233,7 +235,7 @@ func fetchConfig() error {
 	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(30000000))
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
-	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.001))
+	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.000005))
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch {
@@ -590,12 +592,18 @@ func startAltairServices(ctx context.Context,
 		return nil, nil, nil, errors.Wrap(err, "failed to select sync committee contribution provider")
 	}
 
+	log.Trace().Msg("Selecting beacon block root provider")
+	beaconBlockRootProvider, err := selectBeaconBlockRootProvider(ctx, monitor, eth2Client, cacheSvc)
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "failed to select beacon block root provider")
+	}
+
 	log.Trace().Msg("Starting sync committee aggregator")
 	syncCommitteeAggregator, err := standardsynccommitteeaggregator.New(ctx,
 		standardsynccommitteeaggregator.WithLogLevel(util.LogLevel("synccommitteeaggregator")),
 		standardsynccommitteeaggregator.WithMonitor(monitor.(metrics.SyncCommitteeAggregationMonitor)),
 		standardsynccommitteeaggregator.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
-		standardsynccommitteeaggregator.WithBeaconBlockRootProvider(eth2Client.(eth2client.BeaconBlockRootProvider)),
+		standardsynccommitteeaggregator.WithBeaconBlockRootProvider(beaconBlockRootProvider),
 		standardsynccommitteeaggregator.WithContributionAndProofSigner(signerSvc.(signer.ContributionAndProofSigner)),
 		standardsynccommitteeaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardsynccommitteeaggregator.WithSyncCommitteeContributionProvider(syncCommitteeContributionProvider),
@@ -603,12 +611,6 @@ func startAltairServices(ctx context.Context,
 	)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "failed to start sync committee aggregator service")
-	}
-
-	log.Trace().Msg("Selecting beacon block root provider")
-	beaconBlockRootProvider, err := selectBeaconBlockRootProvider(ctx, monitor, eth2Client, cacheSvc)
-	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "failed to select beacon block root provider")
 	}
 
 	log.Trace().Msg("Starting sync committee messenger")
@@ -1568,6 +1570,11 @@ func startBlockRelay(ctx context.Context,
 	blockrelay.Service,
 	error,
 ) {
+	builderBidProvider, err := selectBuilderBidProvider(ctx, monitor, eth2Client, chainTime)
+	if err != nil {
+		return nil, err
+	}
+
 	// We also need to submit validator registrations to all nodes that are acting as blinded beacon block proposers, as
 	// some of them use the registration as part of the condition to decide if the blinded block should be called or not.
 	bestBeaconNodeAddresses := util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best")
@@ -1626,13 +1633,50 @@ func startBlockRelay(ctx context.Context,
 		standardblockrelay.WithTimeout(util.Timeout("blockrelay")),
 		standardblockrelay.WithSecondaryValidatorRegistrationsSubmitters(secondaryValidatorRegistrationsSubmitters),
 		standardblockrelay.WithLogResults(viper.GetBool("blockrelay.log-results")),
-		standardblockrelay.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
-		standardblockrelay.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
 		standardblockrelay.WithReleaseVersion(ReleaseVersion),
+		standardblockrelay.WithBuilderBidProvider(builderBidProvider),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start block relay")
 	}
 
 	return blockRelay, nil
+}
+
+// selectBuilderBidProvider selects the provider for builder bids.
+// Builder bids are blinded execution payload headers provided by relays.
+func selectBuilderBidProvider(ctx context.Context,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+	chainTime chaintime.Service,
+) (
+	builderbid.Provider,
+	error,
+) {
+	log.Trace().Msg("Selecting builder bid strategy")
+
+	var provider builderbid.Provider
+	var err error
+
+	switch viper.GetString("strategies.builderbid.style") {
+	case "best", "":
+		log.Info().Msg("Starting best builder bid strategy")
+		provider, err = bestbuilderbidstrategy.New(ctx,
+			bestbuilderbidstrategy.WithLogLevel(util.LogLevel("strategies.builderbid.best")),
+			bestbuilderbidstrategy.WithMonitor(monitor),
+			bestbuilderbidstrategy.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
+			bestbuilderbidstrategy.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
+			bestbuilderbidstrategy.WithChainTime(chainTime),
+			bestbuilderbidstrategy.WithTimeout(util.Timeout("strategies.builderbid.best")),
+			bestbuilderbidstrategy.WithReleaseVersion(ReleaseVersion),
+		)
+	default:
+		err = fmt.Errorf("unknown builder bid strategy %s", viper.GetString("strategies.builderbid.style"))
+	}
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to instantiate builder bid strategy")
+	}
+
+	return provider, nil
 }

@@ -16,7 +16,6 @@ package best
 import (
 	"context"
 	"fmt"
-	"time"
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -68,7 +67,6 @@ func (s *Service) updateBlockVotes(_ context.Context,
 	if block == nil {
 		return
 	}
-	started := time.Now()
 
 	slot, err := block.Slot()
 	if err != nil {
@@ -128,5 +126,5 @@ func (s *Service) updateBlockVotes(_ context.Context,
 	}
 	s.priorBlocksVotesMu.Unlock()
 
-	log.Trace().Uint64("slot", uint64(slot)).Str("root", fmt.Sprintf("%#x", root[:])).Dur("elapsed", time.Since(started)).Msg("Set votes for slot")
+	log.Trace().Uint64("slot", uint64(slot)).Str("root", fmt.Sprintf("%#x", root[:])).Msg("Set votes for slot")
 }

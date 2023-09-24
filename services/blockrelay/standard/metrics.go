@@ -23,8 +23,6 @@ import (
 )
 
 var (
-	auctionBlockUsed                 *prometheus.CounterVec
-	auctionBlockTimer                prometheus.Histogram
 	builderBidCounter                *prometheus.CounterVec
 	builderBidTimer                  prometheus.Histogram
 	builderBidDeltas                 *prometheus.HistogramVec
@@ -51,32 +49,6 @@ func registerMetrics(ctx context.Context, monitor metrics.Service) error {
 }
 
 func registerPrometheusMetrics(_ context.Context) error {
-	auctionBlockUsed = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "vouch",
-		Subsystem: "relay_auction_block",
-		Name:      "used_total",
-		Help:      "The auction block provider used by a relay.",
-	}, []string{"provider"})
-	if err := prometheus.Register(auctionBlockUsed); err != nil {
-		return err
-	}
-
-	auctionBlockTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "vouch",
-		Subsystem: "relay_auction_block",
-		Name:      "duration_seconds",
-		Help:      "The time vouch spends in the auction block operation.",
-		Buckets: []float64{
-			0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
-			1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0,
-			2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0,
-			3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.0,
-		},
-	})
-	if err := prometheus.Register(auctionBlockTimer); err != nil {
-		return err
-	}
-
 	executionConfigCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
 		Subsystem: "relay_execution_config",
@@ -183,19 +155,6 @@ func registerPrometheusMetrics(_ context.Context) error {
 	validatorRegistrationsCounter.WithLabelValues("failed").Add(0)
 
 	return nil
-}
-
-// monitorAuctionBlock provides metrics for an auction block operation.
-func monitorAuctionBlock(provider string, succeeded bool, duration time.Duration) {
-	if auctionBlockUsed == nil {
-		// Not yet registered.
-		return
-	}
-
-	auctionBlockTimer.Observe(duration.Seconds())
-	if succeeded {
-		auctionBlockUsed.WithLabelValues(provider).Add(1)
-	}
 }
 
 // monitorBuilderBid provides metrics for a builder bid operation.
