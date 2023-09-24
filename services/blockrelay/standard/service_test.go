@@ -89,7 +89,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(nil),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -106,32 +105,10 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: no monitor specified",
 		},
 		{
-			name: "TimeoutZero",
-			params: []standard.Parameter{
-				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(0),
-				standard.WithMajordomo(majordomoSvc),
-				standard.WithScheduler(mockScheduler),
-				standard.WithListenAddress(listenAddress),
-				standard.WithChainTime(chainTime),
-				standard.WithConfigURL(configURL),
-				standard.WithFallbackFeeRecipient(fallbackFeeRecipient),
-				standard.WithFallbackGasLimit(fallbackGasLimit),
-				standard.WithAccountsProvider(mockAccountsProvider),
-				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithValidatorRegistrationSigner(mockSigner),
-				standard.WithReleaseVersion("test"),
-				standard.WithBuilderBidProvider(builderBidProvider),
-			},
-			err: "problem with parameters: no timeout specified",
-		},
-		{
 			name: "MajordomoMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(nil),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -152,7 +129,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(nil),
 				standard.WithListenAddress(listenAddress),
@@ -173,7 +149,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(""),
@@ -194,7 +169,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress("abc"),
@@ -215,7 +189,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -236,7 +209,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -257,7 +229,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -278,7 +249,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -298,7 +268,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -319,7 +288,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -340,7 +308,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -361,7 +328,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -382,7 +348,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),

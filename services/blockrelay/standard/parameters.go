@@ -16,7 +16,6 @@ package standard
 import (
 	"bytes"
 	"net"
-	"time"
 
 	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -49,7 +48,6 @@ type parameters struct {
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 	logResults                                bool
-	timeout                                   time.Duration
 	releaseVersion                            string
 	builderBidProvider                        builderbid.Provider
 }
@@ -170,13 +168,6 @@ func WithValidatorRegistrationSigner(signer signer.ValidatorRegistrationSigner) 
 	})
 }
 
-// WithTimeout sets the timeout for requests.
-func WithTimeout(timeout time.Duration) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.timeout = timeout
-	})
-}
-
 // WithSecondaryValidatorRegistrationsSubmitters sets the secondary validator registrations submitters.
 func WithSecondaryValidatorRegistrationsSubmitters(submitters []consensusclient.ValidatorRegistrationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -243,9 +234,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.validatorRegistrationSigner == nil {
 		return nil, errors.New("no validator registration signer specified")
-	}
-	if parameters.timeout == 0 {
-		return nil, errors.New("no timeout specified")
 	}
 	if parameters.listenAddress == "" {
 		return nil, errors.New("no listen address specified")

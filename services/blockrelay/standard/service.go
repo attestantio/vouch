@@ -16,7 +16,6 @@ package standard
 import (
 	"context"
 	"sync"
-	"time"
 
 	restdaemon "github.com/attestantio/go-block-relay/services/daemon/rest"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
@@ -54,7 +53,6 @@ type Service struct {
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	builderBidsCache                          map[string]map[string]*builderspec.VersionedSignedBuilderBid
 	builderBidsCacheMu                        sync.RWMutex
-	timeout                                   time.Duration
 	signedValidatorRegistrations              map[phase0.Root]*apiv1.SignedValidatorRegistration
 	signedValidatorRegistrationsMu            sync.RWMutex
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
@@ -101,7 +99,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		accountsProvider:             parameters.accountsProvider,
 		validatingAccountsProvider:   parameters.validatingAccountsProvider,
 		validatorRegistrationSigner:  parameters.validatorRegistrationSigner,
-		timeout:                      parameters.timeout,
 		signedValidatorRegistrations: make(map[phase0.Root]*apiv1.SignedValidatorRegistration),
 		secondaryValidatorRegistrationsSubmitters: parameters.secondaryValidatorRegistrationsSubmitters,
 		logResults:         parameters.logResults,
