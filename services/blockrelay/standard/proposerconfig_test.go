@@ -56,8 +56,6 @@ func TestProposerConfig(t *testing.T) {
 	genesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
 	slotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
 	slotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
-	specProvider := mock.NewSpecProvider()
-	domainProvider := mock.NewDomainProvider()
 
 	mockValidatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
 	mockAccountsProvider := mockaccountmanager.NewAccountsProvider()
@@ -118,7 +116,6 @@ func TestProposerConfig(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(nullmetrics.New(ctx)),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -128,9 +125,8 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithAccountsProvider(mockAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
-				standard.WithSpecProvider(specProvider),
-				standard.WithDomainProvider(domainProvider),
 				standard.WithReleaseVersion("test"),
+				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
 			},
 			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","relays":[]}`,
 		},
@@ -138,7 +134,6 @@ func TestProposerConfig(t *testing.T) {
 			name: "File",
 			params: []standard.Parameter{
 				standard.WithMonitor(nullmetrics.New(ctx)),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -149,9 +144,8 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithAccountsProvider(mockAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
-				standard.WithSpecProvider(specProvider),
-				standard.WithDomainProvider(domainProvider),
 				standard.WithReleaseVersion("test"),
+				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
 			},
 			proposerConfig: `{"fee_recipient":"0x0200000000000000000000000000000000000000","relays":[]}`,
 			logEntries: []map[string]interface{}{
@@ -164,7 +158,6 @@ func TestProposerConfig(t *testing.T) {
 			name: "BadFile",
 			params: []standard.Parameter{
 				standard.WithMonitor(nullmetrics.New(ctx)),
-				standard.WithTimeout(time.Second),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -175,9 +168,8 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithAccountsProvider(mockAccountsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
-				standard.WithSpecProvider(specProvider),
-				standard.WithDomainProvider(domainProvider),
 				standard.WithReleaseVersion("test"),
+				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
 			},
 			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","relays":[]}`,
 			logEntries: []map[string]interface{}{
