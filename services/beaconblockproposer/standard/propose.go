@@ -285,7 +285,6 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain proposal slot")
 	}
-
 	if proposalSlot != duty.Slot() {
 		return errors.New("proposal data for incorrect slot")
 	}
@@ -307,7 +306,7 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 
 	sig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
 		duty.Account(),
-		proposalSlot,
+		duty.Slot(),
 		duty.ValidatorIndex(),
 		parentRoot,
 		stateRoot,
@@ -317,6 +316,25 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 	}
 	log.Trace().Msg("Signed proposal")
 
+	signedBlock, err := composeVersionedSignedBeaconBlock(proposal, sig)
+	if err != nil {
+		return err
+	}
+
+	if err := s.beaconBlockSubmitter.SubmitBeaconBlock(ctx, signedBlock); err != nil {
+		return errors.Wrap(err, "failed to submit beacon block proposal")
+	}
+
+	return nil
+}
+
+func composeVersionedSignedBeaconBlock(
+	proposal *spec.VersionedBeaconBlock,
+	sig phase0.BLSSignature,
+) (
+	*spec.VersionedSignedBeaconBlock,
+	error,
+) {
 	signedBlock := &spec.VersionedSignedBeaconBlock{
 		Version: proposal.Version,
 	}
@@ -342,15 +360,10 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 			Signature: sig,
 		}
 	default:
-		return errors.New("unknown proposal version")
+		return nil, errors.New("unknown proposal version")
 	}
 
-	// Submit the block.
-	if err := s.beaconBlockSubmitter.SubmitBeaconBlock(ctx, signedBlock); err != nil {
-		return errors.Wrap(err, "failed to submit beacon block proposal")
-	}
-
-	return nil
+	return signedBlock, nil
 }
 
 func (s *Service) auctionBlock(ctx context.Context,
