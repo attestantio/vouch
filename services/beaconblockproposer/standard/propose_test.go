@@ -1,4 +1,4 @@
-// Copyright © 2021, 2022 Attestant Limited.
+// Copyright © 2021 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -89,33 +89,44 @@ func TestPropose(t *testing.T) {
 	tests := []struct {
 		name string
 		data *beaconblockproposer.Duty
-		errs []string
+		errs []map[string]any
 	}{
 		{
 			name: "Nil",
-			errs: []string{
-				"Passed nil data structure",
+			errs: []map[string]any{
+				{
+					"message": "Invalid duty",
+					"error":   "no duty supplied",
+				},
 			},
 		},
 		{
 			name: "Empty",
 			data: duty(phase0.BLSSignature{}, nil),
-			errs: []string{
-				"Missing RANDAO reveal",
+			errs: []map[string]any{
+				{
+					"message": "Invalid duty",
+					"error":   "duty missing RANDAO reveal",
+				},
 			},
 		},
 		{
 			name: "AccountMissing",
 			data: duty(phase0.BLSSignature{0x01}, nil),
-			errs: []string{
-				"Missing account",
+			errs: []map[string]any{
+				{
+					"message": "Invalid duty",
+					"error":   "duty missing account",
+				},
 			},
 		},
 		{
 			name: "Good",
 			data: duty(phase0.BLSSignature{0x01}, account),
-			errs: []string{
-				"Submitted proposal",
+			errs: []map[string]any{
+				{
+					"message": "Submitted proposal",
+				},
 			},
 		},
 	}
@@ -140,7 +151,7 @@ func TestPropose(t *testing.T) {
 
 			s.Propose(ctx, test.data)
 			for _, err := range test.errs {
-				capture.AssertHasEntry(t, err)
+				require.True(t, capture.HasLog(err))
 			}
 		})
 	}

@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
@@ -67,37 +68,71 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 		monitorBeaconBlockProposalCompleted(started, 0, s.chainTime.StartOfSlot(0), "failed")
 		return
 	}
-	if duty == nil {
-		log.Error().Msg("Passed nil data structure")
-		monitorBeaconBlockProposalCompleted(started, 0, s.chainTime.StartOfSlot(0), "failed")
+	slot, err := validateDuty(duty)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid duty")
+		monitorBeaconBlockProposalCompleted(started, slot, s.chainTime.StartOfSlot(slot), "failed")
 		return
 	}
-	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))
-	log := log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
+	span.SetAttributes(attribute.Int64("slot", int64(slot)))
+	log := log.With().Uint64("proposing_slot", uint64(slot)).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Proposing")
 
-	var zeroSig phase0.BLSSignature
-	if duty.RANDAOReveal() == zeroSig {
-		log.Error().Msg("Missing RANDAO reveal")
-		monitorBeaconBlockProposalCompleted(started, duty.Slot(), s.chainTime.StartOfSlot(duty.Slot()), "failed")
+	graffiti, err := s.obtainGraffiti(ctx, slot, duty.ValidatorIndex())
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to obtain graffiti")
+		graffiti = nil
+	}
+
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained graffiti")
+	span.AddEvent("Ready to propose")
+
+	if err := s.proposeBlock(ctx, duty, graffiti); err != nil {
+		log.Error().Err(err).Msg("Failed to propose block")
+		monitorBeaconBlockProposalCompleted(started, slot, s.chainTime.StartOfSlot(slot), "failed")
 		return
+	}
+
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted proposal")
+	monitorBeaconBlockProposalCompleted(started, slot, s.chainTime.StartOfSlot(slot), "succeeded")
+}
+
+// validateDuty validates that the information supplied to us in a duty is suitable for proposing.
+func validateDuty(duty *beaconblockproposer.Duty) (phase0.Slot, error) {
+	if duty == nil {
+		return 0, errors.New("no duty supplied")
+	}
+
+	zeroSig := phase0.BLSSignature{}
+	randaoReveal := duty.RANDAOReveal()
+	if bytes.Equal(randaoReveal[:], zeroSig[:]) {
+		return duty.Slot(), errors.New("duty missing RANDAO reveal")
 	}
 
 	if duty.Account() == nil {
-		log.Error().Msg("Missing account")
-		monitorBeaconBlockProposalCompleted(started, duty.Slot(), s.chainTime.StartOfSlot(duty.Slot()), "failed")
-		return
+		return duty.Slot(), errors.New("duty missing account")
 	}
 
-	var graffiti []byte
-	var err error
-	if s.graffitiProvider != nil {
-		graffiti, err = s.graffitiProvider.Graffiti(ctx, duty.Slot(), duty.ValidatorIndex())
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to obtain graffiti")
-			graffiti = nil
-		}
+	return duty.Slot(), nil
+}
+
+// obtainGraffiti obtains the graffiti for the proposal.
+func (s *Service) obtainGraffiti(ctx context.Context,
+	slot phase0.Slot,
+	validatorIndex phase0.ValidatorIndex,
+) (
+	[]byte,
+	error,
+) {
+	if s.graffitiProvider == nil {
+		return []byte{}, nil
 	}
+
+	graffiti, err := s.graffitiProvider.Graffiti(ctx, slot, validatorIndex)
+	if err != nil {
+		return []byte{}, errors.Wrap(err, "graffiti provider failed")
+	}
+
 	if bytes.Contains(graffiti, []byte("{{CLIENT}}")) {
 		if nodeClientProvider, isProvider := s.proposalProvider.(consensusclient.NodeClientProvider); isProvider {
 			nodeClient, err := nodeClientProvider.NodeClient(ctx)
@@ -111,17 +146,8 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	if len(graffiti) > 32 {
 		graffiti = graffiti[0:32]
 	}
-	span.AddEvent("Ready to propose")
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained graffiti")
 
-	if err := s.proposeBlock(ctx, duty, graffiti); err != nil {
-		log.Error().Err(err).Msg("Failed to propose block")
-		monitorBeaconBlockProposalCompleted(started, duty.Slot(), s.chainTime.StartOfSlot(duty.Slot()), "failed")
-		return
-	}
-
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted proposal")
-	monitorBeaconBlockProposalCompleted(started, duty.Slot(), s.chainTime.StartOfSlot(duty.Slot()), "succeeded")
+	return graffiti, nil
 }
 
 // proposeBlock proposes a beacon block.
@@ -129,6 +155,22 @@ func (s *Service) proposeBlock(ctx context.Context,
 	duty *beaconblockproposer.Duty,
 	graffiti []byte,
 ) error {
+	// Pre-fetch an unblinded block in parallel with the auction process.
+	// This ensures that we are ready to propose as quickly as possible if the auction is unsuccessful.
+	var wg sync.WaitGroup
+	var proposal *spec.VersionedBeaconBlock
+	wg.Add(1)
+	go func(ctx context.Context, duty *beaconblockproposer.Duty, graffiti []byte) {
+		var err error
+		proposal, err = s.proposalProvider.BeaconBlockProposal(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to pre-obtain proposal data")
+			return
+		}
+		log.Trace().Msg("Pre-obtained proposal")
+		wg.Done()
+	}(ctx, duty, graffiti)
+
 	if s.blockAuctioneer != nil {
 		// There is a block auctioneer specified, try to propose the block with auction.
 		result := s.proposeBlockWithAuction(ctx, duty, graffiti)
@@ -145,7 +187,9 @@ func (s *Service) proposeBlock(ctx context.Context,
 		}
 	}
 
-	err := s.proposeBlockWithoutAuction(ctx, duty, graffiti)
+	wg.Wait()
+
+	err := s.proposeBlockWithoutAuction(ctx, proposal, duty, graffiti)
 	if err != nil {
 		return err
 	}
@@ -172,6 +216,7 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 	if auctionResults.Bid == nil {
 		return auctionResultNoBids
 	}
+	monitorBestBidRelayCount(len(auctionResults.Providers))
 
 	proposal, err := s.obtainBlindedProposal(ctx, duty, graffiti, auctionResults)
 	if err != nil {
@@ -193,7 +238,6 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		log.Debug().Msg("No relays can unblind the block")
 		return auctionResultFailedCanTryWithout
 	}
-	monitorBestBidRelayCount(len(providers))
 	log.Trace().Int("providers", len(providers)).Msg("Obtained relays that can unblind the proposal")
 
 	signedBlindedBlock, err := s.signBlindedProposal(ctx, duty, proposal)
@@ -218,20 +262,24 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 }
 
 func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
+	proposal *spec.VersionedBeaconBlock,
 	duty *beaconblockproposer.Duty,
 	graffiti []byte,
 ) error {
 	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "proposeBlockWithoutAuction")
 	defer span.End()
 
-	proposal, err := s.proposalProvider.BeaconBlockProposal(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti)
-	if err != nil {
-		return errors.Wrap(err, "failed to obtain proposal data")
-	}
+	var err error
 	if proposal == nil {
-		return errors.New("obtained nil beacon block proposal")
+		proposal, err = s.proposalProvider.BeaconBlockProposal(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti)
+		if err != nil {
+			return errors.Wrap(err, "failed to obtain proposal data")
+		}
+		if proposal == nil {
+			return errors.New("obtained nil beacon block proposal")
+		}
+		log.Trace().Msg("Obtained proposal")
 	}
-	log.Trace().Msg("Obtained proposal")
 
 	proposalSlot, err := proposal.Slot()
 	if err != nil {
