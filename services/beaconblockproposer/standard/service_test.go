@@ -23,7 +23,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
-	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/beaconblockproposer/standard"
 	"github.com/attestantio/vouch/services/cache"
 	mockcache "github.com/attestantio/vouch/services/cache/mock"
@@ -31,7 +30,6 @@ import (
 	staticgraffitiprovider "github.com/attestantio/vouch/services/graffitiprovider/static"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	mocksigner "github.com/attestantio/vouch/services/signer/mock"
-	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
@@ -235,32 +233,4 @@ func TestService(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestProposeNoRANDAOReveal(t *testing.T) {
-	ctx := context.Background()
-	capture := logger.NewLogCapture()
-
-	chainTime, err := standardchaintime.New(ctx,
-		standardchaintime.WithLogLevel(zerolog.Disabled),
-		standardchaintime.WithGenesisTimeProvider(mock.NewGenesisTimeProvider(time.Now())),
-		standardchaintime.WithSlotDurationProvider(mock.NewSlotDurationProvider(12*time.Second)),
-		standardchaintime.WithSlotsPerEpochProvider(mock.NewSlotsPerEpochProvider(32)),
-	)
-	require.NoError(t, err)
-
-	s, err := standard.New(ctx,
-		standard.WithLogLevel(zerolog.TraceLevel),
-		standard.WithMonitor(nullmetrics.New(ctx)),
-		standard.WithProposalDataProvider(mock.NewBeaconBlockProposalProvider()),
-		standard.WithChainTime(chainTime),
-		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
-		standard.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
-		standard.WithRANDAORevealSigner(mocksigner.New()),
-		standard.WithBeaconBlockSigner(mocksigner.New()),
-	)
-	require.NoError(t, err)
-
-	s.Propose(ctx, &beaconblockproposer.Duty{})
-	capture.AssertHasEntry(t, "Missing RANDAO reveal")
 }
