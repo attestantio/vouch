@@ -31,13 +31,13 @@ import (
 
 // Service is the provider for beacon block proposals.
 type Service struct {
-	clientMonitor                       metrics.ClientMonitor
-	processConcurrency                  int64
-	chainTime                           chaintime.Service
-	blindedBeaconBlockProposalProviders map[string]eth2client.BlindedBeaconBlockProposalProvider
-	signedBeaconBlockProvider           eth2client.SignedBeaconBlockProvider
-	timeout                             time.Duration
-	blockRootToSlotCache                cache.BlockRootToSlotProvider
+	clientMonitor             metrics.ClientMonitor
+	processConcurrency        int64
+	chainTime                 chaintime.Service
+	blindedProposalProviders  map[string]eth2client.BlindedProposalProvider
+	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider
+	timeout                   time.Duration
+	blockRootToSlotCache      cache.BlockRootToSlotProvider
 
 	// Spec values for scoring proposals.
 	slotsPerEpoch      uint64
@@ -63,7 +63,7 @@ type priorBlockVotes struct {
 // module-wide log.
 var log zerolog.Logger
 
-// New creates a new beacon block propsal strategy.
+// New creates a new beacon block proposal strategy.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
@@ -76,10 +76,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
-	spec, err := parameters.specProvider.Spec(ctx)
+	specResponse, err := parameters.specProvider.Spec(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain spec")
 	}
+	spec := specResponse.Data
 
 	tmp, exists := spec["SLOTS_PER_EPOCH"]
 	if !exists {
@@ -151,21 +152,21 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		processConcurrency:                  parameters.processConcurrency,
-		chainTime:                           parameters.chainTime,
-		blindedBeaconBlockProposalProviders: parameters.blindedBeaconBlockProposalProviders,
-		signedBeaconBlockProvider:           parameters.signedBeaconBlockProvider,
-		timeout:                             parameters.timeout,
-		blockRootToSlotCache:                parameters.blockRootToSlotCache,
-		clientMonitor:                       parameters.clientMonitor,
-		slotsPerEpoch:                       slotsPerEpoch,
-		timelySourceWeight:                  timelySourceWeight,
-		timelyTargetWeight:                  timelyTargetWeight,
-		timelyHeadWeight:                    timelyHeadWeight,
-		syncRewardWeight:                    syncRewardWeight,
-		proposerWeight:                      proposerWeight,
-		weightDenominator:                   weightDenominator,
-		priorBlocksVotes:                    make(map[phase0.Root]*priorBlockVotes),
+		processConcurrency:        parameters.processConcurrency,
+		chainTime:                 parameters.chainTime,
+		blindedProposalProviders:  parameters.blindedProposalProviders,
+		signedBeaconBlockProvider: parameters.signedBeaconBlockProvider,
+		timeout:                   parameters.timeout,
+		blockRootToSlotCache:      parameters.blockRootToSlotCache,
+		clientMonitor:             parameters.clientMonitor,
+		slotsPerEpoch:             slotsPerEpoch,
+		timelySourceWeight:        timelySourceWeight,
+		timelyTargetWeight:        timelyTargetWeight,
+		timelyHeadWeight:          timelyHeadWeight,
+		syncRewardWeight:          syncRewardWeight,
+		proposerWeight:            proposerWeight,
+		weightDenominator:         weightDenominator,
+		priorBlocksVotes:          make(map[phase0.Root]*priorBlockVotes),
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 

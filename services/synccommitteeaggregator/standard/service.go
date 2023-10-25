@@ -20,6 +20,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
@@ -64,10 +65,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
-	spec, err := parameters.specProvider.Spec(ctx)
+	specResponse, err := parameters.specProvider.Spec(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain spec")
 	}
+	spec := specResponse.Data
 
 	tmp, exists := spec["SLOTS_PER_EPOCH"]
 	if !exists {
@@ -145,7 +147,6 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	log.Trace().Msg("Aggregating")
 
 	var beaconBlockRoot *phase0.Root
-	var err error
 
 	s.beaconBlockRootsMu.Lock()
 	if tmp, exists := s.beaconBlockRoots[duty.Slot]; exists {
@@ -156,17 +157,15 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	} else {
 		s.beaconBlockRootsMu.Unlock()
 		log.Debug().Msg("Failed to obtain beacon block root from cache; using head")
-		beaconBlockRoot, err = s.beaconBlockRootProvider.BeaconBlockRoot(ctx, "head")
+		beaconBlockRootResponse, err := s.beaconBlockRootProvider.BeaconBlockRoot(ctx, &api.BeaconBlockRootOpts{
+			Block: "head",
+		})
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to obtain beacon block root")
 			s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed")
 			return
 		}
-		if beaconBlockRoot == nil {
-			log.Warn().Msg("Returned empty beacon block root")
-			s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed")
-			return
-		}
+		beaconBlockRoot = beaconBlockRootResponse.Data
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Str("beacon_block_root", fmt.Sprintf("%#x", *beaconBlockRoot)).Msg("Obtained beacon block root")
 
@@ -174,17 +173,17 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	for _, validatorIndex := range duty.ValidatorIndices {
 		for subcommitteeIndex := range duty.SelectionProofs[validatorIndex] {
 			log.Trace().Uint64("validator_index", uint64(validatorIndex)).Uint64("subcommittee_index", subcommitteeIndex).Str("beacon_block_root", fmt.Sprintf("%#x", *beaconBlockRoot)).Msg("Aggregating")
-			contribution, err := s.syncCommitteeContributionProvider.SyncCommitteeContribution(ctx, duty.Slot, subcommitteeIndex, *beaconBlockRoot)
+			contributionResponse, err := s.syncCommitteeContributionProvider.SyncCommitteeContribution(ctx, &api.SyncCommitteeContributionOpts{
+				Slot:              duty.Slot,
+				SubcommitteeIndex: subcommitteeIndex,
+				BeaconBlockRoot:   *beaconBlockRoot,
+			})
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain sync committee contribution")
 				s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed")
 				return
 			}
-			if contribution == nil {
-				log.Warn().Msg("Returned empty contribution")
-				s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed")
-				return
-			}
+			contribution := contributionResponse.Data
 			contributionAndProof := &altair.ContributionAndProof{
 				AggregatorIndex: validatorIndex,
 				Contribution:    contribution,

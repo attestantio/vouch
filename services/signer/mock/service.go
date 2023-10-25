@@ -162,3 +162,15 @@ func (*Service) SignValidatorRegistration(_ context.Context,
 ) {
 	return phase0.BLSSignature{}, nil
 }
+
+// SignBlobSidecar signs a blob sidecar proposal.
+func (*Service) SignBlobSidecar(_ context.Context,
+	_ e2wtypes.Account,
+	_ phase0.Slot,
+	_ phase0.Root,
+) (
+	phase0.BLSSignature,
+	error,
+) {
+	return phase0.BLSSignature{}, nil
+}

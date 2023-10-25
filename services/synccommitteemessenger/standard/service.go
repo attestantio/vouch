@@ -22,6 +22,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
@@ -71,10 +72,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
-	spec, err := parameters.specProvider.Spec(ctx)
+	specResponse, err := parameters.specProvider.Spec(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain spec")
 	}
+	spec := specResponse.Data
 
 	slotsPerEpoch, err := specUint64(spec, "SLOTS_PER_EPOCH")
 	if err != nil {
@@ -162,15 +164,14 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 	}
 
 	// Fetch the beacon block root.
-	beaconBlockRoot, err := s.beaconBlockRootProvider.BeaconBlockRoot(ctx, "head")
+	beaconBlockRootResponse, err := s.beaconBlockRootProvider.BeaconBlockRoot(ctx, &api.BeaconBlockRootOpts{
+		Block: "head",
+	})
 	if err != nil {
 		s.monitor.SyncCommitteeMessagesCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed")
 		return nil, errors.Wrap(err, "failed to obtain beacon block root")
 	}
-	if beaconBlockRoot == nil {
-		s.monitor.SyncCommitteeMessagesCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed")
-		return nil, errors.Wrap(err, "empty beacon block root obtained")
-	}
+	beaconBlockRoot := beaconBlockRootResponse.Data
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block root")
 	s.syncCommitteeAggregator.SetBeaconBlockRoot(duty.Slot(), *beaconBlockRoot)
 

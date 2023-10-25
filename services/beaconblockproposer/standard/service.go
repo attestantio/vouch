@@ -39,14 +39,15 @@ import (
 type Service struct {
 	chainTime                  chaintime.Service
 	blockAuctioneer            blockauctioneer.BlockAuctioneer
-	proposalProvider           eth2client.BeaconBlockProposalProvider
-	blindedProposalProvider    eth2client.BlindedBeaconBlockProposalProvider
+	proposalProvider           eth2client.ProposalProvider
+	blindedProposalProvider    eth2client.BlindedProposalProvider
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	executionChainHeadProvider cache.ExecutionChainHeadProvider
 	graffitiProvider           graffitiprovider.Service
-	beaconBlockSubmitter       submitter.BeaconBlockSubmitter
+	proposalSubmitter          submitter.ProposalSubmitter
 	randaoRevealSigner         signer.RANDAORevealSigner
 	beaconBlockSigner          signer.BeaconBlockSigner
+	blobSidecarSigner          signer.BlobSidecarSigner
 }
 
 // module-wide log.
@@ -77,9 +78,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		validatingAccountsProvider: parameters.validatingAccountsProvider,
 		executionChainHeadProvider: parameters.executionChainHeadProvider,
 		graffitiProvider:           parameters.graffitiProvider,
-		beaconBlockSubmitter:       parameters.beaconBlockSubmitter,
+		proposalSubmitter:          parameters.proposalSubmitter,
 		randaoRevealSigner:         parameters.randaoRevealSigner,
 		beaconBlockSigner:          parameters.beaconBlockSigner,
+		blobSidecarSigner:          parameters.blobSidecarSigner,
 	}
 
 	return s, nil

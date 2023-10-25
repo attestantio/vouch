@@ -468,10 +468,12 @@ func fetchAltairForkEpoch(ctx context.Context,
 	error,
 ) {
 	// Fetch the fork version.
-	spec, err := specProvider.Spec(ctx)
+	specResponse, err := specProvider.Spec(ctx)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to obtain spec")
 	}
+	spec := specResponse.Data
+
 	tmp, exists := spec["ALTAIR_FORK_EPOCH"]
 	if !exists {
 		return 0, errors.New("altair fork version not known by chain")
@@ -492,10 +494,12 @@ func fetchBellatrixForkEpoch(ctx context.Context,
 	error,
 ) {
 	// Fetch the fork version.
-	spec, err := specProvider.Spec(ctx)
+	specResponse, err := specProvider.Spec(ctx)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to obtain spec")
 	}
+	spec := specResponse.Data
+
 	tmp, exists := spec["BELLATRIX_FORK_EPOCH"]
 	if !exists {
 		return 0, errors.New("bellatrix fork version not known by chain")
@@ -516,10 +520,12 @@ func fetchCapellaForkEpoch(ctx context.Context,
 	error,
 ) {
 	// Fetch the fork version.
-	spec, err := specProvider.Spec(ctx)
+	specResponse, err := specProvider.Spec(ctx)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to obtain spec")
 	}
+	spec := specResponse.Data
+
 	tmp, exists := spec["CAPELLA_FORK_EPOCH"]
 	if !exists {
 		return 0, errors.New("capella fork version not known by chain")
@@ -591,10 +597,11 @@ func obtainSpecValues(ctx context.Context,
 	uint64,
 	error,
 ) {
-	spec, err := specProvider.Spec(ctx)
+	specResponse, err := specProvider.Spec(ctx)
 	if err != nil {
 		return 0, 0, 0, errors.Wrap(err, "failed to obtain spec")
 	}
+	spec := specResponse.Data
 
 	tmp, exists := spec["SECONDS_PER_SLOT"]
 	if !exists {

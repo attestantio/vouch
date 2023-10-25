@@ -21,6 +21,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attester"
@@ -127,15 +128,15 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 	log := log.With().Uint64("slot", uint64(duty.Slot())).Uints64("validator_indices", uints).Logger()
 
 	// Fetch the attestation data.
-	attestationData, err := s.attestationDataProvider.AttestationData(ctx, duty.Slot(), duty.CommitteeIndices()[0])
+	attestationDataResponse, err := s.attestationDataProvider.AttestationData(ctx, &api.AttestationDataOpts{
+		Slot:           duty.Slot(),
+		CommitteeIndex: duty.CommitteeIndices()[0],
+	})
 	if err != nil {
 		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
 		return nil, errors.Wrap(err, "failed to obtain attestation data")
 	}
-	if attestationData == nil {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
-		return nil, errors.Wrap(err, "obtained nil attestation data")
-	}
+	attestationData := attestationDataResponse.Data
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")
 
 	if attestationData.Slot != duty.Slot() {

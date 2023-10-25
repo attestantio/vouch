@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,8 +16,8 @@ package submitter
 import (
 	"context"
 
+	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
-	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
@@ -31,10 +31,10 @@ type AttestationsSubmitter interface {
 	SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error
 }
 
-// BeaconBlockSubmitter is the interface for a submitter of beacon blocks.
-type BeaconBlockSubmitter interface {
-	// SubmitBeaconBlock submits a block.
-	SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error
+// ProposalSubmitter is the interface for a submitter of proposals.
+type ProposalSubmitter interface {
+	// SubmitProposal submits a proposal.
+	SubmitProposal(ctx context.Context, proposal *api.VersionedSignedProposal) error
 }
 
 // BeaconCommitteeSubscriptionsSubmitter is the interface for a submitter of beacon committee subscriptions.

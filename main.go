@@ -523,8 +523,8 @@ func startProviders(ctx context.Context,
 	cache cache.Service,
 ) (
 	graffitiprovider.Service,
-	eth2client.BeaconBlockProposalProvider,
-	eth2client.BlindedBeaconBlockProposalProvider,
+	eth2client.ProposalProvider,
+	eth2client.BlindedProposalProvider,
 	eth2client.AttestationDataProvider,
 	eth2client.AggregateAttestationProvider,
 	error,
@@ -536,13 +536,13 @@ func startProviders(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting beacon block proposal provider")
-	beaconBlockProposalProvider, err := selectBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
+	beaconBlockProposalProvider, err := selectProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
 	if err != nil {
 		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to select beacon block proposal provider")
 	}
 
 	log.Trace().Msg("Selecting blinded beacon block proposal provider")
-	blindedBeaconBlockProposalProvider, err := selectBlindedBeaconBlockProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
+	blindedProposalProvider, err := selectBlindedProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
 	if err != nil {
 		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to select blinded beacon block proposal provider")
 	}
@@ -559,7 +559,7 @@ func startProviders(ctx context.Context,
 		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to select aggregate attestation provider")
 	}
 
-	return graffitiProvider, beaconBlockProposalProvider, blindedBeaconBlockProposalProvider, attestationDataProvider, aggregateAttestationProvider, nil
+	return graffitiProvider, beaconBlockProposalProvider, blindedProposalProvider, attestationDataProvider, aggregateAttestationProvider, nil
 }
 
 func startAltairServices(ctx context.Context,
@@ -652,7 +652,7 @@ func startSigningServices(ctx context.Context,
 	beaconcommitteesubscriber.Service,
 	error,
 ) {
-	graffitiProvider, beaconBlockProposalProvider, blindedBeaconBlockProposalProvider, attestationDataProvider, aggregateAttestationProvider, err := startProviders(ctx, majordomo, monitor, eth2Client, chainTime, cacheSvc)
+	graffitiProvider, proposalProvider, blindedProposalProvider, attestationDataProvider, aggregateAttestationProvider, err := startProviders(ctx, majordomo, monitor, eth2Client, chainTime, cacheSvc)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -660,16 +660,17 @@ func startSigningServices(ctx context.Context,
 	beaconBlockProposer, err := standardbeaconblockproposer.New(ctx,
 		standardbeaconblockproposer.WithLogLevel(util.LogLevel("beaconblockproposer")),
 		standardbeaconblockproposer.WithChainTime(chainTime),
-		standardbeaconblockproposer.WithProposalDataProvider(beaconBlockProposalProvider),
-		standardbeaconblockproposer.WithBlindedProposalDataProvider(blindedBeaconBlockProposalProvider),
+		standardbeaconblockproposer.WithProposalDataProvider(proposalProvider),
+		standardbeaconblockproposer.WithBlindedProposalDataProvider(blindedProposalProvider),
 		standardbeaconblockproposer.WithBlockAuctioneer(blockRelay.(blockauctioneer.BlockAuctioneer)),
 		standardbeaconblockproposer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardbeaconblockproposer.WithExecutionChainHeadProvider(cacheSvc.(cache.ExecutionChainHeadProvider)),
 		standardbeaconblockproposer.WithGraffitiProvider(graffitiProvider),
 		standardbeaconblockproposer.WithMonitor(monitor),
-		standardbeaconblockproposer.WithBeaconBlockSubmitter(submitterStrategy.(submitter.BeaconBlockSubmitter)),
+		standardbeaconblockproposer.WithProposalSubmitter(submitterStrategy.(submitter.ProposalSubmitter)),
 		standardbeaconblockproposer.WithRANDAORevealSigner(signerSvc.(signer.RANDAORevealSigner)),
 		standardbeaconblockproposer.WithBeaconBlockSigner(signerSvc.(signer.BeaconBlockSigner)),
+		standardbeaconblockproposer.WithBlobSidecarSigner(signerSvc.(signer.BlobSidecarSigner)),
 	)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to start beacon block proposer service")
@@ -1150,34 +1151,34 @@ func selectAggregateAttestationProvider(ctx context.Context,
 	return aggregateAttestationProvider, nil
 }
 
-// selectBeaconBlockProposalProvider selects the appropriate beacon block proposal provider given user input.
-func selectBeaconBlockProposalProvider(ctx context.Context,
+// selectProposalProvider selects the appropriate beacon block proposal provider given user input.
+func selectProposalProvider(ctx context.Context,
 	monitor metrics.Service,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cacheSvc cache.Service,
-) (eth2client.BeaconBlockProposalProvider, error) {
-	var beaconBlockProposalProvider eth2client.BeaconBlockProposalProvider
+) (eth2client.ProposalProvider, error) {
+	var proposalProvider eth2client.ProposalProvider
 	var err error
 	switch viper.GetString("strategies.beaconblockproposal.style") {
 	case "best":
 		log.Info().Msg("Starting best beacon block proposal strategy")
-		beaconBlockProposalProviders := make(map[string]eth2client.BeaconBlockProposalProvider)
+		proposalProviders := make(map[string]eth2client.ProposalProvider)
 		for _, address := range util.BeaconNodeAddresses("strategies.beaconblockproposal.best") {
 			client, err := fetchClient(ctx, address)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block proposal strategy", address))
 			}
-			beaconBlockProposalProviders[address] = client.(eth2client.BeaconBlockProposalProvider)
+			proposalProviders[address] = client.(eth2client.ProposalProvider)
 		}
-		beaconBlockProposalProvider, err = bestbeaconblockproposalstrategy.New(ctx,
+		proposalProvider, err = bestbeaconblockproposalstrategy.New(ctx,
 			bestbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestbeaconblockproposalstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.beaconblockproposal.best")),
 			bestbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.best")),
 			bestbeaconblockproposalstrategy.WithEventsProvider(eth2Client.(eth2client.EventsProvider)),
 			bestbeaconblockproposalstrategy.WithChainTimeService(chainTime),
 			bestbeaconblockproposalstrategy.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
-			bestbeaconblockproposalstrategy.WithBeaconBlockProposalProviders(beaconBlockProposalProviders),
+			bestbeaconblockproposalstrategy.WithProposalProviders(proposalProviders),
 			bestbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
 			bestbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.best")),
 			bestbeaconblockproposalstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
@@ -1188,18 +1189,18 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 		}
 	case "first":
 		log.Info().Msg("Starting first beacon block proposal strategy")
-		beaconBlockProposalProviders := make(map[string]eth2client.BeaconBlockProposalProvider)
+		proposalProviders := make(map[string]eth2client.ProposalProvider)
 		for _, address := range util.BeaconNodeAddresses("strategies.beaconblockproposal.first") {
 			client, err := fetchClient(ctx, address)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block proposal strategy", address))
 			}
-			beaconBlockProposalProviders[address] = client.(eth2client.BeaconBlockProposalProvider)
+			proposalProviders[address] = client.(eth2client.ProposalProvider)
 		}
-		beaconBlockProposalProvider, err = firstbeaconblockproposalstrategy.New(ctx,
+		proposalProvider, err = firstbeaconblockproposalstrategy.New(ctx,
 			firstbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.first")),
-			firstbeaconblockproposalstrategy.WithBeaconBlockProposalProviders(beaconBlockProposalProviders),
+			firstbeaconblockproposalstrategy.WithProposalProviders(proposalProviders),
 			firstbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.first")),
 		)
 		if err != nil {
@@ -1207,40 +1208,40 @@ func selectBeaconBlockProposalProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple beacon block proposal strategy")
-		beaconBlockProposalProvider = eth2Client.(eth2client.BeaconBlockProposalProvider)
+		proposalProvider = eth2Client.(eth2client.ProposalProvider)
 	}
 
-	return beaconBlockProposalProvider, nil
+	return proposalProvider, nil
 }
 
-// selectBlindedBeaconBlockProposalProvider selects the appropriate blinded beacon block proposal provider given user input.
-func selectBlindedBeaconBlockProposalProvider(ctx context.Context,
+// selectBlindedProposalProvider selects the appropriate blinded proposal provider given user input.
+func selectBlindedProposalProvider(ctx context.Context,
 	monitor metrics.Service,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cacheSvc cache.Service,
-) (eth2client.BlindedBeaconBlockProposalProvider, error) {
-	var blindedBeaconBlockProposalProvider eth2client.BlindedBeaconBlockProposalProvider
+) (eth2client.BlindedProposalProvider, error) {
+	var blindedProposalProvider eth2client.BlindedProposalProvider
 	var err error
 	switch viper.GetString("strategies.blindedbeaconblockproposal.style") {
 	case "best":
 		log.Info().Msg("Starting best blinded beacon block proposal strategy")
-		blindedBeaconBlockProposalProviders := make(map[string]eth2client.BlindedBeaconBlockProposalProvider)
+		blindedProposalProviders := make(map[string]eth2client.BlindedProposalProvider)
 		for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best") {
 			client, err := fetchClient(ctx, address)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
 			}
-			blindedBeaconBlockProposalProviders[address] = client.(eth2client.BlindedBeaconBlockProposalProvider)
+			blindedProposalProviders[address] = client.(eth2client.BlindedProposalProvider)
 		}
-		blindedBeaconBlockProposalProvider, err = bestblindedbeaconblockproposalstrategy.New(ctx,
+		blindedProposalProvider, err = bestblindedbeaconblockproposalstrategy.New(ctx,
 			bestblindedbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestblindedbeaconblockproposalstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.blindedbeaconblockproposal.best")),
 			bestblindedbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.blindedbeaconblockproposal.best")),
 			bestblindedbeaconblockproposalstrategy.WithEventsProvider(eth2Client.(eth2client.EventsProvider)),
 			bestblindedbeaconblockproposalstrategy.WithChainTimeService(chainTime),
 			bestblindedbeaconblockproposalstrategy.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
-			bestblindedbeaconblockproposalstrategy.WithBlindedBeaconBlockProposalProviders(blindedBeaconBlockProposalProviders),
+			bestblindedbeaconblockproposalstrategy.WithBlindedProposalProviders(blindedProposalProviders),
 			bestblindedbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
 			bestblindedbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.blindedbeaconblockproposal.best")),
 			bestblindedbeaconblockproposalstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
@@ -1250,19 +1251,19 @@ func selectBlindedBeaconBlockProposalProvider(ctx context.Context,
 		}
 	case "first":
 		log.Info().Msg("Starting first blinded beacon block proposal strategy")
-		blindedBeaconBlockProposalProviders := make(map[string]eth2client.BlindedBeaconBlockProposalProvider)
+		blindedProposalProviders := make(map[string]eth2client.BlindedProposalProvider)
 		for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first") {
 			client, err := fetchClient(ctx, address)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
 			}
-			blindedBeaconBlockProposalProviders[address] = client.(eth2client.BlindedBeaconBlockProposalProvider)
+			blindedProposalProviders[address] = client.(eth2client.BlindedProposalProvider)
 		}
-		blindedBeaconBlockProposalProvider, err = firstblindedbeaconblockproposalstrategy.New(ctx,
+		blindedProposalProvider, err = firstblindedbeaconblockproposalstrategy.New(ctx,
 			firstblindedbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstblindedbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.blindedbeaconblockproposal.first")),
 			firstblindedbeaconblockproposalstrategy.WithChainTimeService(chainTime),
-			firstblindedbeaconblockproposalstrategy.WithBlindedBeaconBlockProposalProviders(blindedBeaconBlockProposalProviders),
+			firstblindedbeaconblockproposalstrategy.WithBlindedProposalProviders(blindedProposalProviders),
 			firstblindedbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.blindedbeaconblockproposal.first")),
 		)
 		if err != nil {
@@ -1270,10 +1271,10 @@ func selectBlindedBeaconBlockProposalProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple blinded beacon block proposal strategy")
-		blindedBeaconBlockProposalProvider = eth2Client.(eth2client.BlindedBeaconBlockProposalProvider)
+		blindedProposalProvider = eth2Client.(eth2client.BlindedProposalProvider)
 	}
 
-	return blindedBeaconBlockProposalProvider, nil
+	return blindedProposalProvider, nil
 }
 
 // selectSyncCommitteeContributionProvider selects the appropriate sync committee contribution provider given user input.
@@ -1404,7 +1405,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 		submitter, err = immediatesubmitter.New(ctx,
 			immediatesubmitter.WithLogLevel(util.LogLevel("submitter.immediate")),
 			immediatesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			immediatesubmitter.WithBeaconBlockSubmitter(eth2Client.(eth2client.BeaconBlockSubmitter)),
+			immediatesubmitter.WithProposalSubmitter(eth2Client.(eth2client.ProposalSubmitter)),
 			immediatesubmitter.WithAttestationsSubmitter(eth2Client.(eth2client.AttestationsSubmitter)),
 			immediatesubmitter.WithSyncCommitteeMessagesSubmitter(eth2Client.(eth2client.SyncCommitteeMessagesSubmitter)),
 			immediatesubmitter.WithSyncCommitteeContributionsSubmitter(eth2Client.(eth2client.SyncCommitteeContributionsSubmitter)),
@@ -1444,13 +1445,13 @@ func startMultinodeSubmitter(ctx context.Context,
 		attestationsSubmitters[address] = client.(eth2client.AttestationsSubmitter)
 	}
 
-	beaconBlockSubmitters := make(map[string]eth2client.BeaconBlockSubmitter)
-	for _, address := range util.BeaconNodeAddresses("submitter.beaconblock.multinode") {
+	proposalSubmitters := make(map[string]eth2client.ProposalSubmitter)
+	for _, address := range util.BeaconNodeAddresses("submitter.proposal.multinode") {
 		client, err := fetchClient(ctx, address)
 		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block submitter strategy", address))
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for proposal submitter strategy", address))
 		}
-		beaconBlockSubmitters[address] = client.(eth2client.BeaconBlockSubmitter)
+		proposalSubmitters[address] = client.(eth2client.ProposalSubmitter)
 	}
 
 	beaconCommitteeSubscriptionsSubmitters := make(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter)
@@ -1503,7 +1504,7 @@ func startMultinodeSubmitter(ctx context.Context,
 		multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
 		multinodesubmitter.WithLogLevel(util.LogLevel("submitter.multinode")),
 		multinodesubmitter.WithTimeout(util.Timeout("submitter.multinode")),
-		multinodesubmitter.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+		multinodesubmitter.WithProposalSubmitters(proposalSubmitters),
 		multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),
 		multinodesubmitter.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 		multinodesubmitter.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
@@ -1539,10 +1540,11 @@ func runCommands(ctx context.Context,
 func consensusClientCapabilities(ctx context.Context, consensusClient eth2client.Service) (bool, bool, bool, error) {
 	// Decide if the ETH2 client is capable of Altair.
 	altairCapable := false
-	spec, err := consensusClient.(eth2client.SpecProvider).Spec(ctx)
+	specResponse, err := consensusClient.(eth2client.SpecProvider).Spec(ctx)
 	if err != nil {
 		return false, false, false, errors.Wrap(err, "failed to obtain spec")
 	}
+	spec := specResponse.Data
 	if _, exists := spec["ALTAIR_FORK_EPOCH"]; exists {
 		altairCapable = true
 		log.Info().Msg("Client is Altair-capable")

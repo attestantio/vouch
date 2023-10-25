@@ -50,8 +50,8 @@ func fetchClient(ctx context.Context, address string) (eth2client.Service, error
 	if client, exists = clients[address]; !exists {
 		var err error
 		client, err = httpclient.New(ctx,
-			httpclient.WithLogLevel(util.LogLevel("eth2client")),
-			httpclient.WithTimeout(util.Timeout("eth2client")),
+			httpclient.WithLogLevel(util.LogLevel(fmt.Sprintf("eth2client.%s", address))),
+			httpclient.WithTimeout(util.Timeout(fmt.Sprintf("eth2client.%s", address))),
 			httpclient.WithAddress(address),
 			httpclient.WithExtraHeaders(map[string]string{
 				"User-Agent": fmt.Sprintf("Vouch/%s", ReleaseVersion),

@@ -39,6 +39,7 @@ type Service struct {
 	syncCommitteeSelectionProofDomainType *phase0.DomainType
 	contributionAndProofDomainType        *phase0.DomainType
 	applicationBuilderDomainType          *phase0.DomainType
+	blobSidecarDomainType                 *phase0.DomainType
 	domainProvider                        eth2client.DomainProvider
 }
 
@@ -58,10 +59,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
-	spec, err := parameters.specProvider.Spec(ctx)
+	specResponse, err := parameters.specProvider.Spec(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain spec")
 	}
+	spec := specResponse.Data
 
 	tmp, exists := spec["SLOTS_PER_EPOCH"]
 	if !exists {
@@ -118,6 +120,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		applicationBuilderDomainType = &tmp
 	}
 
+	var blobSidecarDomainType *phase0.DomainType
+	if tmp, err := domainType(spec, "DOMAIN_BLOB_SIDECAR"); err == nil {
+		blobSidecarDomainType = &tmp
+	}
+
 	s := &Service{
 		monitor:                               parameters.monitor,
 		clientMonitor:                         parameters.clientMonitor,
@@ -131,6 +138,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeSelectionProofDomainType: syncCommitteeSelectionProofDomainType,
 		contributionAndProofDomainType:        contributionAndProofDomainType,
 		applicationBuilderDomainType:          applicationBuilderDomainType,
+		blobSidecarDomainType:                 blobSidecarDomainType,
 		domainProvider:                        parameters.domainProvider,
 	}
 

@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,10 +29,12 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1bellatrix "github.com/attestantio/go-eth2-client/api/v1/bellatrix"
 	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
+	apiv1deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/pkg/errors"
@@ -41,9 +44,17 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-type BlindedBeaconBlockProposerWithExpectedPayload interface {
-	// BlindedBeaconBlockProposalWithExpectedPayload fetches a blinded proposed beacon block for signing.
-	BlindedBeaconBlockProposalWithExpectedPayload(context.Context, phase0.Slot, phase0.BLSSignature, []byte, *builderspec.VersionedSignedBuilderBid) (*api.VersionedBlindedBeaconBlock, error)
+type BlindedProposerWithExpectedPayload interface {
+	// BlindedProposalWithExpectedPayload fetches a blinded proposed beacon block for signing.
+	BlindedProposalWithExpectedPayload(context.Context,
+		phase0.Slot,
+		phase0.BLSSignature,
+		[]byte,
+		*builderspec.VersionedSignedBuilderBid,
+	) (
+		*api.VersionedBlindedProposal,
+		error,
+	)
 }
 
 // auctionResult provides information on the result of an auction process.
@@ -81,7 +92,7 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 	graffiti, err := s.obtainGraffiti(ctx, slot, duty.ValidatorIndex())
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to obtain graffiti")
-		graffiti = nil
+		graffiti = [32]byte{}
 	}
 
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained graffiti")
@@ -121,52 +132,58 @@ func (s *Service) obtainGraffiti(ctx context.Context,
 	slot phase0.Slot,
 	validatorIndex phase0.ValidatorIndex,
 ) (
-	[]byte,
+	[32]byte,
 	error,
 ) {
+	var res [32]byte
+
 	if s.graffitiProvider == nil {
-		return []byte{}, nil
+		return res, nil
 	}
 
 	graffiti, err := s.graffitiProvider.Graffiti(ctx, slot, validatorIndex)
 	if err != nil {
-		return []byte{}, errors.Wrap(err, "graffiti provider failed")
+		return res, errors.Wrap(err, "graffiti provider failed")
 	}
 
 	if bytes.Contains(graffiti, []byte("{{CLIENT}}")) {
 		if nodeClientProvider, isProvider := s.proposalProvider.(consensusclient.NodeClientProvider); isProvider {
-			nodeClient, err := nodeClientProvider.NodeClient(ctx)
+			nodeClientResponse, err := nodeClientProvider.NodeClient(ctx)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
 			} else {
-				graffiti = bytes.ReplaceAll(graffiti, []byte("{{CLIENT}}"), []byte(nodeClient))
+				graffiti = bytes.ReplaceAll(graffiti, []byte("{{CLIENT}}"), []byte(nodeClientResponse.Data))
 			}
 		}
 	}
-	if len(graffiti) > 32 {
-		graffiti = graffiti[0:32]
-	}
 
-	return graffiti, nil
+	copy(res[:], graffiti)
+
+	return res, nil
 }
 
 // proposeBlock proposes a beacon block.
 func (s *Service) proposeBlock(ctx context.Context,
 	duty *beaconblockproposer.Duty,
-	graffiti []byte,
+	graffiti [32]byte,
 ) error {
 	// Pre-fetch an unblinded block in parallel with the auction process.
 	// This ensures that we are ready to propose as quickly as possible if the auction is unsuccessful.
 	var wg sync.WaitGroup
-	var proposal *spec.VersionedBeaconBlock
+	var proposal *api.VersionedProposal
 	wg.Add(1)
-	go func(ctx context.Context, duty *beaconblockproposer.Duty, graffiti []byte) {
+	go func(ctx context.Context, duty *beaconblockproposer.Duty, graffiti [32]byte) {
 		var err error
-		proposal, err = s.proposalProvider.BeaconBlockProposal(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti)
+		proposalResponse, err := s.proposalProvider.Proposal(ctx, &api.ProposalOpts{
+			Slot:         duty.Slot(),
+			RandaoReveal: duty.RANDAOReveal(),
+			Graffiti:     graffiti,
+		})
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to pre-obtain proposal data")
 			return
 		}
+		proposal = proposalResponse.Data
 		log.Trace().Msg("Pre-obtained proposal")
 		wg.Done()
 	}(ctx, duty, graffiti)
@@ -201,7 +218,7 @@ func (s *Service) proposeBlock(ctx context.Context,
 // proposeBlockWithAuction proposes a block after going through an auction for the blockspace.
 func (s *Service) proposeBlockWithAuction(ctx context.Context,
 	duty *beaconblockproposer.Duty,
-	graffiti []byte,
+	graffiti [32]byte,
 ) auctionResult {
 	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "proposeBlockWithAuction")
 	defer span.End()
@@ -229,10 +246,10 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 	for _, provider := range auctionResults.Providers {
 		unblindedBlockProvider, isProvider := provider.(builderclient.UnblindedBlockProvider)
 		if !isProvider {
-			log.Warn().Msg("Auctioneer cannot unblind the block")
+			log.Warn().Msg("Auctioneer cannot unblind the proposal")
 			continue
 		}
-		providers = append(providers, unblindedBlockProvider)
+		providers = append(providers, unblindedProposalProvider)
 	}
 	if len(providers) == 0 {
 		log.Debug().Msg("No relays can unblind the block")
@@ -246,14 +263,14 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 		return auctionResultFailed
 	}
 
-	signedBlock, err := s.unblindBlock(ctx, signedBlindedBlock, providers)
+	signedProposal, err := s.unblindBlock(ctx, signedBlindedBlock, providers)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to unblind block")
 		return auctionResultFailed
 	}
 
-	// Submit the block.
-	if err := s.beaconBlockSubmitter.SubmitBeaconBlock(ctx, signedBlock); err != nil {
+	// Submit the proposal.
+	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
 		log.Error().Err(err).Msg("Failed to submit beacon block proposal")
 		return auctionResultFailed
 	}
@@ -262,25 +279,47 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 }
 
 func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
-	proposal *spec.VersionedBeaconBlock,
+	proposal *api.VersionedProposal,
 	duty *beaconblockproposer.Duty,
-	graffiti []byte,
+	graffiti [32]byte,
 ) error {
 	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "proposeBlockWithoutAuction")
 	defer span.End()
 
-	var err error
 	if proposal == nil {
-		proposal, err = s.proposalProvider.BeaconBlockProposal(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti)
+		proposalResponse, err := s.proposalProvider.Proposal(ctx, &api.ProposalOpts{
+			Slot:         duty.Slot(),
+			RandaoReveal: duty.RANDAOReveal(),
+			Graffiti:     graffiti,
+		})
 		if err != nil {
 			return errors.Wrap(err, "failed to obtain proposal data")
 		}
-		if proposal == nil {
-			return errors.New("obtained nil beacon block proposal")
-		}
+		proposal = proposalResponse.Data
 		log.Trace().Msg("Obtained proposal")
 	}
 
+	if err := s.confirmProposalData(ctx, proposal, duty, graffiti); err != nil {
+		return err
+	}
+
+	signedProposal, err := s.signProposalData(ctx, proposal, duty)
+	if err != nil {
+		return err
+	}
+
+	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
+		return errors.Wrap(err, "failed to submit proposal")
+	}
+
+	return nil
+}
+
+func (s *Service) confirmProposalData(ctx context.Context,
+	proposal *api.VersionedProposal,
+	duty *beaconblockproposer.Duty,
+	graffiti [32]byte,
+) error {
 	proposalSlot, err := proposal.Slot()
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain proposal slot")
@@ -289,19 +328,60 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 		return errors.New("proposal data for incorrect slot")
 	}
 
+	proposalGraffiti, err := proposal.Graffiti()
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain proposal graffiti")
+	}
+	if !bytes.Equal(proposalGraffiti[:], graffiti[:]) {
+		return errors.New("proposal data contains incorrect graffiti")
+	}
+
+	return nil
+}
+
+func (s *Service) signProposalData(ctx context.Context,
+	proposal *api.VersionedProposal,
+	duty *beaconblockproposer.Duty,
+) (
+	*api.VersionedSignedProposal,
+	error,
+) {
+	var signedProposal *api.VersionedSignedProposal
+	var err error
+
+	switch proposal.Version {
+	case spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix, spec.DataVersionCapella:
+		signedProposal, err = s.signSimpleProposal(ctx, proposal, duty)
+	case spec.DataVersionDeneb:
+		signedProposal, err = s.signCompositeProposal(ctx, proposal, duty)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return signedProposal, nil
+}
+
+func (s *Service) signSimpleProposal(ctx context.Context,
+	proposal *api.VersionedProposal,
+	duty *beaconblockproposer.Duty,
+) (
+	*api.VersionedSignedProposal,
+	error,
+) {
 	bodyRoot, err := proposal.BodyRoot()
 	if err != nil {
-		return errors.Wrap(err, "failed to calculate hash tree root of block body")
+		return nil, errors.Wrap(err, "failed to calculate hash tree root of block body proposal")
 	}
 
 	parentRoot, err := proposal.ParentRoot()
 	if err != nil {
-		return errors.Wrap(err, "failed to obtain parent root of block")
+		return nil, errors.Wrap(err, "failed to obtain parent root of block proposal")
 	}
 
 	stateRoot, err := proposal.StateRoot()
 	if err != nil {
-		return errors.Wrap(err, "failed to obtain state root of block")
+		return nil, errors.Wrap(err, "failed to obtain state root of block proposal")
 	}
 
 	sig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
@@ -312,58 +392,120 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 		stateRoot,
 		bodyRoot)
 	if err != nil {
-		return errors.Wrap(err, "failed to sign beacon block proposal")
-	}
-	log.Trace().Msg("Signed proposal")
-
-	signedBlock, err := composeVersionedSignedBeaconBlock(proposal, sig)
-	if err != nil {
-		return err
+		return nil, errors.Wrap(err, "failed to sign beacon block proposal")
 	}
 
-	if err := s.beaconBlockSubmitter.SubmitBeaconBlock(ctx, signedBlock); err != nil {
-		return errors.Wrap(err, "failed to submit beacon block proposal")
-	}
-
-	return nil
-}
-
-func composeVersionedSignedBeaconBlock(
-	proposal *spec.VersionedBeaconBlock,
-	sig phase0.BLSSignature,
-) (
-	*spec.VersionedSignedBeaconBlock,
-	error,
-) {
-	signedBlock := &spec.VersionedSignedBeaconBlock{
+	signedProposal := &api.VersionedSignedProposal{
 		Version: proposal.Version,
 	}
-	switch signedBlock.Version {
+
+	switch proposal.Version {
 	case spec.DataVersionPhase0:
-		signedBlock.Phase0 = &phase0.SignedBeaconBlock{
+		signedProposal.Phase0 = &phase0.SignedBeaconBlock{
 			Message:   proposal.Phase0,
 			Signature: sig,
 		}
 	case spec.DataVersionAltair:
-		signedBlock.Altair = &altair.SignedBeaconBlock{
+		signedProposal.Altair = &altair.SignedBeaconBlock{
 			Message:   proposal.Altair,
 			Signature: sig,
 		}
 	case spec.DataVersionBellatrix:
-		signedBlock.Bellatrix = &bellatrix.SignedBeaconBlock{
+		signedProposal.Bellatrix = &bellatrix.SignedBeaconBlock{
 			Message:   proposal.Bellatrix,
 			Signature: sig,
 		}
 	case spec.DataVersionCapella:
-		signedBlock.Capella = &capella.SignedBeaconBlock{
+		signedProposal.Capella = &capella.SignedBeaconBlock{
 			Message:   proposal.Capella,
 			Signature: sig,
 		}
 	default:
-		return nil, errors.New("unknown proposal version")
+		return nil, errors.New("unhandled proposal version")
 	}
 
-	return signedBlock, nil
+	return signedProposal, nil
+}
+
+func (s *Service) signCompositeProposal(ctx context.Context,
+	proposal *api.VersionedProposal,
+	duty *beaconblockproposer.Duty,
+) (
+	*api.VersionedSignedProposal,
+	error,
+) {
+	bodyRoot, err := proposal.BodyRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to calculate hash tree root of proposal body")
+	}
+
+	parentRoot, err := proposal.ParentRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain parent root of proposal")
+	}
+
+	stateRoot, err := proposal.StateRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain state root of proposal")
+	}
+
+	sig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
+		duty.Account(),
+		duty.Slot(),
+		duty.ValidatorIndex(),
+		parentRoot,
+		stateRoot,
+		bodyRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to sign beacon proposal")
+	}
+
+	blobSidecars, err := proposal.BlobSidecars()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain blob sidecars of proposal")
+	}
+	blobSidecarSigs := make([]phase0.BLSSignature, len(blobSidecars))
+	// TODO parallelise or batch this.
+	for i := range blobSidecars {
+		root, err := blobSidecars[i].HashTreeRoot()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to obtain hash tree root of blob sidecar")
+		}
+
+		blobSidecarSigs[i], err = s.blobSidecarSigner.SignBlobSidecar(ctx,
+			duty.Account(),
+			duty.Slot(),
+			root,
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sign blob sidecar")
+		}
+	}
+
+	signedProposal := &api.VersionedSignedProposal{
+		Version: proposal.Version,
+	}
+
+	switch proposal.Version {
+	case spec.DataVersionDeneb:
+		signedProposal.Deneb = &apiv1deneb.SignedBlockContents{
+			SignedBlock: &deneb.SignedBeaconBlock{
+				Message:   proposal.Deneb.Block,
+				Signature: sig,
+			},
+			SignedBlobSidecars: make([]*deneb.SignedBlobSidecar, len(blobSidecars)),
+		}
+		for i := range blobSidecars {
+			signedProposal.Deneb.SignedBlobSidecars[i] = &deneb.SignedBlobSidecar{
+				Message:   blobSidecars[i],
+				Signature: blobSidecarSigs[i],
+			}
+		}
+	default:
+		return nil, errors.New("unhandled composite proposal version")
+	}
+
+	return signedProposal, nil
 }
 
 func (s *Service) auctionBlock(ctx context.Context,
@@ -403,26 +545,31 @@ func (s *Service) auctionBlock(ctx context.Context,
 
 func (s *Service) obtainBlindedProposal(ctx context.Context,
 	duty *beaconblockproposer.Duty,
-	graffiti []byte,
+	graffiti [32]byte,
 	auctionResults *blockauctioneer.Results,
 ) (
-	*api.VersionedBlindedBeaconBlock,
+	*api.VersionedBlindedProposal,
 	error,
 ) {
-	var proposal *api.VersionedBlindedBeaconBlock
+	var proposal *api.VersionedBlindedProposal
 	var err error
-	if verifyingProvider, isProvider := s.blindedProposalProvider.(BlindedBeaconBlockProposerWithExpectedPayload); isProvider {
-		proposal, err = verifyingProvider.BlindedBeaconBlockProposalWithExpectedPayload(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti, auctionResults.Bid)
+	if verifyingProvider, isProvider := s.blindedProposalProvider.(BlindedProposerWithExpectedPayload); isProvider {
+		proposal, err = verifyingProvider.BlindedProposalWithExpectedPayload(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti[:], auctionResults.Bid)
 	} else {
-		proposal, err = s.blindedProposalProvider.BlindedBeaconBlockProposal(ctx, duty.Slot(), duty.RANDAOReveal(), graffiti)
+		proposalResponse, err := s.blindedProposalProvider.BlindedProposal(ctx, &api.BlindedProposalOpts{
+			Slot:         duty.Slot(),
+			RandaoReveal: duty.RANDAOReveal(),
+			Graffiti:     graffiti,
+		})
+		if err != nil {
+			return nil, err
+		}
+		proposal = proposalResponse.Data
 	}
-
 	if err != nil {
 		return nil, err
 	}
-	if proposal == nil {
-		return nil, errors.New("no proposal obtained")
-	}
+
 	if e := log.Trace(); e.Enabled() {
 		data, err := json.Marshal(proposal)
 		if err == nil {
@@ -440,7 +587,7 @@ func (s *Service) obtainBlindedProposal(ctx context.Context,
 func (*Service) validateBlindedBeaconBlockProposal(_ context.Context,
 	duty *beaconblockproposer.Duty,
 	auctionResults *blockauctioneer.Results,
-	proposal *api.VersionedBlindedBeaconBlock,
+	proposal *api.VersionedBlindedProposal,
 ) error {
 	if proposal == nil {
 		return errors.New("obtained nil blinded beacon block proposal")
@@ -491,9 +638,9 @@ func (*Service) validateBlindedBeaconBlockProposal(_ context.Context,
 
 func (s *Service) signBlindedProposal(ctx context.Context,
 	duty *beaconblockproposer.Duty,
-	proposal *api.VersionedBlindedBeaconBlock,
+	proposal *api.VersionedBlindedProposal,
 ) (
-	*api.VersionedSignedBlindedBeaconBlock,
+	*api.VersionedSignedBlindedProposal,
 	error,
 ) {
 	parentRoot, err := proposal.ParentRoot()
@@ -521,32 +668,64 @@ func (s *Service) signBlindedProposal(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to sign blinded beacon block proposal")
 	}
 
-	signedBlindedBlock := &api.VersionedSignedBlindedBeaconBlock{
+	signedProposal := &api.VersionedSignedBlindedProposal{
 		Version: proposal.Version,
 	}
-	switch signedBlindedBlock.Version {
+	switch signedProposal.Version {
 	case spec.DataVersionBellatrix:
-		signedBlindedBlock.Bellatrix = &apiv1bellatrix.SignedBlindedBeaconBlock{
+		signedProposal.Bellatrix = &apiv1bellatrix.SignedBlindedBeaconBlock{
 			Message:   proposal.Bellatrix,
 			Signature: sig,
 		}
 	case spec.DataVersionCapella:
-		signedBlindedBlock.Capella = &apiv1capella.SignedBlindedBeaconBlock{
+		signedProposal.Capella = &apiv1capella.SignedBlindedBeaconBlock{
 			Message:   proposal.Capella,
 			Signature: sig,
 		}
+	case spec.DataVersionDeneb:
+		signedProposal.Deneb = &apiv1deneb.SignedBlindedBlockContents{
+			SignedBlindedBlock: &apiv1deneb.SignedBlindedBeaconBlock{
+				Message:   proposal.Deneb.BlindedBlock,
+				Signature: sig,
+			},
+		}
+
+		blobSidecars := proposal.Deneb.BlindedBlobSidecars
+		signedBlobSidecars := make([]*apiv1deneb.SignedBlindedBlobSidecar, len(blobSidecars))
+		for i := range blobSidecars {
+			signedBlobSidecars[i] = &apiv1deneb.SignedBlindedBlobSidecar{
+				Message: blobSidecars[i],
+			}
+		}
+		// TODO parallelise or batch this.
+		for i := range blobSidecars {
+			root, err := blobSidecars[i].HashTreeRoot()
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to obtain hash tree root of blob sidecar")
+			}
+
+			signedBlobSidecars[i].Signature, err = s.blobSidecarSigner.SignBlobSidecar(ctx,
+				duty.Account(),
+				duty.Slot(),
+				root,
+			)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to sign blob sidecar")
+			}
+		}
+		signedProposal.Deneb.SignedBlindedBlobSidecars = signedBlobSidecars
 	default:
-		return nil, fmt.Errorf("unknown proposal version %v", signedBlindedBlock.Version)
+		return nil, fmt.Errorf("unknown proposal version %v", signedProposal.Version)
 	}
 
-	return signedBlindedBlock, nil
+	return signedProposal, nil
 }
 
 func (*Service) unblindBlock(ctx context.Context,
-	block *api.VersionedSignedBlindedBeaconBlock,
-	providers []builderclient.UnblindedBlockProvider,
+	proposal *api.VersionedSignedBlindedProposal,
+	providers []builderclient.UnblindedProposalProvider,
 ) (
-	*spec.VersionedSignedBeaconBlock,
+	*api.VersionedSignedProposal,
 	error,
 ) {
 	// We do not create a cancelable context, as if we do cancel the later-returning providers they will mark themselves
@@ -554,20 +733,20 @@ func (*Service) unblindBlock(ctx context.Context,
 	// semaphore to track if a signed block has been returned by any provider.
 	sem := semaphore.NewWeighted(1)
 
-	respCh := make(chan *spec.VersionedSignedBeaconBlock, 1)
+	respCh := make(chan *api.VersionedSignedProposal, 1)
 	for _, provider := range providers {
-		go func(ctx context.Context, provider builderclient.UnblindedBlockProvider, ch chan *spec.VersionedSignedBeaconBlock) {
+		go func(ctx context.Context, provider builderclient.UnblindedProposalProvider, ch chan *api.VersionedSignedProposal) {
 			log := log.With().Str("provider", provider.Address()).Logger()
 			log.Trace().Msg("Unblinding block with provider")
 
 			// As we cannot fall back we move to a retry system.
-			retryInterval := 500 * time.Millisecond
+			retryInterval := 250 * time.Millisecond
 
-			var signedBlock *spec.VersionedSignedBeaconBlock
+			var signedProposal *api.VersionedSignedProposal
 			var err error
 			for retries := 3; retries > 0; retries-- {
 				// Unblind the blinded block.
-				signedBlock, err = provider.UnblindBlock(ctx, block)
+				signedProposal, err = provider.UnblindProposal(ctx, proposal)
 
 				if !sem.TryAcquire(1) {
 					// We failed to acquire the semaphore, which means another relay has responded already.
@@ -579,12 +758,16 @@ func (*Service) unblindBlock(ctx context.Context,
 
 				if err != nil {
 					log.Debug().Err(err).Int("retries", retries).Msg("Failed to unblind block")
+					if strings.Contains(err.Error(), "POST failed with status 400") {
+						log.Debug().Msg("Responded with 400; not trying again as relay does not know of the payload")
+						return
+					}
 					time.Sleep(retryInterval)
 					continue
 				}
 				break
 			}
-			if signedBlock == nil {
+			if signedProposal == nil {
 				log.Debug().Msg("No signed block received")
 				return
 			}
@@ -593,7 +776,7 @@ func (*Service) unblindBlock(ctx context.Context,
 			// Acquire the semaphore to confirm that a block has been received.
 			// Use TryAcquire in case two providers return the block at the same time.
 			sem.TryAcquire(1)
-			ch <- signedBlock
+			ch <- signedProposal
 		}(ctx, provider, respCh)
 	}
 

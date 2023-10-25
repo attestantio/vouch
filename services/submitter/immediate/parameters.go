@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -27,7 +27,7 @@ import (
 type parameters struct {
 	logLevel                              zerolog.Level
 	clientMonitor                         metrics.ClientMonitor
-	beaconBlockSubmitter                  eth2client.BeaconBlockSubmitter
+	proposalSubmitter                     eth2client.ProposalSubmitter
 	attestationsSubmitter                 eth2client.AttestationsSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
@@ -62,10 +62,10 @@ func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
 	})
 }
 
-// WithBeaconBlockSubmitter sets the beacon block submitter.
-func WithBeaconBlockSubmitter(submitter eth2client.BeaconBlockSubmitter) Parameter {
+// WithProposalSubmitter sets the proposal submitter.
+func WithProposalSubmitter(submitter eth2client.ProposalSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.beaconBlockSubmitter = submitter
+		p.proposalSubmitter = submitter
 	})
 }
 
@@ -133,8 +133,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.clientMonitor == nil {
 		return nil, errors.New("no client monitor specified")
 	}
-	if parameters.beaconBlockSubmitter == nil {
-		return nil, errors.New("no beacon block submitter specified")
+	if parameters.proposalSubmitter == nil {
+		return nil, errors.New("no proposal submitter specified")
 	}
 	if parameters.attestationsSubmitter == nil {
 		return nil, errors.New("no attestations submitter specified")

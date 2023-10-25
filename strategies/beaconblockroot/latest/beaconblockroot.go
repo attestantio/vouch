@@ -18,6 +18,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
@@ -38,9 +39,14 @@ type beaconBlockRootError struct {
 }
 
 // BeaconBlockRoot provides the latest beacon block root from a number of beacon nodes.
-func (s *Service) BeaconBlockRoot(ctx context.Context, blockID string) (*phase0.Root, error) {
+func (s *Service) BeaconBlockRoot(ctx context.Context,
+	opts *api.BeaconBlockRootOpts,
+) (
+	*api.Response[*phase0.Root],
+	error,
+) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockroot.latest").Start(ctx, "BeaconBlockRoot", trace.WithAttributes(
-		attribute.String("blockid", blockID),
+		attribute.String("blockid", opts.Block),
 	))
 	defer span.End()
 
@@ -60,7 +66,7 @@ func (s *Service) BeaconBlockRoot(ctx context.Context, blockID string) (*phase0.
 	errCh := make(chan *beaconBlockRootError, requests)
 	// Kick off the requests.
 	for name, provider := range s.beaconBlockRootProviders {
-		go s.beaconBlockRoot(ctx, started, name, provider, respCh, errCh, blockID)
+		go s.beaconBlockRoot(ctx, started, name, provider, respCh, errCh, opts)
 	}
 
 	// Wait for all responses (or context done).
@@ -167,7 +173,10 @@ func (s *Service) BeaconBlockRoot(ctx context.Context, blockID string) (*phase0.
 	}
 	log.Trace().Stringer("root", bestResp.root).Uint64("slot", uint64(bestResp.slot)).Msg("Selected latest beacon block root")
 
-	return bestResp.root, nil
+	return &api.Response[*phase0.Root]{
+		Data:     bestResp.root,
+		Metadata: make(map[string]any),
+	}, nil
 }
 
 func (s *Service) beaconBlockRoot(ctx context.Context,
@@ -176,14 +185,14 @@ func (s *Service) beaconBlockRoot(ctx context.Context,
 	provider eth2client.BeaconBlockRootProvider,
 	respCh chan *beaconBlockRootResponse,
 	errCh chan *beaconBlockRootError,
-	blockID string,
+	opts *api.BeaconBlockRootOpts,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockroot.latest").Start(ctx, "beaconBlockRoot", trace.WithAttributes(
 		attribute.String("provider", name),
 	))
 	defer span.End()
 
-	root, err := provider.BeaconBlockRoot(ctx, blockID)
+	rootResponse, err := provider.BeaconBlockRoot(ctx, opts)
 	s.clientMonitor.ClientOperation(name, "beacon block root", err == nil, time.Since(started))
 	if err != nil {
 		errCh <- &beaconBlockRootError{
@@ -192,24 +201,17 @@ func (s *Service) beaconBlockRoot(ctx context.Context,
 		}
 		return
 	}
-	if root == nil {
-		errCh <- &beaconBlockRootError{
-			provider: name,
-			err:      errors.New("beacon block root nil"),
-		}
-		return
-	}
-	s.log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Stringer("root", root).Msg("Obtained beacon block root")
+	s.log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Stringer("root", rootResponse.Data).Msg("Obtained beacon block root")
 
-	slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, *root)
+	slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, *rootResponse.Data)
 	if err != nil {
-		s.log.Debug().Stringer("root", root).Err(err).Msg("Failed to obtain block slot; assuming 0")
+		s.log.Debug().Stringer("root", rootResponse.Data).Err(err).Msg("Failed to obtain block slot; assuming 0")
 		slot = 0
 	}
 
 	respCh <- &beaconBlockRootResponse{
 		provider: name,
-		root:     root,
+		root:     rootResponse.Data,
 		slot:     slot,
 	}
 }

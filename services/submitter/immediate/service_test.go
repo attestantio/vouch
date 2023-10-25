@@ -17,8 +17,8 @@ import (
 	"context"
 	"testing"
 
-	api "github.com/attestantio/go-eth2-client/api/v1"
-	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/api"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
@@ -30,7 +30,7 @@ import (
 
 func TestService(t *testing.T) {
 	attestationsSubmitter := mock.NewAttestationsSubmitter()
-	beaconBlockSubmitter := mock.NewBeaconBlockSubmitter()
+	proposalSubmitter := mock.NewProposalSubmitter()
 	beaconCommitteeSubscriptionSubmitter := mock.NewBeaconCommitteeSubscriptionsSubmitter()
 	aggregateAttestationSubmitter := mock.NewAggregateAttestationsSubmitter()
 	proposalPreparationsSubmitter := mock.NewProposalPreparationsSubmitter()
@@ -49,7 +49,7 @@ func TestService(t *testing.T) {
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithClientMonitor(nil),
 				immediate.WithAttestationsSubmitter(attestationsSubmitter),
-				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
+				immediate.WithProposalSubmitter(proposalSubmitter),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
 				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
 				immediate.WithProposalPreparationsSubmitter(proposalPreparationsSubmitter),
@@ -63,7 +63,7 @@ func TestService(t *testing.T) {
 			name: "AttestationsSubmitterMissing",
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
-				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
+				immediate.WithProposalSubmitter(proposalSubmitter),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
 				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
 				immediate.WithProposalPreparationsSubmitter(proposalPreparationsSubmitter),
@@ -74,7 +74,7 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: no attestations submitter specified",
 		},
 		{
-			name: "BeaconBlockSubmitterMissing",
+			name: "ProposalSubmitterMissing",
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(attestationsSubmitter),
@@ -85,14 +85,14 @@ func TestService(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(syncCommitteeMessagesSubmitter),
 				immediate.WithSyncCommitteeContributionsSubmitter(syncCommitteeContributionsSubmitter),
 			},
-			err: "problem with parameters: no beacon block submitter specified",
+			err: "problem with parameters: no proposal submitter specified",
 		},
 		{
 			name: "AttestationSubnetSubscriptionsSubmitterMissing",
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(attestationsSubmitter),
-				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
+				immediate.WithProposalSubmitter(proposalSubmitter),
 				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
 				immediate.WithProposalPreparationsSubmitter(proposalPreparationsSubmitter),
 				immediate.WithSyncCommitteeSubscriptionsSubmitter(syncCommitteeSubscriptionsSubmitter),
@@ -106,7 +106,7 @@ func TestService(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(attestationsSubmitter),
-				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
+				immediate.WithProposalSubmitter(proposalSubmitter),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
 				immediate.WithProposalPreparationsSubmitter(proposalPreparationsSubmitter),
 				immediate.WithSyncCommitteeSubscriptionsSubmitter(syncCommitteeSubscriptionsSubmitter),
@@ -120,7 +120,7 @@ func TestService(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(attestationsSubmitter),
-				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
+				immediate.WithProposalSubmitter(proposalSubmitter),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
 				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
 				immediate.WithSyncCommitteeSubscriptionsSubmitter(syncCommitteeSubscriptionsSubmitter),
@@ -134,7 +134,7 @@ func TestService(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(attestationsSubmitter),
-				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
+				immediate.WithProposalSubmitter(proposalSubmitter),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
 				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
 				immediate.WithProposalPreparationsSubmitter(proposalPreparationsSubmitter),
@@ -148,7 +148,7 @@ func TestService(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(attestationsSubmitter),
-				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
+				immediate.WithProposalSubmitter(proposalSubmitter),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
 				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
 				immediate.WithProposalPreparationsSubmitter(proposalPreparationsSubmitter),
@@ -162,7 +162,7 @@ func TestService(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(attestationsSubmitter),
-				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
+				immediate.WithProposalSubmitter(proposalSubmitter),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
 				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
 				immediate.WithProposalPreparationsSubmitter(proposalPreparationsSubmitter),
@@ -176,7 +176,7 @@ func TestService(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(attestationsSubmitter),
-				immediate.WithBeaconBlockSubmitter(beaconBlockSubmitter),
+				immediate.WithProposalSubmitter(proposalSubmitter),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
 				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
 				immediate.WithProposalPreparationsSubmitter(proposalPreparationsSubmitter),
@@ -203,7 +203,7 @@ func TestInterfaces(t *testing.T) {
 	s, err := immediate.New(context.Background(),
 		immediate.WithLogLevel(zerolog.Disabled),
 		immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-		immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+		immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 		immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 		immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 		immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -212,7 +212,7 @@ func TestInterfaces(t *testing.T) {
 		immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 	)
 	require.NoError(t, err)
-	require.Implements(t, (*submitter.BeaconBlockSubmitter)(nil), s)
+	require.Implements(t, (*submitter.ProposalSubmitter)(nil), s)
 	require.Implements(t, (*submitter.AttestationsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.BeaconCommitteeSubscriptionsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.AggregateAttestationsSubmitter)(nil), s)
@@ -222,19 +222,19 @@ func TestInterfaces(t *testing.T) {
 	require.Implements(t, (*submitter.SyncCommitteeContributionsSubmitter)(nil), s)
 }
 
-func TestSubmitBeaconBlock(t *testing.T) {
+func TestSubmitProposal(t *testing.T) {
 	tests := []struct {
-		name   string
-		params []immediate.Parameter
-		block  *spec.VersionedSignedBeaconBlock
-		err    string
+		name     string
+		params   []immediate.Parameter
+		proposal *api.VersionedSignedProposal
+		err      string
 	}{
 		{
 			name: "Nil",
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -242,14 +242,14 @@ func TestSubmitBeaconBlock(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			err: "no beacon block supplied",
+			err: "no proposal supplied",
 		},
 		{
 			name: "Empty",
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -257,14 +257,14 @@ func TestSubmitBeaconBlock(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			block: &spec.VersionedSignedBeaconBlock{},
+			proposal: &api.VersionedSignedProposal{},
 		},
 		{
 			name: "Erroring",
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewErroringBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewErroringProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -272,15 +272,15 @@ func TestSubmitBeaconBlock(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			block: &spec.VersionedSignedBeaconBlock{},
-			err:   "failed to submit beacon block: error",
+			proposal: &api.VersionedSignedProposal{},
+			err:      "failed to submit proposal: error",
 		},
 		{
 			name: "Good",
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -288,7 +288,7 @@ func TestSubmitBeaconBlock(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			block: &spec.VersionedSignedBeaconBlock{},
+			proposal: &api.VersionedSignedProposal{},
 		},
 	}
 
@@ -297,7 +297,7 @@ func TestSubmitBeaconBlock(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {
-			err := s.SubmitBeaconBlock(context.Background(), test.block)
+			err := s.SubmitProposal(context.Background(), test.proposal)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
@@ -319,7 +319,7 @@ func TestSubmitAttestations(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -334,7 +334,7 @@ func TestSubmitAttestations(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -350,7 +350,7 @@ func TestSubmitAttestations(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewErroringAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -366,7 +366,7 @@ func TestSubmitAttestations(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -405,7 +405,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -420,7 +420,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -436,7 +436,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewErroringAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -454,7 +454,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -487,7 +487,7 @@ func TestSubmitProposalPreparations(t *testing.T) {
 	tests := []struct {
 		name         string
 		params       []immediate.Parameter
-		preparations []*api.ProposalPreparation
+		preparations []*apiv1.ProposalPreparation
 		err          string
 	}{
 		{
@@ -495,7 +495,7 @@ func TestSubmitProposalPreparations(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -510,7 +510,7 @@ func TestSubmitProposalPreparations(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -518,7 +518,7 @@ func TestSubmitProposalPreparations(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			preparations: []*api.ProposalPreparation{},
+			preparations: []*apiv1.ProposalPreparation{},
 			err:          "no proposal preparations supplied",
 		},
 		{
@@ -526,7 +526,7 @@ func TestSubmitProposalPreparations(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewErroringAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewErroringProposalPreparationsSubmitter()),
@@ -534,7 +534,7 @@ func TestSubmitProposalPreparations(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			preparations: []*api.ProposalPreparation{
+			preparations: []*apiv1.ProposalPreparation{
 				{},
 			},
 			err: "failed to submit proposal preparations: error",
@@ -544,7 +544,7 @@ func TestSubmitProposalPreparations(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -552,7 +552,7 @@ func TestSubmitProposalPreparations(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			preparations: []*api.ProposalPreparation{
+			preparations: []*apiv1.ProposalPreparation{
 				{},
 			},
 		},
@@ -577,7 +577,7 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 	tests := []struct {
 		name          string
 		params        []immediate.Parameter
-		subscriptions []*api.BeaconCommitteeSubscription
+		subscriptions []*apiv1.BeaconCommitteeSubscription
 		err           string
 	}{
 		{
@@ -585,7 +585,7 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -600,7 +600,7 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -608,7 +608,7 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			subscriptions: []*api.BeaconCommitteeSubscription{},
+			subscriptions: []*apiv1.BeaconCommitteeSubscription{},
 			err:           "no beacon committee subscriptions supplied",
 		},
 		{
@@ -616,7 +616,7 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewErroringBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -624,7 +624,7 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			subscriptions: []*api.BeaconCommitteeSubscription{
+			subscriptions: []*apiv1.BeaconCommitteeSubscription{
 				{},
 			},
 			err: "failed to submit beacon committee subscriptions: error",
@@ -634,7 +634,7 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -642,7 +642,7 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			subscriptions: []*api.BeaconCommitteeSubscription{
+			subscriptions: []*apiv1.BeaconCommitteeSubscription{
 				{},
 			},
 		},
@@ -667,7 +667,7 @@ func TestSubmitSyncCommitteeSubscriptions(t *testing.T) {
 	tests := []struct {
 		name          string
 		params        []immediate.Parameter
-		subscriptions []*api.SyncCommitteeSubscription
+		subscriptions []*apiv1.SyncCommitteeSubscription
 		err           string
 	}{
 		{
@@ -675,7 +675,7 @@ func TestSubmitSyncCommitteeSubscriptions(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -690,7 +690,7 @@ func TestSubmitSyncCommitteeSubscriptions(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -698,7 +698,7 @@ func TestSubmitSyncCommitteeSubscriptions(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			subscriptions: []*api.SyncCommitteeSubscription{},
+			subscriptions: []*apiv1.SyncCommitteeSubscription{},
 			err:           "no sync committee subscriptions supplied",
 		},
 		{
@@ -706,7 +706,7 @@ func TestSubmitSyncCommitteeSubscriptions(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -714,7 +714,7 @@ func TestSubmitSyncCommitteeSubscriptions(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			subscriptions: []*api.SyncCommitteeSubscription{
+			subscriptions: []*apiv1.SyncCommitteeSubscription{
 				{},
 			},
 			err: "failed to submit sync committee subscriptions: error",
@@ -724,7 +724,7 @@ func TestSubmitSyncCommitteeSubscriptions(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -732,7 +732,7 @@ func TestSubmitSyncCommitteeSubscriptions(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			subscriptions: []*api.SyncCommitteeSubscription{
+			subscriptions: []*apiv1.SyncCommitteeSubscription{
 				{},
 			},
 		},
@@ -765,7 +765,7 @@ func TestSubmitSyncCommitteeMessages(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -780,7 +780,7 @@ func TestSubmitSyncCommitteeMessages(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -796,7 +796,7 @@ func TestSubmitSyncCommitteeMessages(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -814,7 +814,7 @@ func TestSubmitSyncCommitteeMessages(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -855,7 +855,7 @@ func TestSubmitSyncCommitteeContributions(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -870,7 +870,7 @@ func TestSubmitSyncCommitteeContributions(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -886,7 +886,7 @@ func TestSubmitSyncCommitteeContributions(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
@@ -904,7 +904,7 @@ func TestSubmitSyncCommitteeContributions(t *testing.T) {
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),
 				immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
-				immediate.WithBeaconBlockSubmitter(mock.NewBeaconBlockSubmitter()),
+				immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
 				immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
 				immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
 				immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),

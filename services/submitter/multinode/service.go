@@ -24,12 +24,12 @@ import (
 	zerologger "github.com/rs/zerolog/log"
 )
 
-// Service is the provider for beacon block proposals.
+// Service is the provider for a submitter.
 type Service struct {
 	clientMonitor                         metrics.ClientMonitor
 	timeout                               time.Duration
 	processConcurrency                    int64
-	beaconBlockSubmitters                 map[string]eth2client.BeaconBlockSubmitter
+	proposalSubmitters                    map[string]eth2client.ProposalSubmitter
 	attestationsSubmitters                map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters       map[string]eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitters        map[string]eth2client.ProposalPreparationsSubmitter
@@ -42,7 +42,7 @@ type Service struct {
 // module-wide log.
 var log zerolog.Logger
 
-// New creates a new beacon block propsal strategy.
+// New creates a new multinode submitter.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
@@ -59,7 +59,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		clientMonitor:                         parameters.clientMonitor,
 		timeout:                               parameters.timeout,
 		processConcurrency:                    parameters.processConcurrency,
-		beaconBlockSubmitters:                 parameters.beaconBlockSubmitters,
+		proposalSubmitters:                    parameters.proposalSubmitters,
 		attestationsSubmitters:                parameters.attestationsSubmitters,
 		aggregateAttestationsSubmitters:       parameters.aggregateAttestationsSubmitters,
 		proposalPreparationsSubmitters:        parameters.proposalPreparationsSubmitters,

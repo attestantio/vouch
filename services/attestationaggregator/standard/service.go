@@ -21,6 +21,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
@@ -100,16 +101,17 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	log.Trace().Msg("Aggregating")
 
 	// Obtain the aggregate attestation.
-	aggregateAttestation, err := s.aggregateAttestationProvider.AggregateAttestation(ctx, duty.Slot, duty.AttestationDataRoot)
+	aggregateAttestationResponse, err := s.aggregateAttestationProvider.AggregateAttestation(ctx, &api.AggregateAttestationOpts{
+		Slot:                duty.Slot,
+		AttestationDataRoot: duty.AttestationDataRoot,
+	})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain aggregate attestation")
 		s.monitor.AttestationAggregationCompleted(started, duty.Slot, "failed")
 		return
 	}
-	if aggregateAttestation == nil {
-		log.Debug().Msg("Obtained nil aggregate attestation")
-		return
-	}
+	aggregateAttestation := aggregateAttestationResponse.Data
+
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained aggregate attestation")
 
 	// Fetch the validating account.

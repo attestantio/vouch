@@ -15,9 +15,9 @@ package standard
 
 import (
 	"context"
-	"fmt"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 )
@@ -28,36 +28,36 @@ func (s *Service) BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0
 	slot, exists := s.blockRootToSlot[root]
 	s.blockRootToSlotMu.RUnlock()
 	if exists {
-		log.Trace().Str("root", fmt.Sprintf("%#x", root)).Uint64("slot", uint64(slot)).Msg("Obtained slot from cache")
+		log.Trace().Stringer("root", root).Uint64("slot", uint64(slot)).Msg("Obtained slot from cache")
 		monitorBlockRootToSlot("hit")
 		return slot, nil
 	}
 
 	if headersProvider, isProvider := s.consensusClient.(eth2client.BeaconBlockHeadersProvider); isProvider {
-		block, err := headersProvider.BeaconBlockHeader(ctx, fmt.Sprintf("%#x", root))
+		blockResponse, err := headersProvider.BeaconBlockHeader(ctx, &api.BeaconBlockHeaderOpts{
+			Block: root.String(),
+		})
 		if err != nil {
 			return 0, errors.Wrap(err, "failed to obtain block header")
 		}
-		if block == nil {
-			return 0, errors.Wrap(err, "obtained nil block header")
-		}
+		block := blockResponse.Data
 
 		slot = block.Header.Message.Slot
 		s.SetBlockRootToSlot(root, slot)
 
-		log.Trace().Str("root", fmt.Sprintf("%#x", root)).Uint64("slot", uint64(slot)).Msg("Obtained slot from block header")
+		log.Trace().Stringer("root", root).Uint64("slot", uint64(slot)).Msg("Obtained slot from block header")
 		monitorBlockRootToSlot("miss (block header)")
 		return slot, nil
 	}
 
 	if blocksProvider, isProvider := s.consensusClient.(eth2client.SignedBeaconBlockProvider); isProvider {
-		block, err := blocksProvider.SignedBeaconBlock(ctx, fmt.Sprintf("%#x", root))
+		blockResponse, err := blocksProvider.SignedBeaconBlock(ctx, &api.SignedBeaconBlockOpts{
+			Block: root.String(),
+		})
 		if err != nil {
 			return 0, errors.Wrap(err, "failed to obtain block")
 		}
-		if block == nil {
-			return 0, errors.Wrap(err, "obtained nil block")
-		}
+		block := blockResponse.Data
 		slot, err = block.Slot()
 		if err != nil {
 			return 0, errors.Wrap(err, "failed to obtain block slot")
@@ -65,7 +65,7 @@ func (s *Service) BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0
 
 		s.SetBlockRootToSlot(root, slot)
 
-		log.Trace().Str("root", fmt.Sprintf("%#x", root)).Uint64("slot", uint64(slot)).Msg("Obtained slot from block")
+		log.Trace().Stringer("root", root).Uint64("slot", uint64(slot)).Msg("Obtained slot from block")
 		monitorBlockRootToSlot("miss (block)")
 		return slot, nil
 	}

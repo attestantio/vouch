@@ -38,8 +38,8 @@ func TestSubmitAttestationsEmpty(t *testing.T) {
 		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
 			"1": mock.NewAttestationsSubmitter(),
 		}),
-		multinode.WithBeaconBlockSubmitters(map[string]eth2client.BeaconBlockSubmitter{
-			"1": mock.NewBeaconBlockSubmitter(),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"1": mock.NewProposalSubmitter(),
 		}),
 		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
 			"1": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
@@ -78,8 +78,8 @@ func TestSubmitAttestations(t *testing.T) {
 		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
 			"1": mock.NewAttestationsSubmitter(),
 		}),
-		multinode.WithBeaconBlockSubmitters(map[string]eth2client.BeaconBlockSubmitter{
-			"1": mock.NewBeaconBlockSubmitter(),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"1": mock.NewProposalSubmitter(),
 		}),
 		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
 			"1": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
@@ -135,8 +135,8 @@ func TestSubmitAttestationsErroring(t *testing.T) {
 		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
 			"1": mock.NewErroringAttestationsSubmitter(),
 		}),
-		multinode.WithBeaconBlockSubmitters(map[string]eth2client.BeaconBlockSubmitter{
-			"1": mock.NewBeaconBlockSubmitter(),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"1": mock.NewProposalSubmitter(),
 		}),
 		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
 			"1": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
@@ -188,8 +188,8 @@ func TestSubmitAttestationsSleepy(t *testing.T) {
 		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
 			"1": mock.NewSleepyAttestationsSubmitter(200*time.Millisecond, mock.NewAttestationsSubmitter()),
 		}),
-		multinode.WithBeaconBlockSubmitters(map[string]eth2client.BeaconBlockSubmitter{
-			"1": mock.NewBeaconBlockSubmitter(),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"1": mock.NewProposalSubmitter(),
 		}),
 		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
 			"1": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
@@ -241,8 +241,8 @@ func TestSubmitAttestationsSleepySuccess(t *testing.T) {
 		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
 			"1": mock.NewSleepyAttestationsSubmitter(100*time.Millisecond, mock.NewAttestationsSubmitter()),
 		}),
-		multinode.WithBeaconBlockSubmitters(map[string]eth2client.BeaconBlockSubmitter{
-			"1": mock.NewBeaconBlockSubmitter(),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"1": mock.NewProposalSubmitter(),
 		}),
 		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
 			"1": mock.NewBeaconCommitteeSubscriptionsSubmitter(),

@@ -18,7 +18,8 @@ import (
 	"fmt"
 	"time"
 
-	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/api"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
@@ -38,18 +39,22 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 	started := time.Now()
 	log.Trace().Uint64("epoch", uint64(epoch)).Msg("Scheduling attestations")
 
-	resp, err := s.attesterDutiesProvider.AttesterDuties(ctx, epoch, validatorIndices)
+	attesterDutiesResponse, err := s.attesterDutiesProvider.AttesterDuties(ctx, &api.AttesterDutiesOpts{
+		Epoch:   epoch,
+		Indices: validatorIndices,
+	})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to fetch attester duties")
 		return
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(resp)).Msg("Fetched attester duties")
+	attesterDuties := attesterDutiesResponse.Data
+	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(attesterDuties)).Msg("Fetched attester duties")
 
 	// Generate Vouch duties from the response.
-	filteredDuties := make([]*api.AttesterDuty, 0, len(resp))
+	filteredDuties := make([]*apiv1.AttesterDuty, 0, len(attesterDuties))
 	firstSlot := s.chainTimeService.FirstSlotOfEpoch(epoch)
 	lastSlot := s.chainTimeService.FirstSlotOfEpoch(epoch+1) - 1
-	for _, duty := range resp {
+	for _, duty := range attesterDuties {
 		if duty.Slot < firstSlot || duty.Slot > lastSlot {
 			log.Warn().
 				Uint64("epoch", uint64(epoch)).

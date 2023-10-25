@@ -29,16 +29,16 @@ import (
 )
 
 type parameters struct {
-	logLevel                            zerolog.Level
-	clientMonitor                       metrics.ClientMonitor
-	processConcurrency                  int64
-	eventsProvider                      eth2client.EventsProvider
-	chainTime                           chaintime.Service
-	specProvider                        eth2client.SpecProvider
-	blindedBeaconBlockProposalProviders map[string]eth2client.BlindedBeaconBlockProposalProvider
-	signedBeaconBlockProvider           eth2client.SignedBeaconBlockProvider
-	timeout                             time.Duration
-	blockRootToSlotCache                cache.BlockRootToSlotProvider
+	logLevel                  zerolog.Level
+	clientMonitor             metrics.ClientMonitor
+	processConcurrency        int64
+	eventsProvider            eth2client.EventsProvider
+	chainTime                 chaintime.Service
+	specProvider              eth2client.SpecProvider
+	blindedProposalProviders  map[string]eth2client.BlindedProposalProvider
+	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider
+	timeout                   time.Duration
+	blockRootToSlotCache      cache.BlockRootToSlotProvider
 }
 
 // Parameter is the interface for service parameters.
@@ -101,10 +101,10 @@ func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 	})
 }
 
-// WithBlindedBeaconBlockProposalProviders sets the blinded beacon block proposal providers.
-func WithBlindedBeaconBlockProposalProviders(providers map[string]eth2client.BlindedBeaconBlockProposalProvider) Parameter {
+// WithBlindedProposalProviders sets the blinded proposal providers.
+func WithBlindedProposalProviders(providers map[string]eth2client.BlindedProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.blindedBeaconBlockProposalProviders = providers
+		p.blindedProposalProviders = providers
 	})
 }
 
@@ -152,8 +152,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.specProvider == nil {
 		return nil, errors.New("no spec provider specified")
 	}
-	if len(parameters.blindedBeaconBlockProposalProviders) == 0 {
-		return nil, errors.New("no blinded beacon block proposal providers specified")
+	if len(parameters.blindedProposalProviders) == 0 {
+		return nil, errors.New("no blinded proposal providers specified")
 	}
 	if parameters.signedBeaconBlockProvider == nil {
 		return nil, errors.New("no signed beacon block provider specified")

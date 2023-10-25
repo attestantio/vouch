@@ -50,7 +50,7 @@ func TestSubmit(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	require.EqualError(t, s.SubmitBeaconBlock(context.Background(), nil), "no beacon block supplied")
+	require.EqualError(t, s.SubmitProposal(context.Background(), nil), "no proposal supplied")
 	require.EqualError(t, s.SubmitAttestations(context.Background(), nil), "no attestations supplied")
 	require.EqualError(t, s.SubmitBeaconCommitteeSubscriptions(context.Background(), nil), "no subscriptions supplied")
 	require.EqualError(t, s.SubmitAggregateAttestations(context.Background(), nil), "no aggregate attestations supplied")
@@ -61,7 +61,7 @@ func TestInterfaces(t *testing.T) {
 		null.WithLogLevel(zerolog.Disabled),
 	)
 	require.NoError(t, err)
-	require.Implements(t, (*submitter.BeaconBlockSubmitter)(nil), s)
+	require.Implements(t, (*submitter.ProposalSubmitter)(nil), s)
 	require.Implements(t, (*submitter.AttestationsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.BeaconCommitteeSubscriptionsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.AggregateAttestationsSubmitter)(nil), s)

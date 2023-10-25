@@ -18,7 +18,8 @@ import (
 	"sync"
 	"time"
 
-	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/api"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
@@ -48,15 +49,15 @@ func (s *Service) Subscribe(ctx context.Context,
 	for index := range accounts {
 		validatorIndices = append(validatorIndices, index)
 	}
-	attesterDuties, err := s.attesterDutiesProvider.AttesterDuties(ctx, epoch, validatorIndices)
+	attesterDutiesResponse, err := s.attesterDutiesProvider.AttesterDuties(ctx, &api.AttesterDutiesOpts{
+		Epoch:   epoch,
+		Indices: validatorIndices,
+	})
 	if err != nil {
 		s.monitor.BeaconCommitteeSubscriptionCompleted(started, "failed")
 		return nil, errors.Wrap(err, "failed to obtain attester duties")
 	}
-	if len(attesterDuties) == 0 {
-		s.monitor.BeaconCommitteeSubscriptionCompleted(started, "failed")
-		return nil, errors.Wrap(err, "obtained nil attester duties")
-	}
+	attesterDuties := attesterDutiesResponse.Data
 
 	log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(validatorIndices)).Msg("Fetched attester duties")
 	duties, err := attester.MergeDuties(ctx, attesterDuties)
@@ -85,14 +86,14 @@ func (s *Service) Subscribe(ctx context.Context,
 	// Submit the subscription information.
 	go func(currentSlot phase0.Slot) {
 		log.Trace().Msg("Submitting subscription")
-		subscriptions := make([]*api.BeaconCommitteeSubscription, 0, len(duties))
+		subscriptions := make([]*apiv1.BeaconCommitteeSubscription, 0, len(duties))
 		for slot, slotInfo := range subscriptionInfo {
 			if slot <= currentSlot {
 				log.Trace().Uint64("current_slot", uint64(currentSlot)).Uint64("duty_slot", uint64(slot)).Msg("Subscription not for a future slot; ignoring")
 				return
 			}
 			for committeeIndex, info := range slotInfo {
-				subscriptions = append(subscriptions, &api.BeaconCommitteeSubscription{
+				subscriptions = append(subscriptions, &apiv1.BeaconCommitteeSubscription{
 					ValidatorIndex:   info.Duty.ValidatorIndex,
 					Slot:             slot,
 					CommitteeIndex:   committeeIndex,
@@ -175,7 +176,7 @@ func (s *Service) calculateSubscriptionInfo(ctx context.Context,
 						subscriptionInfo[duty.Slot()] = make(map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription)
 					}
 					subscriptionInfo[duty.Slot()][duty.CommitteeIndices()[i]] = &beaconcommitteesubscriber.Subscription{
-						Duty: &api.AttesterDuty{
+						Duty: &apiv1.AttesterDuty{
 							PubKey:                  pubKey,
 							Slot:                    duty.Slot(),
 							ValidatorIndex:          duty.ValidatorIndices()[i],

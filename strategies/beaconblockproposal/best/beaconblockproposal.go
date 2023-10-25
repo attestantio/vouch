@@ -19,8 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -30,7 +29,7 @@ import (
 
 type beaconBlockResponse struct {
 	provider string
-	proposal *spec.VersionedBeaconBlock
+	proposal *api.VersionedProposal
 	score    float64
 }
 
@@ -39,15 +38,20 @@ type beaconBlockError struct {
 	err      error
 }
 
-// BeaconBlockProposal provides the best beacon block proposal from a number of beacon nodes.
-func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*spec.VersionedBeaconBlock, error) {
-	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.best").Start(ctx, "BeaconBlockProposal", trace.WithAttributes(
-		attribute.Int64("slot", int64(slot)),
+// Proposal provides the best beacon block proposal from a number of beacon nodes.
+func (s *Service) Proposal(ctx context.Context,
+	opts *api.ProposalOpts,
+) (
+	*api.Response[*api.VersionedProposal],
+	error,
+) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.best").Start(ctx, "Proposal", trace.WithAttributes(
+		attribute.Int64("slot", int64(opts.Slot)),
 	))
 	defer span.End()
 
 	started := time.Now()
-	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(slot)).Logger()
+	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(opts.Slot)).Logger()
 
 	// We have two timeouts: a soft timeout and a hard timeout.
 	// At the soft timeout, we return if we have any responses so far.
@@ -56,27 +60,34 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
 
-	requests := len(s.beaconBlockProposalProviders)
+	requests := len(s.proposalProviders)
 
 	respCh := make(chan *beaconBlockResponse, requests)
 	errCh := make(chan *beaconBlockError, requests)
 	// Kick off the requests.
-	for name, provider := range s.beaconBlockProposalProviders {
-		providerGraffiti := graffiti
+	for name, provider := range s.proposalProviders {
+		providerGraffiti := opts.Graffiti[:]
 		if bytes.Contains(providerGraffiti, []byte("{{CLIENT}}")) {
 			if nodeClientProvider, isProvider := provider.(eth2client.NodeClientProvider); isProvider {
-				nodeClient, err := nodeClientProvider.NodeClient(ctx)
+				nodeClientResponse, err := nodeClientProvider.NodeClient(ctx)
 				if err != nil {
 					log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
 				} else {
-					providerGraffiti = bytes.ReplaceAll(providerGraffiti, []byte("{{CLIENT}}"), []byte(nodeClient))
+					providerGraffiti = bytes.ReplaceAll(providerGraffiti, []byte("{{CLIENT}}"), []byte(nodeClientResponse.Data))
+				}
+				if len(providerGraffiti) > 32 {
+					providerGraffiti = providerGraffiti[0:32]
+				}
+				// Replace entire opts structure so the mutated graffiti does not leak to other providers.
+				opts = &api.ProposalOpts{
+					Slot:                   opts.Slot,
+					RandaoReveal:           opts.RandaoReveal,
+					Graffiti:               [32]byte(providerGraffiti),
+					SkipRandaoVerification: opts.SkipRandaoVerification,
 				}
 			}
 		}
-		if len(providerGraffiti) > 32 {
-			providerGraffiti = providerGraffiti[0:32]
-		}
-		go s.beaconBlockProposal(ctx, started, name, provider, respCh, errCh, slot, randaoReveal, providerGraffiti)
+		go s.beaconBlockProposal(ctx, started, name, provider, respCh, errCh, opts)
 	}
 
 	// Wait for all responses (or context done).
@@ -85,7 +96,7 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 	timedOut := 0
 	softTimedOut := 0
 	bestScore := float64(0)
-	var bestProposal *spec.VersionedBeaconBlock
+	var bestProposal *api.VersionedProposal
 	var bestProvider string
 
 	// Loop 1: prior to soft timeout.
@@ -176,6 +187,7 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 		}
 	}
 	cancel()
+
 	log.Trace().
 		Dur("elapsed", time.Since(started)).
 		Int("responded", responded).
@@ -186,30 +198,31 @@ func (s *Service) BeaconBlockProposal(ctx context.Context, slot phase0.Slot, ran
 	if bestProposal == nil {
 		return nil, errors.New("no proposals received")
 	}
-	log.Trace().Str("provider", bestProvider).Stringer("proposal", bestProposal).Float64("score", bestScore).Msg("Selected best proposal")
+	log.Trace().Str("provider", bestProvider).Stringer("proposal", bestProposal).Float64("score", bestScore).Dur("elapsed", time.Since(started)).Msg("Selected best proposal")
 	if bestProvider != "" {
 		s.clientMonitor.StrategyOperation("best", bestProvider, "beacon block proposal", time.Since(started))
 	}
 
-	return bestProposal, nil
+	return &api.Response[*api.VersionedProposal]{
+		Data:     bestProposal,
+		Metadata: make(map[string]any),
+	}, nil
 }
 
 func (s *Service) beaconBlockProposal(ctx context.Context,
 	started time.Time,
 	name string,
-	provider eth2client.BeaconBlockProposalProvider,
+	provider eth2client.ProposalProvider,
 	respCh chan *beaconBlockResponse,
 	errCh chan *beaconBlockError,
-	slot phase0.Slot,
-	randaoReveal phase0.BLSSignature,
-	graffiti []byte,
+	opts *api.ProposalOpts,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.best").Start(ctx, "beaconBlockProposal", trace.WithAttributes(
 		attribute.String("provider", name),
 	))
 	defer span.End()
 
-	proposal, err := provider.BeaconBlockProposal(ctx, slot, randaoReveal, graffiti)
+	proposalResponse, err := provider.Proposal(ctx, opts)
 	s.clientMonitor.ClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
 	if err != nil {
 		errCh <- &beaconBlockError{
@@ -218,14 +231,8 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 		}
 		return
 	}
+	proposal := proposalResponse.Data
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
-	if proposal == nil {
-		errCh <- &beaconBlockError{
-			provider: name,
-			err:      errors.New("beacon block proposal nil"),
-		}
-		return
-	}
 
 	score := s.scoreBeaconBlockProposal(ctx, name, proposal)
 	span.SetAttributes(attribute.Float64("score", score))

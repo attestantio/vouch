@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,6 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/vouch/mock"
@@ -28,7 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSubmitBeaconBlockEmpty(t *testing.T) {
+func TestSubmitProposalEmpty(t *testing.T) {
 	ctx := context.Background()
 
 	s, err := multinode.New(context.Background(),
@@ -38,8 +39,8 @@ func TestSubmitBeaconBlockEmpty(t *testing.T) {
 		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
 			"1": mock.NewAttestationsSubmitter(),
 		}),
-		multinode.WithBeaconBlockSubmitters(map[string]eth2client.BeaconBlockSubmitter{
-			"1": mock.NewBeaconBlockSubmitter(),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"1": mock.NewProposalSubmitter(),
 		}),
 		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
 			"1": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
@@ -62,11 +63,11 @@ func TestSubmitBeaconBlockEmpty(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitBeaconBlock(ctx, nil)
-	require.EqualError(t, err, "no beacon block supplied")
+	err = s.SubmitProposal(ctx, nil)
+	require.EqualError(t, err, "no proposal supplied")
 }
 
-func TestSubmitBeaconBlock(t *testing.T) {
+func TestSubmitProposal(t *testing.T) {
 	ctx := context.Background()
 
 	capture := logger.NewLogCapture()
@@ -78,8 +79,8 @@ func TestSubmitBeaconBlock(t *testing.T) {
 		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
 			"1": mock.NewAttestationsSubmitter(),
 		}),
-		multinode.WithBeaconBlockSubmitters(map[string]eth2client.BeaconBlockSubmitter{
-			"1": mock.NewBeaconBlockSubmitter(),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"1": mock.NewProposalSubmitter(),
 		}),
 		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
 			"1": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
@@ -102,7 +103,7 @@ func TestSubmitBeaconBlock(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitBeaconBlock(ctx, &spec.VersionedSignedBeaconBlock{
+	err = s.SubmitProposal(ctx, &api.VersionedSignedProposal{
 		Version: spec.DataVersionAltair,
 		Altair: &altair.SignedBeaconBlock{
 			Message: &altair.BeaconBlock{
@@ -114,10 +115,10 @@ func TestSubmitBeaconBlock(t *testing.T) {
 
 	// Return happens prior to the log message, so wait before asserting.
 	time.Sleep(time.Millisecond)
-	capture.AssertHasEntry(t, "Submitted beacon block")
+	capture.AssertHasEntry(t, "Submitted proposal")
 }
 
-func TestSubmitBeaconBlockErroring(t *testing.T) {
+func TestSubmitProposalErroring(t *testing.T) {
 	ctx := context.Background()
 
 	s, err := multinode.New(context.Background(),
@@ -127,8 +128,8 @@ func TestSubmitBeaconBlockErroring(t *testing.T) {
 		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
 			"1": mock.NewAttestationsSubmitter(),
 		}),
-		multinode.WithBeaconBlockSubmitters(map[string]eth2client.BeaconBlockSubmitter{
-			"1": mock.NewErroringBeaconBlockSubmitter(),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"1": mock.NewErroringProposalSubmitter(),
 		}),
 		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
 			"1": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
@@ -151,7 +152,7 @@ func TestSubmitBeaconBlockErroring(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitBeaconBlock(ctx, &spec.VersionedSignedBeaconBlock{
+	err = s.SubmitProposal(ctx, &api.VersionedSignedProposal{
 		Version: spec.DataVersionAltair,
 		Altair: &altair.SignedBeaconBlock{
 			Message: &altair.BeaconBlock{
@@ -162,7 +163,7 @@ func TestSubmitBeaconBlockErroring(t *testing.T) {
 	require.EqualError(t, err, "no successful submissions before timeout")
 }
 
-func TestSubmitBeaconBlockSleepy(t *testing.T) {
+func TestSubmitProposalSleepy(t *testing.T) {
 	ctx := context.Background()
 
 	s, err := multinode.New(context.Background(),
@@ -172,8 +173,8 @@ func TestSubmitBeaconBlockSleepy(t *testing.T) {
 		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
 			"1": mock.NewAttestationsSubmitter(),
 		}),
-		multinode.WithBeaconBlockSubmitters(map[string]eth2client.BeaconBlockSubmitter{
-			"1": mock.NewSleepyBeaconBlockSubmitter(200*time.Millisecond, mock.NewBeaconBlockSubmitter()),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"1": mock.NewSleepyProposalSubmitter(200*time.Millisecond, mock.NewProposalSubmitter()),
 		}),
 		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
 			"1": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
@@ -196,7 +197,7 @@ func TestSubmitBeaconBlockSleepy(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitBeaconBlock(ctx, &spec.VersionedSignedBeaconBlock{
+	err = s.SubmitProposal(ctx, &api.VersionedSignedProposal{
 		Version: spec.DataVersionAltair,
 		Altair: &altair.SignedBeaconBlock{
 			Message: &altair.BeaconBlock{
@@ -207,7 +208,7 @@ func TestSubmitBeaconBlockSleepy(t *testing.T) {
 	require.EqualError(t, err, "no successful submissions before timeout")
 }
 
-func TestSubmitBeaconBlockSleepySuccess(t *testing.T) {
+func TestSubmitProposalSleepySuccess(t *testing.T) {
 	ctx := context.Background()
 
 	s, err := multinode.New(context.Background(),
@@ -217,8 +218,8 @@ func TestSubmitBeaconBlockSleepySuccess(t *testing.T) {
 		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
 			"1": mock.NewAttestationsSubmitter(),
 		}),
-		multinode.WithBeaconBlockSubmitters(map[string]eth2client.BeaconBlockSubmitter{
-			"1": mock.NewSleepyBeaconBlockSubmitter(100*time.Millisecond, mock.NewBeaconBlockSubmitter()),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"1": mock.NewSleepyProposalSubmitter(100*time.Millisecond, mock.NewProposalSubmitter()),
 		}),
 		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
 			"1": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
@@ -241,7 +242,7 @@ func TestSubmitBeaconBlockSleepySuccess(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitBeaconBlock(ctx, &spec.VersionedSignedBeaconBlock{
+	err = s.SubmitProposal(ctx, &api.VersionedSignedProposal{
 		Version: spec.DataVersionAltair,
 		Altair: &altair.SignedBeaconBlock{
 			Message: &altair.BeaconBlock{

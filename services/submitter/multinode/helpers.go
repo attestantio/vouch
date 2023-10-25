@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -28,16 +28,17 @@ func (*Service) serviceInfo(ctx context.Context, submitter interface{}) (string,
 		provider = service.Address()
 	}
 	if service, isService := submitter.(eth2client.NodeVersionProvider); isService {
-		nodeVersion, err := service.NodeVersion(ctx)
+		nodeVersionResponse, err := service.NodeVersion(ctx)
 		if err == nil {
+			nodeVersion := strings.ToLower(nodeVersionResponse.Data)
 			switch {
-			case strings.Contains(strings.ToLower(nodeVersion), "lighthouse"):
+			case strings.Contains(nodeVersion, "lighthouse"):
 				serviceName = "lighthouse"
-			case strings.Contains(strings.ToLower(nodeVersion), "prysm"):
+			case strings.Contains(nodeVersion, "prysm"):
 				serviceName = "prysm"
-			case strings.Contains(strings.ToLower(nodeVersion), "teku"):
+			case strings.Contains(nodeVersion, "teku"):
 				serviceName = "teku"
-			case strings.Contains(strings.ToLower(nodeVersion), "nimbus"):
+			case strings.Contains(nodeVersion, "nimbus"):
 				serviceName = "nimbus"
 			}
 		}

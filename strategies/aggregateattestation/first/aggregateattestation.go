@@ -18,6 +18,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
@@ -27,9 +28,14 @@ import (
 )
 
 // AggregateAttestation provides the aggregate attestation from a number of beacon nodes.
-func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, attestationDataRoot phase0.Root) (*phase0.Attestation, error) {
+func (s *Service) AggregateAttestation(ctx context.Context,
+	opts *api.AggregateAttestationOpts,
+) (
+	*api.Response[*phase0.Attestation],
+	error,
+) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.aggregateattestation.first").Start(ctx, "AggregateAttestation", trace.WithAttributes(
-		attribute.Int64("slot", int64(slot)),
+		attribute.Int64("slot", int64(opts.Slot)),
 	))
 	defer span.End()
 
@@ -46,18 +52,15 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 			provider eth2client.AggregateAttestationProvider,
 			ch chan *phase0.Attestation,
 		) {
-			log := log.With().Str("provider", name).Uint64("slot", uint64(slot)).Logger()
+			log := log.With().Str("provider", name).Uint64("slot", uint64(opts.Slot)).Logger()
 
-			aggregate, err := provider.AggregateAttestation(ctx, slot, attestationDataRoot)
+			aggregateResponse, err := provider.AggregateAttestation(ctx, opts)
 			s.clientMonitor.ClientOperation(name, "aggregate attestation", err == nil, time.Since(started))
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain aggregate attestation")
 				return
 			}
-			if aggregate == nil {
-				log.Warn().Msg("Returned empty aggregate attestation")
-				return
-			}
+			aggregate := aggregateResponse.Data
 			log.Trace().Str("provider", name).Msg("Obtained aggregate attestation")
 
 			ch <- aggregate
@@ -71,6 +74,9 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 		return nil, errors.New("failed to obtain aggregate attestation before timeout")
 	case aggregate := <-respCh:
 		cancel()
-		return aggregate, nil
+		return &api.Response[*phase0.Attestation]{
+			Data:     aggregate,
+			Metadata: make(map[string]any),
+		}, nil
 	}
 }

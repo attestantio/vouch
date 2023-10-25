@@ -19,6 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/cache"
@@ -79,21 +80,6 @@ func TestAttestationData(t *testing.T) {
 				best.WithTimeout(time.Second),
 				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
 					"sleepy": mock.NewSleepyAttestationDataProvider(5*time.Second, mock.NewAttestationDataProvider()),
-				}),
-				best.WithChainTime(chainTime),
-				best.WithBlockRootToSlotCache(cache),
-			},
-			slot:           12345,
-			committeeIndex: 3,
-			err:            "no attestations received",
-		},
-		{
-			name: "NilResponse",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(time.Second),
-				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
-					"nil": mock.NewNilAttestationDataProvider(),
 				}),
 				best.WithChainTime(chainTime),
 				best.WithBlockRootToSlotCache(cache),
@@ -171,7 +157,10 @@ func TestAttestationData(t *testing.T) {
 			capture := logger.NewLogCapture()
 			s, err := best.New(context.Background(), test.params...)
 			require.NoError(t, err)
-			attestationData, err := s.AttestationData(context.Background(), test.slot, test.committeeIndex)
+			attestationData, err := s.AttestationData(context.Background(), &api.AttestationDataOpts{
+				Slot:           test.slot,
+				CommitteeIndex: test.committeeIndex,
+			})
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {

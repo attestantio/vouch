@@ -39,7 +39,7 @@ type Service struct {
 	applicationBuilderDomain phase0.Domain
 }
 
-// New creates a new beacon block propsal strategy.
+// New creates a new builder bid strategy.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
@@ -57,10 +57,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// The application domain is static, so fetch it here once.
-	spec, err := parameters.specProvider.Spec(ctx)
+	specResponse, err := parameters.specProvider.Spec(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain spec")
 	}
+	spec := specResponse.Data
 	tmp, exists := spec["DOMAIN_APPLICATION_BUILDER"]
 	if !exists {
 		return nil, errors.New("failed to obtain application builder domain type")

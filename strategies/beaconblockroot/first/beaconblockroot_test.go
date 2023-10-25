@@ -19,6 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/strategies/beaconblockroot/first"
@@ -66,23 +67,6 @@ func TestBeaconBlockRoot(t *testing.T) {
 			err: "failed to obtain beacon block root before timeout",
 		},
 		{
-			name: "NilResponse",
-			params: []first.Parameter{
-				first.WithLogLevel(zerolog.Disabled),
-				first.WithTimeout(time.Second),
-				first.WithBeaconBlockRootProviders(map[string]eth2client.BeaconBlockRootProvider{
-					"nil": mock.NewNilBeaconBlockRootProvider(),
-				}),
-			},
-			blockID: "1",
-			beaconBlockRoot: phase0.Root{
-				0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-				0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
-			},
-			// Nil response is invalid, so expect a timeout.
-			err: "failed to obtain beacon block root before timeout",
-		},
-		{
 			name: "GoodMixed",
 			params: []first.Parameter{
 				first.WithLogLevel(zerolog.Disabled),
@@ -105,7 +89,9 @@ func TestBeaconBlockRoot(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {
-			root, err := s.BeaconBlockRoot(context.Background(), test.blockID)
+			root, err := s.BeaconBlockRoot(context.Background(), &api.BeaconBlockRootOpts{
+				Block: test.blockID,
+			})
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
