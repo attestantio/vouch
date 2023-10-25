@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/attestantio/go-block-relay v0.2.0
 	github.com/attestantio/go-builder-client v0.4.0
-	github.com/attestantio/go-eth2-client v0.19.0
+	github.com/attestantio/go-eth2-client v0.19.2
 	github.com/aws/aws-sdk-go v1.46.3
 	github.com/holiman/uint256 v1.2.3
 	github.com/mitchellh/go-homedir v1.1.0

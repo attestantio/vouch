@@ -242,9 +242,9 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 	}
 
 	// Select the relays with the block we need that are capable of unblinding the block.
-	providers := make([]builderclient.UnblindedBlockProvider, 0, len(auctionResults.Providers))
+	providers := make([]builderclient.UnblindedProposalProvider, 0, len(auctionResults.Providers))
 	for _, provider := range auctionResults.Providers {
-		unblindedBlockProvider, isProvider := provider.(builderclient.UnblindedBlockProvider)
+		unblindedProposalProvider, isProvider := provider.(builderclient.UnblindedProposalProvider)
 		if !isProvider {
 			log.Warn().Msg("Auctioneer cannot unblind the proposal")
 			continue
