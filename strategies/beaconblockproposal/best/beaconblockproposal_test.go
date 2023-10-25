@@ -31,7 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBeaconBlockProposal(t *testing.T) {
+func TestProposal(t *testing.T) {
 	ctx := context.Background()
 
 	genesisTime := time.Now()
@@ -70,8 +70,8 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"good": mock.NewBeaconBlockProposalProvider(),
+				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+					"good": mock.NewProposalProvider(),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -88,8 +88,8 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(5*time.Second, mock.NewBeaconBlockProposalProvider()),
+				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+					"sleepy": mock.NewSleepyProposalProvider(5*time.Second, mock.NewProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -107,9 +107,9 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"error":  mock.NewErroringBeaconBlockProposalProvider(),
-					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(time.Second, mock.NewBeaconBlockProposalProvider()),
+				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+					"error":  mock.NewErroringProposalProvider(),
+					"sleepy": mock.NewSleepyProposalProvider(time.Second, mock.NewProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -126,9 +126,9 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"good":   mock.NewBeaconBlockProposalProvider(),
-					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(2*time.Second, mock.NewBeaconBlockProposalProvider()),
+				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+					"good":   mock.NewProposalProvider(),
+					"sleepy": mock.NewSleepyProposalProvider(2*time.Second, mock.NewProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -146,8 +146,8 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(2*time.Second, mock.NewBeaconBlockProposalProvider()),
+				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+					"sleepy": mock.NewSleepyProposalProvider(2*time.Second, mock.NewProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -165,9 +165,9 @@ func TestBeaconBlockProposal(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
 				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
-				best.WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"error":  mock.NewErroringBeaconBlockProposalProvider(),
-					"sleepy": mock.NewSleepyBeaconBlockProposalProvider(2*time.Second, mock.NewBeaconBlockProposalProvider()),
+				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+					"error":  mock.NewErroringProposalProvider(),
+					"sleepy": mock.NewSleepyProposalProvider(2*time.Second, mock.NewProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -182,7 +182,7 @@ func TestBeaconBlockProposal(t *testing.T) {
 			capture := logger.NewLogCapture()
 			s, err := best.New(context.Background(), test.params...)
 			require.NoError(t, err)
-			proposal, err := s.BeaconBlockProposal(context.Background(), &api.BeaconBlockProposalOpts{
+			proposal, err := s.Proposal(context.Background(), &api.ProposalOpts{
 				Slot: 12345,
 				RandaoReveal: phase0.BLSSignature([96]byte{
 					0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,

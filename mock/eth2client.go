@@ -630,19 +630,19 @@ func (m *SleepyBeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubsc
 	return m.next.SubmitBeaconCommitteeSubscriptions(ctx, subscriptions)
 }
 
-// BeaconBlockProposalProvider is a mock for eth2client.BeaconBlockProposalProvider.
-type BeaconBlockProposalProvider struct{}
+// ProposalProvider is a mock for eth2client.ProposalProvider.
+type ProposalProvider struct{}
 
-// NewBeaconBlockProposalProvider returns a mock beacon block proposal provider.
-func NewBeaconBlockProposalProvider() eth2client.BeaconBlockProposalProvider {
-	return &BeaconBlockProposalProvider{}
+// NewProposalProvider returns a mock beacon block proposal provider.
+func NewProposalProvider() eth2client.ProposalProvider {
+	return &ProposalProvider{}
 }
 
-// BeaconBlockProposal is a mock.
-func (*BeaconBlockProposalProvider) BeaconBlockProposal(_ context.Context,
-	opts *api.BeaconBlockProposalOpts,
+// Proposal is a mock.
+func (*ProposalProvider) Proposal(_ context.Context,
+	opts *api.ProposalOpts,
 ) (
-	*api.Response[*spec.VersionedBeaconBlock],
+	*api.Response[*api.VersionedProposal],
 	error,
 ) {
 	// Build a beacon block.
@@ -687,7 +687,7 @@ func (*BeaconBlockProposalProvider) BeaconBlockProposal(_ context.Context,
 		}
 	}
 
-	block := &spec.VersionedBeaconBlock{
+	block := &api.VersionedProposal{
 		Version: spec.DataVersionPhase0,
 		Phase0: &phase0.BeaconBlock{
 			Slot:          opts.Slot,
@@ -723,53 +723,53 @@ func (*BeaconBlockProposalProvider) BeaconBlockProposal(_ context.Context,
 		},
 	}
 
-	return &api.Response[*spec.VersionedBeaconBlock]{
+	return &api.Response[*api.VersionedProposal]{
 		Data:     block,
 		Metadata: make(map[string]any),
 	}, nil
 }
 
-// ErroringBeaconBlockProposalProvider is a mock for eth2client.BeaconBlockProposalProvider.
-type ErroringBeaconBlockProposalProvider struct{}
+// ErroringProposalProvider is a mock for eth2client.ProposalProvider.
+type ErroringProposalProvider struct{}
 
-// NewErroringBeaconBlockProposalProvider returns a mock beacon block proposal provider.
-func NewErroringBeaconBlockProposalProvider() eth2client.BeaconBlockProposalProvider {
-	return &ErroringBeaconBlockProposalProvider{}
+// NewErroringProposalProvider returns a mock beacon block proposal provider.
+func NewErroringProposalProvider() eth2client.ProposalProvider {
+	return &ErroringProposalProvider{}
 }
 
-// BeaconBlockProposal is a mock.
-func (*ErroringBeaconBlockProposalProvider) BeaconBlockProposal(_ context.Context,
-	_ *api.BeaconBlockProposalOpts,
+// Proposal is a mock.
+func (*ErroringProposalProvider) Proposal(_ context.Context,
+	_ *api.ProposalOpts,
 ) (
-	*api.Response[*spec.VersionedBeaconBlock],
+	*api.Response[*api.VersionedProposal],
 	error,
 ) {
 	return nil, errors.New("error")
 }
 
-// SleepyBeaconBlockProposalProvider is a mock for eth2client.BeaconBlockProposalProvider.
-type SleepyBeaconBlockProposalProvider struct {
+// SleepyProposalProvider is a mock for eth2client.ProposalProvider.
+type SleepyProposalProvider struct {
 	wait time.Duration
-	next eth2client.BeaconBlockProposalProvider
+	next eth2client.ProposalProvider
 }
 
-// NewSleepyBeaconBlockProposalProvider returns a mock beacon block proposal.
-func NewSleepyBeaconBlockProposalProvider(wait time.Duration, next eth2client.BeaconBlockProposalProvider) eth2client.BeaconBlockProposalProvider {
-	return &SleepyBeaconBlockProposalProvider{
+// NewSleepyProposalProvider returns a mock beacon block proposal.
+func NewSleepyProposalProvider(wait time.Duration, next eth2client.ProposalProvider) eth2client.ProposalProvider {
+	return &SleepyProposalProvider{
 		wait: wait,
 		next: next,
 	}
 }
 
-// BeaconBlockProposal is a mock.
-func (m *SleepyBeaconBlockProposalProvider) BeaconBlockProposal(ctx context.Context,
-	opts *api.BeaconBlockProposalOpts,
+// Proposal is a mock.
+func (m *SleepyProposalProvider) Proposal(ctx context.Context,
+	opts *api.ProposalOpts,
 ) (
-	*api.Response[*spec.VersionedBeaconBlock],
+	*api.Response[*api.VersionedProposal],
 	error,
 ) {
 	time.Sleep(m.wait)
-	return m.next.BeaconBlockProposal(ctx, opts)
+	return m.next.Proposal(ctx, opts)
 }
 
 // BeaconBlockRootProvider is a mock for eth2client.BeaconBlockRootProvider.
@@ -826,23 +826,23 @@ func (m *SleepyBeaconBlockRootProvider) BeaconBlockRoot(ctx context.Context, opt
 	return m.next.BeaconBlockRoot(ctx, opts)
 }
 
-// BlindedBeaconBlockProposalProvider is a mock for eth2client.BlindedBeaconBlockProposalProvider.
-type BlindedBeaconBlockProposalProvider struct {
+// BlindedProposalProvider is a mock for eth2client.BlindedProposalProvider.
+type BlindedProposalProvider struct {
 	chainTime chaintime.Service
 }
 
-// NewBlindedBeaconBlockProposalProvider returns a mock blinded beacon block proposal provider.
-func NewBlindedBeaconBlockProposalProvider(chainTime chaintime.Service) eth2client.BlindedBeaconBlockProposalProvider {
-	return &BlindedBeaconBlockProposalProvider{
+// NewBlindedProposalProvider returns a mock blinded beacon block proposal provider.
+func NewBlindedProposalProvider(chainTime chaintime.Service) eth2client.BlindedProposalProvider {
+	return &BlindedProposalProvider{
 		chainTime: chainTime,
 	}
 }
 
-// BlindedBeaconBlockProposal is a mock.
-func (m *BlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ context.Context,
-	opts *api.BlindedBeaconBlockProposalOpts,
+// BlindedProposal is a mock.
+func (m *BlindedProposalProvider) BlindedProposal(_ context.Context,
+	opts *api.BlindedProposalOpts,
 ) (
-	*api.Response[*api.VersionedBlindedBeaconBlock],
+	*api.Response[*api.VersionedBlindedProposal],
 	error,
 ) {
 	// Build a beacon block.
@@ -896,7 +896,7 @@ func (m *BlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ contex
 		Timestamp: uint64(m.chainTime.StartOfSlot(opts.Slot).Unix()),
 	}
 
-	block := &api.VersionedBlindedBeaconBlock{
+	block := &api.VersionedBlindedProposal{
 		Version: spec.DataVersionBellatrix,
 		Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 			Slot:          opts.Slot,
@@ -936,53 +936,53 @@ func (m *BlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ contex
 		},
 	}
 
-	return &api.Response[*api.VersionedBlindedBeaconBlock]{
+	return &api.Response[*api.VersionedBlindedProposal]{
 		Data:     block,
 		Metadata: make(map[string]any),
 	}, nil
 }
 
-// ErroringBlindedBeaconBlockProposalProvider is a mock for eth2client.BlindedBeaconBlockProposalProvider.
-type ErroringBlindedBeaconBlockProposalProvider struct{}
+// ErroringBlindedProposalProvider is a mock for eth2client.BlindedProposalProvider.
+type ErroringBlindedProposalProvider struct{}
 
-// NewErroringBlindedBeaconBlockProposalProvider returns a mock blinded beacon block proposal provider.
-func NewErroringBlindedBeaconBlockProposalProvider() eth2client.BlindedBeaconBlockProposalProvider {
-	return &ErroringBlindedBeaconBlockProposalProvider{}
+// NewErroringBlindedProposalProvider returns a mock blinded beacon block proposal provider.
+func NewErroringBlindedProposalProvider() eth2client.BlindedProposalProvider {
+	return &ErroringBlindedProposalProvider{}
 }
 
-// BlindedBeaconBlockProposal is a mock.
-func (*ErroringBlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(_ context.Context,
-	_ *api.BlindedBeaconBlockProposalOpts,
+// BlindedProposal is a mock.
+func (*ErroringBlindedProposalProvider) BlindedProposal(_ context.Context,
+	_ *api.BlindedProposalOpts,
 ) (
-	*api.Response[*api.VersionedBlindedBeaconBlock],
+	*api.Response[*api.VersionedBlindedProposal],
 	error,
 ) {
 	return nil, errors.New("error")
 }
 
-// SleepyBlindedBeaconBlockProposalProvider is a mock for eth2client.BlindedBeaconBlockProposalProvider.
-type SleepyBlindedBeaconBlockProposalProvider struct {
+// SleepyBlindedProposalProvider is a mock for eth2client.BlindedProposalProvider.
+type SleepyBlindedProposalProvider struct {
 	wait time.Duration
-	next eth2client.BlindedBeaconBlockProposalProvider
+	next eth2client.BlindedProposalProvider
 }
 
-// NewSleepyBlindedBeaconBlockProposalProvider returns a mock blinded beacon block proposal.
-func NewSleepyBlindedBeaconBlockProposalProvider(wait time.Duration, next eth2client.BlindedBeaconBlockProposalProvider) eth2client.BlindedBeaconBlockProposalProvider {
-	return &SleepyBlindedBeaconBlockProposalProvider{
+// NewSleepyBlindedProposalProvider returns a mock blinded beacon block proposal.
+func NewSleepyBlindedProposalProvider(wait time.Duration, next eth2client.BlindedProposalProvider) eth2client.BlindedProposalProvider {
+	return &SleepyBlindedProposalProvider{
 		wait: wait,
 		next: next,
 	}
 }
 
-// BlindedBeaconBlockProposal is a mock.
-func (m *SleepyBlindedBeaconBlockProposalProvider) BlindedBeaconBlockProposal(ctx context.Context,
-	opts *api.BlindedBeaconBlockProposalOpts,
+// BlindedProposal is a mock.
+func (m *SleepyBlindedProposalProvider) BlindedProposal(ctx context.Context,
+	opts *api.BlindedProposalOpts,
 ) (
-	*api.Response[*api.VersionedBlindedBeaconBlock],
+	*api.Response[*api.VersionedBlindedProposal],
 	error,
 ) {
 	time.Sleep(m.wait)
-	return m.next.BlindedBeaconBlockProposal(ctx, opts)
+	return m.next.BlindedProposal(ctx, opts)
 }
 
 // BeaconBlockHeadersProvider is a mock for eth2client.BeaconBlockHeadersProvider.

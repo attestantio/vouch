@@ -19,6 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -56,7 +57,7 @@ func TestScore(t *testing.T) {
 	tests := []struct {
 		name        string
 		priorBlocks map[phase0.Root]*priorBlockVotes
-		block       *spec.VersionedBeaconBlock
+		proposal    *api.VersionedProposal
 		score       float64
 		err         string
 	}{
@@ -65,13 +66,13 @@ func TestScore(t *testing.T) {
 			score: 0,
 		},
 		{
-			name:  "Empty",
-			block: &spec.VersionedBeaconBlock{},
-			score: 0,
+			name:     "Empty",
+			proposal: &api.VersionedProposal{},
+			score:    0,
 		},
 		{
 			name: "SingleAttestation",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
 					Slot:       12346,
@@ -96,7 +97,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "SingleAttestationParentRootDistance2",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
 					Slot:       12346,
@@ -121,7 +122,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "SingleAttestationDistance2",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
 					Slot:       12345,
@@ -146,7 +147,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "TwoAttestations",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
 					Slot:       12345,
@@ -181,7 +182,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "AttesterSlashing",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
 					Slot:       12345,
@@ -216,7 +217,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "DuplicateAttestations",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
 					Slot:       12345,
@@ -251,7 +252,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "Full",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
 					Slot:       12345,
@@ -310,7 +311,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "FullParentRootDistance2",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
 					Slot:       12346,
@@ -369,7 +370,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "FullParentRootDistance4",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionPhase0,
 				Phase0: &phase0.BeaconBlock{
 					Slot:       12348,
@@ -428,7 +429,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "AltairSingleAttestationDistance1",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
 					Slot:       12346,
@@ -457,7 +458,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "AltairSingleAttestationDistance1IncorrectHead",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
 					Slot:       12346,
@@ -486,7 +487,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "AltairSingleAttestationDistance2",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
 					Slot:       12346,
@@ -514,7 +515,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "AltairSingleAttestationDistance5",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
 					Slot:       12349,
@@ -543,7 +544,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "AltairSingleAttestationDistance6",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
 					Slot:       12350,
@@ -571,7 +572,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "AltairOverlappingAttestations",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
 					Slot:       12345,
@@ -609,7 +610,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "AltairParentMissing",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
 					Slot:       12345,
@@ -676,7 +677,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
 					Slot:       12344,
@@ -717,7 +718,7 @@ func TestScore(t *testing.T) {
 					slot:   12320,
 				},
 			},
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
 					Slot:       12345,
@@ -758,7 +759,7 @@ func TestScore(t *testing.T) {
 					slot:   12320,
 				},
 			},
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionAltair,
 				Altair: &altair.BeaconBlock{
 					Slot:       12345,
@@ -788,7 +789,7 @@ func TestScore(t *testing.T) {
 		{
 			name:        "ExecutionPayloadBellatrix",
 			priorBlocks: map[phase0.Root]*priorBlockVotes{},
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &bellatrix.BeaconBlock{
 					Slot:       12345,
@@ -807,7 +808,7 @@ func TestScore(t *testing.T) {
 		{
 			name:        "ExecutionPayloadCapella",
 			priorBlocks: map[phase0.Root]*priorBlockVotes{},
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersionCapella,
 				Capella: &capella.BeaconBlock{
 					Slot:       12345,
@@ -825,7 +826,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "InvalidVersion",
-			block: &spec.VersionedBeaconBlock{
+			proposal: &api.VersionedProposal{
 				Version: spec.DataVersion(999),
 				Altair: &altair.BeaconBlock{
 					Slot: 12345,
@@ -891,8 +892,8 @@ func TestScore(t *testing.T) {
 				WithChainTimeService(chainTime),
 				WithSpecProvider(specProvider),
 				WithProcessConcurrency(6),
-				WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one": mock.NewBeaconBlockProposalProvider(),
+				WithProposalProviders(map[string]eth2client.ProposalProvider{
+					"one": mock.NewProposalProvider(),
 				}),
 				WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				WithBlockRootToSlotCache(blockToSlotCache),
@@ -902,7 +903,7 @@ func TestScore(t *testing.T) {
 			if test.priorBlocks != nil {
 				s.priorBlocksVotes = test.priorBlocks
 			}
-			score := s.scoreBeaconBlockProposal(context.Background(), test.name, test.block)
+			score := s.scoreBeaconBlockProposal(context.Background(), test.name, test.proposal)
 			assert.Equal(t, test.score, score)
 		})
 	}
