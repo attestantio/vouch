@@ -315,7 +315,7 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 	return nil
 }
 
-func (s *Service) confirmProposalData(ctx context.Context,
+func (s *Service) confirmProposalData(_ context.Context,
 	proposal *api.VersionedProposal,
 	duty *beaconblockproposer.Duty,
 	graffiti [32]byte,
@@ -465,7 +465,6 @@ func (s *Service) signCompositeProposal(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to obtain blob sidecars of proposal")
 	}
 	blobSidecarSigs := make([]phase0.BLSSignature, len(blobSidecars))
-	// TODO parallelise or batch this.
 	for i := range blobSidecars {
 		root, err := blobSidecars[i].HashTreeRoot()
 		if err != nil {
@@ -697,7 +696,6 @@ func (s *Service) signBlindedProposal(ctx context.Context,
 				Message: blobSidecars[i],
 			}
 		}
-		// TODO parallelise or batch this.
 		for i := range blobSidecars {
 			root, err := blobSidecars[i].HashTreeRoot()
 			if err != nil {
