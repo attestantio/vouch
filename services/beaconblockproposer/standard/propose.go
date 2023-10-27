@@ -315,7 +315,7 @@ func (s *Service) proposeBlockWithoutAuction(ctx context.Context,
 	return nil
 }
 
-func (s *Service) confirmProposalData(_ context.Context,
+func (*Service) confirmProposalData(_ context.Context,
 	proposal *api.VersionedProposal,
 	duty *beaconblockproposer.Duty,
 	graffiti [32]byte,
