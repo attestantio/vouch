@@ -156,7 +156,7 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 	validatingAccounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, phase0.Epoch(uint64(duty.Slot())/s.slotsPerEpoch), validatorIndices)
 	if err != nil {
 		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
-		return nil, errors.New("failed to obtain attesting validator accounts")
+		return nil, errors.Wrap(err, "failed to obtain attesting validator accounts")
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Int("validating_accounts", len(validatingAccounts)).Msg("Obtained validating accounts")
 
@@ -197,6 +197,7 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 	}
 
 	if len(attestations) < len(validatorIndices) {
+		log.Error().Stringer("duty", duty).Int("total_attestations", len(validatorIndices)).Int("failed_attestations", len(validatorIndices)-len(attestations)).Msg("Some attestations failed")
 		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices)-len(attestations), "failed")
 	}
 	s.monitor.AttestationsCompleted(started, duty.Slot(), len(attestations), "succeeded")

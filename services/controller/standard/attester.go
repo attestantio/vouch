@@ -183,6 +183,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 			log.Debug().Uint64("committee_index", uint64(attestation.Data.Index)).Msg("No committee info; not aggregating")
 			continue
 		}
+		log = log.With().Uint64("validator_index", uint64(info.Duty.ValidatorIndex)).Logger()
 		if info.IsAggregator {
 			accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []phase0.ValidatorIndex{info.Duty.ValidatorIndex})
 			if err != nil {
