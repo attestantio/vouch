@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -22,7 +22,6 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
@@ -35,10 +34,10 @@ import (
 
 // Service is the provider for beacon block proposals.
 type Service struct {
-	clientMonitor                       metrics.ClientMonitor
-	chainTime                           chaintime.Service
-	blindedBeaconBlockProposalProviders map[string]eth2client.BlindedBeaconBlockProposalProvider
-	timeout                             time.Duration
+	clientMonitor            metrics.ClientMonitor
+	chainTime                chaintime.Service
+	blindedProposalProviders map[string]eth2client.BlindedProposalProvider
+	timeout                  time.Duration
 }
 
 // module-wide log.
@@ -46,7 +45,7 @@ var log zerolog.Logger
 
 var zeroFeeRecipient bellatrix.ExecutionAddress
 
-// New creates a new beacon block propsal strategy.
+// New creates a new beacon block proposal strategy.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
@@ -60,32 +59,35 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		chainTime:                           parameters.chainTime,
-		blindedBeaconBlockProposalProviders: parameters.blindedBeaconBlockProposalProviders,
-		timeout:                             parameters.timeout,
-		clientMonitor:                       parameters.clientMonitor,
+		chainTime:                parameters.chainTime,
+		blindedProposalProviders: parameters.blindedProposalProviders,
+		timeout:                  parameters.timeout,
+		clientMonitor:            parameters.clientMonitor,
 	}
 
 	return s, nil
 }
 
-// BlindedBeaconBlockProposal provides the first blinded beacon block proposal from a number of beacon nodes.
-func (s *Service) BlindedBeaconBlockProposal(ctx context.Context, slot phase0.Slot, randaoReveal phase0.BLSSignature, graffiti []byte) (*api.VersionedBlindedBeaconBlock, error) {
-	return s.BlindedBeaconBlockProposalWithExpectedPayload(ctx, slot, randaoReveal, graffiti, nil)
-}
-
-// BlindedBeaconBlockProposalWithExpectedPayload fetches a blinded proposed beacon block for signing.
-func (s *Service) BlindedBeaconBlockProposalWithExpectedPayload(ctx context.Context,
-	slot phase0.Slot,
-	randaoReveal phase0.BLSSignature,
-	graffiti []byte,
-	bid *builderspec.VersionedSignedBuilderBid,
+// BlindedProposal provides the first blinded proposal from a number of beacon nodes.
+func (s *Service) BlindedProposal(ctx context.Context,
+	opts *api.BlindedProposalOpts,
 ) (
-	*api.VersionedBlindedBeaconBlock,
+	*api.Response[*api.VersionedBlindedProposal],
 	error,
 ) {
-	ctx, span := otel.Tracer("attestantio.vouch.strategies.blindedbeaconblockproposal.first").Start(ctx, "BlindedBeaconBlockProposal", trace.WithAttributes(
-		attribute.Int64("slot", int64(slot)),
+	return s.BlindedProposalWithExpectedPayload(ctx, opts, nil)
+}
+
+// BlindedProposalWithExpectedPayload fetches a blinded proposal for signing.
+func (s *Service) BlindedProposalWithExpectedPayload(ctx context.Context,
+	opts *api.BlindedProposalOpts,
+	bid *builderspec.VersionedSignedBuilderBid,
+) (
+	*api.Response[*api.VersionedBlindedProposal],
+	error,
+) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.blindedbeaconblockproposal.first").Start(ctx, "BlindedProposal", trace.WithAttributes(
+		attribute.Int64("slot", int64(opts.Slot)),
 	))
 	defer span.End()
 
@@ -93,22 +95,19 @@ func (s *Service) BlindedBeaconBlockProposalWithExpectedPayload(ctx context.Cont
 	// cancel the context to cancel the other requests.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 
-	proposalCh := make(chan *api.VersionedBlindedBeaconBlock, 1)
-	for name, provider := range s.blindedBeaconBlockProposalProviders {
-		go func(ctx context.Context, name string, provider eth2client.BlindedBeaconBlockProposalProvider, ch chan *api.VersionedBlindedBeaconBlock) {
-			log := log.With().Str("provider", name).Uint64("slot", uint64(slot)).Logger()
+	proposalCh := make(chan *api.Response[*api.VersionedBlindedProposal], 1)
+	for name, provider := range s.blindedProposalProviders {
+		go func(ctx context.Context, name string, provider eth2client.BlindedProposalProvider, ch chan *api.Response[*api.VersionedBlindedProposal]) {
+			log := log.With().Str("provider", name).Uint64("slot", uint64(opts.Slot)).Logger()
 
 			started := time.Now()
-			proposal, err := provider.BlindedBeaconBlockProposal(ctx, slot, randaoReveal, graffiti)
+			proposalResp, err := provider.BlindedProposal(ctx, opts)
 			s.clientMonitor.ClientOperation(name, "blinded beacon block proposal", err == nil, time.Since(started))
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain blinded beacon block proposal")
 				return
 			}
-			if proposal == nil {
-				log.Warn().Err(err).Msg("Returned empty blinded beacon block proposal")
-				return
-			}
+			proposal := proposalResp.Data
 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained blinded beacon block proposal")
 			feeRecipient, err := proposal.FeeRecipient()
 			if err != nil {
@@ -124,7 +123,7 @@ func (s *Service) BlindedBeaconBlockProposalWithExpectedPayload(ctx context.Cont
 				log.Warn().Err(err).Msg("Failed to obtain blinded beacon block timestamp")
 				return
 			}
-			if int64(executionTimestamp) != s.chainTime.StartOfSlot(slot).Unix() {
+			if int64(executionTimestamp) != s.chainTime.StartOfSlot(opts.Slot).Unix() {
 				log.Warn().Msg("Blinded beacon block proposal response has incorrect timestamp")
 				return
 			}
@@ -143,7 +142,7 @@ func (s *Service) BlindedBeaconBlockProposalWithExpectedPayload(ctx context.Cont
 				}
 			}
 
-			ch <- proposal
+			ch <- proposalResp
 		}(ctx, name, provider, proposalCh)
 	}
 

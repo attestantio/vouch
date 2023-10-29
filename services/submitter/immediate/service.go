@@ -19,8 +19,8 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
-	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics"
@@ -34,7 +34,7 @@ import (
 type Service struct {
 	clientMonitor                         metrics.ClientMonitor
 	attestationsSubmitter                 eth2client.AttestationsSubmitter
-	beaconBlockSubmitter                  eth2client.BeaconBlockSubmitter
+	proposalSubmitter                     eth2client.ProposalSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitter         eth2client.ProposalPreparationsSubmitter
@@ -62,7 +62,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	s := &Service{
 		clientMonitor:                         parameters.clientMonitor,
 		attestationsSubmitter:                 parameters.attestationsSubmitter,
-		beaconBlockSubmitter:                  parameters.beaconBlockSubmitter,
+		proposalSubmitter:                     parameters.proposalSubmitter,
 		beaconCommitteeSubscriptionsSubmitter: parameters.beaconCommitteeSubscriptionsSubmitter,
 		aggregateAttestationsSubmitter:        parameters.aggregateAttestationsSubmitter,
 		proposalPreparationsSubmitter:         parameters.proposalPreparationsSubmitter,
@@ -74,30 +74,30 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	return s, nil
 }
 
-// SubmitBeaconBlock submits a block.
-func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error {
-	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitBeaconBlock")
+// SubmitProposal submits a proposal.
+func (s *Service) SubmitProposal(ctx context.Context, proposal *api.VersionedSignedProposal) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitProposal")
 	defer span.End()
 
-	if block == nil {
-		return errors.New("no beacon block supplied")
+	if proposal == nil {
+		return errors.New("no proposal supplied")
 	}
 
 	started := time.Now()
-	err := s.beaconBlockSubmitter.SubmitBeaconBlock(ctx, block)
-	if service, isService := s.beaconBlockSubmitter.(eth2client.Service); isService {
-		s.clientMonitor.ClientOperation(service.Address(), "submit beacon block", err == nil, time.Since(started))
+	err := s.proposalSubmitter.SubmitProposal(ctx, proposal)
+	if service, isService := s.proposalSubmitter.(eth2client.Service); isService {
+		s.clientMonitor.ClientOperation(service.Address(), "submit proposal", err == nil, time.Since(started))
 	} else {
-		s.clientMonitor.ClientOperation("<unknown>", "submit beacon block", err == nil, time.Since(started))
+		s.clientMonitor.ClientOperation("<unknown>", "submit proposal", err == nil, time.Since(started))
 	}
 	if err != nil {
-		return errors.Wrap(err, "failed to submit beacon block")
+		return errors.Wrap(err, "failed to submit proposal")
 	}
 
 	if e := log.Trace(); e.Enabled() {
-		data, err := json.Marshal(block)
+		data, err := json.Marshal(proposal)
 		if err == nil {
-			e.Str("block", string(data)).Msg("Submitted beacon block")
+			e.Str("proposal", string(data)).Msg("Submitted proposal")
 		}
 	}
 

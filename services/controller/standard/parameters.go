@@ -333,10 +333,11 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.blockToSlotSetter == nil {
 		return nil, errors.New("no block to slot setter specified")
 	}
-	spec, err := parameters.specProvider.Spec(context.Background())
+	specResponse, err := parameters.specProvider.Spec(context.Background())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain spec")
 	}
+	spec := specResponse.Data
 	tmp, exists := spec["SECONDS_PER_SLOT"]
 	if !exists {
 		return nil, errors.New("SECONDS_PER_SLOT not found in spec")

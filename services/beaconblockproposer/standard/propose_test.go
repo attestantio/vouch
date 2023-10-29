@@ -15,6 +15,7 @@ package standard_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -139,10 +140,11 @@ func TestPropose(t *testing.T) {
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithBeaconBlockSubmitter(consensusClient),
+				standard.WithProposalSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithGraffitiProvider(graffitiProvider),
 				standard.WithBeaconBlockSigner(signer),
+				standard.WithBlobSidecarSigner(signer),
 				standard.WithBlockAuctioneer(blockAuctioneer),
 				standard.WithBlindedProposalDataProvider(consensusClient),
 				standard.WithExecutionChainHeadProvider(cacheService.(cache.ExecutionChainHeadProvider)),
@@ -150,6 +152,11 @@ func TestPropose(t *testing.T) {
 			require.NoError(t, err)
 
 			s.Propose(ctx, test.data)
+
+			// TODO remove.
+			for _, entry := range capture.Entries() {
+				fmt.Printf("%v\n", entry)
+			}
 			for _, err := range test.errs {
 				require.True(t, capture.HasLog(err))
 			}

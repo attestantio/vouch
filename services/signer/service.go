@@ -91,6 +91,19 @@ type BeaconBlockSigner interface {
 	)
 }
 
+// BlobSidecarSigner provides methods to sign blob sidecars.
+type BlobSidecarSigner interface {
+	// SignBlobSidecar signs a blob sidecar proposal.
+	SignBlobSidecar(ctx context.Context,
+		account e2wtypes.Account,
+		slot phase0.Slot,
+		blobSidecarRoot phase0.Root,
+	) (
+		phase0.BLSSignature,
+		error,
+	)
+}
+
 // RANDAORevealSigner provides methods to sign RANDAO reveals.
 type RANDAORevealSigner interface {
 	// SignRANDAOReveal returns a RANDAO signature.

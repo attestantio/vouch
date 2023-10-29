@@ -48,7 +48,7 @@ func TestScore(t *testing.T) {
 	tests := []struct {
 		name        string
 		priorBlocks map[phase0.Root]*priorBlockVotes
-		block       *api.VersionedBlindedBeaconBlock
+		proposal    *api.VersionedBlindedProposal
 		score       float64
 		err         string
 	}{
@@ -58,14 +58,14 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "Empty",
-			block: &api.VersionedBlindedBeaconBlock{
+			proposal: &api.VersionedBlindedProposal{
 				Version: spec.DataVersionBellatrix,
 			},
 			score: 0,
 		},
 		{
 			name: "SingleAttestation",
-			block: &api.VersionedBlindedBeaconBlock{
+			proposal: &api.VersionedBlindedProposal{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12346,
@@ -94,7 +94,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "BellatrixSingleAttestationDistance1",
-			block: &api.VersionedBlindedBeaconBlock{
+			proposal: &api.VersionedBlindedProposal{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12346,
@@ -123,7 +123,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "BellatrixSingleAttestationDistance1IncorrectHead",
-			block: &api.VersionedBlindedBeaconBlock{
+			proposal: &api.VersionedBlindedProposal{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12346,
@@ -152,7 +152,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "BellatrixSingleAttestationDistance2",
-			block: &api.VersionedBlindedBeaconBlock{
+			proposal: &api.VersionedBlindedProposal{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12346,
@@ -180,7 +180,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "BellatrixSingleAttestationDistance5",
-			block: &api.VersionedBlindedBeaconBlock{
+			proposal: &api.VersionedBlindedProposal{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12349,
@@ -209,7 +209,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "BellatrixSingleAttestationDistance6",
-			block: &api.VersionedBlindedBeaconBlock{
+			proposal: &api.VersionedBlindedProposal{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12350,
@@ -237,7 +237,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "BellatrixOverlappingAttestations",
-			block: &api.VersionedBlindedBeaconBlock{
+			proposal: &api.VersionedBlindedProposal{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12345,
@@ -275,7 +275,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "BellatrixParentMissing",
-			block: &api.VersionedBlindedBeaconBlock{
+			proposal: &api.VersionedBlindedProposal{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12345,
@@ -342,7 +342,7 @@ func TestScore(t *testing.T) {
 					},
 				},
 			},
-			block: &api.VersionedBlindedBeaconBlock{
+			proposal: &api.VersionedBlindedProposal{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12344,
@@ -383,7 +383,7 @@ func TestScore(t *testing.T) {
 					slot:   12320,
 				},
 			},
-			block: &api.VersionedBlindedBeaconBlock{
+			proposal: &api.VersionedBlindedProposal{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12345,
@@ -424,7 +424,7 @@ func TestScore(t *testing.T) {
 					slot:   12320,
 				},
 			},
-			block: &api.VersionedBlindedBeaconBlock{
+			proposal: &api.VersionedBlindedProposal{
 				Version: spec.DataVersionBellatrix,
 				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot:       12345,
@@ -453,7 +453,7 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "InvalidVersion",
-			block: &api.VersionedBlindedBeaconBlock{
+			proposal: &api.VersionedBlindedProposal{
 				Version: spec.DataVersion(999),
 				Bellatrix: &apiv1bellatrix.BlindedBeaconBlock{
 					Slot: 12345,
@@ -519,8 +519,8 @@ func TestScore(t *testing.T) {
 				WithChainTimeService(chainTime),
 				WithSpecProvider(specProvider),
 				WithProcessConcurrency(6),
-				WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
-					"one": mock.NewBlindedBeaconBlockProposalProvider(chainTime),
+				WithBlindedProposalProviders(map[string]eth2client.BlindedProposalProvider{
+					"one": mock.NewBlindedProposalProvider(chainTime),
 				}),
 				WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				WithBlockRootToSlotCache(blockToSlotCache),
@@ -529,7 +529,7 @@ func TestScore(t *testing.T) {
 			if test.priorBlocks != nil {
 				s.priorBlocksVotes = test.priorBlocks
 			}
-			score := s.scoreBlindedBeaconBlockProposal(context.Background(), test.name, test.block)
+			score := s.scoreBlindedProposal(context.Background(), test.name, test.proposal)
 			assert.Equal(t, test.score, score)
 		})
 	}

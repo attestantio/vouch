@@ -79,6 +79,8 @@ QQ9lLQoXywGU8bfdgw==
 -----END CERTIFICATE-----`
 
 // SignerTest01Key is the certificate for singer-test01.
+//
+//nolint:gosec
 var SignerTest01Key = `-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEArI3QYd7U8s9S+s6OSL0Em/HxBqITLNO2YO/03QCOxc5+A2XD
 yp0n25YMYQThh240gmDWk2pC4ppR50mwfh12cZ+VW60QUZsLdrBcVs7DcVjE2nqm
@@ -136,6 +138,8 @@ tnOTVaeHiYpxrArnLno=
 -----END CERTIFICATE-----`
 
 // SignerTest02Key is the key for singer-test02.
+//
+//nolint:gosec
 var SignerTest02Key = `-----BEGIN RSA PRIVATE KEY-----
 MIIEpQIBAAKCAQEAp6i9lEGdCUjMlgW3JASBlDfo1ywotM2pYSvF/H2T0YC7m4H5
 IaiSJ2sDcucgg+qlRC2qKSdGFYsCRQrVykczLsjJB+sOGfeD6D0zDJwMpH17i85l
@@ -193,6 +197,8 @@ AtjX7nZ2WsXL62pOOPRzmq4mDRklrZOGJLALlAbh2GV6Vlgl0INLhGKMCg4zR9zC
 -----END CERTIFICATE-----`
 
 // SignerTest03Key is the certificate for singer-test03.
+//
+//nolint:gosec
 var SignerTest03Key = `-----BEGIN RSA PRIVATE KEY-----
 MIIEogIBAAKCAQEAxoNlihf9lXDAbGDKYEwIqLj/XqFw5L1UHfexlMjH0x/Ds9ZP
 sjWf1lFP5Oc99x05AMiZC8a3g4Dq4pPsLmXi06BGweNeDd5uyS+osW6OY7dANd+L
@@ -250,6 +256,8 @@ neIRkZVTCW0R6hfKW7lea9rDTHMiyJ8jpscZjqg5KITLxJJ3ipg3miXxjeUMOZRW
 -----END CERTIFICATE-----`
 
 // SignerTest04Key is the key for singer-test04.
+//
+//nolint:gosec
 var SignerTest04Key = `-----BEGIN RSA PRIVATE KEY-----
 MIIEpQIBAAKCAQEA426MmmE0gxGxIwI0YUaKnXnWUwY1QYI6KaMK/L8NWYEYi8xp
 yoKnbrutRuiDPV/JW3wkzCOBtoDVSi6Imgw8Lk8WfP37+MRNuOikYbExcjXTdH8V
@@ -307,6 +315,8 @@ vVTqf0eZISAIaBg+dVBe3NNCAfT89DtCE5j/pnqwbcK5sQYF1oxLLs0Wchz31L7Z
 -----END CERTIFICATE-----`
 
 // SignerTest05Key is the key for singer-test05.
+//
+//nolint:gosec
 var SignerTest05Key = `-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAq4Kje4YaeVYrYyuppfwSnxRKP7b3y2NNSiAFR7V2+WSA0GJj
 0yJS5oGDdVoConLvQb+cy5aiz9n/6btz5LIlplowa05/3WBKlJZY3ZSCHw+K+Aky
@@ -364,6 +374,8 @@ yWJYDKQTImOKFINmag==
 -----END CERTIFICATE-----`
 
 // ClientTest01Key is the key for client-test01.
+//
+//nolint:gosec
 var ClientTest01Key = `-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAyCqeUpdaAp7b+2U5hCD6zNgko0I6fOr2HYuAPIYCDvB4pOg8
 WGoMMl441Xkezw57kniEvDydPLdBVzkiviyqN0ETnbZfRkpJVeQ/pZdPYOSct8Wq
@@ -421,6 +433,8 @@ L/7LyA4miSuym3OotnmL54xOAIZvwdr7ULlHaADt6N3QUpmjIfF5za7dzCek8iWv
 -----END CERTIFICATE-----`
 
 // ClientTest02Key is the key for client-test02.
+//
+//nolint:gosec
 var ClientTest02Key = `-----BEGIN RSA PRIVATE KEY-----
 MIIEowIBAAKCAQEAqODE1RetKlNjL3HFdpj/9yCzONIc04Q4EaSXfiIw9Sgbzblm
 0ZfbyZUU9zbsJo42IBuExM2DMRMJ6Zjh0gprZhsuLECj6Le4I64Kl3VSre//f7qj
@@ -478,6 +492,8 @@ ZDPJlY1l7uBTkvtcg/4=
 -----END CERTIFICATE-----`
 
 // ClientTest03Key is the key for client-test03.
+//
+//nolint:gosec
 var ClientTest03Key = `-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEAoInswVcsfIstIkQs5obf/6bykZ80TAQmrtAW+VS4WJMwDJ0A
 isbu5Pfm4u9K4FdxzjsxX2BCURR6jQyqqHUULvK5gjAUsMkv7gCyZNprP0HFFVw+

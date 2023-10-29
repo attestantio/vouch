@@ -29,17 +29,17 @@ import (
 )
 
 type parameters struct {
-	logLevel                     zerolog.Level
-	clientMonitor                metrics.ClientMonitor
-	processConcurrency           int64
-	eventsProvider               eth2client.EventsProvider
-	chainTime                    chaintime.Service
-	specProvider                 eth2client.SpecProvider
-	beaconBlockProposalProviders map[string]eth2client.BeaconBlockProposalProvider
-	signedBeaconBlockProvider    eth2client.SignedBeaconBlockProvider
-	timeout                      time.Duration
-	blockRootToSlotCache         cache.BlockRootToSlotProvider
-	executionPayloadFactor       float64
+	logLevel                  zerolog.Level
+	clientMonitor             metrics.ClientMonitor
+	processConcurrency        int64
+	eventsProvider            eth2client.EventsProvider
+	chainTime                 chaintime.Service
+	specProvider              eth2client.SpecProvider
+	proposalProviders         map[string]eth2client.ProposalProvider
+	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider
+	timeout                   time.Duration
+	blockRootToSlotCache      cache.BlockRootToSlotProvider
+	executionPayloadFactor    float64
 }
 
 // Parameter is the interface for service parameters.
@@ -102,10 +102,10 @@ func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 	})
 }
 
-// WithBeaconBlockProposalProviders sets the beacon block proposal providers.
-func WithBeaconBlockProposalProviders(providers map[string]eth2client.BeaconBlockProposalProvider) Parameter {
+// WithProposalProviders sets the proposal providers.
+func WithProposalProviders(providers map[string]eth2client.ProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.beaconBlockProposalProviders = providers
+		p.proposalProviders = providers
 	})
 }
 
@@ -160,8 +160,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.specProvider == nil {
 		return nil, errors.New("no spec provider specified")
 	}
-	if len(parameters.beaconBlockProposalProviders) == 0 {
-		return nil, errors.New("no beacon block proposal providers specified")
+	if len(parameters.proposalProviders) == 0 {
+		return nil, errors.New("no proposal providers specified")
 	}
 	if parameters.signedBeaconBlockProvider == nil {
 		return nil, errors.New("no signed beacon block provider specified")

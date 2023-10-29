@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -165,8 +165,8 @@ func TestUpdateBlockVotes(t *testing.T) {
 				WithChainTimeService(chainTime),
 				WithSpecProvider(specProvider),
 				WithProcessConcurrency(6),
-				WithBlindedBeaconBlockProposalProviders(map[string]eth2client.BlindedBeaconBlockProposalProvider{
-					"one": mock.NewBlindedBeaconBlockProposalProvider(chainTime),
+				WithBlindedProposalProviders(map[string]eth2client.BlindedProposalProvider{
+					"one": mock.NewBlindedProposalProvider(chainTime),
 				}),
 				WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				WithBlockRootToSlotCache(blockToSlotCache),

@@ -152,6 +152,7 @@ linters:
     - ifshort
     - interfacer
     - ireturn
+    - inamedparam
     - lll
     - maligned
     - musttag
@@ -159,6 +160,7 @@ linters:
     - nilnil
     - nlreturn
     - nosnakecase
+    - perfsprint
     - promlinter
     - scopelint
     - structcheck

@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,7 +18,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -30,10 +30,11 @@ func (s *Service) RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys [
 	ctx, span := otel.Tracer("attestantio.vouch.services.validatorsmanager.standard").Start(ctx, "RefreshValidatorsFromBeaconNode")
 	defer span.End()
 
-	var validators map[phase0.ValidatorIndex]*api.Validator
-	var err error
 	started := time.Now()
-	validators, err = s.validatorsProvider.ValidatorsByPubKey(ctx, "head", pubKeys)
+	validatorsResponse, err := s.validatorsProvider.Validators(ctx, &api.ValidatorsOpts{
+		State:   "head",
+		PubKeys: pubKeys,
+	})
 	if service, isService := s.validatorsProvider.(eth2client.Service); isService {
 		s.clientMonitor.ClientOperation(service.Address(), "validators", err == nil, time.Since(started))
 	} else {
@@ -42,6 +43,7 @@ func (s *Service) RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys [
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain validators")
 	}
+	validators := validatorsResponse.Data
 	log.Trace().Dur("elapsed", time.Since(started)).Int("received", len(validators)).Msg("Received validators from beacon node")
 
 	// If we have no validators at this point we leave early rather than possibly replace existing information.

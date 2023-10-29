@@ -33,14 +33,15 @@ type parameters struct {
 	monitor                    metrics.Service
 	chainTime                  chaintime.Service
 	blockAuctioneer            blockauctioneer.BlockAuctioneer
-	proposalProvider           eth2client.BeaconBlockProposalProvider
-	blindedProposalProvider    eth2client.BlindedBeaconBlockProposalProvider
+	proposalProvider           eth2client.ProposalProvider
+	blindedProposalProvider    eth2client.BlindedProposalProvider
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	executionChainHeadProvider cache.ExecutionChainHeadProvider
 	graffitiProvider           graffitiprovider.Service
-	beaconBlockSubmitter       submitter.BeaconBlockSubmitter
+	proposalSubmitter          submitter.ProposalSubmitter
 	randaoRevealSigner         signer.RANDAORevealSigner
 	beaconBlockSigner          signer.BeaconBlockSigner
+	blobSidecarSigner          signer.BlobSidecarSigner
 }
 
 // Parameter is the interface for service parameters.
@@ -76,14 +77,14 @@ func WithBlockAuctioneer(auctioneer blockauctioneer.BlockAuctioneer) Parameter {
 }
 
 // WithProposalDataProvider sets the proposal data provider.
-func WithProposalDataProvider(provider eth2client.BeaconBlockProposalProvider) Parameter {
+func WithProposalDataProvider(provider eth2client.ProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalProvider = provider
 	})
 }
 
 // WithBlindedProposalDataProvider sets the proposal data provider.
-func WithBlindedProposalDataProvider(provider eth2client.BlindedBeaconBlockProposalProvider) Parameter {
+func WithBlindedProposalDataProvider(provider eth2client.BlindedProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.blindedProposalProvider = provider
 	})
@@ -117,10 +118,10 @@ func WithGraffitiProvider(provider graffitiprovider.Service) Parameter {
 	})
 }
 
-// WithBeaconBlockSubmitter sets the beacon block submitter.
-func WithBeaconBlockSubmitter(submitter submitter.BeaconBlockSubmitter) Parameter {
+// WithProposalSubmitter sets the proposal submitter.
+func WithProposalSubmitter(submitter submitter.ProposalSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.beaconBlockSubmitter = submitter
+		p.proposalSubmitter = submitter
 	})
 }
 
@@ -135,6 +136,13 @@ func WithRANDAORevealSigner(signer signer.RANDAORevealSigner) Parameter {
 func WithBeaconBlockSigner(signer signer.BeaconBlockSigner) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.beaconBlockSigner = signer
+	})
+}
+
+// WithBlobSidecarSigner sets the blob sidecar signer.
+func WithBlobSidecarSigner(signer signer.BlobSidecarSigner) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.blobSidecarSigner = signer
 	})
 }
 
@@ -171,14 +179,17 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.validatingAccountsProvider == nil {
 		return nil, errors.New("no validating accounts provider specified")
 	}
-	if parameters.beaconBlockSubmitter == nil {
-		return nil, errors.New("no beacon block submitter specified")
+	if parameters.proposalSubmitter == nil {
+		return nil, errors.New("no proposal submitter specified")
 	}
 	if parameters.randaoRevealSigner == nil {
 		return nil, errors.New("no RANDAO reveal signer specified")
 	}
 	if parameters.beaconBlockSigner == nil {
 		return nil, errors.New("no beacon block signer specified")
+	}
+	if parameters.blobSidecarSigner == nil {
+		return nil, errors.New("no blob sidecar signer specified")
 	}
 
 	return &parameters, nil

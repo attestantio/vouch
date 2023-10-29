@@ -18,6 +18,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
@@ -38,14 +39,19 @@ type attestationDataError struct {
 }
 
 // AttestationData provides the best attestation data from a number of beacon nodes.
-func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committeeIndex phase0.CommitteeIndex) (*phase0.AttestationData, error) {
+func (s *Service) AttestationData(ctx context.Context,
+	opts *api.AttestationDataOpts,
+) (
+	*api.Response[*phase0.AttestationData],
+	error,
+) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.attestationdata.best").Start(ctx, "AttestationData", trace.WithAttributes(
-		attribute.Int64("slot", int64(slot)),
+		attribute.Int64("slot", int64(opts.Slot)),
 	))
 	defer span.End()
 
 	started := time.Now()
-	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(slot)).Logger()
+	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(opts.Slot)).Logger()
 
 	// We have two timeouts: a soft timeout and a hard timeout.
 	// At the soft timeout, we return if we have any responses so far.
@@ -60,7 +66,7 @@ func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committ
 	errCh := make(chan *attestationDataError, requests)
 	// Kick off the requests.
 	for name, provider := range s.attestationDataProviders {
-		go s.attestationData(ctx, started, name, provider, respCh, errCh, slot, committeeIndex)
+		go s.attestationData(ctx, started, name, provider, respCh, errCh, opts)
 	}
 
 	// Wait for all responses (or context done).
@@ -175,7 +181,10 @@ func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committ
 		s.clientMonitor.StrategyOperation("best", bestProvider, "attestation data", time.Since(started))
 	}
 
-	return bestAttestationData, nil
+	return &api.Response[*phase0.AttestationData]{
+		Data:     bestAttestationData,
+		Metadata: make(map[string]any),
+	}, nil
 }
 
 func (s *Service) attestationData(ctx context.Context,
@@ -184,15 +193,14 @@ func (s *Service) attestationData(ctx context.Context,
 	provider eth2client.AttestationDataProvider,
 	respCh chan *attestationDataResponse,
 	errCh chan *attestationDataError,
-	slot phase0.Slot,
-	committeeIndex phase0.CommitteeIndex,
+	opts *api.AttestationDataOpts,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.attestationdata.best").Start(ctx, "attestationData", trace.WithAttributes(
 		attribute.String("provider", name),
 	))
 	defer span.End()
 
-	attestationData, err := provider.AttestationData(ctx, slot, committeeIndex)
+	attestationDataResp, err := provider.AttestationData(ctx, opts)
 	s.clientMonitor.ClientOperation(name, "attestation data", err == nil, time.Since(started))
 	if err != nil {
 		errCh <- &attestationDataError{
@@ -201,6 +209,7 @@ func (s *Service) attestationData(ctx context.Context,
 		}
 		return
 	}
+	attestationData := attestationDataResp.Data
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")
 
 	if attestationData == nil {
@@ -217,7 +226,7 @@ func (s *Service) attestationData(ctx context.Context,
 		}
 		return
 	}
-	if attestationData.Target.Epoch != s.chainTime.SlotToEpoch(slot) {
+	if attestationData.Target.Epoch != s.chainTime.SlotToEpoch(opts.Slot) {
 		errCh <- &attestationDataError{
 			provider: name,
 			err:      errors.New("attestation data slot/target epoch mismatch"),

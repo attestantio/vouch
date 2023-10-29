@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/synccommitteeaggregator"
 	"github.com/attestantio/vouch/services/synccommitteemessenger"
@@ -58,11 +59,15 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 	started := time.Now()
 	log.Trace().Uint64("period", period).Uint64("first_epoch", uint64(firstEpoch)).Uint64("last_epoch", uint64(lastEpoch)).Msg("Scheduling sync committee messages")
 
-	duties, err := s.syncCommitteeDutiesProvider.SyncCommitteeDuties(ctx, firstEpoch, validatorIndices)
+	dutiesResponse, err := s.syncCommitteeDutiesProvider.SyncCommitteeDuties(ctx, &api.SyncCommitteeDutiesOpts{
+		Epoch:   firstEpoch,
+		Indices: validatorIndices,
+	})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to fetch sync committee message duties")
 		return
 	}
+	duties := dutiesResponse.Data
 	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(duties)).Msg("Fetched sync committee message duties")
 	if len(duties) == 0 {
 		// No duties; nothing to do.

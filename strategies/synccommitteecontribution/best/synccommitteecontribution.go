@@ -18,8 +18,8 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/altair"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -39,9 +39,18 @@ type syncCommitteeContributionError struct {
 }
 
 // SyncCommitteeContribution provides the sync committee contribution from a number of beacon nodes.
-func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slot, subcommitteeIndex uint64, beaconBlockRoot phase0.Root) (*altair.SyncCommitteeContribution, error) {
+func (s *Service) SyncCommitteeContribution(ctx context.Context,
+	opts *api.SyncCommitteeContributionOpts,
+) (
+	*api.Response[*altair.SyncCommitteeContribution],
+	error,
+) {
+	if opts == nil {
+		return nil, errors.New("no options specified")
+	}
+
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.synccommitteecontribution.best").Start(ctx, "SyncCommitteeContribution", trace.WithAttributes(
-		attribute.Int64("slot", int64(slot)),
+		attribute.Int64("slot", int64(opts.Slot)),
 	))
 	defer span.End()
 
@@ -61,7 +70,7 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 	errCh := make(chan *syncCommitteeContributionError, requests)
 	// Kick off the requests.
 	for name, provider := range s.syncCommitteeContributionProviders {
-		go s.syncCommitteeContribution(ctx, started, name, provider, respCh, errCh, slot, subcommitteeIndex, beaconBlockRoot)
+		go s.syncCommitteeContribution(ctx, started, name, provider, respCh, errCh, opts)
 	}
 
 	// Wait for all responses (or context done).
@@ -176,7 +185,10 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context, slot phase0.Slo
 		s.clientMonitor.StrategyOperation("best", bestProvider, "sync committee contribution", time.Since(started))
 	}
 
-	return bestSyncCommitteeContribution, nil
+	return &api.Response[*altair.SyncCommitteeContribution]{
+		Data:     bestSyncCommitteeContribution,
+		Metadata: make(map[string]any),
+	}, nil
 }
 
 func (s *Service) syncCommitteeContribution(ctx context.Context,
@@ -185,16 +197,14 @@ func (s *Service) syncCommitteeContribution(ctx context.Context,
 	provider eth2client.SyncCommitteeContributionProvider,
 	respCh chan *syncCommitteeContributionResponse,
 	errCh chan *syncCommitteeContributionError,
-	slot phase0.Slot,
-	subcommitteeIndex uint64,
-	beaconBlockRoot phase0.Root,
+	opts *api.SyncCommitteeContributionOpts,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.synccommitteecontribution.best").Start(ctx, "syncCommitteeContribution", trace.WithAttributes(
 		attribute.String("provider", name),
 	))
 	defer span.End()
 
-	contribution, err := provider.SyncCommitteeContribution(ctx, slot, subcommitteeIndex, beaconBlockRoot)
+	contributionResponse, err := provider.SyncCommitteeContribution(ctx, opts)
 	s.clientMonitor.ClientOperation(name, "sync committee contribution", err == nil, time.Since(started))
 	if err != nil {
 		errCh <- &syncCommitteeContributionError{
@@ -203,6 +213,7 @@ func (s *Service) syncCommitteeContribution(ctx context.Context,
 		}
 		return
 	}
+	contribution := contributionResponse.Data
 	log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained sync committee contribution")
 	if contribution == nil {
 		errCh <- &syncCommitteeContributionError{

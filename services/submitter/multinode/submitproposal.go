@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,7 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -27,23 +27,23 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-// SubmitBeaconBlock submits a beacon block.
-func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSignedBeaconBlock) error {
-	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "SubmitBeaconBlock", trace.WithAttributes(
+// SubmitProposal submits a proposal.
+func (s *Service) SubmitProposal(ctx context.Context, proposal *api.VersionedSignedProposal) error {
+	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "SubmitProposal", trace.WithAttributes(
 		attribute.String("strategy", "multinode"),
 	))
 	defer span.End()
 
-	if block == nil {
-		return errors.New("no beacon block supplied")
+	if proposal == nil {
+		return errors.New("no proposal supplied")
 	}
 
 	var err error
 	sem := semaphore.NewWeighted(s.processConcurrency)
 	w := sync.NewCond(&sync.Mutex{})
 	w.L.Lock()
-	for name, submitter := range s.beaconBlockSubmitters {
-		go s.submitBeaconBlock(ctx, sem, w, name, block, submitter)
+	for name, submitter := range s.proposalSubmitters {
+		go s.submitProposal(ctx, sem, w, name, proposal, submitter)
 	}
 	// Also set a timeout condition, in case no submitters return.
 	go func(s *Service, w *sync.Cond) {
@@ -57,21 +57,21 @@ func (s *Service) SubmitBeaconBlock(ctx context.Context, block *spec.VersionedSi
 	return err
 }
 
-// submitBeaconBlock carries out the internal work of submitting beacon blocks.
+// submitProposal carries out the internal work of submitting beacon blocks.
 // skipcq: RVV-B0001
-func (s *Service) submitBeaconBlock(ctx context.Context,
+func (s *Service) submitProposal(ctx context.Context,
 	sem *semaphore.Weighted,
 	w *sync.Cond,
 	name string,
-	block *spec.VersionedSignedBeaconBlock,
-	submitter eth2client.BeaconBlockSubmitter,
+	proposal *api.VersionedSignedProposal,
+	submitter eth2client.ProposalSubmitter,
 ) {
-	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "submitBeaconBlock", trace.WithAttributes(
+	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "submitProposal", trace.WithAttributes(
 		attribute.String("server", name),
 	))
 	defer span.End()
 
-	slot, err := block.Slot()
+	slot, err := proposal.Slot()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain slot")
 		return
@@ -85,14 +85,14 @@ func (s *Service) submitBeaconBlock(ctx context.Context,
 
 	_, address := s.serviceInfo(ctx, submitter)
 	started := time.Now()
-	err = submitter.SubmitBeaconBlock(ctx, block)
 
-	s.clientMonitor.ClientOperation(address, "submit beacon block", err == nil, time.Since(started))
+	err = submitter.SubmitProposal(ctx, proposal)
+	s.clientMonitor.ClientOperation(address, "submit proposal", err == nil, time.Since(started))
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to submit beacon block")
+		log.Warn().Err(err).Msg("Failed to submit proposal")
 		return
 	}
 
 	w.Signal()
-	log.Trace().Msg("Submitted beacon block")
+	log.Trace().Msg("Submitted proposal")
 }

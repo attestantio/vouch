@@ -18,6 +18,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
@@ -38,9 +39,14 @@ type aggregateAttestationError struct {
 }
 
 // AggregateAttestation provides the aggregate attestation from a number of beacon nodes.
-func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, attestationDataRoot phase0.Root) (*phase0.Attestation, error) {
+func (s *Service) AggregateAttestation(ctx context.Context,
+	opts *api.AggregateAttestationOpts,
+) (
+	*api.Response[*phase0.Attestation],
+	error,
+) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.aggregateattestation.best").Start(ctx, "AggregateAttestation", trace.WithAttributes(
-		attribute.Int64("slot", int64(slot)),
+		attribute.Int64("slot", int64(opts.Slot)),
 	))
 	defer span.End()
 
@@ -60,7 +66,7 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 	errCh := make(chan *aggregateAttestationError, requests)
 	// Kick off the requests.
 	for name, provider := range s.aggregateAttestationProviders {
-		go s.aggregateAttestation(ctx, started, name, provider, respCh, errCh, slot, attestationDataRoot)
+		go s.aggregateAttestation(ctx, started, name, provider, respCh, errCh, opts)
 	}
 
 	// Wait for all responses (or context done).
@@ -179,7 +185,10 @@ func (s *Service) AggregateAttestation(ctx context.Context, slot phase0.Slot, at
 		s.clientMonitor.StrategyOperation("best", bestProvider, "aggregate attestation", time.Since(started))
 	}
 
-	return bestAggregateAttestation, nil
+	return &api.Response[*phase0.Attestation]{
+		Data:     bestAggregateAttestation,
+		Metadata: make(map[string]any),
+	}, nil
 }
 
 func (s *Service) aggregateAttestation(ctx context.Context,
@@ -188,15 +197,14 @@ func (s *Service) aggregateAttestation(ctx context.Context,
 	provider eth2client.AggregateAttestationProvider,
 	respCh chan *aggregateAttestationResponse,
 	errCh chan *aggregateAttestationError,
-	slot phase0.Slot,
-	attestationDataRoot phase0.Root,
+	opts *api.AggregateAttestationOpts,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.aggregateattestation.best").Start(ctx, "aggregateAttestation", trace.WithAttributes(
 		attribute.String("provider", name),
 	))
 	defer span.End()
 
-	aggregate, err := provider.AggregateAttestation(ctx, slot, attestationDataRoot)
+	aggregateAttestationResp, err := provider.AggregateAttestation(ctx, opts)
 	s.clientMonitor.ClientOperation(name, "aggregate attestation", err == nil, time.Since(started))
 	if err != nil {
 		errCh <- &aggregateAttestationError{
@@ -205,8 +213,9 @@ func (s *Service) aggregateAttestation(ctx context.Context,
 		}
 		return
 	}
+	aggregateAttestation := aggregateAttestationResp.Data
 	log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained aggregate attestation")
-	if aggregate == nil {
+	if aggregateAttestation == nil {
 		errCh <- &aggregateAttestationError{
 			provider: name,
 			err:      errors.New("aggregate attestation nil"),
@@ -214,10 +223,10 @@ func (s *Service) aggregateAttestation(ctx context.Context,
 		return
 	}
 
-	score := s.scoreAggregateAttestation(ctx, name, aggregate)
+	score := s.scoreAggregateAttestation(ctx, name, aggregateAttestation)
 	respCh <- &aggregateAttestationResponse{
 		provider:  name,
-		aggregate: aggregate,
+		aggregate: aggregateAttestation,
 		score:     score,
 	}
 }

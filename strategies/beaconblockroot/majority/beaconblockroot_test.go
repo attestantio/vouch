@@ -19,6 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/cache"
@@ -62,19 +63,6 @@ func TestBeaconBlockRoot(t *testing.T) {
 				majority.WithTimeout(time.Second),
 				majority.WithBeaconBlockRootProviders(map[string]eth2client.BeaconBlockRootProvider{
 					"sleepy": mock.NewSleepyBeaconBlockRootProvider(5*time.Second, mock.NewBeaconBlockRootProvider()),
-				}),
-				majority.WithBlockRootToSlotCache(blockToSlotCache),
-			},
-			blockID: "1",
-			err:     "no beacon block root received",
-		},
-		{
-			name: "NilResponse",
-			params: []majority.Parameter{
-				majority.WithLogLevel(zerolog.TraceLevel),
-				majority.WithTimeout(time.Second),
-				majority.WithBeaconBlockRootProviders(map[string]eth2client.BeaconBlockRootProvider{
-					"nil": mock.NewNilBeaconBlockRootProvider(),
 				}),
 				majority.WithBlockRootToSlotCache(blockToSlotCache),
 			},
@@ -142,7 +130,9 @@ func TestBeaconBlockRoot(t *testing.T) {
 			capture := logger.NewLogCapture()
 			s, err := majority.New(context.Background(), test.params...)
 			require.NoError(t, err)
-			contribution, err := s.BeaconBlockRoot(context.Background(), test.blockID)
+			contribution, err := s.BeaconBlockRoot(context.Background(), &api.BeaconBlockRootOpts{
+				Block: test.blockID,
+			})
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {

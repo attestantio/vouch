@@ -19,6 +19,7 @@ import (
 	"time"
 
 	consensusclient "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/pkg/errors"
@@ -66,12 +67,14 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Fetch the current execution head.
-	block, err := s.consensusClient.(consensusclient.SignedBeaconBlockProvider).SignedBeaconBlock(context.Background(), "head")
+	blockResponse, err := s.consensusClient.(consensusclient.SignedBeaconBlockProvider).SignedBeaconBlock(context.Background(), &api.SignedBeaconBlockOpts{
+		Block: "head",
+	})
 	if err != nil {
 		// Could happen for various reasons, including the chain not yet being ready.  Log it, but don't error.
 		log.Debug().Err(err).Msg("Failed to obtain head block")
 	} else {
-		s.updateExecutionHeadFromBlock(block)
+		s.updateExecutionHeadFromBlock(blockResponse.Data)
 	}
 
 	if eventsProvider, isProvider := s.consensusClient.(consensusclient.EventsProvider); isProvider {

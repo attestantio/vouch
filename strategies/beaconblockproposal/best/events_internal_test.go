@@ -165,8 +165,8 @@ func TestUpdateBlockVotes(t *testing.T) {
 				WithChainTimeService(chainTime),
 				WithSpecProvider(specProvider),
 				WithProcessConcurrency(6),
-				WithBeaconBlockProposalProviders(map[string]eth2client.BeaconBlockProposalProvider{
-					"one": mock.NewBeaconBlockProposalProvider(),
+				WithProposalProviders(map[string]eth2client.ProposalProvider{
+					"one": mock.NewProposalProvider(),
 				}),
 				WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 				WithBlockRootToSlotCache(blockToSlotCache),

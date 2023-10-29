@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -27,10 +27,10 @@ import (
 )
 
 type parameters struct {
-	logLevel                     zerolog.Level
-	clientMonitor                metrics.ClientMonitor
-	beaconBlockProposalProviders map[string]eth2client.BeaconBlockProposalProvider
-	timeout                      time.Duration
+	logLevel          zerolog.Level
+	clientMonitor     metrics.ClientMonitor
+	proposalProviders map[string]eth2client.ProposalProvider
+	timeout           time.Duration
 }
 
 // Parameter is the interface for service parameters.
@@ -58,10 +58,10 @@ func WithClientMonitor(monitor metrics.ClientMonitor) Parameter {
 	})
 }
 
-// WithBeaconBlockProposalProviders sets the beacon block proposal providers.
-func WithBeaconBlockProposalProviders(providers map[string]eth2client.BeaconBlockProposalProvider) Parameter {
+// WithProposalProviders sets the beacon block proposal providers.
+func WithProposalProviders(providers map[string]eth2client.ProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.beaconBlockProposalProviders = providers
+		p.proposalProviders = providers
 	})
 }
 
@@ -84,7 +84,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
-	if parameters.beaconBlockProposalProviders == nil {
+	if parameters.proposalProviders == nil {
 		return nil, errors.New("no beacon block proposal providers specified")
 	}
 

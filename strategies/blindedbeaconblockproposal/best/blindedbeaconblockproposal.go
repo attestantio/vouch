@@ -23,7 +23,6 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -35,7 +34,7 @@ var zeroFeeRecipient bellatrix.ExecutionAddress
 
 type beaconBlockResponse struct {
 	provider string
-	proposal *api.VersionedBlindedBeaconBlock
+	proposal *api.VersionedBlindedProposal
 	score    float64
 }
 
@@ -44,36 +43,32 @@ type beaconBlockError struct {
 	err      error
 }
 
-// BlindedBeaconBlockProposal provides the best blinded beacon block proposal from a number of beacon nodes.
-func (s *Service) BlindedBeaconBlockProposal(ctx context.Context,
-	slot phase0.Slot,
-	randaoReveal phase0.BLSSignature,
-	graffiti []byte,
+// BlindedProposal provides the best blinded proposal from a number of beacon nodes.
+func (s *Service) BlindedProposal(ctx context.Context,
+	opts *api.BlindedProposalOpts,
 ) (
-	*api.VersionedBlindedBeaconBlock,
+	*api.Response[*api.VersionedBlindedProposal],
 	error,
 ) {
-	return s.BlindedBeaconBlockProposalWithExpectedPayload(ctx, slot, randaoReveal, graffiti, nil)
+	return s.BlindedProposalWithExpectedPayload(ctx, opts, nil)
 }
 
-// BlindedBeaconBlockProposalWithExpectedPayload fetches a blinded proposed beacon block for signing.
-func (s *Service) BlindedBeaconBlockProposalWithExpectedPayload(ctx context.Context,
-	slot phase0.Slot,
-	randaoReveal phase0.BLSSignature,
-	graffiti []byte,
+// BlindedProposalWithExpectedPayload fetches a blinded proposal for signing.
+func (s *Service) BlindedProposalWithExpectedPayload(ctx context.Context,
+	opts *api.BlindedProposalOpts,
 	bid *builderspec.VersionedSignedBuilderBid,
 ) (
-	*api.VersionedBlindedBeaconBlock,
+	*api.Response[*api.VersionedBlindedProposal],
 	error,
 ) {
-	ctx, span := otel.Tracer("attestantio.vouch.strategies.blindedbeaconblockproposal.best").Start(ctx, "BlindedBeaconBlockProposal",
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.blindedbeaconblockproposal.best").Start(ctx, "BlindedProposal",
 		trace.WithAttributes(
-			attribute.Int64("slot", int64(slot)),
+			attribute.Int64("slot", int64(opts.Slot)),
 		))
 	defer span.End()
 
 	started := time.Now()
-	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(slot)).Logger()
+	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(opts.Slot)).Logger()
 
 	// We have two timeouts: a soft timeout and a hard timeout.
 	// At the soft timeout, we return if we have any responses so far.
@@ -82,27 +77,34 @@ func (s *Service) BlindedBeaconBlockProposalWithExpectedPayload(ctx context.Cont
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
 
-	requests := len(s.blindedBeaconBlockProposalProviders)
+	requests := len(s.blindedProposalProviders)
 
 	respCh := make(chan *beaconBlockResponse, requests)
 	errCh := make(chan *beaconBlockError, requests)
 	// Kick off the requests.
-	for name, provider := range s.blindedBeaconBlockProposalProviders {
-		providerGraffiti := graffiti
+	for name, provider := range s.blindedProposalProviders {
+		providerGraffiti := opts.Graffiti[:]
 		if bytes.Contains(providerGraffiti, []byte("{{CLIENT}}")) {
 			if nodeClientProvider, isProvider := provider.(eth2client.NodeClientProvider); isProvider {
-				nodeClient, err := nodeClientProvider.NodeClient(ctx)
+				nodeClientResponse, err := nodeClientProvider.NodeClient(ctx)
 				if err != nil {
 					log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
 				} else {
-					providerGraffiti = bytes.ReplaceAll(providerGraffiti, []byte("{{CLIENT}}"), []byte(nodeClient))
+					providerGraffiti = bytes.ReplaceAll(providerGraffiti, []byte("{{CLIENT}}"), []byte(nodeClientResponse.Data))
+				}
+				if len(providerGraffiti) > 32 {
+					providerGraffiti = providerGraffiti[0:32]
+				}
+				// Replace entire opts structure so the mutated graffiti does not leak to other providers.
+				opts = &api.BlindedProposalOpts{
+					Slot:                   opts.Slot,
+					RandaoReveal:           opts.RandaoReveal,
+					Graffiti:               [32]byte(providerGraffiti),
+					SkipRandaoVerification: opts.SkipRandaoVerification,
 				}
 			}
 		}
-		if len(providerGraffiti) > 32 {
-			providerGraffiti = providerGraffiti[0:32]
-		}
-		go s.blindedBeaconBlockProposal(ctx, started, name, provider, respCh, errCh, slot, randaoReveal, providerGraffiti, bid)
+		go s.blindedProposal(ctx, started, name, provider, respCh, errCh, opts, bid)
 	}
 
 	// Wait for all responses (or context done).
@@ -111,7 +113,7 @@ func (s *Service) BlindedBeaconBlockProposalWithExpectedPayload(ctx context.Cont
 	timedOut := 0
 	softTimedOut := 0
 	bestScore := float64(0)
-	var bestProposal *api.VersionedBlindedBeaconBlock
+	var bestProposal *api.VersionedBlindedProposal
 	var bestProvider string
 
 	// Loop 1: prior to soft timeout.
@@ -217,26 +219,27 @@ func (s *Service) BlindedBeaconBlockProposalWithExpectedPayload(ctx context.Cont
 		s.clientMonitor.StrategyOperation("best", bestProvider, "blinded beacon block proposal", time.Since(started))
 	}
 
-	return bestProposal, nil
+	return &api.Response[*api.VersionedBlindedProposal]{
+		Data:     bestProposal,
+		Metadata: make(map[string]any),
+	}, nil
 }
 
-func (s *Service) blindedBeaconBlockProposal(ctx context.Context,
+func (s *Service) blindedProposal(ctx context.Context,
 	started time.Time,
 	name string,
-	provider eth2client.BlindedBeaconBlockProposalProvider,
+	provider eth2client.BlindedProposalProvider,
 	respCh chan *beaconBlockResponse,
 	errCh chan *beaconBlockError,
-	slot phase0.Slot,
-	randaoReveal phase0.BLSSignature,
-	graffiti []byte,
+	opts *api.BlindedProposalOpts,
 	bid *builderspec.VersionedSignedBuilderBid,
 ) {
-	ctx, span := otel.Tracer("attestantio.vouch.strategies.blindedbeaconblockproposal.best").Start(ctx, "blindedBeaconBlockProposal", trace.WithAttributes(
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.blindedbeaconblockproposal.best").Start(ctx, "blindedProposal", trace.WithAttributes(
 		attribute.String("provider", name),
 	))
 	defer span.End()
 
-	proposal, err := provider.BlindedBeaconBlockProposal(ctx, slot, randaoReveal, graffiti)
+	proposalResponse, err := provider.BlindedProposal(ctx, opts)
 	s.clientMonitor.ClientOperation(name, "blinded beacon block proposal", err == nil, time.Since(started))
 	if err != nil {
 		errCh <- &beaconBlockError{
@@ -245,14 +248,8 @@ func (s *Service) blindedBeaconBlockProposal(ctx context.Context,
 		}
 		return
 	}
+	proposal := proposalResponse.Data
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained blinded beacon block proposal")
-	if proposal == nil {
-		errCh <- &beaconBlockError{
-			provider: name,
-			err:      errors.New("blinded beacon block proposal nil"),
-		}
-		return
-	}
 	feeRecipient, err := proposal.FeeRecipient()
 	if err != nil {
 		errCh <- &beaconBlockError{
@@ -276,7 +273,7 @@ func (s *Service) blindedBeaconBlockProposal(ctx context.Context,
 		}
 		return
 	}
-	if int64(executionTimestamp) != s.chainTime.StartOfSlot(slot).Unix() {
+	if int64(executionTimestamp) != s.chainTime.StartOfSlot(opts.Slot).Unix() {
 		errCh <- &beaconBlockError{
 			provider: name,
 			err:      errors.New("blinded beacon block response has incorrect timestamp"),
@@ -304,7 +301,7 @@ func (s *Service) blindedBeaconBlockProposal(ctx context.Context,
 		}
 	}
 
-	score := s.scoreBlindedBeaconBlockProposal(ctx, name, proposal)
+	score := s.scoreBlindedProposal(ctx, name, proposal)
 	span.SetAttributes(attribute.Float64("score", score))
 	respCh <- &beaconBlockResponse{
 		provider: name,

@@ -28,11 +28,11 @@ import (
 )
 
 type parameters struct {
-	logLevel                            zerolog.Level
-	clientMonitor                       metrics.ClientMonitor
-	chainTime                           chaintime.Service
-	blindedBeaconBlockProposalProviders map[string]eth2client.BlindedBeaconBlockProposalProvider
-	timeout                             time.Duration
+	logLevel                 zerolog.Level
+	clientMonitor            metrics.ClientMonitor
+	chainTime                chaintime.Service
+	blindedProposalProviders map[string]eth2client.BlindedProposalProvider
+	timeout                  time.Duration
 }
 
 // Parameter is the interface for service parameters.
@@ -67,10 +67,10 @@ func WithChainTimeService(chainTime chaintime.Service) Parameter {
 	})
 }
 
-// WithBlindedBeaconBlockProposalProviders sets the blinded beacon block proposal providers.
-func WithBlindedBeaconBlockProposalProviders(providers map[string]eth2client.BlindedBeaconBlockProposalProvider) Parameter {
+// WithBlindedProposalProviders sets the blinded proposal providers.
+func WithBlindedProposalProviders(providers map[string]eth2client.BlindedProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.blindedBeaconBlockProposalProviders = providers
+		p.blindedProposalProviders = providers
 	})
 }
 
@@ -96,8 +96,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.chainTime == nil {
 		return nil, errors.New("no chain time service specified")
 	}
-	if parameters.blindedBeaconBlockProposalProviders == nil {
-		return nil, errors.New("no blinded beacon block proposal providers specified")
+	if parameters.blindedProposalProviders == nil {
+		return nil, errors.New("no blinded proposal providers specified")
 	}
 
 	return &parameters, nil

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"go.opentelemetry.io/otel"
@@ -38,18 +39,22 @@ func (s *Service) scheduleProposals(ctx context.Context,
 	started := time.Now()
 	log.Trace().Uint64("epoch", uint64(epoch)).Msg("Scheduling proposals")
 
-	resp, err := s.proposerDutiesProvider.ProposerDuties(ctx, epoch, validatorIndices)
+	proposerDutiesResponse, err := s.proposerDutiesProvider.ProposerDuties(ctx, &api.ProposerDutiesOpts{
+		Epoch:   epoch,
+		Indices: validatorIndices,
+	})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to fetch proposer duties")
 		return
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(resp)).Msg("Fetched proposer duties")
+	proposerDuties := proposerDutiesResponse.Data
+	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(proposerDuties)).Msg("Fetched proposer duties")
 
 	// Generate Vouch duties from the response.
-	duties := make([]*beaconblockproposer.Duty, 0, len(resp))
+	duties := make([]*beaconblockproposer.Duty, 0, len(proposerDuties))
 	firstSlot := s.chainTimeService.FirstSlotOfEpoch(epoch)
 	lastSlot := s.chainTimeService.FirstSlotOfEpoch(epoch+1) - 1
-	for _, respDuty := range resp {
+	for _, respDuty := range proposerDuties {
 		if respDuty.Slot < firstSlot || respDuty.Slot > lastSlot {
 			log.Warn().
 				Uint64("epoch", uint64(epoch)).
@@ -125,15 +130,14 @@ func (s *Service) proposeEarly(ctx context.Context, data interface{}) {
 	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))
 
 	// Start off by fetching the current head.
-	header, err := s.beaconBlockHeadersProvider.BeaconBlockHeader(ctx, "head")
+	headerResponse, err := s.beaconBlockHeadersProvider.BeaconBlockHeader(ctx, &api.BeaconBlockHeaderOpts{
+		Block: "head",
+	})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain beacon block header")
 		return
 	}
-	if header == nil {
-		log.Error().Msg("Obtained nil beacon block header")
-		return
-	}
+	header := headerResponse.Data
 
 	// If the current head is up to the prior slot then we can propose immediately.
 	if header.Header.Message.Slot == duty.Slot()-1 {

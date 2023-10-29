@@ -31,7 +31,7 @@ type parameters struct {
 	timeout                                time.Duration
 	clientMonitor                          metrics.ClientMonitor
 	processConcurrency                     int64
-	beaconBlockSubmitters                  map[string]eth2client.BeaconBlockSubmitter
+	proposalSubmitters                     map[string]eth2client.ProposalSubmitter
 	attestationsSubmitters                 map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters        map[string]eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitters         map[string]eth2client.ProposalPreparationsSubmitter
@@ -80,10 +80,10 @@ func WithProcessConcurrency(concurrency int64) Parameter {
 	})
 }
 
-// WithBeaconBlockSubmitters sets the beacon block submitters.
-func WithBeaconBlockSubmitters(submitters map[string]eth2client.BeaconBlockSubmitter) Parameter {
+// WithProposalSubmitters sets the proposal submitters.
+func WithProposalSubmitters(submitters map[string]eth2client.ProposalSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.beaconBlockSubmitters = submitters
+		p.proposalSubmitters = submitters
 	})
 }
 
@@ -157,8 +157,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.processConcurrency == 0 {
 		return nil, errors.New("no process concurrency specified")
 	}
-	if len(parameters.beaconBlockSubmitters) == 0 {
-		return nil, errors.New("no beacon block submitters specified")
+	if len(parameters.proposalSubmitters) == 0 {
+		return nil, errors.New("no proposal submitters specified")
 	}
 	if len(parameters.attestationsSubmitters) == 0 {
 		return nil, errors.New("no attestations submitters specified")

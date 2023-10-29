@@ -18,6 +18,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
@@ -27,9 +28,14 @@ import (
 )
 
 // AttestationData provides the first attestation data from a number of beacon nodes.
-func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committeeIndex phase0.CommitteeIndex) (*phase0.AttestationData, error) {
+func (s *Service) AttestationData(ctx context.Context,
+	opts *api.AttestationDataOpts,
+) (
+	*api.Response[*phase0.AttestationData],
+	error,
+) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.attestationdata.first").Start(ctx, "AttestationData", trace.WithAttributes(
-		attribute.Int64("slot", int64(slot)),
+		attribute.Int64("slot", int64(opts.Slot)),
 	))
 	defer span.End()
 
@@ -42,18 +48,15 @@ func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committ
 	respCh := make(chan *phase0.AttestationData, 1)
 	for name, provider := range s.attestationDataProviders {
 		go func(ctx context.Context, name string, provider eth2client.AttestationDataProvider, ch chan *phase0.AttestationData) {
-			log := log.With().Str("provider", name).Uint64("slot", uint64(slot)).Logger()
+			log := log.With().Str("provider", name).Uint64("slot", uint64(opts.Slot)).Logger()
 
-			attestationData, err := provider.AttestationData(ctx, slot, committeeIndex)
+			attestationDataResponse, err := provider.AttestationData(ctx, opts)
 			s.clientMonitor.ClientOperation(name, "attestation data", err == nil, time.Since(started))
 			if err != nil {
 				log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain attestation data")
 				return
 			}
-			if attestationData == nil {
-				log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Returned empty attestation data")
-				return
-			}
+			attestationData := attestationDataResponse.Data
 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")
 
 			ch <- attestationData
@@ -67,6 +70,9 @@ func (s *Service) AttestationData(ctx context.Context, slot phase0.Slot, committ
 		return nil, errors.New("failed to obtain attestation data before timeout")
 	case attestationData := <-respCh:
 		cancel()
-		return attestationData, nil
+		return &api.Response[*phase0.AttestationData]{
+			Data:     attestationData,
+			Metadata: make(map[string]any),
+		}, nil
 	}
 }

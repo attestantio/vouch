@@ -30,8 +30,8 @@ func TestService(t *testing.T) {
 	attestationsSubmitters := map[string]eth2client.AttestationsSubmitter{
 		"1": mock.NewAttestationsSubmitter(),
 	}
-	beaconBlockSubmitters := map[string]eth2client.BeaconBlockSubmitter{
-		"1": mock.NewBeaconBlockSubmitter(),
+	beaconBlockSubmitters := map[string]eth2client.ProposalSubmitter{
+		"1": mock.NewProposalSubmitter(),
 	}
 	beaconCommitteeSubscriptionsSubmitters := map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
 		"1": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
@@ -64,7 +64,7 @@ func TestService(t *testing.T) {
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithClientMonitor(nil),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -81,7 +81,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(0),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -98,7 +98,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(0),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -110,7 +110,7 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: no process concurrency specified",
 		},
 		{
-			name: "BeaconBlockSubmittersMissing",
+			name: "ProposalSubmittersMissing",
 			params: []multinode.Parameter{
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
@@ -123,15 +123,15 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
 			},
-			err: "problem with parameters: no beacon block submitters specified",
+			err: "problem with parameters: no proposal submitters specified",
 		},
 		{
-			name: "BeaconBlockSubmittersEmpty",
+			name: "ProposalSubmittersEmpty",
 			params: []multinode.Parameter{
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(map[string]eth2client.BeaconBlockSubmitter{}),
+				multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{}),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -140,7 +140,7 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
 			},
-			err: "problem with parameters: no beacon block submitters specified",
+			err: "problem with parameters: no proposal submitters specified",
 		},
 		{
 			name: "AttestationsSubmittersMissing",
@@ -148,7 +148,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
 				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
@@ -164,7 +164,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{}),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -181,7 +181,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
 				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
@@ -197,7 +197,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{}),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -214,7 +214,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
@@ -230,7 +230,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{}),
@@ -247,7 +247,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -263,7 +263,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -280,7 +280,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -296,7 +296,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -313,7 +313,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -329,7 +329,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -346,7 +346,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -362,7 +362,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -379,7 +379,7 @@ func TestService(t *testing.T) {
 				multinode.WithLogLevel(zerolog.Disabled),
 				multinode.WithTimeout(2 * time.Second),
 				multinode.WithProcessConcurrency(2),
-				multinode.WithBeaconBlockSubmitters(beaconBlockSubmitters),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
 				multinode.WithAttestationsSubmitters(attestationsSubmitters),
 				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
@@ -411,8 +411,8 @@ func TestInterfaces(t *testing.T) {
 		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
 			"1": mock.NewAttestationsSubmitter(),
 		}),
-		multinode.WithBeaconBlockSubmitters(map[string]eth2client.BeaconBlockSubmitter{
-			"1": mock.NewBeaconBlockSubmitter(),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"1": mock.NewProposalSubmitter(),
 		}),
 		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
 			"1": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
@@ -434,7 +434,7 @@ func TestInterfaces(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-	require.Implements(t, (*submitter.BeaconBlockSubmitter)(nil), s)
+	require.Implements(t, (*submitter.ProposalSubmitter)(nil), s)
 	require.Implements(t, (*submitter.AttestationsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.BeaconCommitteeSubscriptionsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.AggregateAttestationsSubmitter)(nil), s)

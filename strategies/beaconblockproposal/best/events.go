@@ -17,21 +17,22 @@ import (
 	"context"
 	"fmt"
 
-	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/api"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
 // HandleHeadEvent handles the "head" events from the beacon node.
-func (s *Service) HandleHeadEvent(event *api.Event) {
+func (s *Service) HandleHeadEvent(event *apiv1.Event) {
 	if event.Data == nil {
 		return
 	}
 
 	ctx := context.Background()
 
-	data := event.Data.(*api.HeadEvent)
+	data := event.Data.(*apiv1.HeadEvent)
 	log := log.With().Uint64("slot", uint64(data.Slot)).Logger()
 	log.Trace().Msg("Received head event")
 
@@ -51,11 +52,14 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 		return
 	}
 
-	block, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, fmt.Sprintf("%#x", data.Block))
+	blockResponse, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, &api.SignedBeaconBlockOpts{
+		Block: fmt.Sprintf("%#x", data.Block),
+	})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain head beacon block")
 		return
 	}
+	block := blockResponse.Data
 
 	s.updateBlockVotes(ctx, block)
 }

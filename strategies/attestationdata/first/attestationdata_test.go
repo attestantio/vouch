@@ -19,6 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/strategies/attestationdata/first"
@@ -60,20 +61,6 @@ func TestAttestationData(t *testing.T) {
 			err:            "failed to obtain attestation data before timeout",
 		},
 		{
-			name: "NilResponse",
-			params: []first.Parameter{
-				first.WithLogLevel(zerolog.Disabled),
-				first.WithTimeout(time.Second),
-				first.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
-					"nil": mock.NewNilAttestationDataProvider(),
-				}),
-			},
-			slot:           12345,
-			committeeIndex: 3,
-			// Nil response is invalid, so expect a timeout.
-			err: "failed to obtain attestation data before timeout",
-		},
-		{
 			name: "GoodMixed",
 			params: []first.Parameter{
 				first.WithLogLevel(zerolog.Disabled),
@@ -93,7 +80,10 @@ func TestAttestationData(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {
-			attestationData, err := s.AttestationData(context.Background(), test.slot, test.committeeIndex)
+			attestationData, err := s.AttestationData(context.Background(), &api.AttestationDataOpts{
+				Slot:           test.slot,
+				CommitteeIndex: test.committeeIndex,
+			})
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {

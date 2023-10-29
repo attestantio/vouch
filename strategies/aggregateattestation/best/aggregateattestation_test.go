@@ -19,6 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/strategies/aggregateattestation/best"
@@ -58,22 +59,6 @@ func TestAggregateAttestation(t *testing.T) {
 				best.WithTimeout(time.Second),
 				best.WithAggregateAttestationProviders(map[string]eth2client.AggregateAttestationProvider{
 					"sleepy": mock.NewSleepyAggregateAttestationProvider(5*time.Second, mock.NewAggregateAttestationProvider()),
-				}),
-			},
-			slot: 12345,
-			attestationDataRoot: phase0.Root{
-				0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-				0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
-			},
-			err: "no aggregate attestations received",
-		},
-		{
-			name: "NilResponse",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(time.Second),
-				best.WithAggregateAttestationProviders(map[string]eth2client.AggregateAttestationProvider{
-					"nil": mock.NewNilAggregateAttestationProvider(),
 				}),
 			},
 			slot: 12345,
@@ -156,7 +141,10 @@ func TestAggregateAttestation(t *testing.T) {
 			capture := logger.NewLogCapture()
 			s, err := best.New(context.Background(), test.params...)
 			require.NoError(t, err)
-			aggregate, err := s.AggregateAttestation(context.Background(), test.slot, test.attestationDataRoot)
+			aggregate, err := s.AggregateAttestation(context.Background(), &api.AggregateAttestationOpts{
+				Slot:                test.slot,
+				AttestationDataRoot: test.attestationDataRoot,
+			})
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {

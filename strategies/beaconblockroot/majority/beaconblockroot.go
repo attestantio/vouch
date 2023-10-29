@@ -19,6 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
@@ -38,14 +39,19 @@ type beaconBlockRootError struct {
 }
 
 // BeaconBlockRoot provides the consensus root from a number of beacon nodes.
-func (s *Service) BeaconBlockRoot(ctx context.Context, blockID string) (*phase0.Root, error) {
+func (s *Service) BeaconBlockRoot(ctx context.Context,
+	opts *api.BeaconBlockRootOpts,
+) (
+	*api.Response[*phase0.Root],
+	error,
+) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockroot.majority").Start(ctx, "BeaconBlockRoot", trace.WithAttributes(
-		attribute.String("blockid", blockID),
+		attribute.String("blockid", opts.Block),
 	))
 	defer span.End()
 
 	started := time.Now()
-	log := util.LogWithID(ctx, s.log, "strategy_id").With().Str("block_id", blockID).Logger()
+	log := util.LogWithID(ctx, s.log, "strategy_id").With().Str("block_id", opts.Block).Logger()
 
 	// We have two timeouts: a soft timeout and a hard timeout.
 	// At the soft timeout, we return if we have any responses so far.
@@ -60,7 +66,7 @@ func (s *Service) BeaconBlockRoot(ctx context.Context, blockID string) (*phase0.
 	errCh := make(chan *beaconBlockRootError, requests)
 	// Kick off the requests.
 	for name, provider := range s.beaconBlockRootProviders {
-		go s.beaconBlockRoot(ctx, started, name, provider, respCh, errCh, blockID)
+		go s.beaconBlockRoot(ctx, started, name, provider, respCh, errCh, opts)
 	}
 
 	// Wait for all responses (or context done).
@@ -202,7 +208,10 @@ func (s *Service) BeaconBlockRoot(ctx context.Context, blockID string) (*phase0.
 	}
 	log.Trace().Stringer("root", bestRoot).Uint64("slot", uint64(bestRootSlot)).Int("count", bestRootCount).Msg("Selected majority beacon block root")
 
-	return &bestRoot, nil
+	return &api.Response[*phase0.Root]{
+		Data:     &bestRoot,
+		Metadata: make(map[string]any),
+	}, nil
 }
 
 func (s *Service) beaconBlockRoot(ctx context.Context,
@@ -211,14 +220,14 @@ func (s *Service) beaconBlockRoot(ctx context.Context,
 	provider eth2client.BeaconBlockRootProvider,
 	respCh chan *beaconBlockRootResponse,
 	errCh chan *beaconBlockRootError,
-	blockID string,
+	opts *api.BeaconBlockRootOpts,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockroot.majority").Start(ctx, "beaconBlockRoot", trace.WithAttributes(
 		attribute.String("provider", name),
 	))
 	defer span.End()
 
-	root, err := provider.BeaconBlockRoot(ctx, blockID)
+	rootResponse, err := provider.BeaconBlockRoot(ctx, opts)
 	s.clientMonitor.ClientOperation(name, "beacon block root", err == nil, time.Since(started))
 	if err != nil {
 		errCh <- &beaconBlockRootError{
@@ -227,17 +236,10 @@ func (s *Service) beaconBlockRoot(ctx context.Context,
 		}
 		return
 	}
-	if root == nil {
-		errCh <- &beaconBlockRootError{
-			provider: name,
-			err:      errors.New("beacon block root nil"),
-		}
-		return
-	}
-	s.log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Stringer("root", root).Msg("Obtained beacon block root")
+	s.log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Stringer("root", rootResponse.Data).Msg("Obtained beacon block root")
 
 	respCh <- &beaconBlockRootResponse{
 		provider: name,
-		root:     root,
+		root:     rootResponse.Data,
 	}
 }

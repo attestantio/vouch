@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -17,8 +17,8 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
-	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
@@ -47,16 +47,16 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	return s, nil
 }
 
-// SubmitBeaconBlock submits a block.
-func (*Service) SubmitBeaconBlock(_ context.Context, block *spec.VersionedSignedBeaconBlock) error {
-	if block == nil {
-		return errors.New("no beacon block supplied")
+// SubmitProposal submits a proposal.
+func (*Service) SubmitProposal(_ context.Context, proposal *api.VersionedSignedProposal) error {
+	if proposal == nil {
+		return errors.New("no proposal supplied")
 	}
 
 	if e := log.Trace(); e.Enabled() {
-		data, err := json.Marshal(block)
+		data, err := json.Marshal(proposal)
 		if err == nil {
-			e.Str("block", string(data)).Msg("Not submitting beacon block")
+			e.Str("block", string(data)).Msg("Not submitting proposal")
 		}
 	}
 
