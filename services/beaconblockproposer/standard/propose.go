@@ -460,27 +460,6 @@ func (s *Service) signCompositeProposal(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to sign beacon proposal")
 	}
 
-	blobSidecars, err := proposal.BlobSidecars()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain blob sidecars of proposal")
-	}
-	blobSidecarSigs := make([]phase0.BLSSignature, len(blobSidecars))
-	for i := range blobSidecars {
-		root, err := blobSidecars[i].HashTreeRoot()
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to obtain hash tree root of blob sidecar")
-		}
-
-		blobSidecarSigs[i], err = s.blobSidecarSigner.SignBlobSidecar(ctx,
-			duty.Account(),
-			duty.Slot(),
-			root,
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to sign blob sidecar")
-		}
-	}
-
 	signedProposal := &api.VersionedSignedProposal{
 		Version: proposal.Version,
 	}
@@ -492,13 +471,6 @@ func (s *Service) signCompositeProposal(ctx context.Context,
 				Message:   proposal.Deneb.Block,
 				Signature: sig,
 			},
-			SignedBlobSidecars: make([]*deneb.SignedBlobSidecar, len(blobSidecars)),
-		}
-		for i := range blobSidecars {
-			signedProposal.Deneb.SignedBlobSidecars[i] = &deneb.SignedBlobSidecar{
-				Message:   blobSidecars[i],
-				Signature: blobSidecarSigs[i],
-			}
 		}
 	default:
 		return nil, errors.New("unhandled composite proposal version")
@@ -682,36 +654,11 @@ func (s *Service) signBlindedProposal(ctx context.Context,
 			Signature: sig,
 		}
 	case spec.DataVersionDeneb:
-		signedProposal.Deneb = &apiv1deneb.SignedBlindedBlockContents{
-			SignedBlindedBlock: &apiv1deneb.SignedBlindedBeaconBlock{
-				Message:   proposal.Deneb.BlindedBlock,
-				Signature: sig,
-			},
-		}
-
-		blobSidecars := proposal.Deneb.BlindedBlobSidecars
-		signedBlobSidecars := make([]*apiv1deneb.SignedBlindedBlobSidecar, len(blobSidecars))
-		for i := range blobSidecars {
-			signedBlobSidecars[i] = &apiv1deneb.SignedBlindedBlobSidecar{
-				Message: blobSidecars[i],
-			}
-		}
-		for i := range blobSidecars {
-			root, err := blobSidecars[i].HashTreeRoot()
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to obtain hash tree root of blob sidecar")
-			}
-
-			signedBlobSidecars[i].Signature, err = s.blobSidecarSigner.SignBlobSidecar(ctx,
-				duty.Account(),
-				duty.Slot(),
-				root,
-			)
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to sign blob sidecar")
-			}
-		}
-		signedProposal.Deneb.SignedBlindedBlobSidecars = signedBlobSidecars
+		return nil, errors.New("unsupported proposal version deneb")
+		// signedProposal.Deneb = &apiv1deneb.SignedBlindedBeaconBlock{
+		// 	Message:   proposal.Deneb,
+		// 	Signature: sig,
+		// }
 	default:
 		return nil, fmt.Errorf("unknown proposal version %v", signedProposal.Version)
 	}

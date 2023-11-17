@@ -32,6 +32,7 @@ import (
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/vouch/services/accountmanager"
 	dirkaccountmanager "github.com/attestantio/vouch/services/accountmanager/dirk"
@@ -448,9 +449,8 @@ func startBasicServices(ctx context.Context,
 	log.Trace().Msg("Starting chain time service")
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithLogLevel(util.LogLevel("chaintime")),
-		standardchaintime.WithGenesisTimeProvider(eth2Client.(eth2client.GenesisTimeProvider)),
-		standardchaintime.WithSlotDurationProvider(eth2Client.(eth2client.SlotDurationProvider)),
-		standardchaintime.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
+		standardchaintime.WithGenesisProvider(eth2Client.(eth2client.GenesisProvider)),
+		standardchaintime.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 	)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "failed to start chain time service")
@@ -1020,7 +1020,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 			walletaccountmanager.WithAccountPaths(viper.GetStringSlice("accountmanager.wallet.accounts")),
 			walletaccountmanager.WithPassphrases(passphrases),
 			walletaccountmanager.WithLocations(viper.GetStringSlice("accountmanager.wallet.locations")),
-			walletaccountmanager.WithSlotsPerEpochProvider(eth2Client.(eth2client.SlotsPerEpochProvider)),
+			walletaccountmanager.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 			walletaccountmanager.WithFarFutureEpochProvider(eth2Client.(eth2client.FarFutureEpochProvider)),
 			walletaccountmanager.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
 			walletaccountmanager.WithCurrentEpochProvider(chainTime),
@@ -1540,7 +1540,7 @@ func runCommands(ctx context.Context,
 func consensusClientCapabilities(ctx context.Context, consensusClient eth2client.Service) (bool, bool, bool, error) {
 	// Decide if the ETH2 client is capable of Altair.
 	altairCapable := false
-	specResponse, err := consensusClient.(eth2client.SpecProvider).Spec(ctx)
+	specResponse, err := consensusClient.(eth2client.SpecProvider).Spec(ctx, &api.SpecOpts{})
 	if err != nil {
 		return false, false, false, errors.Wrap(err, "failed to obtain spec")
 	}

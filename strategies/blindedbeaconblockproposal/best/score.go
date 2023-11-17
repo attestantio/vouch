@@ -253,7 +253,7 @@ func (s *Service) scoreCapellaBlindedProposal(ctx context.Context,
 func (s *Service) scoreDenebBlindedProposal(ctx context.Context,
 	name string,
 	parentSlot phase0.Slot,
-	proposal *apiv1deneb.BlindedBlockContents,
+	proposal *apiv1deneb.BlindedBeaconBlock,
 ) float64 {
 	attestationScore := float64(0)
 	immediateAttestationScore := float64(0)
@@ -261,7 +261,7 @@ func (s *Service) scoreDenebBlindedProposal(ctx context.Context,
 	// We need to avoid duplicates in attestations.
 	// Map is attestation slot -> committee index -> validator committee index -> aggregate.
 	attested := make(map[phase0.Slot]map[phase0.CommitteeIndex]bitfield.Bitlist)
-	for _, attestation := range proposal.BlindedBlock.Body.Attestations {
+	for _, attestation := range proposal.Body.Attestations {
 		data := attestation.Data
 		if _, exists := attested[data.Slot]; !exists {
 			attested[data.Slot] = make(map[phase0.CommitteeIndex]bitfield.Bitlist)
@@ -272,7 +272,7 @@ func (s *Service) scoreDenebBlindedProposal(ctx context.Context,
 			}
 		}
 
-		priorVotes, err := s.priorVotesForAttestation(ctx, attestation, proposal.BlindedBlock.ParentRoot)
+		priorVotes, err := s.priorVotesForAttestation(ctx, attestation, proposal.ParentRoot)
 		if err != nil {
 			log.Debug().Err(err).Msg("Failed to obtain prior votes for attestation; assuming no votes")
 		}
@@ -297,9 +297,9 @@ func (s *Service) scoreDenebBlindedProposal(ctx context.Context,
 		// We can calculate if the head vote is correct, but not target so for the
 		// purposes of the calculation we assume that it is.
 
-		headCorrect := denebHeadCorrect(proposal.BlindedBlock, attestation)
+		headCorrect := denebHeadCorrect(proposal, attestation)
 		targetCorrect := s.bellatrixTargetCorrect(ctx, attestation)
-		inclusionDistance := proposal.BlindedBlock.Slot - attestation.Data.Slot
+		inclusionDistance := proposal.Slot - attestation.Data.Slot
 
 		score := 0.0
 		if targetCorrect {
@@ -320,13 +320,13 @@ func (s *Service) scoreDenebBlindedProposal(ctx context.Context,
 		}
 	}
 
-	attesterSlashingScore, proposerSlashingScore := scoreSlashings(proposal.BlindedBlock.Body.AttesterSlashings, proposal.BlindedBlock.Body.ProposerSlashings)
+	attesterSlashingScore, proposerSlashingScore := scoreSlashings(proposal.Body.AttesterSlashings, proposal.Body.ProposerSlashings)
 
 	// Add sync committee score.
-	syncCommitteeScore := float64(proposal.BlindedBlock.Body.SyncAggregate.SyncCommitteeBits.Count()) * float64(s.syncRewardWeight) / float64(s.weightDenominator)
+	syncCommitteeScore := float64(proposal.Body.SyncAggregate.SyncCommitteeBits.Count()) * float64(s.syncRewardWeight) / float64(s.weightDenominator)
 
 	log.Trace().
-		Uint64("slot", uint64(proposal.BlindedBlock.Slot)).
+		Uint64("slot", uint64(proposal.Slot)).
 		Uint64("parent_slot", uint64(parentSlot)).
 		Str("provider", name).
 		Float64("immediate_attestations", immediateAttestationScore).

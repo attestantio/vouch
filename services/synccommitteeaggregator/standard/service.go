@@ -65,7 +65,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
-	specResponse, err := parameters.specProvider.Spec(ctx)
+	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain spec")
 	}

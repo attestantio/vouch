@@ -20,10 +20,9 @@ import (
 )
 
 type parameters struct {
-	logLevel              zerolog.Level
-	genesisTimeProvider   eth2client.GenesisTimeProvider
-	slotDurationProvider  eth2client.SlotDurationProvider
-	slotsPerEpochProvider eth2client.SlotsPerEpochProvider
+	logLevel        zerolog.Level
+	genesisProvider eth2client.GenesisProvider
+	specProvider    eth2client.SpecProvider
 }
 
 // Parameter is the interface for service parameters.
@@ -44,24 +43,17 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 	})
 }
 
-// WithGenesisTimeProvider sets the genesis time provider.
-func WithGenesisTimeProvider(provider eth2client.GenesisTimeProvider) Parameter {
+// WithGenesisProvider sets the genesis provider.
+func WithGenesisProvider(provider eth2client.GenesisProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.genesisTimeProvider = provider
+		p.genesisProvider = provider
 	})
 }
 
-// WithSlotDurationProvider sets the seconds per slot provider.
-func WithSlotDurationProvider(provider eth2client.SlotDurationProvider) Parameter {
+// WithSpecProvider sets the spec provider.
+func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.slotDurationProvider = provider
-	})
-}
-
-// WithSlotsPerEpochProvider sets the slots per epoch provider.
-func WithSlotsPerEpochProvider(provider eth2client.SlotsPerEpochProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.slotsPerEpochProvider = provider
+		p.specProvider = provider
 	})
 }
 
@@ -76,14 +68,11 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
-	if parameters.genesisTimeProvider == nil {
-		return nil, errors.New("no genesis time provider specified")
+	if parameters.genesisProvider == nil {
+		return nil, errors.New("no genesis provider specified")
 	}
-	if parameters.slotDurationProvider == nil {
-		return nil, errors.New("no slot duration provider specified")
-	}
-	if parameters.slotsPerEpochProvider == nil {
-		return nil, errors.New("no slots per epoch provider specified")
+	if parameters.specProvider == nil {
+		return nil, errors.New("no spec provider specified")
 	}
 
 	return &parameters, nil

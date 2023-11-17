@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -20,6 +20,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
@@ -468,7 +469,7 @@ func fetchAltairForkEpoch(ctx context.Context,
 	error,
 ) {
 	// Fetch the fork version.
-	specResponse, err := specProvider.Spec(ctx)
+	specResponse, err := specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to obtain spec")
 	}
@@ -494,7 +495,7 @@ func fetchBellatrixForkEpoch(ctx context.Context,
 	error,
 ) {
 	// Fetch the fork version.
-	specResponse, err := specProvider.Spec(ctx)
+	specResponse, err := specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to obtain spec")
 	}
@@ -520,7 +521,7 @@ func fetchCapellaForkEpoch(ctx context.Context,
 	error,
 ) {
 	// Fetch the fork version.
-	specResponse, err := specProvider.Spec(ctx)
+	specResponse, err := specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to obtain spec")
 	}
@@ -597,7 +598,7 @@ func obtainSpecValues(ctx context.Context,
 	uint64,
 	error,
 ) {
-	specResponse, err := specProvider.Spec(ctx)
+	specResponse, err := specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
 		return 0, 0, 0, errors.Wrap(err, "failed to obtain spec")
 	}

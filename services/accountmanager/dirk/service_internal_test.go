@@ -174,15 +174,12 @@ func TestAccounts(t *testing.T) {
 
 func setupService(ctx context.Context, t *testing.T, endpoints []string, accountPaths []string) (*Service, error) {
 	genesisTime := time.Now()
-	slotDuration := 12 * time.Second
-	slotsPerEpoch := uint64(32)
-	mockGenesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
-	mockSlotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
-	mockSlotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
+	genesisProvider := mock.NewGenesisProvider(genesisTime)
+	specProvider := mock.NewSpecProvider()
 	chainTime, err := standardchaintime.New(ctx,
-		standardchaintime.WithGenesisTimeProvider(mockGenesisTimeProvider),
-		standardchaintime.WithSlotDurationProvider(mockSlotDurationProvider),
-		standardchaintime.WithSlotsPerEpochProvider(mockSlotsPerEpochProvider),
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(genesisProvider),
+		standardchaintime.WithSpecProvider(specProvider),
 	)
 	require.NoError(t, err)
 

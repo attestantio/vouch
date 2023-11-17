@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -17,6 +17,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -46,21 +47,36 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
-	genesisTime, err := parameters.genesisTimeProvider.GenesisTime(ctx)
+	genesisResponse, err := parameters.genesisProvider.Genesis(ctx, &api.GenesisOpts{})
 	if err != nil {
-		return nil, errors.Wrap(nil, "failed to obtain genesis time")
+		return nil, errors.Wrap(err, "failed to obtain genesis")
 	}
+	genesisTime := genesisResponse.Data.GenesisTime
 	log.Trace().Time("genesis_time", genesisTime).Msg("Obtained genesis time")
 
-	slotDuration, err := parameters.slotDurationProvider.SlotDuration(ctx)
+	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
-		return nil, errors.Wrap(nil, "failed to obtain slot duration")
+		return nil, errors.Wrap(err, "failed to obtain spec")
+	}
+	spec := specResponse.Data
+
+	tmp, exists := spec["SECONDS_PER_SLOT"]
+	if !exists {
+		return nil, errors.New("SECONDS_PER_SLOT not found in spec")
+	}
+	slotDuration, ok := tmp.(time.Duration)
+	if !ok {
+		return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
 	}
 	log.Trace().Dur("slot_duration", slotDuration).Msg("Obtained slot duration")
 
-	slotsPerEpoch, err := parameters.slotsPerEpochProvider.SlotsPerEpoch(ctx)
-	if err != nil {
-		return nil, errors.Wrap(nil, "failed to obtain slots per epoch")
+	tmp, exists = spec["SLOTS_PER_EPOCH"]
+	if !exists {
+		return nil, errors.New("SLOTS_PER_EPOCH not found in spec")
+	}
+	slotsPerEpoch, ok := tmp.(uint64)
+	if !ok {
+		return nil, errors.New("SLOTS_PER_EPOCH of unexpected type")
 	}
 	log.Trace().Uint64("slots_per_epoch", slotsPerEpoch).Msg("Obtained slots per epoch")
 

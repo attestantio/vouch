@@ -30,7 +30,7 @@ type parameters struct {
 	accountPaths           []string
 	passphrases            [][]byte
 	validatorsManager      validatorsmanager.Service
-	slotsPerEpochProvider  eth2client.SlotsPerEpochProvider
+	specProvider           eth2client.SpecProvider
 	domainProvider         eth2client.DomainProvider
 	farFutureEpochProvider eth2client.FarFutureEpochProvider
 	currentEpochProvider   chaintime.Service
@@ -96,10 +96,10 @@ func WithValidatorsManager(manager validatorsmanager.Service) Parameter {
 	})
 }
 
-// WithSlotsPerEpochProvider sets the slots per epoch provider.
-func WithSlotsPerEpochProvider(provider eth2client.SlotsPerEpochProvider) Parameter {
+// WithSpecProvider sets the specification provider.
+func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.slotsPerEpochProvider = provider
+		p.specProvider = provider
 	})
 }
 
@@ -150,8 +150,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.validatorsManager == nil {
 		return nil, errors.New("no validators manager specified")
 	}
-	if parameters.slotsPerEpochProvider == nil {
-		return nil, errors.New("no slots per epoch provider specified")
+	if parameters.specProvider == nil {
+		return nil, errors.New("no spec provider specified")
 	}
 	if parameters.farFutureEpochProvider == nil {
 		return nil, errors.New("no far future epoch provider specified")

@@ -32,21 +32,18 @@ func TestService(t *testing.T) {
 	ctx := context.Background()
 
 	genesisTime := time.Now()
-	slotDuration := 12 * time.Second
-	slotsPerEpoch := uint64(32)
-	mockGenesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
-	mockSlotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
-	mockSlotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
+	genesisProvider := mock.NewGenesisProvider(genesisTime)
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(genesisProvider),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
 
 	domainProvider := mock.NewDomainProvider()
 	validatorsManager := mock.NewValidatorsManager()
 	farFutureEpochProvider := mock.NewFarFutureEpochProvider(0xffffffffffffffff)
-	chainTime, err := standardchaintime.New(ctx,
-		standardchaintime.WithGenesisTimeProvider(mockGenesisTimeProvider),
-		standardchaintime.WithSlotDurationProvider(mockSlotDurationProvider),
-		standardchaintime.WithSlotsPerEpochProvider(mockSlotsPerEpochProvider),
-	)
-	require.NoError(t, err)
 
 	tests := []struct {
 		name     string
