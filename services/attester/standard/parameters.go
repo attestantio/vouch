@@ -29,7 +29,7 @@ type parameters struct {
 	processConcurrency         int64
 	monitor                    metrics.AttestationMonitor
 	chainTimeService           chaintime.Service
-	slotsPerEpochProvider      eth2client.SlotsPerEpochProvider
+	specProvider               eth2client.SpecProvider
 	attestationDataProvider    eth2client.AttestationDataProvider
 	attestationsSubmitter      submitter.AttestationsSubmitter
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
@@ -68,10 +68,10 @@ func WithChainTimeService(service chaintime.Service) Parameter {
 	})
 }
 
-// WithSlotsPerEpochProvider sets the slots per epoch provider.
-func WithSlotsPerEpochProvider(provider eth2client.SlotsPerEpochProvider) Parameter {
+// WithSpecProvider sets the specification provider.
+func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.slotsPerEpochProvider = provider
+		p.specProvider = provider
 	})
 }
 
@@ -127,8 +127,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.chainTimeService == nil {
 		return nil, errors.New("no chain time service specified")
 	}
-	if parameters.slotsPerEpochProvider == nil {
-		return nil, errors.New("no slots per epoch provider specified")
+	if parameters.specProvider == nil {
+		return nil, errors.New("no spec provider specified")
 	}
 	if parameters.attestationDataProvider == nil {
 		return nil, errors.New("no attestation data provider specified")

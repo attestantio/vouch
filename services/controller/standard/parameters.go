@@ -18,6 +18,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
@@ -333,7 +334,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.blockToSlotSetter == nil {
 		return nil, errors.New("no block to slot setter specified")
 	}
-	specResponse, err := parameters.specProvider.Spec(context.Background())
+	specResponse, err := parameters.specProvider.Spec(context.Background(), &api.SpecOpts{})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain spec")
 	}

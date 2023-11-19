@@ -30,11 +30,13 @@ import (
 func TestService(t *testing.T) {
 	ctx := context.Background()
 
+	genesisTime := time.Now()
+	genesisProvider := mock.NewGenesisProvider(genesisTime)
+	specProvider := mock.NewSpecProvider()
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithLogLevel(zerolog.Disabled),
-		standardchaintime.WithGenesisTimeProvider(mock.NewGenesisTimeProvider(time.Now())),
-		standardchaintime.WithSlotDurationProvider(mock.NewSlotDurationProvider(12*time.Second)),
-		standardchaintime.WithSlotsPerEpochProvider(mock.NewSlotsPerEpochProvider(32)),
+		standardchaintime.WithGenesisProvider(genesisProvider),
+		standardchaintime.WithSpecProvider(specProvider),
 	)
 	require.NoError(t, err)
 

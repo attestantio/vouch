@@ -33,51 +33,25 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 )
 
-// GenesisTimeProvider is a mock for eth2client.GenesisTimeProvider.
-type GenesisTimeProvider struct {
+// GenesisProvider is a mock for eth2client.GenesisProvider.
+type GenesisProvider struct {
 	genesisTime time.Time
 }
 
-// NewGenesisTimeProvider returns a mock genesis time provider with the provided value.
-func NewGenesisTimeProvider(genesisTime time.Time) eth2client.GenesisTimeProvider {
-	return &GenesisTimeProvider{
+// NewGenesisProvider returns a mock genesis provider with the provided value.
+func NewGenesisProvider(genesisTime time.Time) eth2client.GenesisProvider {
+	return &GenesisProvider{
 		genesisTime: genesisTime,
 	}
 }
 
-// GenesisTime is a mock.
-func (m *GenesisTimeProvider) GenesisTime(_ context.Context) (time.Time, error) {
-	return m.genesisTime, nil
-}
-
-// SlotDurationProvider is a mock for eth2client.SlotDurationProvider.
-type SlotDurationProvider struct {
-	slotDuration time.Duration
-}
-
-// NewSlotDurationProvider returns a mock slot duration provider with the provided value.
-func NewSlotDurationProvider(slotDuration time.Duration) eth2client.SlotDurationProvider {
-	return &SlotDurationProvider{
-		slotDuration: slotDuration,
-	}
-}
-
-// SlotDuration is a mock.
-func (m *SlotDurationProvider) SlotDuration(_ context.Context) (time.Duration, error) {
-	return m.slotDuration, nil
-}
-
-// ErroringSlotDurationProvider is a mock for eth2client.SlotDurationProvider.
-type ErroringSlotDurationProvider struct{}
-
-// NewErroringSlotDurationProvider returns a mock slot duration provider that errors.
-func NewErroringSlotDurationProvider() eth2client.SlotDurationProvider {
-	return &ErroringSlotDurationProvider{}
-}
-
-// SlotDuration is a mock.
-func (*ErroringSlotDurationProvider) SlotDuration(_ context.Context) (time.Duration, error) {
-	return 0, errors.New("mock")
+// Genesis is a mock.
+func (m *GenesisProvider) Genesis(_ context.Context, _ *api.GenesisOpts) (*api.Response[*apiv1.Genesis], error) {
+	return &api.Response[*apiv1.Genesis]{
+		Data: &apiv1.Genesis{
+			GenesisTime: m.genesisTime,
+		},
+	}, nil
 }
 
 // FarFutureEpochProvider is a mock for eth2client.FarFutureEpochProvider.
@@ -95,36 +69,6 @@ func NewFarFutureEpochProvider(farFutureEpoch phase0.Epoch) eth2client.FarFuture
 // FarFutureEpoch is a mock.
 func (m *FarFutureEpochProvider) FarFutureEpoch(_ context.Context) (phase0.Epoch, error) {
 	return m.farFutureEpoch, nil
-}
-
-// SlotsPerEpochProvider is a mock for eth2client.SlotsPerEpochProvider.
-type SlotsPerEpochProvider struct {
-	slotsPerEpoch uint64
-}
-
-// NewSlotsPerEpochProvider returns a mock slots per epoch provider with the provided value.
-func NewSlotsPerEpochProvider(slotsPerEpoch uint64) eth2client.SlotsPerEpochProvider {
-	return &SlotsPerEpochProvider{
-		slotsPerEpoch: slotsPerEpoch,
-	}
-}
-
-// SlotsPerEpoch is a mock.
-func (m *SlotsPerEpochProvider) SlotsPerEpoch(_ context.Context) (uint64, error) {
-	return m.slotsPerEpoch, nil
-}
-
-// ErroringSlotsPerEpochProvider is a mock for eth2client.SlotsPerEpochProvider.
-type ErroringSlotsPerEpochProvider struct{}
-
-// NewErroringSlotsPerEpochProvider returns a mock slots per epoch provider that errors.
-func NewErroringSlotsPerEpochProvider() eth2client.SlotsPerEpochProvider {
-	return &ErroringSlotsPerEpochProvider{}
-}
-
-// SlotsPerEpoch is a mock.
-func (*ErroringSlotsPerEpochProvider) SlotsPerEpoch(_ context.Context) (uint64, error) {
-	return 0, errors.New("error")
 }
 
 // ProposerDutiesProvider is a mock for eth2client.ProposerDutiesProvider.
@@ -1263,7 +1207,7 @@ func NewErroringSpecProvider() eth2client.SpecProvider {
 }
 
 // Spec is a mock.
-func (*ErroringSpecProvider) Spec(_ context.Context) (*api.Response[map[string]any], error) {
+func (*ErroringSpecProvider) Spec(_ context.Context, _ *api.SpecOpts) (*api.Response[map[string]any], error) {
 	return nil, errors.New("error")
 }
 
@@ -1276,7 +1220,7 @@ func NewSpecProvider() eth2client.SpecProvider {
 }
 
 // Spec is a mock.
-func (*SpecProvider) Spec(_ context.Context) (*api.Response[map[string]any], error) {
+func (*SpecProvider) Spec(_ context.Context, _ *api.SpecOpts) (*api.Response[map[string]any], error) {
 	return &api.Response[map[string]any]{
 			Data: map[string]any{
 				// Mainnet params (give or take).
@@ -1312,7 +1256,7 @@ func NewForkScheduleProvider() eth2client.ForkScheduleProvider {
 }
 
 // ForkSchedule is a mock.
-func (*ForkScheduleProvider) ForkSchedule(_ context.Context) (*api.Response[[]*phase0.Fork], error) {
+func (*ForkScheduleProvider) ForkSchedule(_ context.Context, _ *api.ForkScheduleOpts) (*api.Response[[]*phase0.Fork], error) {
 	return &api.Response[[]*phase0.Fork]{
 		Data: []*phase0.Fork{
 			{

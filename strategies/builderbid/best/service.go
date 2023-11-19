@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
@@ -57,7 +58,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// The application domain is static, so fetch it here once.
-	specResponse, err := parameters.specProvider.Spec(ctx)
+	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain spec")
 	}

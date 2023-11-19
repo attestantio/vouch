@@ -34,16 +34,12 @@ func TestUpdatePreparations(t *testing.T) {
 	zerolog.SetGlobalLevel(zerolog.Disabled)
 
 	genesisTime := time.Now()
-	slotDuration := 12 * time.Second
-	slotsPerEpoch := uint64(32)
-	genesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
-	slotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
-	slotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
-
+	genesisProvider := mock.NewGenesisProvider(genesisTime)
+	specProvider := mock.NewSpecProvider()
 	chainTime, err := standardchaintime.New(ctx,
-		standardchaintime.WithGenesisTimeProvider(genesisTimeProvider),
-		standardchaintime.WithSlotDurationProvider(slotDurationProvider),
-		standardchaintime.WithSlotsPerEpochProvider(slotsPerEpochProvider),
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(genesisProvider),
+		standardchaintime.WithSpecProvider(specProvider),
 	)
 	require.NoError(t, err)
 

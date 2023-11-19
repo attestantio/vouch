@@ -68,9 +68,19 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
-	slotsPerEpoch, err := parameters.slotsPerEpochProvider.SlotsPerEpoch(ctx)
+	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain slots per epoch")
+		return nil, errors.Wrap(err, "failed to obtain spec")
+	}
+	spec := specResponse.Data
+
+	tmp, exists := spec["SLOTS_PER_EPOCH"]
+	if !exists {
+		return nil, errors.New("SLOTS_PER_EPOCH not found in spec")
+	}
+	slotsPerEpoch, ok := tmp.(uint64)
+	if !ok {
+		return nil, errors.New("SLOTS_PER_EPOCH of unexpected type")
 	}
 
 	s := &Service{

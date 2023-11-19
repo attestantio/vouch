@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 )
 
 // serviceInfo returns the service name and provider information.
@@ -28,7 +29,7 @@ func (*Service) serviceInfo(ctx context.Context, submitter interface{}) (string,
 		provider = service.Address()
 	}
 	if service, isService := submitter.(eth2client.NodeVersionProvider); isService {
-		nodeVersionResponse, err := service.NodeVersion(ctx)
+		nodeVersionResponse, err := service.NodeVersion(ctx, &api.NodeVersionOpts{})
 		if err == nil {
 			nodeVersion := strings.ToLower(nodeVersionResponse.Data)
 			switch {

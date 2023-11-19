@@ -21,7 +21,8 @@ import (
 	"sync"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/api"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
@@ -85,10 +86,21 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		}
 	}
 
-	slotsPerEpoch, err := parameters.slotsPerEpochProvider.SlotsPerEpoch(ctx)
+	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain slots per epoch")
+		return nil, errors.Wrap(err, "failed to obtain spec")
 	}
+	spec := specResponse.Data
+
+	tmp, exists := spec["SLOTS_PER_EPOCH"]
+	if !exists {
+		return nil, errors.New("failed to obtain SLOTS_PER_EPOCH")
+	}
+	slotsPerEpoch, ok := tmp.(uint64)
+	if !ok {
+		return nil, errors.New("SLOTS_PER_EPOCH of unexpected type")
+	}
+
 	farFutureEpoch, err := parameters.farFutureEpochProvider.FarFutureEpoch(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain far future epoch")
@@ -199,17 +211,17 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 	defer span.End()
 
 	// stateCount is used to update metrics.
-	stateCount := map[api.ValidatorState]uint64{
-		api.ValidatorStateUnknown:            0,
-		api.ValidatorStatePendingInitialized: 0,
-		api.ValidatorStatePendingQueued:      0,
-		api.ValidatorStateActiveOngoing:      0,
-		api.ValidatorStateActiveExiting:      0,
-		api.ValidatorStateActiveSlashed:      0,
-		api.ValidatorStateExitedUnslashed:    0,
-		api.ValidatorStateExitedSlashed:      0,
-		api.ValidatorStateWithdrawalPossible: 0,
-		api.ValidatorStateWithdrawalDone:     0,
+	stateCount := map[apiv1.ValidatorState]uint64{
+		apiv1.ValidatorStateUnknown:            0,
+		apiv1.ValidatorStatePendingInitialized: 0,
+		apiv1.ValidatorStatePendingQueued:      0,
+		apiv1.ValidatorStateActiveOngoing:      0,
+		apiv1.ValidatorStateActiveExiting:      0,
+		apiv1.ValidatorStateActiveSlashed:      0,
+		apiv1.ValidatorStateExitedUnslashed:    0,
+		apiv1.ValidatorStateExitedSlashed:      0,
+		apiv1.ValidatorStateWithdrawalPossible: 0,
+		apiv1.ValidatorStateWithdrawalDone:     0,
 	}
 
 	validatingAccounts := make(map[phase0.ValidatorIndex]e2wtypes.Account)
@@ -220,9 +232,9 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 
 	validators := s.validatorsManager.ValidatorsByPubKey(ctx, pubKeys)
 	for index, validator := range validators {
-		state := api.ValidatorToState(validator, nil, epoch, s.farFutureEpoch)
+		state := apiv1.ValidatorToState(validator, nil, epoch, s.farFutureEpoch)
 		stateCount[state]++
-		if state == api.ValidatorStateActiveOngoing || state == api.ValidatorStateActiveExiting {
+		if state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting {
 			account := s.accounts[validator.PublicKey]
 			log.Trace().
 				Str("name", account.Name()).
@@ -236,7 +248,7 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 
 	// Update metrics if this is the current epoch.
 	if epoch == s.currentEpochProvider.CurrentEpoch() {
-		stateCount[api.ValidatorStateUnknown] += uint64(len(s.accounts) - len(validators))
+		stateCount[apiv1.ValidatorStateUnknown] += uint64(len(s.accounts) - len(validators))
 		for state, count := range stateCount {
 			s.monitor.Accounts(strings.ToLower(state.String()), count)
 		}
@@ -267,8 +279,8 @@ func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch p
 		if _, present := indexPresenceMap[index]; !present {
 			continue
 		}
-		state := api.ValidatorToState(validator, nil, epoch, s.farFutureEpoch)
-		if state == api.ValidatorStateActiveOngoing || state == api.ValidatorStateActiveExiting {
+		state := apiv1.ValidatorToState(validator, nil, epoch, s.farFutureEpoch)
+		if state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting {
 			validatingAccounts[index] = s.accounts[validator.PublicKey]
 		}
 	}

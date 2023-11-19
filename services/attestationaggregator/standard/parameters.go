@@ -24,15 +24,14 @@ import (
 )
 
 type parameters struct {
-	logLevel                              zerolog.Level
-	monitor                               metrics.AttestationAggregationMonitor
-	slotsPerEpochProvider                 eth2client.SlotsPerEpochProvider
-	targetAggregatorsPerCommitteeProvider eth2client.TargetAggregatorsPerCommitteeProvider
-	validatingAccountsProvider            accountmanager.ValidatingAccountsProvider
-	aggregateAttestationProvider          eth2client.AggregateAttestationProvider
-	aggregateAttestationsSubmitter        submitter.AggregateAttestationsSubmitter
-	slotSelectionSigner                   signer.SlotSelectionSigner
-	aggregateAndProofSigner               signer.AggregateAndProofSigner
+	logLevel                       zerolog.Level
+	monitor                        metrics.AttestationAggregationMonitor
+	specProvider                   eth2client.SpecProvider
+	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
+	aggregateAttestationProvider   eth2client.AggregateAttestationProvider
+	aggregateAttestationsSubmitter submitter.AggregateAttestationsSubmitter
+	slotSelectionSigner            signer.SlotSelectionSigner
+	aggregateAndProofSigner        signer.AggregateAndProofSigner
 }
 
 // Parameter is the interface for service parameters.
@@ -53,17 +52,10 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 	})
 }
 
-// WithSlotsPerEpochProvider sets the slots per epoch provider.
-func WithSlotsPerEpochProvider(provider eth2client.SlotsPerEpochProvider) Parameter {
+// WithSpecProvider sets the specification provider.
+func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.slotsPerEpochProvider = provider
-	})
-}
-
-// WithTargetAggregatorsPerCommitteeProvider sets the target aggregators per attestation provider.
-func WithTargetAggregatorsPerCommitteeProvider(provider eth2client.TargetAggregatorsPerCommitteeProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.targetAggregatorsPerCommitteeProvider = provider
+		p.specProvider = provider
 	})
 }
 
@@ -120,11 +112,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
-	if parameters.targetAggregatorsPerCommitteeProvider == nil {
-		return nil, errors.New("no target aggregators per committee provider specified")
-	}
-	if parameters.slotsPerEpochProvider == nil {
-		return nil, errors.New("no slots per epoch provider specified")
+	if parameters.specProvider == nil {
+		return nil, errors.New("no spec provider specified")
 	}
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")

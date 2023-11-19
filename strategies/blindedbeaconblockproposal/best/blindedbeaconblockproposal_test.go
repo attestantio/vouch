@@ -34,21 +34,17 @@ import (
 func TestBlindedProposal(t *testing.T) {
 	ctx := context.Background()
 
-	genesisTime := time.Unix(1669161600, 0)
-	slotDuration := 12 * time.Second
-	slotsPerEpoch := uint64(32)
-	genesisTimeProvider := mock.NewGenesisTimeProvider(genesisTime)
-	slotDurationProvider := mock.NewSlotDurationProvider(slotDuration)
-	slotsPerEpochProvider := mock.NewSlotsPerEpochProvider(slotsPerEpoch)
-	signedBeaconBlockProvider := mock.NewSignedBeaconBlockProvider()
+	genesisTime := time.Now()
+	genesisProvider := mock.NewGenesisProvider(genesisTime)
 	specProvider := mock.NewSpecProvider()
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithLogLevel(zerolog.Disabled),
-		standardchaintime.WithGenesisTimeProvider(genesisTimeProvider),
-		standardchaintime.WithSlotDurationProvider(slotDurationProvider),
-		standardchaintime.WithSlotsPerEpochProvider(slotsPerEpochProvider),
+		standardchaintime.WithGenesisProvider(genesisProvider),
+		standardchaintime.WithSpecProvider(specProvider),
 	)
 	require.NoError(t, err)
+
+	signedBeaconBlockProvider := mock.NewSignedBeaconBlockProvider()
 	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
 	blockToSlotCache := cacheSvc.(cache.BlockRootToSlotProvider)
 

@@ -62,13 +62,28 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
-	targetAggregatorsPerCommittee, err := parameters.targetAggregatorsPerCommitteeProvider.TargetAggregatorsPerCommittee(ctx)
+	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain target aggregators per committee")
+		return nil, errors.Wrap(err, "failed to obtain spec")
 	}
-	slotsPerEpoch, err := parameters.slotsPerEpochProvider.SlotsPerEpoch(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain slots per epoch")
+	spec := specResponse.Data
+
+	tmp, exists := spec["SLOTS_PER_EPOCH"]
+	if !exists {
+		return nil, errors.New("SLOTS_PER_EPOCH not found in spec")
+	}
+	slotsPerEpoch, ok := tmp.(uint64)
+	if !ok {
+		return nil, errors.New("SLOTS_PER_EPOCH of unexpected type")
+	}
+
+	tmp, exists = spec["TARGET_AGGREGATORS_PER_COMMITTEE"]
+	if !exists {
+		return nil, errors.New("TARGET_AGGREGATORS_PER_COMMITTEE not found in spec")
+	}
+	targetAggregatorsPerCommittee, ok := tmp.(uint64)
+	if !ok {
+		return nil, errors.New("TARGET_AGGREGATORS_PER_COMMITTEE of unexpected type")
 	}
 
 	s := &Service{
