@@ -3,6 +3,7 @@ dev:
   - create strategies for builder bid
   - fetch blinded and unblinded proposals in parallel to speed up block production
   - support Deneb beta.3
+  - compose multiclients from clients, reducing connections to beacon nodes
 
 1.7.6:
   - add User-Agent header to HTTP requests
