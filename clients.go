@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,16 +21,14 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	httpclient "github.com/attestantio/go-eth2-client/http"
-	"github.com/attestantio/go-eth2-client/metrics"
 	multiclient "github.com/attestantio/go-eth2-client/multi"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 )
 
 var (
-	clients   map[string]eth2client.Service
-	clientsMu sync.Mutex
+	knownClients   = make(map[string]eth2client.Service)
+	knownClientsMu sync.Mutex
 )
 
 // fetchClient fetches a client service, instantiating it if required.
@@ -39,15 +37,11 @@ func fetchClient(ctx context.Context, address string) (eth2client.Service, error
 		return nil, errors.New("no address supplied for client")
 	}
 
-	clientsMu.Lock()
-	defer clientsMu.Unlock()
-	if clients == nil {
-		clients = make(map[string]eth2client.Service)
-	}
+	knownClientsMu.Lock()
+	client, exists := knownClients[address]
+	knownClientsMu.Unlock()
 
-	var client eth2client.Service
-	var exists bool
-	if client, exists = clients[address]; !exists {
+	if !exists {
 		var err error
 		client, err = httpclient.New(ctx,
 			httpclient.WithLogLevel(util.LogLevel(fmt.Sprintf("eth2client.%s", address))),
@@ -60,53 +54,50 @@ func fetchClient(ctx context.Context, address string) (eth2client.Service, error
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate consensus client")
 		}
-		clients[address] = client
+
+		knownClientsMu.Lock()
+		knownClients[address] = client
+		knownClientsMu.Unlock()
 	}
 	return client, nil
 }
 
 // fetchMulticlient fetches a multiclient service, instantiating it if required.
 func fetchMultiClient(ctx context.Context, addresses []string) (eth2client.Service, error) {
-	clientsMu.Lock()
-	defer clientsMu.Unlock()
-	if clients == nil {
-		clients = make(map[string]eth2client.Service)
+	if len(addresses) == 0 {
+		return nil, errors.New("no addresses supplied for multiclient")
 	}
 
-	var client eth2client.Service
-	var exists bool
 	multiID := fmt.Sprintf("multi:%s", strings.Join(addresses, ","))
-	if client, exists = clients[multiID]; !exists {
-		// The prometheus metrics service requires a client connection, and the client connection
-		// requires a prometheus metrics service.  Square the circle by creating a local metrics
-		// service if required.
-		var monitor metrics.Service
-		if viper.Get("metrics.prometheus") != nil {
-			monitor = &consensusMonitor{}
+
+	knownClientsMu.Lock()
+	client, exists := knownClients[multiID]
+	knownClientsMu.Unlock()
+
+	if !exists {
+		// Fetch or create the individual clients.
+		clients := make([]eth2client.Service, 0, len(addresses))
+		for _, address := range addresses {
+			client, err := fetchClient(ctx, address)
+			if err != nil {
+				log.Error().Err(err).Str("address", address).Msg("Cannot access client for multiclient; dropping from list")
+				continue
+			}
+			clients = append(clients, client)
 		}
 
 		var err error
 		client, err = multiclient.New(ctx,
-			multiclient.WithMonitor(monitor),
-			multiclient.WithLogLevel(util.LogLevel("eth2client")),
-			multiclient.WithTimeout(util.Timeout("eth2client")),
-			multiclient.WithAddresses(addresses),
-			multiclient.WithExtraHeaders(map[string]string{
-				"User-Agent": fmt.Sprintf("Vouch/%s", ReleaseVersion),
-			}),
+			multiclient.WithClients(clients),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate multiclient")
 		}
-		clients[multiID] = client
+
+		knownClientsMu.Lock()
+		knownClients[multiID] = client
+		knownClientsMu.Unlock()
 	}
+
 	return client, nil
-}
-
-// consensusMonitor is a monitor for the consensus client.
-type consensusMonitor struct{}
-
-// Presenter provides the presenter for the monitor.
-func (*consensusMonitor) Presenter() string {
-	return "prometheus"
 }
