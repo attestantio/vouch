@@ -246,7 +246,7 @@ func (s *Service) proposeBlockWithAuction(ctx context.Context,
 	for _, provider := range auctionResults.Providers {
 		unblindedProposalProvider, isProvider := provider.(builderclient.UnblindedProposalProvider)
 		if !isProvider {
-			log.Warn().Msg("Auctioneer cannot unblind the proposal")
+			log.Warn().Str("provider", provider.Name()).Msg("Auctioneer cannot unblind the proposal")
 			continue
 		}
 		providers = append(providers, unblindedProposalProvider)
@@ -346,29 +346,6 @@ func (s *Service) signProposalData(ctx context.Context,
 	*api.VersionedSignedProposal,
 	error,
 ) {
-	var signedProposal *api.VersionedSignedProposal
-	var err error
-
-	switch proposal.Version {
-	case spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix, spec.DataVersionCapella:
-		signedProposal, err = s.signSimpleProposal(ctx, proposal, duty)
-	case spec.DataVersionDeneb:
-		signedProposal, err = s.signCompositeProposal(ctx, proposal, duty)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return signedProposal, nil
-}
-
-func (s *Service) signSimpleProposal(ctx context.Context,
-	proposal *api.VersionedProposal,
-	duty *beaconblockproposer.Duty,
-) (
-	*api.VersionedSignedProposal,
-	error,
-) {
 	bodyRoot, err := proposal.BodyRoot()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to calculate hash tree root of block body proposal")
@@ -420,60 +397,17 @@ func (s *Service) signSimpleProposal(ctx context.Context,
 			Message:   proposal.Capella,
 			Signature: sig,
 		}
-	default:
-		return nil, errors.New("unhandled proposal version")
-	}
-
-	return signedProposal, nil
-}
-
-func (s *Service) signCompositeProposal(ctx context.Context,
-	proposal *api.VersionedProposal,
-	duty *beaconblockproposer.Duty,
-) (
-	*api.VersionedSignedProposal,
-	error,
-) {
-	bodyRoot, err := proposal.BodyRoot()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to calculate hash tree root of proposal body")
-	}
-
-	parentRoot, err := proposal.ParentRoot()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain parent root of proposal")
-	}
-
-	stateRoot, err := proposal.StateRoot()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain state root of proposal")
-	}
-
-	sig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
-		duty.Account(),
-		duty.Slot(),
-		duty.ValidatorIndex(),
-		parentRoot,
-		stateRoot,
-		bodyRoot)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to sign beacon proposal")
-	}
-
-	signedProposal := &api.VersionedSignedProposal{
-		Version: proposal.Version,
-	}
-
-	switch proposal.Version {
 	case spec.DataVersionDeneb:
 		signedProposal.Deneb = &apiv1deneb.SignedBlockContents{
 			SignedBlock: &deneb.SignedBeaconBlock{
 				Message:   proposal.Deneb.Block,
 				Signature: sig,
 			},
+			KZGProofs: proposal.Deneb.KZGProofs,
+			Blobs:     proposal.Deneb.Blobs,
 		}
 	default:
-		return nil, errors.New("unhandled composite proposal version")
+		return nil, errors.New("unhandled proposal version")
 	}
 
 	return signedProposal, nil
@@ -654,11 +588,10 @@ func (s *Service) signBlindedProposal(ctx context.Context,
 			Signature: sig,
 		}
 	case spec.DataVersionDeneb:
-		return nil, errors.New("unsupported proposal version deneb")
-		// signedProposal.Deneb = &apiv1deneb.SignedBlindedBeaconBlock{
-		// 	Message:   proposal.Deneb,
-		// 	Signature: sig,
-		// }
+		signedProposal.Deneb = &apiv1deneb.SignedBlindedBeaconBlock{
+			Message:   proposal.Deneb,
+			Signature: sig,
+		}
 	default:
 		return nil, fmt.Errorf("unknown proposal version %v", signedProposal.Version)
 	}

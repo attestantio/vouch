@@ -14,6 +14,7 @@
 package prometheus
 
 import (
+	"errors"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -32,7 +33,12 @@ func (s *Service) setupAttestationMetrics() error {
 		},
 	})
 	if err := prometheus.Register(s.attestationProcessTimer); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.attestationProcessTimer = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
+		} else {
+			return err
+		}
 	}
 
 	s.attestationMarkTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -56,7 +62,12 @@ func (s *Service) setupAttestationMetrics() error {
 		},
 	})
 	if err := prometheus.Register(s.attestationMarkTimer); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.attestationMarkTimer = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
+		} else {
+			return err
+		}
 	}
 
 	s.attestationProcessLatestSlot = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -66,7 +77,12 @@ func (s *Service) setupAttestationMetrics() error {
 		Help:      "The latest slot for which Vouch attested.",
 	})
 	if err := prometheus.Register(s.attestationProcessLatestSlot); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.attestationProcessLatestSlot = alreadyRegisteredError.ExistingCollector.(prometheus.Gauge)
+		} else {
+			return err
+		}
 	}
 
 	s.attestationProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -75,7 +91,16 @@ func (s *Service) setupAttestationMetrics() error {
 		Name:      "requests_total",
 		Help:      "The number of attestation processes.",
 	}, []string{"result"})
-	return prometheus.Register(s.attestationProcessRequests)
+	if err := prometheus.Register(s.attestationProcessRequests); err != nil {
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.attestationProcessRequests = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+		} else {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // AttestationsCompleted is called when an attestation process has completed.
@@ -86,8 +111,9 @@ func (s *Service) AttestationsCompleted(started time.Time, slot phase0.Slot, cou
 		for i := 0; i < count; i++ {
 			s.attestationProcessTimer.Observe(duration)
 		}
-		secsSinceStartOfSlot := time.Since(s.chainTime.StartOfSlot(slot)).Seconds()
-		s.attestationMarkTimer.Observe(secsSinceStartOfSlot)
+		if s.chainTime != nil {
+			s.attestationMarkTimer.Observe(time.Since(s.chainTime.StartOfSlot(slot)).Seconds())
+		}
 		s.attestationProcessLatestSlot.Set(float64(slot))
 	}
 	s.attestationProcessRequests.WithLabelValues(result).Add(float64(count))

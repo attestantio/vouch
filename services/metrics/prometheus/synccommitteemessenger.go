@@ -14,6 +14,7 @@
 package prometheus
 
 import (
+	"errors"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -32,7 +33,12 @@ func (s *Service) setupSyncCommitteeMessageMetrics() error {
 		},
 	})
 	if err := prometheus.Register(s.syncCommitteeMessageProcessTimer); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.syncCommitteeMessageProcessTimer = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
+		} else {
+			return err
+		}
 	}
 
 	s.syncCommitteeMessageMarkTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -56,7 +62,12 @@ func (s *Service) setupSyncCommitteeMessageMetrics() error {
 		},
 	})
 	if err := prometheus.Register(s.syncCommitteeMessageMarkTimer); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.syncCommitteeMessageMarkTimer = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
+		} else {
+			return err
+		}
 	}
 
 	s.syncCommitteeMessageProcessLatestSlot = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -66,7 +77,12 @@ func (s *Service) setupSyncCommitteeMessageMetrics() error {
 		Help:      "The latest slot for which Vouch created a sync committee message.",
 	})
 	if err := prometheus.Register(s.syncCommitteeMessageProcessLatestSlot); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.syncCommitteeMessageProcessLatestSlot = alreadyRegisteredError.ExistingCollector.(prometheus.Gauge)
+		} else {
+			return err
+		}
 	}
 
 	s.syncCommitteeMessageProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -75,7 +91,16 @@ func (s *Service) setupSyncCommitteeMessageMetrics() error {
 		Name:      "requests_total",
 		Help:      "The number of sync committee message processes.",
 	}, []string{"result"})
-	return prometheus.Register(s.syncCommitteeMessageProcessRequests)
+	if err := prometheus.Register(s.syncCommitteeMessageProcessRequests); err != nil {
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.syncCommitteeMessageProcessRequests = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+		} else {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // SyncCommitteeMessagesCompleted is called when a sync committee message process has completed.
@@ -86,8 +111,9 @@ func (s *Service) SyncCommitteeMessagesCompleted(started time.Time, slot phase0.
 		for i := 0; i < count; i++ {
 			s.syncCommitteeMessageProcessTimer.Observe(duration)
 		}
-		secsSinceStartOfSlot := time.Since(s.chainTime.StartOfSlot(slot)).Seconds()
-		s.syncCommitteeMessageMarkTimer.Observe(secsSinceStartOfSlot)
+		if s.chainTime != nil {
+			s.syncCommitteeMessageMarkTimer.Observe(time.Since(s.chainTime.StartOfSlot(slot)).Seconds())
+		}
 		s.syncCommitteeMessageProcessLatestSlot.Set(float64(slot))
 	}
 	s.syncCommitteeMessageProcessRequests.WithLabelValues(result).Add(float64(count))

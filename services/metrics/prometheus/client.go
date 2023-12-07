@@ -14,6 +14,7 @@
 package prometheus
 
 import (
+	"errors"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -26,8 +27,14 @@ func (s *Service) setupClientMetrics() error {
 		Name:      "requests_total",
 	}, []string{"provider", "operation", "result"})
 	if err := prometheus.Register(s.clientOperationCounter); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.clientOperationCounter = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+		} else {
+			return err
+		}
 	}
+
 	s.clientOperationTimer = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "vouch",
 		Subsystem: "client_operation",
@@ -41,8 +48,14 @@ func (s *Service) setupClientMetrics() error {
 		},
 	}, []string{"provider", "operation"})
 	if err := prometheus.Register(s.clientOperationTimer); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.clientOperationTimer = alreadyRegisteredError.ExistingCollector.(*prometheus.HistogramVec)
+		} else {
+			return err
+		}
 	}
+
 	s.strategyOperationCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
 		Subsystem: "strategy_operation",
@@ -50,8 +63,14 @@ func (s *Service) setupClientMetrics() error {
 		Help:      "The results used by a strategy.",
 	}, []string{"strategy", "provider", "operation"})
 	if err := prometheus.Register(s.strategyOperationCounter); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.strategyOperationCounter = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+		} else {
+			return err
+		}
 	}
+
 	s.strategyOperationTimer = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: "vouch",
 		Subsystem: "strategy_operation",
@@ -64,7 +83,16 @@ func (s *Service) setupClientMetrics() error {
 			3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.0,
 		},
 	}, []string{"strategy", "provider", "operation"})
-	return prometheus.Register(s.strategyOperationTimer)
+	if err := prometheus.Register(s.strategyOperationTimer); err != nil {
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.strategyOperationTimer = alreadyRegisteredError.ExistingCollector.(*prometheus.HistogramVec)
+		} else {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // ClientOperation registers an operation.

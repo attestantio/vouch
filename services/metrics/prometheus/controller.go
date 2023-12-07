@@ -14,6 +14,7 @@
 package prometheus
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,7 +28,12 @@ func (s *Service) setupControllerMetrics() error {
 		Help:      "The number of epochs vouch has processed.",
 	})
 	if err := prometheus.Register(s.epochsProcessed); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.epochsProcessed = alreadyRegisteredError.ExistingCollector.(prometheus.Counter)
+		} else {
+			return err
+		}
 	}
 
 	s.blockReceiptDelay = prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -49,7 +55,16 @@ func (s *Service) setupControllerMetrics() error {
 			11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 12.0,
 		},
 	}, []string{"epoch_slot"})
-	return prometheus.Register(s.blockReceiptDelay)
+	if err := prometheus.Register(s.blockReceiptDelay); err != nil {
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.blockReceiptDelay = alreadyRegisteredError.ExistingCollector.(*prometheus.HistogramVec)
+		} else {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // NewEpoch is called when vouch starts processing a new epoch.
