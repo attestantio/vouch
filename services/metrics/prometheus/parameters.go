@@ -21,9 +21,10 @@ import (
 )
 
 type parameters struct {
-	logLevel  zerolog.Level
-	address   string
-	chainTime chaintime.Service
+	logLevel     zerolog.Level
+	address      string
+	chainTime    chaintime.Service
+	createServer bool
 }
 
 // Parameter is the interface for service parameters.
@@ -58,6 +59,13 @@ func WithChainTime(chainTime chaintime.Service) Parameter {
 	})
 }
 
+// WithCreateServer creates a web server for metrics if true.
+func WithCreateServer(createServer bool) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.createServer = createServer
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -71,9 +79,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 
 	if parameters.address == "" {
 		return nil, errors.New("no address specified")
-	}
-	if parameters.chainTime == nil {
-		return nil, errors.New("no chain time service specified")
 	}
 
 	return &parameters, nil

@@ -54,19 +54,10 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: no address specified",
 		},
 		{
-			name: "ChainTimeMissing",
-			params: []prometheus.Parameter{
-				prometheus.WithLogLevel(zerolog.Disabled),
-				prometheus.WithAddress("http://localhost:12345/"),
-			},
-			err: "problem with parameters: no chain time service specified",
-		},
-		{
 			name: "Good",
 			params: []prometheus.Parameter{
 				prometheus.WithLogLevel(zerolog.Disabled),
 				prometheus.WithAddress("http://localhost:12345/"),
-				prometheus.WithChainTime(chainTime),
 			},
 		},
 	}

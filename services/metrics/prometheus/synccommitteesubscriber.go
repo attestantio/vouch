@@ -14,6 +14,7 @@
 package prometheus
 
 import (
+	"errors"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -31,7 +32,12 @@ func (s *Service) setupSyncCommitteeSubscriptionMetrics() error {
 		},
 	})
 	if err := prometheus.Register(s.syncCommitteeSubscriptionProcessTimer); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.syncCommitteeSubscriptionProcessTimer = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
+		} else {
+			return err
+		}
 	}
 
 	s.syncCommitteeSubscriptionProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -41,7 +47,12 @@ func (s *Service) setupSyncCommitteeSubscriptionMetrics() error {
 		Help:      "The number of sync committee subscription processes.",
 	}, []string{"result"})
 	if err := prometheus.Register(s.syncCommitteeSubscriptionProcessRequests); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.syncCommitteeSubscriptionProcessRequests = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+		} else {
+			return err
+		}
 	}
 
 	s.syncCommitteeSubscribers = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -50,7 +61,16 @@ func (s *Service) setupSyncCommitteeSubscriptionMetrics() error {
 		Name:      "subscribers_total",
 		Help:      "The number of sync committee subscribed.",
 	})
-	return prometheus.Register(s.syncCommitteeSubscribers)
+	if err := prometheus.Register(s.syncCommitteeSubscribers); err != nil {
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.syncCommitteeSubscribers = alreadyRegisteredError.ExistingCollector.(prometheus.Gauge)
+		} else {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // SyncCommitteeSubscriptionCompleted is called when an sync committee subscription process has completed.

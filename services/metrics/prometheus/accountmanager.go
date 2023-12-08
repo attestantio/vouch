@@ -14,6 +14,8 @@
 package prometheus
 
 import (
+	"errors"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -24,7 +26,16 @@ func (s *Service) setupAccountManagerMetrics() error {
 		Name:      "accounts_total",
 		Help:      "The number of accounts managed by Vouch.",
 	}, []string{"state"})
-	return prometheus.Register(s.accountManagerAccounts)
+	if err := prometheus.Register(s.accountManagerAccounts); err != nil {
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.accountManagerAccounts = alreadyRegisteredError.ExistingCollector.(*prometheus.GaugeVec)
+		} else {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Accounts sets the number of accounts in a given state.

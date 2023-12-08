@@ -22,6 +22,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	httpclient "github.com/attestantio/go-eth2-client/http"
 	multiclient "github.com/attestantio/go-eth2-client/multi"
+	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 )
@@ -32,7 +33,7 @@ var (
 )
 
 // fetchClient fetches a client service, instantiating it if required.
-func fetchClient(ctx context.Context, address string) (eth2client.Service, error) {
+func fetchClient(ctx context.Context, monitor metrics.Service, address string) (eth2client.Service, error) {
 	if address == "" {
 		return nil, errors.New("no address supplied for client")
 	}
@@ -45,6 +46,7 @@ func fetchClient(ctx context.Context, address string) (eth2client.Service, error
 		var err error
 		client, err = httpclient.New(ctx,
 			httpclient.WithLogLevel(util.LogLevel(fmt.Sprintf("eth2client.%s", address))),
+			httpclient.WithMonitor(monitor),
 			httpclient.WithTimeout(util.Timeout(fmt.Sprintf("eth2client.%s", address))),
 			httpclient.WithAddress(address),
 			httpclient.WithExtraHeaders(map[string]string{
@@ -63,7 +65,7 @@ func fetchClient(ctx context.Context, address string) (eth2client.Service, error
 }
 
 // fetchMulticlient fetches a multiclient service, instantiating it if required.
-func fetchMultiClient(ctx context.Context, addresses []string) (eth2client.Service, error) {
+func fetchMultiClient(ctx context.Context, monitor metrics.Service, addresses []string) (eth2client.Service, error) {
 	if len(addresses) == 0 {
 		return nil, errors.New("no addresses supplied for multiclient")
 	}
@@ -78,7 +80,7 @@ func fetchMultiClient(ctx context.Context, addresses []string) (eth2client.Servi
 		// Fetch or create the individual clients.
 		clients := make([]eth2client.Service, 0, len(addresses))
 		for _, address := range addresses {
-			client, err := fetchClient(ctx, address)
+			client, err := fetchClient(ctx, monitor, address)
 			if err != nil {
 				log.Error().Err(err).Str("address", address).Msg("Cannot access client for multiclient; dropping from list")
 				continue

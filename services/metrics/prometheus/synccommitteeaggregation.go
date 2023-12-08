@@ -14,6 +14,7 @@
 package prometheus
 
 import (
+	"errors"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -32,7 +33,12 @@ func (s *Service) setupSyncCommitteeAggregationMetrics() error {
 		},
 	})
 	if err := prometheus.Register(s.syncCommitteeAggregationProcessTimer); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.syncCommitteeAggregationProcessTimer = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
+		} else {
+			return err
+		}
 	}
 
 	s.syncCommitteeAggregationMarkTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -56,7 +62,12 @@ func (s *Service) setupSyncCommitteeAggregationMetrics() error {
 		},
 	})
 	if err := prometheus.Register(s.syncCommitteeAggregationMarkTimer); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.syncCommitteeAggregationMarkTimer = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
+		} else {
+			return err
+		}
 	}
 
 	s.syncCommitteeAggregationProcessLatestSlot = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -66,7 +77,12 @@ func (s *Service) setupSyncCommitteeAggregationMetrics() error {
 		Help:      "The latest slot for which Vouch created a sync committee aggregate.",
 	})
 	if err := prometheus.Register(s.syncCommitteeAggregationProcessLatestSlot); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.syncCommitteeAggregationProcessLatestSlot = alreadyRegisteredError.ExistingCollector.(prometheus.Gauge)
+		} else {
+			return err
+		}
 	}
 
 	s.syncCommitteeAggregationProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -76,7 +92,12 @@ func (s *Service) setupSyncCommitteeAggregationMetrics() error {
 		Help:      "The number of sync committee aggregation processes.",
 	}, []string{"result"})
 	if err := prometheus.Register(s.syncCommitteeAggregationProcessRequests); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.syncCommitteeAggregationProcessRequests = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+		} else {
+			return err
+		}
 	}
 
 	s.syncCommitteeAggregationCoverageRatio = prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -86,7 +107,16 @@ func (s *Service) setupSyncCommitteeAggregationMetrics() error {
 		Help:      "The ratio of included to possible messages in the aggregate.",
 		Buckets:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
 	})
-	return prometheus.Register(s.syncCommitteeAggregationCoverageRatio)
+	if err := prometheus.Register(s.syncCommitteeAggregationCoverageRatio); err != nil {
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.syncCommitteeAggregationCoverageRatio = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
+		} else {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // SyncCommitteeAggregationsCompleted is called when a sync committee aggregation process has completed.
@@ -97,8 +127,9 @@ func (s *Service) SyncCommitteeAggregationsCompleted(started time.Time, slot pha
 		for i := 0; i < count; i++ {
 			s.syncCommitteeAggregationProcessTimer.Observe(duration)
 		}
-		secsSinceStartOfSlot := time.Since(s.chainTime.StartOfSlot(slot)).Seconds()
-		s.syncCommitteeAggregationMarkTimer.Observe(secsSinceStartOfSlot)
+		if s.chainTime != nil {
+			s.syncCommitteeAggregationMarkTimer.Observe(time.Since(s.chainTime.StartOfSlot(slot)).Seconds())
+		}
 		s.syncCommitteeAggregationProcessLatestSlot.Set(float64(slot))
 	}
 	s.syncCommitteeAggregationProcessRequests.WithLabelValues(result).Add(float64(count))

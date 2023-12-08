@@ -14,6 +14,7 @@
 package prometheus
 
 import (
+	"errors"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -32,7 +33,12 @@ func (s *Service) setupAttestationAggregationMetrics() error {
 		},
 	})
 	if err := prometheus.Register(s.attestationAggregationProcessTimer); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.attestationAggregationProcessTimer = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
+		} else {
+			return err
+		}
 	}
 
 	s.attestationAggregationMarkTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -56,7 +62,12 @@ func (s *Service) setupAttestationAggregationMetrics() error {
 		},
 	})
 	if err := prometheus.Register(s.attestationAggregationMarkTimer); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.attestationAggregationMarkTimer = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
+		} else {
+			return err
+		}
 	}
 
 	s.attestationAggregationProcessLatestSlot = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -66,7 +77,12 @@ func (s *Service) setupAttestationAggregationMetrics() error {
 		Help:      "The latest slot for which Vouch produced an aggregate attestation.",
 	})
 	if err := prometheus.Register(s.attestationAggregationProcessLatestSlot); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.attestationAggregationProcessLatestSlot = alreadyRegisteredError.ExistingCollector.(prometheus.Gauge)
+		} else {
+			return err
+		}
 	}
 
 	s.attestationAggregationProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -76,7 +92,12 @@ func (s *Service) setupAttestationAggregationMetrics() error {
 		Help:      "The number of beacon block attestation aggregation processes.",
 	}, []string{"result"})
 	if err := prometheus.Register(s.attestationAggregationProcessRequests); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.attestationAggregationProcessRequests = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+		} else {
+			return err
+		}
 	}
 
 	s.attestationAggregationCoverageRatio = prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -86,7 +107,16 @@ func (s *Service) setupAttestationAggregationMetrics() error {
 		Help:      "The ratio of included to possible attestations in the aggregate.",
 		Buckets:   []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
 	})
-	return prometheus.Register(s.attestationAggregationCoverageRatio)
+	if err := prometheus.Register(s.attestationAggregationCoverageRatio); err != nil {
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.attestationAggregationCoverageRatio = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
+		} else {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // AttestationAggregationCompleted is called when an attestation aggregationprocess has completed.
@@ -94,8 +124,9 @@ func (s *Service) AttestationAggregationCompleted(started time.Time, slot phase0
 	// Only log times for successful completions.
 	if result == "succeeded" {
 		s.attestationAggregationProcessTimer.Observe(time.Since(started).Seconds())
-		secsSinceStartOfSlot := time.Since(s.chainTime.StartOfSlot(slot)).Seconds()
-		s.attestationAggregationMarkTimer.Observe(secsSinceStartOfSlot)
+		if s.chainTime != nil {
+			s.attestationAggregationMarkTimer.Observe(time.Since(s.chainTime.StartOfSlot(slot)).Seconds())
+		}
 		s.attestationAggregationProcessLatestSlot.Set(float64(slot))
 	}
 	s.attestationAggregationProcessRequests.WithLabelValues(result).Inc()

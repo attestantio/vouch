@@ -14,6 +14,7 @@
 package prometheus
 
 import (
+	"errors"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -31,7 +32,12 @@ func (s *Service) setupBeaconCommitteeSubscriptionMetrics() error {
 		},
 	})
 	if err := prometheus.Register(s.beaconCommitteeSubscriptionProcessTimer); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.beaconCommitteeSubscriptionProcessTimer = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
+		} else {
+			return err
+		}
 	}
 
 	s.beaconCommitteeSubscriptionProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -41,7 +47,12 @@ func (s *Service) setupBeaconCommitteeSubscriptionMetrics() error {
 		Help:      "The number of beacon committee subscription processes.",
 	}, []string{"result"})
 	if err := prometheus.Register(s.beaconCommitteeSubscriptionProcessRequests); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.beaconCommitteeSubscriptionProcessRequests = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+		} else {
+			return err
+		}
 	}
 
 	s.beaconCommitteeSubscribers = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -51,7 +62,12 @@ func (s *Service) setupBeaconCommitteeSubscriptionMetrics() error {
 		Help:      "The number of beacon committee subscribed.",
 	})
 	if err := prometheus.Register(s.beaconCommitteeSubscribers); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.beaconCommitteeSubscribers = alreadyRegisteredError.ExistingCollector.(prometheus.Gauge)
+		} else {
+			return err
+		}
 	}
 
 	s.beaconCommitteeAggregators = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -60,7 +76,16 @@ func (s *Service) setupBeaconCommitteeSubscriptionMetrics() error {
 		Name:      "aggregators_total",
 		Help:      "The number of beacon committee aggregated.",
 	})
-	return prometheus.Register(s.beaconCommitteeAggregators)
+	if err := prometheus.Register(s.beaconCommitteeAggregators); err != nil {
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.beaconCommitteeAggregators = alreadyRegisteredError.ExistingCollector.(prometheus.Gauge)
+		} else {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // BeaconCommitteeSubscriptionCompleted is called when an beacon committee subscription process has completed.

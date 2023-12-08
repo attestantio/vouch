@@ -14,6 +14,8 @@
 package prometheus
 
 import (
+	"errors"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -25,7 +27,12 @@ func (s *Service) setupSchedulerMetrics() error {
 		Help:      "The number of jobs scheduled.",
 	}, []string{"class"})
 	if err := prometheus.Register(s.schedulerJobsScheduled); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.schedulerJobsScheduled = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+		} else {
+			return err
+		}
 	}
 
 	s.schedulerJobsCancelled = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -35,7 +42,12 @@ func (s *Service) setupSchedulerMetrics() error {
 		Help:      "The number of scheduled jobs cancelled.",
 	}, []string{"class"})
 	if err := prometheus.Register(s.schedulerJobsCancelled); err != nil {
-		return err
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.schedulerJobsCancelled = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+		} else {
+			return err
+		}
 	}
 
 	s.schedulerJobsStarted = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -44,7 +56,16 @@ func (s *Service) setupSchedulerMetrics() error {
 		Name:      "jobs_started_total",
 		Help:      "The number of scheduled jobs started.",
 	}, []string{"class", "trigger"})
-	return prometheus.Register(s.schedulerJobsStarted)
+	if err := prometheus.Register(s.schedulerJobsStarted); err != nil {
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.schedulerJobsStarted = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+		} else {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // JobScheduled is called when a job is scheduled.

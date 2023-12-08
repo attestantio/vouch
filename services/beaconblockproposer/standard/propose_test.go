@@ -15,7 +15,6 @@ package standard_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -148,10 +147,6 @@ func TestPropose(t *testing.T) {
 
 			s.Propose(ctx, test.data)
 
-			// TODO remove.
-			for _, entry := range capture.Entries() {
-				fmt.Printf("%v\n", entry)
-			}
 			for _, err := range test.errs {
 				require.True(t, capture.HasLog(err))
 			}
