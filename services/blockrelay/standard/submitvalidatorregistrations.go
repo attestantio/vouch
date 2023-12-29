@@ -50,7 +50,7 @@ func (s *Service) submitValidatorRegistrationsRuntime(_ context.Context,
 	currentEpoch := s.chainTime.CurrentEpoch()
 	epochDuration := s.chainTime.StartOfEpoch(currentEpoch + 1).Sub(s.chainTime.StartOfEpoch(currentEpoch))
 	//nolint:gosec // Secure random number generation not required.
-	offset := (rand.Intn(100) * int(epochDuration.Milliseconds())) / 100
+	offset := (rand.Int63n(100) * epochDuration.Milliseconds()) / 100
 	return s.chainTime.StartOfEpoch(currentEpoch + 1).Add(time.Duration(offset) * time.Millisecond), nil
 }
 
