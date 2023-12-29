@@ -46,11 +46,12 @@ func (s *Service) submitValidatorRegistrationsRuntime(_ context.Context,
 	time.Time,
 	error,
 ) {
-	// Schedule for an abitrary time in the next epoch, to avoid overloading the relays with lots of simultaneous registrations.
+	// Schedule for an abitrary time in the middle 80% of the next epoch, to avoid overloading the relays
+	// with lots of simultaneous registrations.
 	currentEpoch := s.chainTime.CurrentEpoch()
 	epochDuration := s.chainTime.StartOfEpoch(currentEpoch + 1).Sub(s.chainTime.StartOfEpoch(currentEpoch))
 	//nolint:gosec // Secure random number generation not required.
-	offset := (rand.Int63n(100) * epochDuration.Milliseconds()) / 100
+	offset := ((10 + rand.Int63n(80)) * epochDuration.Milliseconds()) / 100
 	return s.chainTime.StartOfEpoch(currentEpoch + 1).Add(time.Duration(offset) * time.Millisecond), nil
 }
 

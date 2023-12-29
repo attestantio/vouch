@@ -4,7 +4,7 @@ dev:
   - fetch blinded and unblinded proposals in parallel to speed up block production
   - support Deneb beta.3
   - compose multiclients from clients, reducing connections to beacon nodes
-  - start validator registrations at arbitrary time in each epoch, to avoid overloading relays
+  - start validator registrations randomly in middle 80% of each epoch, to avoid overloading relays
 
 1.7.6:
   - add User-Agent header to HTTP requests
