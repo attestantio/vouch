@@ -5,6 +5,7 @@ dev:
   - support Deneb beta.3
   - compose multiclients from clients, reducing connections to beacon nodes
   - start validator registrations randomly in middle 80% of each epoch, to avoid overloading relays
+  - reduce CPU and memory requirements for refreshing validator information
 
 1.7.6:
   - add User-Agent header to HTTP requests
