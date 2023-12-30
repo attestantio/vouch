@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -45,13 +46,13 @@ func (s *Service) submitValidatorRegistrationsRuntime(_ context.Context,
 	time.Time,
 	error,
 ) {
-	// Schedule for the middle of the slot, half-way through the next epoch.
+	// Schedule for an abitrary time in the middle 80% of the next epoch, to avoid overloading the relays
+	// with lots of simultaneous registrations.
 	currentEpoch := s.chainTime.CurrentEpoch()
 	epochDuration := s.chainTime.StartOfEpoch(currentEpoch + 1).Sub(s.chainTime.StartOfEpoch(currentEpoch))
-	currentSlot := s.chainTime.CurrentSlot()
-	slotDuration := s.chainTime.StartOfSlot(currentSlot + 1).Sub(s.chainTime.StartOfSlot(currentSlot))
-	offset := int(epochDuration.Seconds()/2.0 + slotDuration.Seconds()/2.0)
-	return s.chainTime.StartOfEpoch(currentEpoch + 1).Add(time.Duration(offset) * time.Second), nil
+	//nolint:gosec // Secure random number generation not required.
+	offset := ((10 + rand.Int63n(80)) * epochDuration.Milliseconds()) / 100
+	return s.chainTime.StartOfEpoch(currentEpoch + 1).Add(time.Duration(offset) * time.Millisecond), nil
 }
 
 // SubmitValidatorRegistrations submits validator registrations for the given accounts.
