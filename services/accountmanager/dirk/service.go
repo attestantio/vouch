@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2023 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -54,6 +54,7 @@ type Service struct {
 	accountPaths         []string
 	credentials          credentials.TransportCredentials
 	accounts             map[phase0.BLSPubKey]e2wtypes.Account
+	pubKeys              []phase0.BLSPubKey
 	validatorsManager    validatorsmanager.Service
 	domainProvider       eth2client.DomainProvider
 	farFutureEpoch       phase0.Epoch
@@ -188,6 +189,7 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 	var accountsMu sync.Mutex
 	sem := semaphore.NewWeighted(s.processConcurrency)
 	var wg sync.WaitGroup
+	pubKeys := make([]phase0.BLSPubKey, 0)
 	for i := range wallets {
 		wg.Add(1)
 		go func(ctx context.Context, sem *semaphore.Weighted, wg *sync.WaitGroup, i int, mu *sync.Mutex) {
@@ -204,6 +206,7 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 			mu.Lock()
 			for k, v := range walletAccounts {
 				accounts[k] = v
+				pubKeys = append(pubKeys, k)
 			}
 			mu.Unlock()
 			log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(walletAccounts)).Msg("Imported accounts")
@@ -219,6 +222,7 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 		return
 	}
 	s.accounts = accounts
+	s.pubKeys = pubKeys
 	s.mutex.Unlock()
 }
 
@@ -253,14 +257,11 @@ func (s *Service) refreshValidators(ctx context.Context) error {
 	defer span.End()
 
 	s.mutex.RLock()
-	accountPubKeys := make([]phase0.BLSPubKey, 0, len(s.accounts))
-	for pubKey := range s.accounts {
-		accountPubKeys = append(accountPubKeys, pubKey)
-	}
+	pubKeys := s.pubKeys
 	s.mutex.RUnlock()
-	log.Trace().Int("accounts", len(accountPubKeys)).Msg("Refreshing validators of accounts")
+	log.Trace().Int("accounts", len(pubKeys)).Msg("Refreshing validators of accounts")
 
-	if err := s.validatorsManager.RefreshValidatorsFromBeaconNode(ctx, accountPubKeys); err != nil {
+	if err := s.validatorsManager.RefreshValidatorsFromBeaconNode(ctx, pubKeys); err != nil {
 		return errors.Wrap(err, "failed to refresh validators")
 	}
 	return nil
@@ -313,14 +314,11 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 	}
 
 	s.mutex.RLock()
-	pubKeys := make([]phase0.BLSPubKey, 0, len(s.accounts))
-	for pubKey := range s.accounts {
-		pubKeys = append(pubKeys, pubKey)
-	}
+	pubKeys := s.pubKeys
 	s.mutex.RUnlock()
 
 	validators := s.validatorsManager.ValidatorsByPubKey(ctx, pubKeys)
-	validatingAccounts := make(map[phase0.ValidatorIndex]e2wtypes.Account)
+	validatingAccounts := make(map[phase0.ValidatorIndex]e2wtypes.Account, len(validators))
 	s.mutex.RLock()
 	for index, validator := range validators {
 		state := api.ValidatorToState(validator, nil, epoch, s.farFutureEpoch)
@@ -357,10 +355,7 @@ func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch p
 	defer span.End()
 
 	s.mutex.RLock()
-	pubKeys := make([]phase0.BLSPubKey, 0, len(s.accounts))
-	for pubKey := range s.accounts {
-		pubKeys = append(pubKeys, pubKey)
-	}
+	pubKeys := s.pubKeys
 	s.mutex.RUnlock()
 
 	indexPresenceMap := make(map[phase0.ValidatorIndex]bool)
