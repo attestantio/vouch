@@ -34,6 +34,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	dirkaccountmanager "github.com/attestantio/vouch/services/accountmanager/dirk"
 	walletaccountmanager "github.com/attestantio/vouch/services/accountmanager/wallet"
@@ -1642,6 +1643,18 @@ func startBlockRelay(ctx context.Context,
 	}
 	copy(fallbackFeeRecipient[:], feeRecipient)
 
+	excludedBuilders := make([]phase0.BLSPubKey, len(viper.GetStringSlice("blockrelay.excluded-builders")))
+	for i, excludedBuilder := range viper.GetStringSlice("blockrelay.excluded-builders") {
+		tmp, err := hex.DecodeString(strings.TrimPrefix(excludedBuilder, "0x"))
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to decode excluded builder")
+		}
+		if len(tmp) != phase0.PublicKeyLength {
+			return nil, errors.New("incorrect length for excluded builder")
+		}
+		copy(excludedBuilders[i][:], tmp)
+	}
+
 	var blockRelay blockrelay.Service
 	blockRelay, err = standardblockrelay.New(ctx,
 		standardblockrelay.WithLogLevel(util.LogLevel("blockrelay")),
@@ -1663,6 +1676,7 @@ func startBlockRelay(ctx context.Context,
 		standardblockrelay.WithLogResults(viper.GetBool("blockrelay.log-results")),
 		standardblockrelay.WithReleaseVersion(ReleaseVersion),
 		standardblockrelay.WithBuilderBidProvider(builderBidProvider),
+		standardblockrelay.WithExcludedBuilders(excludedBuilders),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start block relay")

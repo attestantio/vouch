@@ -29,6 +29,7 @@ func (BuilderBidProvider) BuilderBid(_ context.Context,
 	_ phase0.Hash32,
 	_ phase0.BLSPubKey,
 	_ *beaconblockproposer.ProposerConfig,
+	_ []phase0.BLSPubKey,
 ) (
 	*blockauctioneer.Results,
 	error,

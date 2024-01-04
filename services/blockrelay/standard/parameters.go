@@ -19,6 +19,7 @@ import (
 
 	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
@@ -50,6 +51,7 @@ type parameters struct {
 	logResults                                bool
 	releaseVersion                            string
 	builderBidProvider                        builderbid.Provider
+	excludedBuilders                          []phase0.BLSPubKey
 }
 
 // Parameter is the interface for service parameters.
@@ -193,6 +195,13 @@ func WithReleaseVersion(version string) Parameter {
 func WithBuilderBidProvider(provider builderbid.Provider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.builderBidProvider = provider
+	})
+}
+
+// WithExcludedBuilders is the list of builders whose bids will be excluded.
+func WithExcludedBuilders(builders []phase0.BLSPubKey) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.excludedBuilders = builders
 	})
 }
 

@@ -59,6 +59,7 @@ type Service struct {
 	logResults                                bool
 	releaseVersion                            string
 	builderBidProvider                        builderbid.Provider
+	excludedBuilders                          []phase0.BLSPubKey
 
 	executionConfig   blockrelay.ExecutionConfigurator
 	executionConfigMu sync.RWMutex
@@ -107,6 +108,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		executionConfig:    &v2.ExecutionConfig{Version: 2},
 		activitySem:        semaphore.NewWeighted(1),
 		builderBidProvider: parameters.builderBidProvider,
+		excludedBuilders:   parameters.excludedBuilders,
 	}
 
 	// Carry out initial fetch of execution configuration.

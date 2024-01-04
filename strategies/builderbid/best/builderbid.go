@@ -60,6 +60,7 @@ func (s *Service) BuilderBid(ctx context.Context,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
 	proposerConfig *beaconblockproposer.ProposerConfig,
+	excludedBuilders []phase0.BLSPubKey,
 ) (
 	*blockauctioneer.Results,
 	error,
@@ -100,7 +101,7 @@ func (s *Service) BuilderBid(ctx context.Context,
 			continue
 		}
 		res.AllProviders = append(res.AllProviders, provider)
-		go s.builderBid(ctx, provider, respCh, errCh, slot, parentHash, pubkey, relay)
+		go s.builderBid(ctx, provider, respCh, errCh, slot, parentHash, pubkey, relay, excludedBuilders)
 	}
 
 	// Wait for all responses (or context done).
@@ -208,6 +209,7 @@ func (s *Service) builderBid(ctx context.Context,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
 	relayConfig *beaconblockproposer.RelayConfig,
+	excludedBuilders []phase0.BLSPubKey,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.builderbid.best").Start(ctx, "builderBid", trace.WithAttributes(
 		attribute.String("relay", provider.Address()),
@@ -233,6 +235,27 @@ func (s *Service) builderBid(ctx context.Context,
 			score:    big.NewInt(0),
 		}
 		return
+	}
+
+	if len(excludedBuilders) > 0 {
+		builder, err := builderBid.Builder()
+		if err != nil {
+			errCh <- &builderBidError{
+				provider: provider,
+				err:      err,
+			}
+			return
+		}
+		for _, excludedBuilder := range excludedBuilders {
+			if bytes.Equal(builder[:], excludedBuilder[:]) {
+				log.Debug().Stringer("builder", builder).Msg("Ignoring bid by excluded builder")
+				respCh <- &builderBidResponse{
+					provider: provider,
+					score:    big.NewInt(0),
+				}
+				return
+			}
+		}
 	}
 
 	value, err := s.getBidValue(ctx, builderBid)
