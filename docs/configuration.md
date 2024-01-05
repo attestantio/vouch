@@ -146,6 +146,11 @@ strategies:
 # Configuration information for this section can be found in the execution layer documentation.
 blockrelay:
   fallback-fee-recipient: '0x0000000000000000000000000000000000000001'
+  # Excluded builders are a list of public keys of builders from which bids will not be accepted.
+  # Note that this may result in no bid being available, if the only bids received from the MEV relays are from excluded builders.
+  excluded-builders:
+    - '0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111'
+    - '0x222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222'
 
 # tracing sends OTLP trace data to the supplied endpoint.
 tracing:

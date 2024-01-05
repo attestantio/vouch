@@ -29,6 +29,7 @@ type Provider interface {
 		parentHash phase0.Hash32,
 		pubkey phase0.BLSPubKey,
 		proposerConfig *beaconblockproposer.ProposerConfig,
+		excludedBuilders []phase0.BLSPubKey,
 	) (
 		*blockauctioneer.Results,
 		error,
