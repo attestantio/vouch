@@ -680,6 +680,7 @@ func startSigningServices(ctx context.Context,
 		standardbeaconblockproposer.WithRANDAORevealSigner(signerSvc.(signer.RANDAORevealSigner)),
 		standardbeaconblockproposer.WithBeaconBlockSigner(signerSvc.(signer.BeaconBlockSigner)),
 		standardbeaconblockproposer.WithBlobSidecarSigner(signerSvc.(signer.BlobSidecarSigner)),
+		standardbeaconblockproposer.WithUnblindFromAllRelays(viper.GetBool("beaconblockproposer.unblind-from-all-relays")),
 	)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to start beacon block proposer service")
