@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -107,7 +107,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.8.0-dev"
+var ReleaseVersion = "1.8.0-beta.1"
 
 func main() {
 	exitCode := main2()
@@ -237,7 +237,7 @@ func fetchConfig() error {
 	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(30000000))
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
-	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.000005))
+	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.0005))
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch {
