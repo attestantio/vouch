@@ -42,6 +42,7 @@ type parameters struct {
 	randaoRevealSigner         signer.RANDAORevealSigner
 	beaconBlockSigner          signer.BeaconBlockSigner
 	blobSidecarSigner          signer.BlobSidecarSigner
+	unblindFromAllRelays       bool
 }
 
 // Parameter is the interface for service parameters.
@@ -143,6 +144,13 @@ func WithBeaconBlockSigner(signer signer.BeaconBlockSigner) Parameter {
 func WithBlobSidecarSigner(signer signer.BlobSidecarSigner) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.blobSidecarSigner = signer
+	})
+}
+
+// WithUnblindFromAllRelays will unblind blocks from all relays if set.
+func WithUnblindFromAllRelays(unblindFromAll bool) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.unblindFromAllRelays = unblindFromAll
 	})
 }
 

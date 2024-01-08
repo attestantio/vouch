@@ -48,6 +48,7 @@ type Service struct {
 	randaoRevealSigner         signer.RANDAORevealSigner
 	beaconBlockSigner          signer.BeaconBlockSigner
 	blobSidecarSigner          signer.BlobSidecarSigner
+	unblindFromAllRelays       bool
 }
 
 // module-wide log.
@@ -82,6 +83,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		randaoRevealSigner:         parameters.randaoRevealSigner,
 		beaconBlockSigner:          parameters.beaconBlockSigner,
 		blobSidecarSigner:          parameters.blobSidecarSigner,
+		unblindFromAllRelays:       parameters.unblindFromAllRelays,
 	}
 
 	return s, nil

@@ -54,6 +54,13 @@ graffiti:
   static:
     value: 'My graffiti'
 
+# beaconblockproposer provides control of the beacon block proposal process.
+beaconblockproposer:
+  # If unblind-from-all-relays is true then Vouch will use all relays that it asked for blocks to unblind the
+  # selected bid.  This can potentially increase the reliability of obtaining an unblinded block, but will increment
+  # failures in the eth_builder_client_operations_total metric for the relays that do not know of the bid.
+  unblind-from-all-relays: false
+
 # submitter submits data to beacon nodes.  If not present the nodes in beacon-node-address above will be used.
 submitter:
   # style can currently only be 'multinode'
