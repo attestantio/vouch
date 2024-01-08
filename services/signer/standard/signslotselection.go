@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -43,7 +43,7 @@ func (s *Service) SignSlotSelection(ctx context.Context,
 		s.selectionProofDomainType,
 		phase0.Epoch(slot/s.slotsPerEpoch))
 	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for selection proof")
+		return phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for slot selection proof")
 	}
 
 	var slotBytes phase0.Root
@@ -51,7 +51,7 @@ func (s *Service) SignSlotSelection(ctx context.Context,
 
 	sig, err := s.sign(ctx, account, slotBytes, domain)
 	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to sign RANDO reveal")
+		return phase0.BLSSignature{}, errors.Wrap(err, "failed to sign slot selection proof")
 	}
 
 	return sig, nil
