@@ -90,6 +90,8 @@ func fetchMultiClient(ctx context.Context, monitor metrics.Service, addresses []
 
 		var err error
 		client, err = multiclient.New(ctx,
+			multiclient.WithMonitor(monitor),
+			multiclient.WithLogLevel(util.LogLevel("eth2client.multi")),
 			multiclient.WithClients(clients),
 		)
 		if err != nil {
