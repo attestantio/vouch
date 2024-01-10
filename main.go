@@ -80,6 +80,7 @@ import (
 	firstaggregateattestationstrategy "github.com/attestantio/vouch/strategies/aggregateattestation/first"
 	bestattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/best"
 	firstattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/first"
+	majorityattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/majority"
 	bestbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	firstbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/first"
 	firstbeaconblockrootstrategy "github.com/attestantio/vouch/strategies/beaconblockroot/first"
@@ -1081,6 +1082,29 @@ func selectAttestationDataProvider(ctx context.Context,
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start best attestation data strategy")
+		}
+	case "majority":
+		log.Info().Msg("Starting majority attestation data strategy")
+		attestationDataProviders := make(map[string]eth2client.AttestationDataProvider)
+		for _, address := range util.BeaconNodeAddresses("strategies.attestationdata.majority") {
+			client, err := fetchClient(ctx, monitor, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for attestation data strategy", address))
+			}
+			attestationDataProviders[address] = client.(eth2client.AttestationDataProvider)
+		}
+		attestationDataProvider, err = majorityattestationdatastrategy.New(ctx,
+			majorityattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			majorityattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.majority")),
+			majorityattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.majority")),
+			majorityattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
+			majorityattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.majority")),
+			majorityattestationdatastrategy.WithChainTime(chainTime),
+			majorityattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+			majorityattestationdatastrategy.WithThreshold(viper.GetUint64("strategies.attestationdata.majority.threshold")),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start majority attestation data strategy")
 		}
 	case "first":
 		log.Info().Msg("Starting first attestation data strategy")
