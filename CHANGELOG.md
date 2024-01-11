@@ -2,12 +2,13 @@ dev:
   - ensure relay configuration inherits all configuration values as expected
   - create strategies for builder bid
   - fetch blinded and unblinded proposals in parallel to speed up block production
-  - support Deneb beta.3
+  - support Deneb beta
   - compose multiclients from clients, reducing connections to beacon nodes
   - start validator registrations randomly in middle 80% of each epoch, to avoid overloading relays
   - reduce CPU and memory requirements for refreshing validator information
   - implement exclusion list for builders
   - add option to attempt unblinding of payloads from all contacted relays
+  - add "majority" attestation data strategy
 
 1.7.6:
   - add User-Agent header to HTTP requests
