@@ -230,7 +230,7 @@ func (s *Service) AttestationData(ctx context.Context,
 	}
 	slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, bestAttestationData.BeaconBlockRoot)
 	if err == nil {
-		log.Info().Uint64("slot", uint64(bestAttestationData.Slot)).Stringer("head", bestAttestationData.BeaconBlockRoot).Int("head_distance", int(bestAttestationData.Slot-slot)).Msg("Attestation slot data")
+		log.Trace().Uint64("slot", uint64(bestAttestationData.Slot)).Stringer("head", bestAttestationData.BeaconBlockRoot).Int("head_distance", int(bestAttestationData.Slot-slot)).Msg("Attestation slot data")
 	}
 	log.Trace().Stringer("attestation_data", &bestAttestationData).Int("count", bestAttestationDataCount).Msg("Selected majority attestation data")
 
