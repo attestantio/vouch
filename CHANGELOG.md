@@ -1,4 +1,4 @@
-dev:
+1.8.0-beta.1:
   - ensure relay configuration inherits all configuration values as expected
   - create strategies for builder bid
   - fetch blinded and unblinded proposals in parallel to speed up block production
@@ -9,6 +9,7 @@ dev:
   - implement exclusion list for builders
   - add option to attempt unblinding of payloads from all contacted relays
   - add "majority" attestation data strategy
+  - allow MEV relay re-registration of previously registered data
 
 1.7.6:
   - add User-Agent header to HTTP requests
