@@ -1,4 +1,4 @@
-// Copyright © 2022, 2023 Attestant Limited.
+// Copyright © 2022 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,6 +14,7 @@
 package standard
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -252,10 +253,16 @@ func (s *Service) generateValidatorRegistrationForRelay(ctx context.Context,
 	s.signedValidatorRegistrationsMu.RLock()
 	signedRegistration, exists := s.signedValidatorRegistrations[registrationRoot]
 	s.signedValidatorRegistrationsMu.RUnlock()
-	if exists {
+
+	// See if the latest registration matches this configuration.
+	s.latestValidatorRegistrationsMu.RLock()
+	latestRoot := s.latestValidatorRegistrations[pubkey]
+	s.latestValidatorRegistrationsMu.RUnlock()
+
+	if exists && bytes.Equal(latestRoot[:], registrationRoot[:]) {
 		monitorRegistrationsGeneration("cache")
 	} else {
-		log.Trace().Msg("Signing the validator registration")
+		log.Trace().Msg("Signing a new or updated validator registration")
 		sig, err := s.validatorRegistrationSigner.SignValidatorRegistration(ctx, account, &builderapi.VersionedValidatorRegistration{
 			Version: builderspec.BuilderVersionV1,
 			V1:      registration,
@@ -271,6 +278,9 @@ func (s *Service) generateValidatorRegistrationForRelay(ctx context.Context,
 		s.signedValidatorRegistrationsMu.Lock()
 		s.signedValidatorRegistrations[registrationRoot] = signedRegistration
 		s.signedValidatorRegistrationsMu.Unlock()
+		s.latestValidatorRegistrationsMu.Lock()
+		s.latestValidatorRegistrations[pubkey] = registrationRoot
+		s.latestValidatorRegistrationsMu.Unlock()
 		monitorRegistrationsGeneration("generation")
 	}
 
