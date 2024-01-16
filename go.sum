@@ -411,8 +411,8 @@ github.com/wealdtech/go-eth2-util v1.8.2 h1:gq+JMrnadifyKadUr75wmfP7+usiqMu9t3VV
 github.com/wealdtech/go-eth2-util v1.8.2/go.mod h1:/80GAK0K/3+PqUBZHvaOPd3b1sjHeimxQh1nrJzgaPk=
 github.com/wealdtech/go-eth2-wallet v1.16.0 h1:syD1xDYB7emk4x+6bTYm5VZp9nx5FLab5Fgm09Eq1Kg=
 github.com/wealdtech/go-eth2-wallet v1.16.0/go.mod h1:JFA2P7PpPR8quQ/T6Gsr/4VLj5sQVnyzKgfPA+eqmYE=
-github.com/wealdtech/go-eth2-wallet-dirk v1.4.6 h1:aT8nFCW7uZNgQQePrRTuEnf1xGYYsKhhk4Kz8m9+QGk=
-github.com/wealdtech/go-eth2-wallet-dirk v1.4.6/go.mod h1:fP/g7OQQTYCFRg+ZIv6eoTvDdjkZlHnLcf41UgCvrM8=
+github.com/wealdtech/go-eth2-wallet-dirk v1.4.7 h1:P9xgaoBB9h1r0OUEE6LHffZ+IbiGE4uniMaNjvP1+D8=
+github.com/wealdtech/go-eth2-wallet-dirk v1.4.7/go.mod h1:fP/g7OQQTYCFRg+ZIv6eoTvDdjkZlHnLcf41UgCvrM8=
 github.com/wealdtech/go-eth2-wallet-distributed v1.2.1 h1:+pbG9i9b5TrWd7GDRX8yq4FKA+D7k7aI6uySEvAZ+Kk=
 github.com/wealdtech/go-eth2-wallet-distributed v1.2.1/go.mod h1:jYkDax2VhUNKIct6TVlgxAagvR56/eg7y7J+JFq+gDo=
 github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.4.1 h1:9j7bpwjT9wmwBb54ZkBhTm1uNIlFFcCJXefd/YskZPw=
