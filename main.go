@@ -1667,6 +1667,9 @@ func startBlockRelay(ctx context.Context,
 		return nil, errors.New("blockrelay: incorrect length for fallback fee recipient")
 	}
 	copy(fallbackFeeRecipient[:], feeRecipient)
+	if fallbackFeeRecipient.IsZero() {
+		return nil, errors.New("blockrelay: fee recipient supplied is zero")
+	}
 
 	excludedBuilders := make([]phase0.BLSPubKey, len(viper.GetStringSlice("blockrelay.excluded-builders")))
 	for i, excludedBuilder := range viper.GetStringSlice("blockrelay.excluded-builders") {

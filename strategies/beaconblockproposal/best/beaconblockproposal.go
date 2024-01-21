@@ -229,10 +229,29 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 			provider: name,
 			err:      err,
 		}
+
 		return
 	}
 	proposal := proposalResponse.Data
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
+
+	feeRecipient, err := proposal.FeeRecipient()
+	if err != nil {
+		errCh <- &beaconBlockError{
+			provider: name,
+			err:      errors.Wrap(err, "failed to obtain fee recipient for beacon block"),
+		}
+
+		return
+	}
+	if feeRecipient.IsZero() {
+		errCh <- &beaconBlockError{
+			provider: name,
+			err:      errors.New("beacon block obtained with 0 fee recipient"),
+		}
+
+		return
+	}
 
 	score := s.scoreBeaconBlockProposal(ctx, name, proposal)
 	span.SetAttributes(attribute.Float64("score", score))
