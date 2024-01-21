@@ -28,6 +28,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/prysmaticlabs/go-bitfield"
@@ -632,8 +633,8 @@ func (*ProposalProvider) Proposal(_ context.Context,
 	}
 
 	block := &api.VersionedProposal{
-		Version: spec.DataVersionPhase0,
-		Phase0: &phase0.BeaconBlock{
+		Version: spec.DataVersionCapella,
+		Capella: &capella.BeaconBlock{
 			Slot:          opts.Slot,
 			ProposerIndex: 1,
 			ParentRoot: phase0.Root([32]byte{
@@ -644,7 +645,7 @@ func (*ProposalProvider) Proposal(_ context.Context,
 				0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
 				0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
 			}),
-			Body: &phase0.BeaconBlockBody{
+			Body: &capella.BeaconBlockBody{
 				RANDAOReveal: opts.RandaoReveal,
 				ETH1Data: &phase0.ETH1Data{
 					DepositRoot: phase0.Root([32]byte{
@@ -663,6 +664,10 @@ func (*ProposalProvider) Proposal(_ context.Context,
 				Attestations:      attestations,
 				Deposits:          []*phase0.Deposit{},
 				VoluntaryExits:    []*phase0.SignedVoluntaryExit{},
+				ExecutionPayload: &capella.ExecutionPayload{
+					FeeRecipient: bellatrix.ExecutionAddress{0x01},
+				},
+				SyncAggregate: &altair.SyncAggregate{},
 			},
 		},
 	}
