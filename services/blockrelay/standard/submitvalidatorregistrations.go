@@ -133,6 +133,10 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 		if err != nil {
 			return errors.Wrap(err, "No proposer configuration; cannot submit validator registrations")
 		}
+		if proposerConfig.FeeRecipient.IsZero() {
+			log.Error().Stringer("validator", pubkey).Msg("Received 0 execution address for validator registration; using fallback")
+			proposerConfig.FeeRecipient = s.fallbackFeeRecipient
+		}
 		for index, relay := range proposerConfig.Relays {
 			relayRegistration, consensusRegistration, err := s.generateValidatorRegistrationForRelay(ctx, account, pubkey, relay)
 			if err != nil {

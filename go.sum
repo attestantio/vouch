@@ -75,8 +75,8 @@ github.com/attestantio/go-block-relay v0.2.0 h1:RiIDW6nLAfTYsD7bQ4W3MJVDlTIifyDU
 github.com/attestantio/go-block-relay v0.2.0/go.mod h1:6pjIGKOdIwP1AF0+TFF9kBVS1CueHec5sLSZX4U9XBg=
 github.com/attestantio/go-builder-client v0.4.2 h1:EycfAFqQV+ooc2z6hmTsbuH4TCLknr0aO0nHLHLMpJM=
 github.com/attestantio/go-builder-client v0.4.2/go.mod h1:e02i/WO4fjs3/u9oIZEjiC8CK1Qyxy4cpiMMGKx4VqQ=
-github.com/attestantio/go-eth2-client v0.19.8 h1:7hn5X1MohW+wpfnwOpysPpjSktZwTB0A2ClohOCgZLI=
-github.com/attestantio/go-eth2-client v0.19.8/go.mod h1:mZve1kV9Ctj0I1HH9gdg+MnI8lZ+Cb2EktEtOYrBlsM=
+github.com/attestantio/go-eth2-client v0.19.10 h1:NLs9mcBvZpBTZ3du7Ey2NHQoj8d3UePY7pFBXX6C6qs=
+github.com/attestantio/go-eth2-client v0.19.10/go.mod h1:TTz7YF6w4z6ahvxKiHuGPn6DbQn7gH6HPuWm/DEQeGE=
 github.com/aws/aws-sdk-go v1.44.81/go.mod h1:y4AeaBuwd2Lk+GepC1E9v0qOiTws0MIWAX4oIKwKHZo=
 github.com/aws/aws-sdk-go v1.49.17 h1:Cc+7LgPjKeJkF2SdNo1IkpQ5Dfl9HCZEVw9OP3CPuEI=
 github.com/aws/aws-sdk-go v1.49.17/go.mod h1:LF8svs817+Nz+DmiMQKTO3ubZ/6IaTpq3TjupRn3Eqk=

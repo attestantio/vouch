@@ -1,3 +1,6 @@
+1.8.0:
+  - reject block proposals with 0 fee recipient
+
 1.8.0-beta.1:
   - ensure relay configuration inherits all configuration values as expected
   - create strategies for builder bid
