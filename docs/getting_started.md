@@ -18,8 +18,11 @@ accountmanager:
       - Validators
     passphrases:
       - secret
-feerecipient:
-  default-address: '0x0000000000000000000000000000000000000001'
+blockrelay:
+  fallback-recipient-address: '0x0000000000000000000000000000000000000001'
+metrics:
+  prometheus:
+    listen-address: '127.0.0.1:12345'
 ```
 
 `beacon-node-address` should be changed to access a suitable beacon node.
@@ -42,3 +45,5 @@ $ vouch
 
 
 At this point Vouch is operational and validation for the configured validators should begin.
+
+However, please note that in this configuration Vouch does not provide slashing protection.  For this, and additional protections, Vouch should be used in combination with Dirk.
