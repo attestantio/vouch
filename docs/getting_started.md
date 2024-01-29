@@ -18,8 +18,11 @@ accountmanager:
       - Validators
     passphrases:
       - secret
-feerecipient:
-  default-address: '0x0000000000000000000000000000000000000001'
+blockrelay:
+  fallback-recipient-address: '0x0000000000000000000000000000000000000001'
+metrics:
+  prometheus:
+    listen-address: '127.0.0.1:12345'
 ```
 
 `beacon-node-address` should be changed to access a suitable beacon node.
