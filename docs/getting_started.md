@@ -45,3 +45,5 @@ $ vouch
 
 
 At this point Vouch is operational and validation for the configured validators should begin.
+
+However, please note that in this configuration Vouch does not provide slashing protection.  For this, and additional protections, Vouch should be used in combination with Dirk.
