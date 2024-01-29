@@ -19,7 +19,7 @@ accountmanager:
     passphrases:
       - secret
 blockrelay:
-  fallback-recipient-address: '0x0000000000000000000000000000000000000001'
+  fallback-fee-recipient: '0x0000000000000000000000000000000000000001'
 metrics:
   prometheus:
     listen-address: '127.0.0.1:12345'
