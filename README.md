@@ -52,7 +52,6 @@ Vouch sits between the beacon node(s) and signer(s) in an Ethereum 2 validating 
   - [Graffiti](docs/graffiti.md) Details of the graffiti provider
 
 ## Known issues
-  - lighthouse does not yet implement server-sent events.  As a result, if you are using Lighthouse you will see an occasional error in the logs that looks like: `{"level":"error","service":"client","impl":"standardv1","error":"could not connect to stream","time":"2020-11-26T08:01:09Z","message":"Failed to subscribe to event stream"}`
 
 ## Maintainers
 
