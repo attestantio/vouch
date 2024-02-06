@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/mock"
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
 	mockblockrelay "github.com/attestantio/vouch/services/blockrelay/mock"
@@ -55,7 +56,7 @@ func TestUpdatePreparations(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(mockaccountmanager.NewErroringValidatingAccountsProvider()),
-				standard.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
+				standard.WithProposalPreparationsSubmitters([]eth2client.ProposalPreparationsSubmitter{mock.NewProposalPreparationsSubmitter()}),
 				standard.WithExecutionConfigProvider(mockblockrelay.New()),
 			},
 			err: "failed to obtain validating accounts: error",
@@ -66,7 +67,7 @@ func TestUpdatePreparations(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
-				standard.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
+				standard.WithProposalPreparationsSubmitters([]eth2client.ProposalPreparationsSubmitter{mock.NewProposalPreparationsSubmitter()}),
 				standard.WithExecutionConfigProvider(mockblockrelay.New()),
 			},
 		},

@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -27,10 +27,10 @@ import (
 
 // Service is a proposal preparer.
 type Service struct {
-	chainTimeService              chaintime.Service
-	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
-	proposalPreparationsSubmitter eth2client.ProposalPreparationsSubmitter
-	executionConfigProvider       blockrelay.ExecutionConfigProvider
+	chainTimeService               chaintime.Service
+	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
+	proposalPreparationsSubmitters []eth2client.ProposalPreparationsSubmitter
+	executionConfigProvider        blockrelay.ExecutionConfigProvider
 }
 
 // module-wide log.
@@ -54,10 +54,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		chainTimeService:              parameters.chainTimeService,
-		validatingAccountsProvider:    parameters.validatingAccountsProvider,
-		proposalPreparationsSubmitter: parameters.proposalPreparationsSubmitter,
-		executionConfigProvider:       parameters.executionConfigProvider,
+		chainTimeService:               parameters.chainTimeService,
+		validatingAccountsProvider:     parameters.validatingAccountsProvider,
+		proposalPreparationsSubmitters: parameters.proposalPreparationsSubmitters,
+		executionConfigProvider:        parameters.executionConfigProvider,
 	}
 
 	return s, nil

@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -27,12 +27,12 @@ import (
 )
 
 type parameters struct {
-	logLevel                      zerolog.Level
-	monitor                       metrics.Service
-	chainTimeService              chaintime.Service
-	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
-	proposalPreparationsSubmitter eth2client.ProposalPreparationsSubmitter
-	executionConfigProvider       blockrelay.ExecutionConfigProvider
+	logLevel                       zerolog.Level
+	monitor                        metrics.Service
+	chainTimeService               chaintime.Service
+	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
+	proposalPreparationsSubmitters []eth2client.ProposalPreparationsSubmitter
+	executionConfigProvider        blockrelay.ExecutionConfigProvider
 }
 
 // Parameter is the interface for service parameters.
@@ -74,10 +74,10 @@ func WithValidatingAccountsProvider(provider accountmanager.ValidatingAccountsPr
 	})
 }
 
-// WithProposalPreparationsSubmitter sets the proposal preparations submitter.
-func WithProposalPreparationsSubmitter(submitter eth2client.ProposalPreparationsSubmitter) Parameter {
+// WithProposalPreparationsSubmitters sets the proposal preparations submitters.
+func WithProposalPreparationsSubmitters(submitters []eth2client.ProposalPreparationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.proposalPreparationsSubmitter = submitter
+		p.proposalPreparationsSubmitters = submitters
 	})
 }
 
@@ -109,8 +109,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.validatingAccountsProvider == nil {
 		return nil, errors.New("no validating accounts provider specified")
 	}
-	if parameters.proposalPreparationsSubmitter == nil {
-		return nil, errors.New("no proposal preparations submitter specified")
+	if len(parameters.proposalPreparationsSubmitters) == 0 {
+		return nil, errors.New("no proposal preparations submitters specified")
 	}
 	if parameters.executionConfigProvider == nil {
 		return nil, errors.New("no execution configuration provider specified")

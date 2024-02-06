@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"time"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
@@ -99,12 +100,19 @@ func (s *Service) updateProposalPreparations(ctx context.Context,
 	))
 	defer span.End()
 
-	if err := s.proposalPreparationsSubmitter.SubmitProposalPreparations(ctx, proposalPreparations); err != nil {
-		proposalPreparationCompleted(started, epoch, "failed")
-		log.Error().Err(err).Msg("Failed to update proposal preparations")
-		return
+	failed := 0
+	for _, proposalPreparationsSubmitter := range s.proposalPreparationsSubmitters {
+		if err := proposalPreparationsSubmitter.SubmitProposalPreparations(ctx, proposalPreparations); err != nil {
+			failed++
+			log.Error().Str("client", proposalPreparationsSubmitter.(eth2client.Service).Address()).Err(err).Msg("Failed to update proposal preparations")
+			// Do not exit here; we want to attempt all proposal preparations.
+		}
 	}
 
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted proposal preparations")
-	proposalPreparationCompleted(started, epoch, "succeeded")
+	if failed > 0 {
+		proposalPreparationCompleted(started, epoch, "failed")
+	} else {
+		log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted proposal preparations")
+		proposalPreparationCompleted(started, epoch, "succeeded")
+	}
 }
