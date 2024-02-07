@@ -144,7 +144,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 
 	attestations, err := s.attester.Attest(ctx, duty)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to attest")
+		log.Error().Err(err).Msg("Failed to attest")
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Attested")
