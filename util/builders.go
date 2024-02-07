@@ -52,8 +52,8 @@ func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Ser
 	if !exists {
 		client, err = httpclient.New(ctx,
 			httpclient.WithMonitor(monitor),
-			httpclient.WithLogLevel(LogLevel("builderclient")),
-			httpclient.WithTimeout(Timeout("builderclient")),
+			httpclient.WithLogLevel(LogLevel(fmt.Sprintf("builderclient.%s", address))),
+			httpclient.WithTimeout(Timeout(fmt.Sprintf("builderclient.%s", address))),
 			httpclient.WithAddress(address),
 			httpclient.WithExtraHeaders(extraHeaders),
 		)
