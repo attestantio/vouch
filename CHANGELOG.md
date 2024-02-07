@@ -1,5 +1,6 @@
 1.8.0:
   - reject block proposals with 0 fee recipient
+  - ensure all relevant beacon nodes receive proposal preparations
 
 1.8.0-beta.1:
   - ensure relay configuration inherits all configuration values as expected

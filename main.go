@@ -368,6 +368,17 @@ func startServices(ctx context.Context,
 		}
 	}
 
+	// We need to submit proposal preparations to all nodes that are acting as beacon block proposers.
+	nodeAddresses := util.BeaconNodeAddressesForProposing()
+	proposalPreparationsSubmitters := make([]eth2client.ProposalPreparationsSubmitter, 0, len(nodeAddresses))
+	for _, address := range nodeAddresses {
+		client, err := fetchClient(ctx, monitor, address)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for proposal preparation submitter", address))
+		}
+		proposalPreparationsSubmitters = append(proposalPreparationsSubmitters, client.(eth2client.ProposalPreparationsSubmitter))
+	}
+
 	var proposalPreparer proposalpreparer.Service
 	if bellatrixCapable {
 		log.Trace().Msg("Starting proposals preparer")
@@ -376,7 +387,7 @@ func startServices(ctx context.Context,
 			standardproposalpreparer.WithMonitor(monitor),
 			standardproposalpreparer.WithChainTimeService(chainTime),
 			standardproposalpreparer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-			standardproposalpreparer.WithProposalPreparationsSubmitter(submitter.(eth2client.ProposalPreparationsSubmitter)),
+			standardproposalpreparer.WithProposalPreparationsSubmitters(proposalPreparationsSubmitters),
 			standardproposalpreparer.WithExecutionConfigProvider(blockRelay.(blockrelay.ExecutionConfigProvider)),
 		)
 		if err != nil {
@@ -385,16 +396,7 @@ func startServices(ctx context.Context,
 	}
 
 	// The events provider for the controller should only use beacon nodes that are used for attestation data.
-	var eventsBeaconNodeAddresses []string
-	switch {
-	case viper.Get("strategies.attestationdata.best") != nil:
-		eventsBeaconNodeAddresses = util.BeaconNodeAddresses("strategies.attestationdata.best")
-	case viper.Get("strategies.attestationdata.first") != nil:
-		eventsBeaconNodeAddresses = util.BeaconNodeAddresses("strategies.attestationdata.first")
-	default:
-		eventsBeaconNodeAddresses = util.BeaconNodeAddresses("strategies.attestationdata")
-	}
-	eventsConsensusClient, err := fetchMultiClient(ctx, monitor, eventsBeaconNodeAddresses)
+	eventsConsensusClient, err := fetchMultiClient(ctx, monitor, util.BeaconNodeAddressesForAttesting())
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to fetch multiclient for controller")
 	}
@@ -1632,27 +1634,14 @@ func startBlockRelay(ctx context.Context,
 
 	// We also need to submit validator registrations to all nodes that are acting as blinded beacon block proposers, as
 	// some of them use the registration as part of the condition to decide if the blinded block should be called or not.
-	bestBeaconNodeAddresses := util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best")
-	firstBeaconNodeAddresses := util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first")
-	secondaryValidatorRegistrationsSubmitters := make([]eth2client.ValidatorRegistrationsSubmitter, 0, len(bestBeaconNodeAddresses)+len(firstBeaconNodeAddresses))
-	clients := make(map[string]struct{})
-	for _, address := range bestBeaconNodeAddresses {
+	nodeAddresses := util.BeaconNodeAddressesForProposing()
+	secondaryValidatorRegistrationsSubmitters := make([]eth2client.ValidatorRegistrationsSubmitter, 0, len(nodeAddresses))
+	for _, address := range nodeAddresses {
 		client, err := fetchClient(ctx, monitor, address)
 		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for secondary validator registration", address))
 		}
 		secondaryValidatorRegistrationsSubmitters = append(secondaryValidatorRegistrationsSubmitters, client.(eth2client.ValidatorRegistrationsSubmitter))
-		clients[address] = struct{}{}
-	}
-	for _, address := range firstBeaconNodeAddresses {
-		if _, exists := clients[address]; !exists {
-			client, err := fetchClient(ctx, monitor, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
-			}
-			secondaryValidatorRegistrationsSubmitters = append(secondaryValidatorRegistrationsSubmitters, client.(eth2client.ValidatorRegistrationsSubmitter))
-			clients[address] = struct{}{}
-		}
 	}
 
 	var fallbackFeeRecipient bellatrix.ExecutionAddress

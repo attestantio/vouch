@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/mock"
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
 	mockblockrelay "github.com/attestantio/vouch/services/blockrelay/mock"
@@ -45,7 +46,7 @@ func TestService(t *testing.T) {
 	require.NoError(t, err)
 
 	mockValidatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
-	mockProposalPreparationsSubmitter := mock.NewProposalPreparationsSubmitter()
+	mockProposalPreparationsSubmitters := []eth2client.ProposalPreparationsSubmitter{mock.NewProposalPreparationsSubmitter()}
 	mockBlockRelay := mockblockrelay.New()
 
 	prometheusMetrics, err := prometheusmetrics.New(ctx,
@@ -67,7 +68,7 @@ func TestService(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
+				standard.WithProposalPreparationsSubmitters(mockProposalPreparationsSubmitters),
 				standard.WithExecutionConfigProvider(mockBlockRelay),
 			},
 			err: "problem with parameters: no monitor specified",
@@ -77,7 +78,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
+				standard.WithProposalPreparationsSubmitters(mockProposalPreparationsSubmitters),
 				standard.WithExecutionConfigProvider(mockBlockRelay),
 			},
 			err: "problem with parameters: no chain time service specified",
@@ -87,7 +88,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
-				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
+				standard.WithProposalPreparationsSubmitters(mockProposalPreparationsSubmitters),
 				standard.WithExecutionConfigProvider(mockBlockRelay),
 			},
 			err: "problem with parameters: no validating accounts provider specified",
@@ -98,19 +99,30 @@ func TestService(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
+				standard.WithProposalPreparationsSubmitters(mockProposalPreparationsSubmitters),
 			},
 			err: "problem with parameters: no execution configuration provider specified",
 		},
 		{
-			name: "ProposalPreparationsSubmitterMissing",
+			name: "ProposalPreparationsSubmittersMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithExecutionConfigProvider(mockBlockRelay),
 			},
-			err: "problem with parameters: no proposal preparations submitter specified",
+			err: "problem with parameters: no proposal preparations submitters specified",
+		},
+		{
+			name: "ProposalPreparationsSubmittersempty",
+			params: []standard.Parameter{
+				standard.WithLogLevel(zerolog.Disabled),
+				standard.WithChainTimeService(chainTime),
+				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalPreparationsSubmitters([]eth2client.ProposalPreparationsSubmitter{}),
+				standard.WithExecutionConfigProvider(mockBlockRelay),
+			},
+			err: "problem with parameters: no proposal preparations submitters specified",
 		},
 		{
 			name: "Good",
@@ -119,7 +131,7 @@ func TestService(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
-				standard.WithProposalPreparationsSubmitter(mockProposalPreparationsSubmitter),
+				standard.WithProposalPreparationsSubmitters(mockProposalPreparationsSubmitters),
 				standard.WithExecutionConfigProvider(mockBlockRelay),
 			},
 		},
