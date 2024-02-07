@@ -75,6 +75,8 @@ github.com/attestantio/go-block-relay v0.2.3 h1:eQ4MKmJ+lQ8NCVyRUfPjfsJc9hDu7Lhl
 github.com/attestantio/go-block-relay v0.2.3/go.mod h1:J8hCQMiaYdFQxW1LNCvW4WYAqNXjVaDjp+J1Pj6sCc0=
 github.com/attestantio/go-builder-client v0.4.3 h1:K1m/PTqY01mfAPc0h+9iR2OivY3LOevbxHxEfvI4M8M=
 github.com/attestantio/go-builder-client v0.4.3/go.mod h1:yeJANU1O5P3b/4+iwShz9JMcgUnZABCh5RJBtZnLiDo=
+github.com/attestantio/go-eth2-client v0.19.10 h1:NLs9mcBvZpBTZ3du7Ey2NHQoj8d3UePY7pFBXX6C6qs=
+github.com/attestantio/go-eth2-client v0.19.10/go.mod h1:TTz7YF6w4z6ahvxKiHuGPn6DbQn7gH6HPuWm/DEQeGE=
 github.com/aws/aws-sdk-go v1.44.81/go.mod h1:y4AeaBuwd2Lk+GepC1E9v0qOiTws0MIWAX4oIKwKHZo=
 github.com/aws/aws-sdk-go v1.49.21 h1:Rl8KW6HqkwzhATwvXhyr7vD4JFUMi7oXGAw9SrxxIFY=
 github.com/aws/aws-sdk-go v1.49.21/go.mod h1:LF8svs817+Nz+DmiMQKTO3ubZ/6IaTpq3TjupRn3Eqk=
@@ -355,7 +357,7 @@ github.com/r3labs/sse/v2 v2.10.0 h1:hFEkLLFY4LDifoHdiCN/LlGBAdVJYsANaLqNYa1l/v0=
 github.com/r3labs/sse/v2 v2.10.0/go.mod h1:Igau6Whc+F17QUgML1fYe1VPZzTV6EMCnYktEmkNJ7I=
 github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6LYCDYWNEvQ=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
-github.com/rogpeppe/go-internal v1.12.0 h1:exVL4IDcn6na9z1rAb56Vxr+CgyK3nn3O+epU5NdKM8=
+github.com/rogpeppe/go-internal v1.11.0 h1:cWPaGQEPrBb5/AsnsZesgZZ9yb1OQ+GOISoDNXVBh4M=
 github.com/rs/xid v1.3.0/go.mod h1:trrq9SKmegXys3aeAKXMUTdJsYXVwGY3RLcfgqegfbg=
 github.com/rs/xid v1.5.0/go.mod h1:trrq9SKmegXys3aeAKXMUTdJsYXVwGY3RLcfgqegfbg=
 github.com/rs/zerolog v1.27.0/go.mod h1:7frBqO0oezxmnO7GF86FY++uy8I0Tk/If5ni1G9Qc0U=
