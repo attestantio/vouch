@@ -162,7 +162,6 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 	defer span.End()
 
 	// Create the relevant wallets.
-	wallets := make([]e2wtypes.Wallet, 0, len(s.accountPaths))
 	pathsByWallet := make(map[string][]string)
 	for _, path := range s.accountPaths {
 		pathBits := strings.Split(path, "/")
@@ -173,15 +172,8 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 			paths = make([]string, 0)
 		}
 		pathsByWallet[pathBits[0]] = append(paths, path)
-		wallet, err := s.openWallet(ctx, pathBits[0])
-		if err != nil {
-			log.Warn().Err(err).Str("wallet", pathBits[0]).Msg("Failed to open wallet")
-		} else {
-			wallets = append(wallets, wallet)
-		}
 	}
-	log.Trace().Int("wallets", len(wallets)).Msg("Fetching accounts for wallets")
-
+	log.Trace().Int("wallets", len(pathsByWallet)).Msg("Fetching accounts for wallets")
 	verificationRegexes := accountPathsToVerificationRegexes(s.accountPaths)
 	// Fetch accounts for each wallet in parallel.
 	started := time.Now()
@@ -190,18 +182,23 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 	sem := semaphore.NewWeighted(s.processConcurrency)
 	var wg sync.WaitGroup
 	pubKeys := make([]phase0.BLSPubKey, 0)
-	for i := range wallets {
+	for walletName := range pathsByWallet {
 		wg.Add(1)
-		go func(ctx context.Context, sem *semaphore.Weighted, wg *sync.WaitGroup, i int, mu *sync.Mutex) {
+		go func(ctx context.Context, sem *semaphore.Weighted, wg *sync.WaitGroup, walletName string, mu *sync.Mutex) {
 			defer wg.Done()
 			if err := sem.Acquire(ctx, 1); err != nil {
 				log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
 			}
 			defer sem.Release(1)
-			log := log.With().Str("wallet", wallets[i].Name()).Logger()
+			wallet, err := s.openWallet(ctx, walletName)
+			if err != nil {
+				log.Warn().Err(err).Str("wallet", walletName).Msg("Failed to open wallet")
+				return
+			}
+			log := log.With().Str("wallet", wallet.Name()).Logger()
 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained semaphore")
-			walletAccounts := s.fetchAccountsForWallet(ctx, wallets[i], verificationRegexes)
+			walletAccounts := s.fetchAccountsForWallet(ctx, wallet, verificationRegexes)
 			log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(walletAccounts)).Msg("Obtained accounts")
 			mu.Lock()
 			for k, v := range walletAccounts {
@@ -210,7 +207,7 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 			}
 			mu.Unlock()
 			log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(walletAccounts)).Msg("Imported accounts")
-		}(ctx, sem, &wg, i, &accountsMu)
+		}(ctx, sem, &wg, walletName, &accountsMu)
 	}
 	wg.Wait()
 	log.Trace().Int("accounts", len(accounts)).Msg("Obtained accounts")
