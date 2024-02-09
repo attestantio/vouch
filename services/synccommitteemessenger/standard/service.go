@@ -195,7 +195,7 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 				log.Debug().Msg("Account nil; likely exited validator still in sync committee")
 				return
 			}
-			sig, err := s.contribute(ctx, account, s.chainTimeService.SlotToEpoch(duty.Slot()+1), *beaconBlockRoot)
+			sig, err := s.contribute(ctx, account, s.chainTimeService.SlotToEpoch(duty.Slot()), *beaconBlockRoot)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to sign sync committee message")
 				return
