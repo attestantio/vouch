@@ -87,7 +87,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		}
 	}
 
-	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ interface{}) (time.Time, error) {
 		// Run approximately every 15 minutes.
 		return time.Now().Add(15 * time.Minute), nil
 	}

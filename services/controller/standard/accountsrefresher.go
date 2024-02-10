@@ -23,7 +23,7 @@ import (
 
 // startAccountsRefresher starts a periodic job that refreshes the accounts known by Vouch.
 func (s *Service) startAccountsRefresher(ctx context.Context) error {
-	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ interface{}) (time.Time, error) {
 		if s.activeValidators == 0 {
 			log.Trace().Msg("No active validators; refreshing accounts next slot")
 			return time.Now().Add(s.slotDuration), nil

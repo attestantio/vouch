@@ -307,7 +307,7 @@ type epochTickerData struct {
 
 // startEpochTicker starts a ticker that ticks at the beginning of each epoch.
 func (s *Service) startEpochTicker(ctx context.Context) error {
-	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ interface{}) (time.Time, error) {
 		// Schedule for the beginning of the next epoch.
 		return s.chainTimeService.StartOfEpoch(s.chainTimeService.CurrentEpoch() + 1), nil
 	}

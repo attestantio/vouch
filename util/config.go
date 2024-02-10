@@ -14,9 +14,7 @@
 package util
 
 import (
-
-	// #nosec G108
-	_ "net/http/pprof"
+	"sort"
 
 	"github.com/spf13/viper"
 )
@@ -60,6 +58,7 @@ func BeaconNodeAddressesForProposing() []string {
 	for nodeAddress := range nodeAddresses {
 		addresses = append(addresses, nodeAddress)
 	}
+	sort.Strings(addresses)
 
 	return addresses
 }
@@ -92,6 +91,7 @@ func BeaconNodeAddressesForAttesting() []string {
 	for nodeAddress := range nodeAddresses {
 		addresses = append(addresses, nodeAddress)
 	}
+	sort.Strings(addresses)
 
 	return addresses
 }

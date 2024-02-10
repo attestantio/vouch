@@ -25,7 +25,7 @@ import (
 
 // startProposalsPreparer starts a periodic job to prepare proposal information.
 func (s *Service) startProposalsPreparer(ctx context.Context) error {
-	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ interface{}) (time.Time, error) {
 		// Schedule for the middle of the slot, three-quarters through the epoch.
 		currentEpoch := s.chainTimeService.CurrentEpoch()
 		epochDuration := s.chainTimeService.StartOfEpoch(currentEpoch + 1).Sub(s.chainTimeService.StartOfEpoch(currentEpoch))
