@@ -1,12 +1,10 @@
 1.8.0:
+  - support Deneb
   - reject block proposals with 0 fee recipient
   - ensure all relevant beacon nodes receive proposal preparations
-
-1.8.0-beta.1:
   - ensure relay configuration inherits all configuration values as expected
   - create strategies for builder bid
   - fetch blinded and unblinded proposals in parallel to speed up block production
-  - support Deneb beta
   - compose multiclients from clients, reducing connections to beacon nodes
   - start validator registrations randomly in middle 80% of each epoch, to avoid overloading relays
   - reduce CPU and memory requirements for refreshing validator information
