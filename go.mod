@@ -3,7 +3,7 @@ module github.com/attestantio/vouch
 go 1.20
 
 require (
-	github.com/attestantio/go-block-relay v0.2.3
+	github.com/attestantio/go-block-relay v0.2.4
 	github.com/attestantio/go-builder-client v0.4.3
 	github.com/attestantio/go-eth2-client v0.19.10
 	github.com/aws/aws-sdk-go v1.49.21
