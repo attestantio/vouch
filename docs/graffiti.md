@@ -16,7 +16,7 @@ The dynamic graffiti provider uses a majordomo URL to obtain one or more values 
 
 ```YAML
 graffiti:
-  dyanmic:
+  dynamic:
     location: file:///home/me/graffiti.txt
 ```
 
