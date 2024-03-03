@@ -102,11 +102,6 @@ func TestAccountPathsToVerificationRegexes(t *testing.T) {
 			regexes: []*regexp.Regexp{regexp.MustCompile("^wallet1/acc$")},
 		},
 		{
-			name:    "WalletRegex",
-			paths:   []string{"wallet[0123]/a.*b[abc]{1}"},
-			regexes: []*regexp.Regexp{regexp.MustCompile("^wallet[0123]/a.*b[abc]{1}$")},
-		},
-		{
 			name:    "AccountRegex",
 			paths:   []string{"wallet1/a.*b[abc]{1}"},
 			regexes: []*regexp.Regexp{regexp.MustCompile("^wallet1/a.*b[abc]{1}$")},
@@ -117,8 +112,13 @@ func TestAccountPathsToVerificationRegexes(t *testing.T) {
 			regexes: []*regexp.Regexp{regexp.MustCompile("^wallet1/a.*b[abc]{1}$")},
 		},
 		{
-			name:    "AccountRegexStartAnchor",
+			name:    "AccountRegexWalletStartAnchor",
 			paths:   []string{"^wallet1/a.*b[abc]{1}"},
+			regexes: []*regexp.Regexp{regexp.MustCompile("^wallet1/a.*b[abc]{1}$")},
+		},
+		{
+			name:    "AccountRegexAccountStartAnchor",
+			paths:   []string{"wallet1/^a.*b[abc]{1}"},
 			regexes: []*regexp.Regexp{regexp.MustCompile("^wallet1/a.*b[abc]{1}$")},
 		},
 		{
@@ -142,7 +142,7 @@ func TestAccountPathsToVerificationRegexes(t *testing.T) {
 			regexes := accountPathsToVerificationRegexes(test.paths)
 			require.Equal(t, len(test.regexes), len(regexes))
 			for i := range test.regexes {
-				require.Equal(t, test.regexes[i], regexes[i])
+				require.Equal(t, test.regexes[i], regexes["wallet1"][i])
 			}
 			if test.logEntry != "" {
 				capture.AssertHasEntry(t, test.logEntry)

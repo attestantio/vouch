@@ -1,3 +1,6 @@
+dev:
+  - reduce time spent verifying account names
+
 1.8.0:
   - support Deneb
   - reject block proposals with 0 fee recipient
