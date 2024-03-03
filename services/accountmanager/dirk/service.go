@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -166,16 +166,16 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 	for _, path := range s.accountPaths {
 		pathBits := strings.Split(path, "/")
 
-		var paths []string
-		var exists bool
-		if paths, exists = pathsByWallet[pathBits[0]]; !exists {
-			paths = make([]string, 0)
+		if _, exists := pathsByWallet[pathBits[0]]; !exists {
+			pathsByWallet[pathBits[0]] = make([]string, 0)
 		}
-		pathsByWallet[pathBits[0]] = append(paths, path)
+		pathsByWallet[pathBits[0]] = append(pathsByWallet[pathBits[0]], path)
 	}
-	log.Trace().Int("wallets", len(pathsByWallet)).Msg("Fetching accounts for wallets")
+
 	verificationRegexes := accountPathsToVerificationRegexes(s.accountPaths)
+
 	// Fetch accounts for each wallet in parallel.
+	log.Trace().Int("wallets", len(pathsByWallet)).Msg("Fetching accounts for wallets")
 	started := time.Now()
 	accounts := make(map[phase0.BLSPubKey]e2wtypes.Account)
 	var accountsMu sync.Mutex
@@ -198,7 +198,7 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 			}
 			log := log.With().Str("wallet", wallet.Name()).Logger()
 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained semaphore")
-			walletAccounts := s.fetchAccountsForWallet(ctx, wallet, verificationRegexes)
+			walletAccounts := s.fetchAccountsForWallet(ctx, wallet, verificationRegexes[wallet.Name()])
 			log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(walletAccounts)).Msg("Obtained accounts")
 			mu.Lock()
 			for k, v := range walletAccounts {
@@ -377,8 +377,8 @@ func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch p
 }
 
 // accountPathsToVerificationRegexes turns account paths in to regexes to allow verification.
-func accountPathsToVerificationRegexes(paths []string) []*regexp.Regexp {
-	regexes := make([]*regexp.Regexp, 0, len(paths))
+func accountPathsToVerificationRegexes(paths []string) map[string][]*regexp.Regexp {
+	regexes := make(map[string][]*regexp.Regexp, len(paths))
 	for _, path := range paths {
 		log := log.With().Str("path", path).Logger()
 		parts := strings.Split(path, "/")
@@ -402,7 +402,10 @@ func accountPathsToVerificationRegexes(paths []string) []*regexp.Regexp {
 			log.Warn().Str("specifier", specifier).Err(err).Msg("Invalid path regex")
 			continue
 		}
-		regexes = append(regexes, regex)
+		if _, exists := regexes[parts[0]]; !exists {
+			regexes[parts[0]] = make([]*regexp.Regexp, 0)
+		}
+		regexes[parts[0]] = append(regexes[parts[0]], regex)
 	}
 	return regexes
 }
@@ -414,21 +417,17 @@ func (*Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wall
 	defer span.End()
 
 	res := make(map[phase0.BLSPubKey]e2wtypes.Account)
-	for account := range wallet.Accounts(ctx) {
-		// Ensure the name matches one of our account paths.
-		name := fmt.Sprintf("%s/%s", wallet.Name(), account.Name())
-		verified := false
-		for _, verificationRegex := range verificationRegexes {
-			if verificationRegex.MatchString(name) {
-				verified = true
-				break
-			}
-		}
-		if !verified {
-			log.Debug().Str("account", name).Msg("Received unwanted account from server; ignoring")
-			continue
-		}
+	accounts := wallet.Accounts(ctx)
 
+	// Short circuit these checks if the verification regex is 'everything'.
+	shortCircuitRegex := fmt.Sprintf("^%s/.*$", wallet.Name())
+	shortCircuit := false
+	if len(verificationRegexes) == 1 && verificationRegexes[0].String() == shortCircuitRegex {
+		log.Trace().Str("wallet", wallet.Name()).Msg("Short-circuiting regex checks")
+		shortCircuit = true
+	}
+
+	for account := range accounts {
 		var pubKey []byte
 		if provider, isProvider := account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
 			pubKey = provider.CompositePublicKey().Marshal()
@@ -436,8 +435,25 @@ func (*Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wall
 			pubKey = account.PublicKey().Marshal()
 		}
 
+		if !shortCircuit {
+			// Ensure the name matches one of our account paths.
+			name := fmt.Sprintf("%s/%s", wallet.Name(), account.Name())
+			verified := false
+			for _, verificationRegex := range verificationRegexes {
+				if verificationRegex.MatchString(name) {
+					verified = true
+					break
+				}
+			}
+			if !verified {
+				log.Debug().Str("account", name).Msg("Received unwanted account from server; ignoring")
+				continue
+			}
+		}
+
 		res[bytesutil.ToBytes48(pubKey)] = account
 	}
+
 	return res
 }
 
