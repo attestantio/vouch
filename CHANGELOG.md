@@ -1,5 +1,6 @@
 dev:
   - reduce time spent verifying account names
+  - ensure that attestations complete on Vouch's first ever epoch
 
 1.8.0:
   - support Deneb
