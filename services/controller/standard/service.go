@@ -355,11 +355,10 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 		return
 	}
 
-	// Expect at least one validator.
+	// Expect at least one validator, but keep going even if we don't have any
+	// as there may be some in the next epoch.
 	if len(validatorIndices) == 0 {
 		log.Warn().Msg("No active validators; not validating")
-		cancel()
-		return
 	}
 
 	// Done the preparation work available to us; wait for the end of the timer.
