@@ -85,7 +85,10 @@ func (s *Service) Proposal(ctx context.Context,
 			proposalResponse, err := provider.Proposal(ctx, opts)
 			s.clientMonitor.ClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
 			if err != nil {
-				log.Warn().Err(err).Msg("Failed to obtain beacon block proposal")
+				if !errors.Is(err, context.Canceled) {
+					log.Warn().Err(err).Msg("Failed to obtain beacon block proposal")
+				}
+
 				return
 			}
 			proposal := proposalResponse.Data

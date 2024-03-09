@@ -53,7 +53,10 @@ func (s *Service) AttestationData(ctx context.Context,
 			attestationDataResponse, err := provider.AttestationData(ctx, opts)
 			s.clientMonitor.ClientOperation(name, "attestation data", err == nil, time.Since(started))
 			if err != nil {
-				log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain attestation data")
+				if !errors.Is(err, context.Canceled) {
+					log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain attestation data")
+				}
+
 				return
 			}
 			attestationData := attestationDataResponse.Data

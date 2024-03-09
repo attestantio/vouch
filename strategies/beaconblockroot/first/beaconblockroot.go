@@ -57,7 +57,10 @@ func (s *Service) BeaconBlockRoot(ctx context.Context,
 			rootResponse, err := provider.BeaconBlockRoot(ctx, opts)
 			s.clientMonitor.ClientOperation(name, "beacon block root", err == nil, time.Since(started))
 			if err != nil {
-				log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain beacon block root")
+				if !errors.Is(err, context.Canceled) {
+					log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain beacon block root")
+				}
+
 				return
 			}
 			log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained beacon block root")

@@ -61,7 +61,10 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context,
 			contributionResponse, err := provider.SyncCommitteeContribution(ctx, opts)
 			s.clientMonitor.ClientOperation(name, "sync committee contribution", err == nil, time.Since(started))
 			if err != nil {
-				log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain sync committee contribution")
+				if !errors.Is(err, context.Canceled) {
+					log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain sync committee contribution")
+				}
+
 				return
 			}
 			contribution := contributionResponse.Data
