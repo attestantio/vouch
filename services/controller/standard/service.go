@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -243,26 +243,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	go s.scheduleAttestations(ctx, epoch+1, nextEpochValidatorIndices, true /* notCurrentSlot */)
 
 	// Update beacon committee subscriptions for this and the next epoch.
-	go func() {
-		subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, epoch, accounts)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to subscribe to beacon committees")
-			return
-		}
-		s.subscriptionInfosMutex.Lock()
-		s.subscriptionInfos[epoch] = subscriptionInfo
-		s.subscriptionInfosMutex.Unlock()
-	}()
-	go func() {
-		subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, epoch+1, nextEpochAccounts)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to subscribe to beacon committees")
-			return
-		}
-		s.subscriptionInfosMutex.Lock()
-		s.subscriptionInfos[epoch+1] = subscriptionInfo
-		s.subscriptionInfosMutex.Unlock()
-	}()
+	go s.subscribeToBeaconCommittees(ctx, epoch, accounts)
+	go s.subscribeToBeaconCommittees(ctx, epoch+1, nextEpochAccounts)
 
 	// Update proposal preparers.
 	go func() {
@@ -428,16 +410,7 @@ func (s *Service) prepareForEpoch(ctx context.Context, data interface{}) {
 	}
 
 	go s.scheduleAttestations(ctx, prepareForEpochData.epoch, validatorIndices, false /* notCurrentSlot */)
-	go func() {
-		subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, prepareForEpochData.epoch, accounts)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to subscribe to beacon committees")
-			return
-		}
-		s.subscriptionInfosMutex.Lock()
-		s.subscriptionInfos[prepareForEpochData.epoch] = subscriptionInfo
-		s.subscriptionInfosMutex.Unlock()
-	}()
+	go s.subscribeToBeaconCommittees(ctx, prepareForEpochData.epoch, accounts)
 }
 
 // accountsAndIndicesForEpoch obtains the accounts and validator indices for the specified epoch.
