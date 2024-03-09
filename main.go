@@ -852,7 +852,7 @@ func startMonitor(ctx context.Context,
 ) {
 	log.Trace().Msg("Starting metrics service")
 	var monitor metrics.Service
-	if viper.Get("metrics.prometheus.listen-address") != nil {
+	if viper.Get("metrics.prometheus.listen-address") != nil && viper.Get("metrics.prometheus.listen-address") != "" {
 		var err error
 		monitor, err = prometheusmetrics.New(ctx,
 			prometheusmetrics.WithLogLevel(util.LogLevel("metrics.prometheus")),
