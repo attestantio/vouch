@@ -57,7 +57,10 @@ func (s *Service) AggregateAttestation(ctx context.Context,
 			aggregateResponse, err := provider.AggregateAttestation(ctx, opts)
 			s.clientMonitor.ClientOperation(name, "aggregate attestation", err == nil, time.Since(started))
 			if err != nil {
-				log.Warn().Err(err).Msg("Failed to obtain aggregate attestation")
+				if !errors.Is(err, context.Canceled) {
+					log.Warn().Err(err).Msg("Failed to obtain aggregate attestation")
+				}
+
 				return
 			}
 			aggregate := aggregateResponse.Data
