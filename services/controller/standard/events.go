@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,6 +21,7 @@ import (
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -232,14 +233,7 @@ func (s *Service) refreshAttesterDutiesForEpoch(ctx context.Context, epoch phase
 	go s.scheduleAttestations(ctx, epoch, validatorIndices, !curentSlotJobCancelled)
 
 	// Update beacon committee subscriptions for the next epoch.
-	subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, epoch, accounts)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to subscribe to beacon committees")
-		return
-	}
-	s.subscriptionInfosMutex.Lock()
-	s.subscriptionInfos[epoch] = subscriptionInfo
-	s.subscriptionInfosMutex.Unlock()
+	go s.subscribeToBeaconCommittees(ctx, epoch, accounts)
 }
 
 // refreshSyncCommitteeDutiesForEpochPeriod refreshes sync committee duties for all epochs in the
@@ -296,4 +290,18 @@ func (s *Service) refreshSyncCommitteeDutiesForEpochPeriod(ctx context.Context, 
 
 	// Reschedule sync committee messages.
 	go s.scheduleSyncCommitteeMessages(ctx, epoch, validatorIndices, false /* notCurrentSlot */)
+}
+
+func (s *Service) subscribeToBeaconCommittees(ctx context.Context,
+	epoch phase0.Epoch,
+	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
+) {
+	subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, epoch, accounts)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to subscribe to beacon committees")
+		return
+	}
+	s.subscriptionInfosMutex.Lock()
+	s.subscriptionInfos[epoch] = subscriptionInfo
+	s.subscriptionInfosMutex.Unlock()
 }
