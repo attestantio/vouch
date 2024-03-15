@@ -84,9 +84,7 @@ func (s *Service) SubmitProposal(ctx context.Context, proposal *api.VersionedSig
 	}
 
 	started := time.Now()
-	err := s.proposalSubmitter.SubmitProposal(ctx, &api.SubmitProposalOpts{
-		Proposal: proposal,
-	})
+	err := s.proposalSubmitter.SubmitProposal(ctx, proposal)
 	if service, isService := s.proposalSubmitter.(eth2client.Service); isService {
 		s.clientMonitor.ClientOperation(service.Address(), "submit proposal", err == nil, time.Since(started))
 	} else {

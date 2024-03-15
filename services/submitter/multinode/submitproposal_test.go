@@ -20,9 +20,8 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	apiv1deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/submitter/multinode"
 	"github.com/attestantio/vouch/testing/logger"
@@ -105,12 +104,10 @@ func TestSubmitProposal(t *testing.T) {
 	require.NoError(t, err)
 
 	err = s.SubmitProposal(ctx, &api.VersionedSignedProposal{
-		Version: spec.DataVersionDeneb,
-		Deneb: &apiv1deneb.SignedBlockContents{
-			SignedBlock: &deneb.SignedBeaconBlock{
-				Message: &deneb.BeaconBlock{
-					Slot: 1,
-				},
+		Version: spec.DataVersionAltair,
+		Altair: &altair.SignedBeaconBlock{
+			Message: &altair.BeaconBlock{
+				Slot: 1,
 			},
 		},
 	})
@@ -156,12 +153,10 @@ func TestSubmitProposalErroring(t *testing.T) {
 	require.NoError(t, err)
 
 	err = s.SubmitProposal(ctx, &api.VersionedSignedProposal{
-		Version: spec.DataVersionDeneb,
-		Deneb: &apiv1deneb.SignedBlockContents{
-			SignedBlock: &deneb.SignedBeaconBlock{
-				Message: &deneb.BeaconBlock{
-					Slot: 1,
-				},
+		Version: spec.DataVersionAltair,
+		Altair: &altair.SignedBeaconBlock{
+			Message: &altair.BeaconBlock{
+				Slot: 1,
 			},
 		},
 	})
@@ -203,12 +198,10 @@ func TestSubmitProposalSleepy(t *testing.T) {
 	require.NoError(t, err)
 
 	err = s.SubmitProposal(ctx, &api.VersionedSignedProposal{
-		Version: spec.DataVersionDeneb,
-		Deneb: &apiv1deneb.SignedBlockContents{
-			SignedBlock: &deneb.SignedBeaconBlock{
-				Message: &deneb.BeaconBlock{
-					Slot: 1,
-				},
+		Version: spec.DataVersionAltair,
+		Altair: &altair.SignedBeaconBlock{
+			Message: &altair.BeaconBlock{
+				Slot: 1,
 			},
 		},
 	})
@@ -250,12 +243,10 @@ func TestSubmitProposalSleepySuccess(t *testing.T) {
 	require.NoError(t, err)
 
 	err = s.SubmitProposal(ctx, &api.VersionedSignedProposal{
-		Version: spec.DataVersionDeneb,
-		Deneb: &apiv1deneb.SignedBlockContents{
-			SignedBlock: &deneb.SignedBeaconBlock{
-				Message: &deneb.BeaconBlock{
-					Slot: 1,
-				},
+		Version: spec.DataVersionAltair,
+		Altair: &altair.SignedBeaconBlock{
+			Message: &altair.BeaconBlock{
+				Slot: 1,
 			},
 		},
 	})
