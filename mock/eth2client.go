@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"math/big"
 	"strings"
 	"time"
 
@@ -354,7 +355,7 @@ func NewProposalSubmitter() eth2client.ProposalSubmitter {
 }
 
 // SubmitProposal is a mock.
-func (*ProposalSubmitter) SubmitProposal(_ context.Context, _ *api.VersionedSignedProposal) error {
+func (*ProposalSubmitter) SubmitProposal(_ context.Context, _ *api.SubmitProposalOpts) error {
 	return nil
 }
 
@@ -367,7 +368,7 @@ func NewErroringProposalSubmitter() eth2client.ProposalSubmitter {
 }
 
 // SubmitProposal is a mock.
-func (*ErroringProposalSubmitter) SubmitProposal(_ context.Context, _ *api.VersionedSignedProposal) error {
+func (*ErroringProposalSubmitter) SubmitProposal(_ context.Context, _ *api.SubmitProposalOpts) error {
 	return errors.New("error")
 }
 
@@ -386,7 +387,7 @@ func NewSleepyProposalSubmitter(wait time.Duration, next eth2client.ProposalSubm
 }
 
 // SubmitProposal is a mock.
-func (m *SleepyProposalSubmitter) SubmitProposal(ctx context.Context, proposal *api.VersionedSignedProposal) error {
+func (m *SleepyProposalSubmitter) SubmitProposal(ctx context.Context, proposal *api.SubmitProposalOpts) error {
 	time.Sleep(m.wait)
 	return m.next.SubmitProposal(ctx, proposal)
 }
@@ -400,7 +401,7 @@ func NewBlindedProposalSubmitter() eth2client.BlindedProposalSubmitter {
 }
 
 // SubmitBlindedProposal is a mock.
-func (*BlindedProposalSubmitter) SubmitBlindedProposal(_ context.Context, _ *api.VersionedSignedBlindedProposal) error {
+func (*BlindedProposalSubmitter) SubmitBlindedProposal(_ context.Context, _ *api.SubmitBlindedProposalOpts) error {
 	return nil
 }
 
@@ -413,7 +414,7 @@ func NewErroringBlindedProposalSubmitter() eth2client.BlindedProposalSubmitter {
 }
 
 // SubmitBlindedProposal is a mock.
-func (*ErroringBlindedProposalSubmitter) SubmitBlindedProposal(_ context.Context, _ *api.VersionedSignedBlindedProposal) error {
+func (*ErroringBlindedProposalSubmitter) SubmitBlindedProposal(_ context.Context, _ *api.SubmitBlindedProposalOpts) error {
 	return errors.New("error")
 }
 
@@ -432,7 +433,7 @@ func NewSleepyBlindedProposalSubmitter(wait time.Duration, next eth2client.Blind
 }
 
 // SubmitBlindedProposal is a mock.
-func (m *SleepyBlindedProposalSubmitter) SubmitBlindedProposal(ctx context.Context, block *api.VersionedSignedBlindedProposal) error {
+func (m *SleepyBlindedProposalSubmitter) SubmitBlindedProposal(ctx context.Context, block *api.SubmitBlindedProposalOpts) error {
 	time.Sleep(m.wait)
 	return m.next.SubmitBlindedProposal(ctx, block)
 }
@@ -633,7 +634,9 @@ func (*ProposalProvider) Proposal(_ context.Context,
 	}
 
 	block := &api.VersionedProposal{
-		Version: spec.DataVersionCapella,
+		Version:        spec.DataVersionCapella,
+		ConsensusValue: big.NewInt(12345),
+		ExecutionValue: big.NewInt(23456),
 		Capella: &capella.BeaconBlock{
 			Slot:          opts.Slot,
 			ProposerIndex: 1,

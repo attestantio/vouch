@@ -40,6 +40,11 @@ eth2client:
   # operation, for example fetching the current list of active validators.  These operations are not time-sensitive,
   # and can contain large amounts of information, hence the longer timeout.
   timeout: '2m'
+  #
+  # allow-delayed-start allows Vouch to start if some of the consensus nodes are unavailable.
+  # Note that this can result in Vouch being active without being able to validate, however, if strategies use
+  # a subset of beacon nodes that are all unavailable.
+  allow-delayed-start: true
 
 # metrics is the module that logs metrics, in this case using prometheus.
 metrics:
