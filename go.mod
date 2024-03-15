@@ -5,7 +5,7 @@ go 1.21
 toolchain go1.21.6
 
 require (
-	github.com/attestantio/go-block-relay v0.3.0
+	github.com/attestantio/go-block-relay v0.2.4
 	github.com/attestantio/go-builder-client v0.4.3
 	github.com/attestantio/go-eth2-client v0.20.0
 	github.com/aws/aws-sdk-go v1.50.28

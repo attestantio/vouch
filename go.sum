@@ -72,8 +72,8 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
-github.com/attestantio/go-block-relay v0.3.0 h1:5uKB7MSONyIL4SwtUuVbzF/olMCxN/cXtVxTSIfKyZQ=
-github.com/attestantio/go-block-relay v0.3.0/go.mod h1:J8hCQMiaYdFQxW1LNCvW4WYAqNXjVaDjp+J1Pj6sCc0=
+github.com/attestantio/go-block-relay v0.2.4 h1:Rnwr+KuT0VvxRPwlayiBKtVsiomOCgXcLCoNdgC0SUM=
+github.com/attestantio/go-block-relay v0.2.4/go.mod h1:J8hCQMiaYdFQxW1LNCvW4WYAqNXjVaDjp+J1Pj6sCc0=
 github.com/attestantio/go-builder-client v0.4.3 h1:K1m/PTqY01mfAPc0h+9iR2OivY3LOevbxHxEfvI4M8M=
 github.com/attestantio/go-builder-client v0.4.3/go.mod h1:yeJANU1O5P3b/4+iwShz9JMcgUnZABCh5RJBtZnLiDo=
 github.com/attestantio/go-eth2-client v0.20.0 h1:5UA/qkABDasmdiZtaqK60sEdFw0vUGQU2c0NS/0IhfU=
