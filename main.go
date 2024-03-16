@@ -108,7 +108,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.8.0"
+var ReleaseVersion = "1.9.0-dev"
 
 func main() {
 	exitCode := main2()
@@ -229,6 +229,7 @@ func fetchConfig() error {
 	viper.SetDefault("process-concurrency", int64(runtime.GOMAXPROCS(-1)))
 	viper.SetDefault("timeout", 2*time.Second)
 	viper.SetDefault("eth2client.timeout", 2*time.Minute)
+	viper.SetDefault("eth2client.allow-delayed-start", true)
 	viper.SetDefault("controller.max-proposal-delay", 0)
 	viper.SetDefault("controller.max-attestation-delay", 4*time.Second)
 	viper.SetDefault("controller.max-sync-committee-message-delay", 4*time.Second)
@@ -284,7 +285,7 @@ func startClient(ctx context.Context, monitor metrics.Service) (eth2client.Servi
 	var consensusClient eth2client.Service
 	var err error
 	if len(viper.GetStringSlice("beacon-node-addresses")) > 0 {
-		consensusClient, err = fetchMultiClient(ctx, monitor, viper.GetStringSlice("beacon-node-addresses"))
+		consensusClient, err = fetchMultiClient(ctx, monitor, "main", viper.GetStringSlice("beacon-node-addresses"))
 	} else {
 		consensusClient, err = fetchClient(ctx, monitor, viper.GetString("beacon-node-address"))
 	}
@@ -396,7 +397,7 @@ func startServices(ctx context.Context,
 	}
 
 	// The events provider for the controller should only use beacon nodes that are used for attestation data.
-	eventsConsensusClient, err := fetchMultiClient(ctx, monitor, util.BeaconNodeAddressesForAttesting())
+	eventsConsensusClient, err := fetchMultiClient(ctx, monitor, "events", util.BeaconNodeAddressesForAttesting())
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to fetch multiclient for controller")
 	}

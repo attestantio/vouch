@@ -103,6 +103,11 @@ func (s *Service) updateProposalPreparations(ctx context.Context,
 	failed := 0
 	for _, proposalPreparationsSubmitter := range s.proposalPreparationsSubmitters {
 		if err := proposalPreparationsSubmitter.SubmitProposalPreparations(ctx, proposalPreparations); err != nil {
+			if errors.Is(err, eth2client.ErrNotActive) {
+				// If the client isn't ready we don't count it as a failure.
+				log.Debug().Str("client", proposalPreparationsSubmitter.(eth2client.Service).Address()).Msg("Client is no active; cannot update proposal preparations")
+				continue
+			}
 			failed++
 			log.Error().Str("client", proposalPreparationsSubmitter.(eth2client.Service).Address()).Err(err).Msg("Failed to update proposal preparations")
 			// Do not exit here; we want to attempt all proposal preparations.

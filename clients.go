@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -25,6 +25,7 @@ import (
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -49,6 +50,7 @@ func fetchClient(ctx context.Context, monitor metrics.Service, address string) (
 			httpclient.WithMonitor(monitor),
 			httpclient.WithTimeout(util.Timeout(fmt.Sprintf("eth2client.%s", address))),
 			httpclient.WithAddress(address),
+			httpclient.WithAllowDelayedStart(viper.GetBool("eth2client.allow-delayed-start")),
 			httpclient.WithExtraHeaders(map[string]string{
 				"User-Agent": fmt.Sprintf("Vouch/%s", ReleaseVersion),
 			}),
@@ -65,7 +67,7 @@ func fetchClient(ctx context.Context, monitor metrics.Service, address string) (
 }
 
 // fetchMulticlient fetches a multiclient service, instantiating it if required.
-func fetchMultiClient(ctx context.Context, monitor metrics.Service, addresses []string) (eth2client.Service, error) {
+func fetchMultiClient(ctx context.Context, monitor metrics.Service, name string, addresses []string) (eth2client.Service, error) {
 	if len(addresses) == 0 {
 		return nil, errors.New("no addresses supplied for multiclient")
 	}
@@ -93,6 +95,8 @@ func fetchMultiClient(ctx context.Context, monitor metrics.Service, addresses []
 			multiclient.WithMonitor(monitor),
 			multiclient.WithLogLevel(util.LogLevel("eth2client.multi")),
 			multiclient.WithClients(clients),
+			multiclient.WithName(name),
+			multiclient.WithAllowDelayedStart(viper.GetBool("eth2client.allow-delayed-start")),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate multiclient")
