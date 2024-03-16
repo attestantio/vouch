@@ -139,7 +139,9 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	}
 
 	// Remove old subscriptions if present.
+	s.subscriptionInfosMutex.Lock()
 	delete(s.subscriptionInfos, s.chainTimeService.SlotToEpoch(data.Slot)-2)
+	s.subscriptionInfosMutex.Unlock()
 }
 
 // handlePreviousDependentRootChanged handles the situation where the previous

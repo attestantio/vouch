@@ -1,3 +1,7 @@
+1.8.1:
+  - ensure proposer-config-check command operates correctly
+  - avoid crash by suitably locking a controller read/write map
+
 1.8.0:
   - support Deneb
   - reject block proposals with 0 fee recipient
