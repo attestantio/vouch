@@ -1,4 +1,4 @@
-dev:
+1.9.0-alpha.1:
   - reduce time spent verifying account names
   - ensure that attestations complete on Vouch's first ever epoch
   - allow Vouch to start with some consensus nodes unavailable
