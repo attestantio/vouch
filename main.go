@@ -108,7 +108,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.8.0"
+var ReleaseVersion = "1.8.1"
 
 func main() {
 	exitCode := main2()
@@ -852,7 +852,7 @@ func startMonitor(ctx context.Context,
 ) {
 	log.Trace().Msg("Starting metrics service")
 	var monitor metrics.Service
-	if viper.Get("metrics.prometheus.listen-address") != nil {
+	if viper.GetString("metrics.prometheus.listen-address") != "" {
 		var err error
 		monitor, err = prometheusmetrics.New(ctx,
 			prometheusmetrics.WithLogLevel(util.LogLevel("metrics.prometheus")),
