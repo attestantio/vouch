@@ -66,6 +66,7 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 	if len(accounts) == 0 {
 		monitorExecutionConfig(time.Since(started), false)
 		log.Debug().Msg("No validating accounts; not fetching execution config")
+		return
 	}
 
 	// Build list of public keys.

@@ -109,7 +109,7 @@ func registerPrometheusMetrics(_ context.Context) error {
 		Namespace: "vouch",
 		Subsystem: "beaconblockproposal_process",
 		Name:      "blocks_total",
-		Help:      "The number of beacon block proposals.",
+		Help:      "The number of beacon block proposals.  method can be either direct or auction",
 	}, []string{"method"})
 	if err := prometheus.Register(beaconBlockProposalSource); err != nil {
 		return err

@@ -25,7 +25,7 @@ func (s *Service) ValidatorsByPubKey(ctx context.Context, pubKeys []phase0.BLSPu
 	_, span := otel.Tracer("attestantio.vouch.services.validatorsmanager.standard").Start(ctx, "ValidatorsByPubKey")
 	defer span.End()
 
-	res := make(map[phase0.ValidatorIndex]*phase0.Validator)
+	res := make(map[phase0.ValidatorIndex]*phase0.Validator, len(pubKeys))
 	s.validatorsMutex.RLock()
 	for _, pubKey := range pubKeys {
 		if validator, exists := s.validatorsByPubKey[pubKey]; exists {

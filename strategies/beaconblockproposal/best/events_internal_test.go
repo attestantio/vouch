@@ -34,6 +34,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func bitList(set uint64, total uint64) bitfield.Bitlist {
+	bits := bitfield.NewBitlist(total)
+	for i := uint64(0); i < set; i++ {
+		bits.SetBitAt(i, true)
+	}
+	return bits
+}
+
 // TestUpdateBlockVotes tests the internal function updateBlockVotes.
 func TestUpdateBlockVotes(t *testing.T) {
 	ctx := context.Background()

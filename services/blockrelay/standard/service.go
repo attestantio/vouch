@@ -49,6 +49,7 @@ type Service struct {
 	clientKeyURL                              string
 	caCertURL                                 string
 	accountsProvider                          accountmanager.AccountsProvider
+	validatorsProvider                        consensusclient.ValidatorsProvider
 	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	builderBidsCache                          map[string]map[string]*builderspec.VersionedSignedBuilderBid
@@ -62,9 +63,19 @@ type Service struct {
 	releaseVersion                            string
 	builderBidProvider                        builderbid.Provider
 	excludedBuilders                          []phase0.BLSPubKey
+	// builderBidMu ensures that only one builder bid operation is actively talking to
+	// relays at a time.
+	builderBidMu sync.Mutex
 
 	executionConfig   blockrelay.ExecutionConfigurator
 	executionConfigMu sync.RWMutex
+
+	// controlledValidators is a map of validators that are controlled
+	// by Vouch.  Used when receiving registrations from beacon nodes to know
+	// which registrations to forward, and which to drop because we have already
+	// submitted them.
+	controlledValidators   map[phase0.BLSPubKey]struct{}
+	controlledValidatorsMu sync.RWMutex
 
 	activitySem *semaphore.Weighted
 }
@@ -100,18 +111,20 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		fallbackFeeRecipient:         parameters.fallbackFeeRecipient,
 		fallbackGasLimit:             parameters.fallbackGasLimit,
 		accountsProvider:             parameters.accountsProvider,
+		validatorsProvider:           parameters.validatorsProvider,
 		validatingAccountsProvider:   parameters.validatingAccountsProvider,
 		validatorRegistrationSigner:  parameters.validatorRegistrationSigner,
 		latestValidatorRegistrations: make(map[phase0.BLSPubKey]phase0.Root),
 		signedValidatorRegistrations: make(map[phase0.Root]*apiv1.SignedValidatorRegistration),
 		secondaryValidatorRegistrationsSubmitters: parameters.secondaryValidatorRegistrationsSubmitters,
-		logResults:         parameters.logResults,
-		releaseVersion:     parameters.releaseVersion,
-		builderBidsCache:   make(map[string]map[string]*builderspec.VersionedSignedBuilderBid),
-		executionConfig:    &v2.ExecutionConfig{Version: 2},
-		activitySem:        semaphore.NewWeighted(1),
-		builderBidProvider: parameters.builderBidProvider,
-		excludedBuilders:   parameters.excludedBuilders,
+		logResults:           parameters.logResults,
+		releaseVersion:       parameters.releaseVersion,
+		builderBidsCache:     make(map[string]map[string]*builderspec.VersionedSignedBuilderBid),
+		executionConfig:      &v2.ExecutionConfig{Version: 2},
+		activitySem:          semaphore.NewWeighted(1),
+		builderBidProvider:   parameters.builderBidProvider,
+		excludedBuilders:     parameters.excludedBuilders,
+		controlledValidators: make(map[phase0.BLSPubKey]struct{}),
 	}
 
 	// Carry out initial fetch of execution configuration.
@@ -154,6 +167,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		restdaemon.WithListenAddress(parameters.listenAddress),
 		restdaemon.WithValidatorRegistrar(s),
 		restdaemon.WithBlockAuctioneer(s),
+		restdaemon.WithBlockUnblinder(s),
 		restdaemon.WithBuilderBidProvider(s),
 	)
 	if err != nil {

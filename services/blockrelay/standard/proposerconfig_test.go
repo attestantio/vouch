@@ -62,6 +62,7 @@ func TestProposerConfig(t *testing.T) {
 
 	mockValidatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
 	mockAccountsProvider := mockaccountmanager.NewAccountsProvider()
+	mockValidatorsProvider := mock.NewValidatorsProvider()
 	require.NoError(t, e2types.InitBLS())
 	store := scratch.New()
 	require.NoError(t, e2wallet.UseStore(store))
@@ -119,6 +120,7 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithFallbackGasLimit(10000000),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithAccountsProvider(mockAccountsProvider),
+				standard.WithValidatorsProvider(mockValidatorsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
 				standard.WithReleaseVersion("test"),
 				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
@@ -138,6 +140,7 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithFallbackGasLimit(10000000),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithAccountsProvider(mockAccountsProvider),
+				standard.WithValidatorsProvider(mockValidatorsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
 				standard.WithReleaseVersion("test"),
 				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
@@ -162,6 +165,7 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithFallbackGasLimit(10000000),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithAccountsProvider(mockAccountsProvider),
+				standard.WithValidatorsProvider(mockValidatorsProvider),
 				standard.WithValidatorRegistrationSigner(mockSigner),
 				standard.WithReleaseVersion("test"),
 				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),

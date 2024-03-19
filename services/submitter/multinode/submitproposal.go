@@ -86,7 +86,9 @@ func (s *Service) submitProposal(ctx context.Context,
 	_, address := s.serviceInfo(ctx, submitter)
 	started := time.Now()
 
-	err = submitter.SubmitProposal(ctx, proposal)
+	err = submitter.SubmitProposal(ctx, &api.SubmitProposalOpts{
+		Proposal: proposal,
+	})
 	s.clientMonitor.ClientOperation(address, "submit proposal", err == nil, time.Since(started))
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to submit proposal")

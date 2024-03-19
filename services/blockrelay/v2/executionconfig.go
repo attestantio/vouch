@@ -183,10 +183,14 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 
 	// Work through the proposer-specific configurations to see if one matches.
 	var accountName string
-	if provider, isProvider := account.(e2wtypes.AccountWalletProvider); isProvider {
-		accountName = fmt.Sprintf("%s/%s", provider.Wallet().Name(), account.Name())
+	if account == nil {
+		accountName = "<unknown>/<unknown>"
 	} else {
-		accountName = fmt.Sprintf("<unknown>/%s", account.Name())
+		if provider, isProvider := account.(e2wtypes.AccountWalletProvider); isProvider {
+			accountName = fmt.Sprintf("%s/%s", provider.Wallet().Name(), account.Name())
+		} else {
+			accountName = fmt.Sprintf("<unknown>/%s", account.Name())
+		}
 	}
 	for _, proposerConfig := range e.Proposers {
 		var match bool

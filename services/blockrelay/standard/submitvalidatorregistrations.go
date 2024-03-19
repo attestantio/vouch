@@ -120,6 +120,7 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 		return errors.New("no execution configuration; cannot submit validator registrations at current")
 	}
 
+	controlledValidators := make(map[phase0.BLSPubKey]struct{}, len(accounts))
 	consensusRegistrations := make([]*consensusapi.VersionedSignedValidatorRegistration, 0, len(accounts))
 	relayRegistrations := make(map[string][]*builderapi.VersionedSignedValidatorRegistration)
 	var pubkey phase0.BLSPubKey
@@ -129,6 +130,7 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 		} else {
 			copy(pubkey[:], account.PublicKey().Marshal())
 		}
+		controlledValidators[pubkey] = struct{}{}
 		proposerConfig, err := s.executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit)
 		if err != nil {
 			return errors.Wrap(err, "No proposer configuration; cannot submit validator registrations")
@@ -164,6 +166,10 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 	}
 	span.AddEvent("Generated registrations")
 
+	s.controlledValidatorsMu.Lock()
+	s.controlledValidators = controlledValidators
+	s.controlledValidatorsMu.Unlock()
+
 	if e := log.Trace(); e.Enabled() {
 		data, err := json.Marshal(relayRegistrations)
 		if err == nil {
@@ -176,6 +182,21 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 			e.RawJSON("registrations", data).Msg("Generated consensus registrations")
 		}
 	}
+
+	s.submitRelayRegistrations(ctx, relayRegistrations)
+
+	if len(consensusRegistrations) > 0 {
+		s.submitConsensusRegistrations(ctx, consensusRegistrations)
+	}
+
+	return nil
+}
+
+func (s *Service) submitRelayRegistrations(ctx context.Context,
+	relayRegistrations map[string][]*builderapi.VersionedSignedValidatorRegistration,
+) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "submitRelayRegistrations")
+	defer span.End()
 
 	// Submit registrations in parallel to the builders.
 	var wg sync.WaitGroup
@@ -204,7 +225,17 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 			}
 		}(ctx, builder, providerRegistrations, s.monitor)
 	}
-	// Submit secondary registrations as well.
+	wg.Wait()
+}
+
+func (s *Service) submitConsensusRegistrations(ctx context.Context,
+	consensusRegistrations []*consensusapi.VersionedSignedValidatorRegistration,
+) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "submitConsensusRegistrations")
+	defer span.End()
+
+	// Submit registrations in parallel to the beacon nodes.
+	var wg sync.WaitGroup
 	if len(consensusRegistrations) > 0 {
 		for _, submitter := range s.secondaryValidatorRegistrationsSubmitters {
 			wg.Add(1)
@@ -223,11 +254,7 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 			}(ctx, submitter, consensusRegistrations)
 		}
 	}
-
 	wg.Wait()
-	span.AddEvent("Submitted registrations")
-
-	return nil
 }
 
 func (s *Service) generateValidatorRegistrationForRelay(ctx context.Context,
