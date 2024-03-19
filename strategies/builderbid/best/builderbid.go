@@ -319,7 +319,7 @@ func (s *Service) builderBid(ctx context.Context,
 	}
 }
 
-func (s *Service) obtainBid(ctx context.Context,
+func (*Service) obtainBid(ctx context.Context,
 	provider builderclient.BuilderBidProvider,
 	slot phase0.Slot,
 	parentHash phase0.Hash32,
