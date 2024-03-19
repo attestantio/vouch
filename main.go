@@ -40,6 +40,7 @@ import (
 	walletaccountmanager "github.com/attestantio/vouch/services/accountmanager/wallet"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	standardattestationaggregator "github.com/attestantio/vouch/services/attestationaggregator/standard"
+	standardattestationcounter "github.com/attestantio/vouch/services/attestationcounter/standard"
 	"github.com/attestantio/vouch/services/attester"
 	standardattester "github.com/attestantio/vouch/services/attester/standard"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
@@ -435,6 +436,17 @@ func startServices(ctx context.Context,
 	)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to start controller service")
+	}
+
+	_, err = standardattestationcounter.New(ctx,
+		standardattestationcounter.WithLogLevel(zerolog.TraceLevel),
+		standardattestationcounter.WithMonitor(monitor),
+		standardattestationcounter.WithChainTime(chainTime),
+		standardattestationcounter.WithEventsProvider(eventsConsensusClient.(eth2client.EventsProvider)),
+		standardattestationcounter.WithScheduler(scheduler),
+	)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to start attestation counter service")
 	}
 
 	return chainTime, controller, nil
