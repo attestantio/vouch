@@ -225,48 +225,38 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		p.apply(&parameters)
 	}
 
-	if parameters.monitor == nil {
+	switch {
+	case parameters.monitor == nil:
 		return nil, errors.New("no monitor specified")
-	}
-	if parameters.majordomo == nil {
+	case parameters.majordomo == nil:
 		return nil, errors.New("no majordomo specified")
-	}
-	if parameters.scheduler == nil {
+	case parameters.scheduler == nil:
 		return nil, errors.New("no scheduler specified")
-	}
-	if parameters.chainTime == nil {
+	case parameters.chainTime == nil:
 		return nil, errors.New("no chaintime specified")
-	}
-	if bytes.Equal(parameters.fallbackFeeRecipient[:], zeroExecutionAddress[:]) {
+	case bytes.Equal(parameters.fallbackFeeRecipient[:], zeroExecutionAddress[:]):
 		return nil, errors.New("no fallback fee recipient specified")
-	}
-	if parameters.fallbackGasLimit == 0 {
+	case parameters.fallbackGasLimit == 0:
 		return nil, errors.New("no fallback gas limit specified")
-	}
-	if parameters.accountsProvider == nil {
+	case parameters.accountsProvider == nil:
 		return nil, errors.New("no accounts provider specified")
-	}
-	if parameters.validatorsProvider == nil {
+	case parameters.validatorsProvider == nil:
 		return nil, errors.New("no validators provider specified")
-	}
-	if parameters.validatingAccountsProvider == nil {
+	case parameters.validatingAccountsProvider == nil:
 		return nil, errors.New("no validating accounts provider specified")
-	}
-	if parameters.validatorRegistrationSigner == nil {
+	case parameters.validatorRegistrationSigner == nil:
 		return nil, errors.New("no validator registration signer specified")
-	}
-	if parameters.listenAddress == "" {
+	case parameters.listenAddress == "":
 		return nil, errors.New("no listen address specified")
+	// config URL can be empty.
+	case parameters.releaseVersion == "":
+		return nil, errors.New("no release version specified")
+	case parameters.builderBidProvider == nil:
+		return nil, errors.New("no builder bid provider specified")
 	}
+
 	if _, _, err := net.SplitHostPort(parameters.listenAddress); err != nil {
 		return nil, errors.New("listen address malformed")
-	}
-	// config URL can be empty.
-	if parameters.releaseVersion == "" {
-		return nil, errors.New("no release version specified")
-	}
-	if parameters.builderBidProvider == nil {
-		return nil, errors.New("no builder bid provider specified")
 	}
 
 	return &parameters, nil
