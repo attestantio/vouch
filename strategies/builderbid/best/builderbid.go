@@ -110,7 +110,7 @@ func (s *Service) BuilderBid(ctx context.Context,
 	return res, nil
 }
 
-func (s *Service) builderBidLoop1(ctx context.Context,
+func (*Service) builderBidLoop1(ctx context.Context,
 	started time.Time,
 	requests int,
 	res *blockauctioneer.Results,
@@ -162,7 +162,7 @@ func (s *Service) builderBidLoop1(ctx context.Context,
 	return responded, errored, bestScore
 }
 
-func (s *Service) builderBidLoop2(ctx context.Context,
+func (*Service) builderBidLoop2(ctx context.Context,
 	started time.Time,
 	requests int,
 	res *blockauctioneer.Results,

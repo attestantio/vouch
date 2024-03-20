@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -143,7 +143,7 @@ func (e *ExecutionConfig) UnmarshalJSON(input []byte) error {
 }
 
 // ProposerConfig returns the proposer configuration for the given validator.
-func (e *ExecutionConfig) ProposerConfig(_ context.Context,
+func (e *ExecutionConfig) ProposerConfig(ctx context.Context,
 	account e2wtypes.Account,
 	pubkey phase0.BLSPubKey,
 	fallbackFeeRecipient bellatrix.ExecutionAddress,
@@ -162,7 +162,19 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 		config.FeeRecipient = *e.FeeRecipient
 	}
 
-	// Set initial relay options.
+	e.setInitialRelayOptions(ctx, config, fallbackGasLimit)
+
+	if err := e.setProposerSpecificOptions(ctx, config, account, pubkey, fallbackFeeRecipient, fallbackGasLimit); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+func (e *ExecutionConfig) setInitialRelayOptions(_ context.Context,
+	config *beaconblockproposer.ProposerConfig,
+	fallbackGasLimit uint64,
+) {
 	for address, baseRelayConfig := range e.Relays {
 		configRelay := &beaconblockproposer.RelayConfig{
 			Address: address,
@@ -180,7 +192,15 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 		setRelayConfig(configRelay, baseRelayConfig, config.FeeRecipient, fallbackGasLimit)
 		config.Relays = append(config.Relays, configRelay)
 	}
+}
 
+func (e *ExecutionConfig) setProposerSpecificOptions(_ context.Context,
+	config *beaconblockproposer.ProposerConfig,
+	account e2wtypes.Account,
+	pubkey phase0.BLSPubKey,
+	fallbackFeeRecipient bellatrix.ExecutionAddress,
+	fallbackGasLimit uint64,
+) error {
 	// Work through the proposer-specific configurations to see if one matches.
 	var accountName string
 	if account == nil {
@@ -200,7 +220,7 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 		case !bytes.Equal(proposerConfig.Validator[:], zeroPubkey[:]):
 			match = bytes.Equal(proposerConfig.Validator[:], pubkey[:])
 		default:
-			return nil, errors.New("proposer config without either account or validator; cannot apply")
+			return errors.New("proposer config without either account or validator; cannot apply")
 		}
 		if !match {
 			continue
@@ -264,7 +284,7 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 		break
 	}
 
-	return config, nil
+	return nil
 }
 
 // generateRelayConfig generates a relay configuration from the various
