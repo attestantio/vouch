@@ -225,38 +225,48 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		p.apply(&parameters)
 	}
 
-	switch {
-	case parameters.monitor == nil:
+	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")
-	case parameters.majordomo == nil:
-		return nil, errors.New("no majordomo specified")
-	case parameters.scheduler == nil:
-		return nil, errors.New("no scheduler specified")
-	case parameters.chainTime == nil:
-		return nil, errors.New("no chaintime specified")
-	case bytes.Equal(parameters.fallbackFeeRecipient[:], zeroExecutionAddress[:]):
-		return nil, errors.New("no fallback fee recipient specified")
-	case parameters.fallbackGasLimit == 0:
-		return nil, errors.New("no fallback gas limit specified")
-	case parameters.accountsProvider == nil:
-		return nil, errors.New("no accounts provider specified")
-	case parameters.validatorsProvider == nil:
-		return nil, errors.New("no validators provider specified")
-	case parameters.validatingAccountsProvider == nil:
-		return nil, errors.New("no validating accounts provider specified")
-	case parameters.validatorRegistrationSigner == nil:
-		return nil, errors.New("no validator registration signer specified")
-	case parameters.listenAddress == "":
-		return nil, errors.New("no listen address specified")
-	// config URL can be empty.
-	case parameters.releaseVersion == "":
-		return nil, errors.New("no release version specified")
-	case parameters.builderBidProvider == nil:
-		return nil, errors.New("no builder bid provider specified")
 	}
-
+	if parameters.majordomo == nil {
+		return nil, errors.New("no majordomo specified")
+	}
+	if parameters.scheduler == nil {
+		return nil, errors.New("no scheduler specified")
+	}
+	if parameters.chainTime == nil {
+		return nil, errors.New("no chaintime specified")
+	}
+	if bytes.Equal(parameters.fallbackFeeRecipient[:], zeroExecutionAddress[:]) {
+		return nil, errors.New("no fallback fee recipient specified")
+	}
+	if parameters.fallbackGasLimit == 0 {
+		return nil, errors.New("no fallback gas limit specified")
+	}
+	if parameters.accountsProvider == nil {
+		return nil, errors.New("no accounts provider specified")
+	}
+	if parameters.validatorsProvider == nil {
+		return nil, errors.New("no validators provider specified")
+	}
+	if parameters.validatingAccountsProvider == nil {
+		return nil, errors.New("no validating accounts provider specified")
+	}
+	if parameters.validatorRegistrationSigner == nil {
+		return nil, errors.New("no validator registration signer specified")
+	}
+	if parameters.listenAddress == "" {
+		return nil, errors.New("no listen address specified")
+	}
 	if _, _, err := net.SplitHostPort(parameters.listenAddress); err != nil {
 		return nil, errors.New("listen address malformed")
+	}
+	// config URL can be empty.
+	if parameters.releaseVersion == "" {
+		return nil, errors.New("no release version specified")
+	}
+	if parameters.builderBidProvider == nil {
+		return nil, errors.New("no builder bid provider specified")
 	}
 
 	return &parameters, nil

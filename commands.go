@@ -95,6 +95,6 @@ func proposerConfigCheck(ctx context.Context, majordomo majordomo.Service) bool 
 		return true
 	}
 
-	fmt.Printf("%s\n", string(data))
+	fmt.Fprintf(os.Stdout, "%s\n", string(data))
 	return true
 }

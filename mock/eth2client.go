@@ -1204,7 +1204,7 @@ func NewValidatorsProvider() eth2client.ValidatorsProvider {
 }
 
 // Validators is a mock.
-func (*ValidatorsProvider) Validators(_ context.Context,
+func (*ValidatorsProvider) Validators(ctx context.Context,
 	opts *api.ValidatorsOpts,
 ) (
 	*api.Response[map[phase0.ValidatorIndex]*apiv1.Validator],
@@ -1327,7 +1327,7 @@ func (*ValidatorsProvider) Validators(_ context.Context,
 		res = make(map[phase0.ValidatorIndex]*apiv1.Validator)
 		for k, v := range base {
 			for _, pubKey := range opts.PubKeys {
-				p, _ := v.PubKey(context.Background())
+				p, _ := v.PubKey(ctx)
 				if bytes.Equal(p[:], pubKey[:]) {
 					res[k] = v
 					break
