@@ -40,7 +40,6 @@ func (s *Service) BuilderBid(ctx context.Context,
 	defer span.End()
 
 	log := log.With().Uint64("slot", uint64(slot)).Stringer("parent_hash", parentHash).Stringer("pubkey", pubkey).Logger()
-
 	log.Trace().Msg("Builder bid called")
 
 	builderBid, exists := s.cachedBid(ctx, slot, parentHash, pubkey)
