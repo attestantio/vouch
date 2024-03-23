@@ -63,6 +63,8 @@ type Service struct {
 	releaseVersion                            string
 	builderBidProvider                        builderbid.Provider
 	excludedBuilders                          []phase0.BLSPubKey
+	privilegedBuilders                        []phase0.BLSPubKey
+
 	// builderBidMu ensures that only one builder bid operation is actively talking to
 	// relays at a time.
 	builderBidMu sync.Mutex
@@ -125,6 +127,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		builderBidProvider:   parameters.builderBidProvider,
 		excludedBuilders:     parameters.excludedBuilders,
 		controlledValidators: make(map[phase0.BLSPubKey]struct{}),
+		privilegedBuilders:   parameters.privilegedBuilders,
 	}
 
 	// Carry out initial fetch of execution configuration.

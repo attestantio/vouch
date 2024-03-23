@@ -53,6 +53,7 @@ type parameters struct {
 	releaseVersion                            string
 	builderBidProvider                        builderbid.Provider
 	excludedBuilders                          []phase0.BLSPubKey
+	privilegedBuilders                        []phase0.BLSPubKey
 }
 
 // Parameter is the interface for service parameters.
@@ -210,6 +211,12 @@ func WithBuilderBidProvider(provider builderbid.Provider) Parameter {
 func WithExcludedBuilders(builders []phase0.BLSPubKey) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.excludedBuilders = builders
+	})
+}
+
+func WithPrivilegedBuilders(builders []phase0.BLSPubKey) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.privilegedBuilders = builders
 	})
 }
 

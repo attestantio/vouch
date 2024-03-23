@@ -30,6 +30,7 @@ type Provider interface {
 		pubkey phase0.BLSPubKey,
 		proposerConfig *beaconblockproposer.ProposerConfig,
 		excludedBuilders []phase0.BLSPubKey,
+		privilegedBuilders []phase0.BLSPubKey,
 	) (
 		*blockauctioneer.Results,
 		error,
