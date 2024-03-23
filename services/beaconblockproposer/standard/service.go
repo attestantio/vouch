@@ -40,7 +40,6 @@ type Service struct {
 	chainTime                  chaintime.Service
 	blockAuctioneer            blockauctioneer.BlockAuctioneer
 	proposalProvider           eth2client.ProposalProvider
-	blindedProposalProvider    eth2client.BlindedProposalProvider
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	executionChainHeadProvider cache.ExecutionChainHeadProvider
 	graffitiProvider           graffitiprovider.Service
@@ -75,7 +74,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		chainTime:                  parameters.chainTime,
 		blockAuctioneer:            parameters.blockAuctioneer,
 		proposalProvider:           parameters.proposalProvider,
-		blindedProposalProvider:    parameters.blindedProposalProvider,
 		validatingAccountsProvider: parameters.validatingAccountsProvider,
 		executionChainHeadProvider: parameters.executionChainHeadProvider,
 		graffitiProvider:           parameters.graffitiProvider,

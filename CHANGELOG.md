@@ -2,6 +2,8 @@
   - reduce time spent verifying account names
   - ensure that attestations complete on Vouch's first ever epoch
   - allow Vouch to start with some consensus nodes unavailable
+  - allow Vouch to act as an MEV-boost clint ofr non-Vouch validators
+  - increase proposal performance with new validator REST APIs
 
 1.8.0:
   - support Deneb

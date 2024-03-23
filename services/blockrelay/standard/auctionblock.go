@@ -1,4 +1,4 @@
-// Copyright © 2022, 2023 Attestant Limited.
+// Copyright © 2022 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -20,9 +20,14 @@ import (
 	"strings"
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
+	"github.com/attestantio/go-builder-client/api/deneb"
 	builderspec "github.com/attestantio/go-builder-client/spec"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 )
@@ -43,8 +48,24 @@ func (s *Service) AuctionBlock(ctx context.Context,
 	if err != nil {
 		return nil, errors.New("no account found for public key")
 	}
+
+	return s.auctionBlock(ctx, slot, parentHash, pubkey, account)
+}
+
+func (s *Service) auctionBlock(ctx context.Context,
+	slot phase0.Slot,
+	parentHash phase0.Hash32,
+	pubkey phase0.BLSPubKey,
+	account e2wtypes.Account,
+) (
+	*blockauctioneer.Results,
+	error,
+) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "auctionBlock")
+	defer span.End()
+
 	s.executionConfigMu.RLock()
-	proposerConfig, err := s.executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit)
+	proposerConfig, err := s.ProposerConfig(ctx, account, pubkey)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain proposer configuration")
 	}
@@ -52,7 +73,9 @@ func (s *Service) AuctionBlock(ctx context.Context,
 
 	if len(proposerConfig.Relays) == 0 {
 		log.Trace().Msg("No relays in proposer configuration")
-		return &blockauctioneer.Results{}, nil
+		return &blockauctioneer.Results{
+			Values: make(map[string]*big.Int),
+		}, nil
 	}
 
 	res, err := s.builderBidProvider.BuilderBid(ctx, slot, parentHash, pubkey, proposerConfig, s.excludedBuilders)
@@ -60,16 +83,29 @@ func (s *Service) AuctionBlock(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to obtain builder bid")
 	}
 
-	if res.Bid != nil {
-		key := fmt.Sprintf("%d", slot)
-		subKey := fmt.Sprintf("%x:%x", parentHash, pubkey)
-		s.builderBidsCacheMu.Lock()
-		if _, exists := s.builderBidsCache[key]; !exists {
-			s.builderBidsCache[key] = make(map[string]*builderspec.VersionedSignedBuilderBid)
+	bidToCache := res.Bid
+	if bidToCache == nil {
+		// No bid returned; create a dummy for the purposes of caching.
+		log.Debug().Msg("Bid is nil; creating dummy")
+		bidToCache = &builderspec.VersionedSignedBuilderBid{
+			Version: spec.DataVersionDeneb,
+			Deneb: &deneb.SignedBuilderBid{
+				Message: &deneb.BuilderBid{
+					Value: uint256.NewInt(0),
+				},
+			},
 		}
-		s.builderBidsCache[key][subKey] = res.Bid
-		s.builderBidsCacheMu.Unlock()
 	}
+
+	key := fmt.Sprintf("%d", slot)
+	subKey := fmt.Sprintf("%x:%x", parentHash, pubkey)
+	log.Info().Str("key", key).Str("subkey", subKey).Msg("Caching bid")
+	s.builderBidsCacheMu.Lock()
+	if _, exists := s.builderBidsCache[key]; !exists {
+		s.builderBidsCache[key] = make(map[string]*builderspec.VersionedSignedBuilderBid)
+	}
+	s.builderBidsCache[key][subKey] = bidToCache
+	s.builderBidsCacheMu.Unlock()
 
 	selectedProviders := make(map[string]struct{})
 	for _, provider := range res.Providers {
@@ -88,11 +124,21 @@ func (s *Service) AuctionBlock(ctx context.Context,
 				if !isSelected {
 					monitorBuilderBidDelta(provider, delta)
 				}
+				var logger *zerolog.Event
 				if s.logResults {
-					log.Info().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", isSelected).Msg("Auction participant")
+					//nolint:zerologlint
+					logger = log.Info()
 				} else {
-					log.Trace().Uint64("slot", uint64(slot)).Str("provider", provider).Stringer("value", value).Stringer("delta", delta).Bool("selected", isSelected).Msg("Auction participant")
+					//nolint:zerologlint
+					logger = log.Trace()
 				}
+				logger.
+					Uint64("slot", uint64(slot)).
+					Str("provider", provider).
+					Stringer("value", value).
+					Stringer("delta", delta).
+					Bool("selected", isSelected).
+					Msg("Auction participant")
 			}
 
 			// Add result to trace.

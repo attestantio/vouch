@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -143,7 +143,7 @@ func (e *ExecutionConfig) UnmarshalJSON(input []byte) error {
 }
 
 // ProposerConfig returns the proposer configuration for the given validator.
-func (e *ExecutionConfig) ProposerConfig(_ context.Context,
+func (e *ExecutionConfig) ProposerConfig(ctx context.Context,
 	account e2wtypes.Account,
 	pubkey phase0.BLSPubKey,
 	fallbackFeeRecipient bellatrix.ExecutionAddress,
@@ -162,7 +162,19 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 		config.FeeRecipient = *e.FeeRecipient
 	}
 
-	// Set initial relay options.
+	e.setInitialRelayOptions(ctx, config, fallbackGasLimit)
+
+	if err := e.setProposerSpecificOptions(ctx, config, account, pubkey, fallbackFeeRecipient, fallbackGasLimit); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+func (e *ExecutionConfig) setInitialRelayOptions(_ context.Context,
+	config *beaconblockproposer.ProposerConfig,
+	fallbackGasLimit uint64,
+) {
 	for address, baseRelayConfig := range e.Relays {
 		configRelay := &beaconblockproposer.RelayConfig{
 			Address: address,
@@ -180,14 +192,18 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 		setRelayConfig(configRelay, baseRelayConfig, config.FeeRecipient, fallbackGasLimit)
 		config.Relays = append(config.Relays, configRelay)
 	}
+}
+
+func (e *ExecutionConfig) setProposerSpecificOptions(ctx context.Context,
+	config *beaconblockproposer.ProposerConfig,
+	account e2wtypes.Account,
+	pubkey phase0.BLSPubKey,
+	fallbackFeeRecipient bellatrix.ExecutionAddress,
+	fallbackGasLimit uint64,
+) error {
+	accountName := setAccountName(account)
 
 	// Work through the proposer-specific configurations to see if one matches.
-	var accountName string
-	if provider, isProvider := account.(e2wtypes.AccountWalletProvider); isProvider {
-		accountName = fmt.Sprintf("%s/%s", provider.Wallet().Name(), account.Name())
-	} else {
-		accountName = fmt.Sprintf("<unknown>/%s", account.Name())
-	}
 	for _, proposerConfig := range e.Proposers {
 		var match bool
 		switch {
@@ -196,71 +212,92 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 		case !bytes.Equal(proposerConfig.Validator[:], zeroPubkey[:]):
 			match = bytes.Equal(proposerConfig.Validator[:], pubkey[:])
 		default:
-			return nil, errors.New("proposer config without either account or validator; cannot apply")
+			return errors.New("proposer config without either account or validator; cannot apply")
 		}
 		if !match {
 			continue
 		}
 
-		// Update from proposer-specific configuration.
-		if proposerConfig.FeeRecipient != nil {
-			config.FeeRecipient = *proposerConfig.FeeRecipient
-			for _, configRelay := range config.Relays {
-				configRelay.FeeRecipient = *proposerConfig.FeeRecipient
-			}
-		}
-		if proposerConfig.GasLimit != nil {
-			for _, configRelay := range config.Relays {
-				configRelay.GasLimit = *proposerConfig.GasLimit
-			}
-		}
-		if proposerConfig.Grace != nil {
-			for _, configRelay := range config.Relays {
-				configRelay.Grace = *proposerConfig.Grace
-			}
-		}
-		if proposerConfig.MinValue != nil {
-			for _, configRelay := range config.Relays {
-				configRelay.MinValue = *proposerConfig.MinValue
-			}
-		}
-
-		if proposerConfig.ResetRelays {
-			// The proposer wants to start from scratch, remove existing relay info.
-			config.Relays = make([]*beaconblockproposer.RelayConfig, 0)
-		}
-
-		relays := make([]*beaconblockproposer.RelayConfig, 0)
-
-		// Create/update from relay-level info.
-		updated := make(map[string]struct{})
-		// Update existing relays.
-		for _, configRelay := range config.Relays {
-			proposerRelayConfig, exists := proposerConfig.Relays[configRelay.Address]
-			if exists {
-				if !proposerRelayConfig.Disabled {
-					updateRelayConfig(configRelay, proposerRelayConfig)
-					relays = append(relays, configRelay)
-				}
-			} else {
-				// No update; pass along as-is.
-				relays = append(relays, configRelay)
-			}
-			updated[configRelay.Address] = struct{}{}
-		}
-		// Add new relays.
-		for address, proposerRelayConfig := range proposerConfig.Relays {
-			if _, alreadyUpdated := updated[address]; !alreadyUpdated {
-				relays = append(relays, e.generateRelayConfig(address, proposerConfig, proposerRelayConfig, fallbackFeeRecipient, fallbackGasLimit))
-			}
-		}
-		config.Relays = relays
+		e.setProposerConfigOptions(ctx, config, proposerConfig, fallbackFeeRecipient, fallbackGasLimit)
 
 		// Once we have a match we are done.
 		break
 	}
 
-	return config, nil
+	return nil
+}
+
+func setAccountName(account e2wtypes.Account) string {
+	if account == nil {
+		return "<unknown>/<unknown>"
+	}
+
+	if provider, isProvider := account.(e2wtypes.AccountWalletProvider); isProvider {
+		return fmt.Sprintf("%s/%s", provider.Wallet().Name(), account.Name())
+	}
+
+	return fmt.Sprintf("<unknown>/%s", account.Name())
+}
+
+func (e *ExecutionConfig) setProposerConfigOptions(_ context.Context,
+	config *beaconblockproposer.ProposerConfig,
+	proposerConfig *ProposerConfig,
+	fallbackFeeRecipient bellatrix.ExecutionAddress,
+	fallbackGasLimit uint64,
+) {
+	// Update from proposer-specific configuration.
+	if proposerConfig.FeeRecipient != nil {
+		config.FeeRecipient = *proposerConfig.FeeRecipient
+		for _, configRelay := range config.Relays {
+			configRelay.FeeRecipient = *proposerConfig.FeeRecipient
+		}
+	}
+	if proposerConfig.GasLimit != nil {
+		for _, configRelay := range config.Relays {
+			configRelay.GasLimit = *proposerConfig.GasLimit
+		}
+	}
+	if proposerConfig.Grace != nil {
+		for _, configRelay := range config.Relays {
+			configRelay.Grace = *proposerConfig.Grace
+		}
+	}
+	if proposerConfig.MinValue != nil {
+		for _, configRelay := range config.Relays {
+			configRelay.MinValue = *proposerConfig.MinValue
+		}
+	}
+
+	if proposerConfig.ResetRelays {
+		// The proposer wants to start from scratch, remove existing relay info.
+		config.Relays = make([]*beaconblockproposer.RelayConfig, 0)
+	}
+
+	relays := make([]*beaconblockproposer.RelayConfig, 0)
+
+	// Create/update from relay-level info.
+	updated := make(map[string]struct{})
+	// Update existing relays.
+	for _, configRelay := range config.Relays {
+		proposerRelayConfig, exists := proposerConfig.Relays[configRelay.Address]
+		if exists {
+			if !proposerRelayConfig.Disabled {
+				updateRelayConfig(configRelay, proposerRelayConfig)
+				relays = append(relays, configRelay)
+			}
+		} else {
+			// No update; pass along as-is.
+			relays = append(relays, configRelay)
+		}
+		updated[configRelay.Address] = struct{}{}
+	}
+	// Add new relays.
+	for address, proposerRelayConfig := range proposerConfig.Relays {
+		if _, alreadyUpdated := updated[address]; !alreadyUpdated {
+			relays = append(relays, e.generateRelayConfig(address, proposerConfig, proposerRelayConfig, fallbackFeeRecipient, fallbackGasLimit))
+		}
+	}
+	config.Relays = relays
 }
 
 // generateRelayConfig generates a relay configuration from the various

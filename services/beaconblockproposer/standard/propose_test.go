@@ -140,7 +140,6 @@ func TestPropose(t *testing.T) {
 				standard.WithBeaconBlockSigner(signer),
 				standard.WithBlobSidecarSigner(signer),
 				standard.WithBlockAuctioneer(blockAuctioneer),
-				standard.WithBlindedProposalDataProvider(consensusClient),
 				standard.WithExecutionChainHeadProvider(cacheService.(cache.ExecutionChainHeadProvider)),
 			)
 			require.NoError(t, err)

@@ -134,11 +134,9 @@ linters:
     - deadcode
     - depguard
     - dupl
-    - errchkjson
     - exhaustive
     - exhaustivestruct
     - exhaustruct
-    - forbidigo
     - forcetypeassert
     - funlen
     - gci
@@ -146,7 +144,6 @@ linters:
     - gocognit
     - goconst
     - goerr113
-    - goheader
     - golint
     - gomnd
     - ifshort
