@@ -1,9 +1,11 @@
+1.9.0-alpha.2:
+  - allow Vouch to act as an MEV-boost clint for non-Vouch validators
+  - increase proposal performance with new validator REST APIs
+
 1.9.0-alpha.1:
   - reduce time spent verifying account names
   - ensure that attestations complete on Vouch's first ever epoch
   - allow Vouch to start with some consensus nodes unavailable
-  - allow Vouch to act as an MEV-boost clint ofr non-Vouch validators
-  - increase proposal performance with new validator REST APIs
 
 1.8.0:
   - support Deneb
