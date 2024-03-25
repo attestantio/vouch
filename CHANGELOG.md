@@ -1,5 +1,5 @@
 1.9.0-alpha.2:
-  - allow Vouch to act as an MEV-boost clint for non-Vouch validators
+  - allow Vouch to act as an MEV-boost client for non-Vouch validators
   - increase proposal performance with new validator REST APIs
 
 1.9.0-alpha.1:
