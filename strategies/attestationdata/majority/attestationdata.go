@@ -201,7 +201,7 @@ func (s *Service) attestationData(ctx context.Context,
 	}
 }
 
-func (s *Service) attestationDataLoop1(ctx context.Context,
+func (*Service) attestationDataLoop1(ctx context.Context,
 	started time.Time,
 	requests int,
 	attestationData map[[32]byte]*phase0.AttestationData,
@@ -265,7 +265,7 @@ func (s *Service) attestationDataLoop1(ctx context.Context,
 	return responded, errored
 }
 
-func (s *Service) attestationDataLoop2(ctx context.Context,
+func (*Service) attestationDataLoop2(ctx context.Context,
 	started time.Time,
 	requests int,
 	attestationData map[[32]byte]*phase0.AttestationData,
