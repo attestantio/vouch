@@ -1,4 +1,4 @@
-// Copyright © 2023 Attestant Limited.
+// Copyright © 2023, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,7 +16,6 @@ package majority
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -24,6 +23,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -40,8 +40,6 @@ type attestationDataError struct {
 }
 
 // AttestationData provides the consensus attestation data from a number of beacon nodes.
-//
-//nolint:maintidx
 func (s *Service) AttestationData(ctx context.Context,
 	opts *api.AttestationDataOpts,
 ) (
@@ -55,147 +53,30 @@ func (s *Service) AttestationData(ctx context.Context,
 
 	started := time.Now()
 	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(opts.Slot)).Logger()
-
-	// We have two timeouts: a soft timeout and a hard timeout.
-	// At the soft timeout, we return if we have any responses so far.
-	// At the hard timeout, we return unconditionally.
-	// The soft timeout is half the duration of the hard timeout.
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
-	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
+	ctx = log.WithContext(ctx)
 
 	requests := len(s.attestationDataProviders)
 
-	respCh := make(chan *attestationDataResponse, requests)
-	errCh := make(chan *attestationDataError, requests)
-	// Kick off the requests.
-	for name, provider := range s.attestationDataProviders {
-		go s.attestationData(ctx, started, name, provider, respCh, errCh, opts)
-	}
+	// We have two timeouts: a soft timeout and a hard timeout.
+	// At the soft timeout, we return if we have enough data to proceed.
+	// At the hard timeout, we return unconditionally.
+	// The soft timeout is half the duration of the hard timeout.
+	hardCtx, cancel := context.WithTimeout(ctx, s.timeout)
+	softCtx, softCancel := context.WithTimeout(hardCtx, s.timeout/2)
 
-	// Wait for all responses (or context done).
-	responded := 0
-	errored := 0
-	timedOut := 0
-	softTimedOut := 0
+	respCh, errCh := s.issueAttestationDataRequests(hardCtx, opts, started, requests)
+	span.AddEvent("Issued requests")
+
 	attestationData := make(map[[32]byte]*phase0.AttestationData)
 	attestationDataCounts := make(map[[32]byte]int)
-	largestCount := 0
-	strictMajority := requests/2 + 1
-	var attestationDataCountsMu sync.Mutex
-
-	// Loop 1: prior to soft timeout.
-	for responded+errored+timedOut+softTimedOut != requests && largestCount < strictMajority {
-		select {
-		case resp := <-respCh:
-			responded++
-			log.Trace().
-				Dur("elapsed", time.Since(started)).
-				Str("provider", resp.provider).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Msg("Response received")
-			attestationDataRoot, err := resp.attestationData.HashTreeRoot()
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to obtain root of attestation data")
-			} else {
-				attestationDataCountsMu.Lock()
-				attestationData[attestationDataRoot] = resp.attestationData
-				attestationDataCounts[attestationDataRoot]++
-				if attestationDataCounts[attestationDataRoot] > largestCount {
-					largestCount = attestationDataCounts[attestationDataRoot]
-				}
-				attestationDataCountsMu.Unlock()
-			}
-		case err := <-errCh:
-			errored++
-			log.Debug().
-				Dur("elapsed", time.Since(started)).
-				Str("provider", err.provider).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Err(err.err).
-				Msg("Error received")
-		case <-softCtx.Done():
-			// If we have any responses at this point we consider the non-responders timed out.
-			if responded > 0 {
-				timedOut = requests - responded - errored
-				log.Debug().
-					Dur("elapsed", time.Since(started)).
-					Int("responded", responded).
-					Int("errored", errored).
-					Int("timed_out", timedOut).
-					Msg("Soft timeout reached with responses")
-			} else {
-				log.Debug().
-					Dur("elapsed", time.Since(started)).
-					Int("errored", errored).
-					Msg("Soft timeout reached with no responses")
-			}
-			// Set the number of requests that have soft timed out.
-			softTimedOut = requests - responded - errored - timedOut
-		}
-	}
+	attestationDataProviders := make(map[[32]byte][]string)
+	responded, errored := s.attestationDataLoop1(softCtx, started, requests, attestationData, attestationDataCounts, attestationDataProviders, respCh, errCh)
 	softCancel()
 
-	// Loop 2: after soft timeout.
-	for responded+errored+timedOut != requests && largestCount < strictMajority {
-		select {
-		case resp := <-respCh:
-			responded++
-			log.Trace().
-				Dur("elapsed", time.Since(started)).
-				Str("provider", resp.provider).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Msg("Response received")
-			attestationDataRoot, err := resp.attestationData.HashTreeRoot()
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to obtain root of attestation data")
-			} else {
-				attestationDataCountsMu.Lock()
-				attestationData[attestationDataRoot] = resp.attestationData
-				attestationDataCounts[attestationDataRoot]++
-				if attestationDataCounts[attestationDataRoot] > largestCount {
-					largestCount = attestationDataCounts[attestationDataRoot]
-				}
-				attestationDataCountsMu.Unlock()
-			}
-		case err := <-errCh:
-			errored++
-			log.Debug().
-				Dur("elapsed", time.Since(started)).
-				Str("provider", err.provider).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Err(err.err).
-				Msg("Error received")
-		case <-ctx.Done():
-			// Anyone not responded by now is timed out.
-			timedOut = requests - responded - errored
-			log.Debug().
-				Dur("elapsed", time.Since(started)).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Msg("Hard timeout reached")
-		}
-	}
+	s.attestationDataLoop2(hardCtx, started, requests, attestationData, attestationDataCounts, attestationDataProviders, respCh, errCh, responded, errored)
 	cancel()
-	if largestCount >= strictMajority && largestCount >= int(s.threshold) {
-		log.Trace().Msg("Strict majority reached")
-		timedOut = requests - responded - errored
-	}
-	log.Trace().
-		Dur("elapsed", time.Since(started)).
-		Int("responded", responded).
-		Int("errored", errored).
-		Int("timed_out", timedOut).
-		Msg("Results")
 
+	var bestAttestationDataRoot [32]byte
 	var bestAttestationData phase0.AttestationData
 	bestAttestationDataCount := 0
 	bestAttestationDataSlot := phase0.Slot(0)
@@ -211,6 +92,7 @@ func (s *Service) AttestationData(ctx context.Context,
 			bestAttestationData = *attestationData
 			bestAttestationDataCount = count
 			bestAttestationDataSlot = slot
+			bestAttestationDataRoot = root
 		case count == bestAttestationDataCount:
 			// Tie, take the one with the higher slot.
 			if slot > bestAttestationDataSlot {
@@ -229,10 +111,18 @@ func (s *Service) AttestationData(ctx context.Context,
 		return nil, fmt.Errorf("majority attestation data count of %d lower than threshold %d", bestAttestationDataCount, s.threshold)
 	}
 	slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, bestAttestationData.BeaconBlockRoot)
-	if err == nil {
-		log.Trace().Uint64("slot", uint64(bestAttestationData.Slot)).Stringer("head", bestAttestationData.BeaconBlockRoot).Int("head_distance", int(bestAttestationData.Slot-slot)).Msg("Attestation slot data")
+	if err != nil {
+		log.Debug().Stringer("root", bestAttestationData.BeaconBlockRoot).Err(err).Msg("Failed to obtain best attestation data head slot; assuming 0")
 	}
-	log.Trace().Stringer("attestation_data", &bestAttestationData).Int("count", bestAttestationDataCount).Msg("Selected majority attestation data")
+	log.Trace().
+		Dur("elapsed", time.Since(started)).
+		Stringer("attestation_data", &bestAttestationData).
+		Int("head_distance", int(bestAttestationData.Slot-slot)).
+		Int("count", bestAttestationDataCount).
+		Msg("Selected majority attestation data")
+	for _, provider := range attestationDataProviders[bestAttestationDataRoot] {
+		s.clientMonitor.StrategyOperation("majority", provider, "attestation data", time.Since(started))
+	}
 
 	return &api.Response[*phase0.AttestationData]{
 		Data:     &bestAttestationData,
@@ -240,55 +130,207 @@ func (s *Service) AttestationData(ctx context.Context,
 	}, nil
 }
 
+func (s *Service) issueAttestationDataRequests(ctx context.Context,
+	opts *api.AttestationDataOpts,
+	started time.Time,
+	requests int,
+) (
+	chan *attestationDataResponse,
+	chan *attestationDataError,
+) {
+	respCh := make(chan *attestationDataResponse, requests)
+	errCh := make(chan *attestationDataError, requests)
+
+	// Kick off the requests.
+	for name, provider := range s.attestationDataProviders {
+		go s.attestationData(ctx, started, name, provider, respCh, errCh, opts)
+	}
+
+	return respCh, errCh
+}
+
 func (s *Service) attestationData(ctx context.Context,
 	started time.Time,
-	name string,
+	providerName string,
 	provider eth2client.AttestationDataProvider,
 	respCh chan *attestationDataResponse,
 	errCh chan *attestationDataError,
 	opts *api.AttestationDataOpts,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.attestationdata.best").Start(ctx, "attestationData", trace.WithAttributes(
-		attribute.String("provider", name),
+		attribute.String("provider", providerName),
 	))
 	defer span.End()
 
 	attestationDataResp, err := provider.AttestationData(ctx, opts)
-	s.clientMonitor.ClientOperation(name, "attestation data", err == nil, time.Since(started))
+	s.clientMonitor.ClientOperation(providerName, "attestation data", err == nil, time.Since(started))
 	if err != nil {
 		errCh <- &attestationDataError{
-			provider: name,
+			provider: providerName,
 			err:      err,
 		}
 		return
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")
 	attestationData := attestationDataResp.Data
 
 	if attestationData == nil {
 		errCh <- &attestationDataError{
-			provider: name,
+			provider: providerName,
 			err:      errors.New("attestation data nil"),
 		}
 		return
 	}
 	if attestationData.Target == nil {
 		errCh <- &attestationDataError{
-			provider: name,
+			provider: providerName,
 			err:      errors.New("attestation data target nil"),
 		}
 		return
 	}
 	if attestationData.Target.Epoch != s.chainTime.SlotToEpoch(opts.Slot) {
 		errCh <- &attestationDataError{
-			provider: name,
+			provider: providerName,
 			err:      errors.New("attestation data slot/target epoch mismatch"),
 		}
 		return
 	}
 
 	respCh <- &attestationDataResponse{
-		provider:        name,
+		provider:        providerName,
 		attestationData: attestationData,
 	}
+}
+
+func (*Service) attestationDataLoop1(ctx context.Context,
+	started time.Time,
+	requests int,
+	attestationData map[[32]byte]*phase0.AttestationData,
+	attestationDataCounts map[[32]byte]int,
+	attestationDataProviders map[[32]byte][]string,
+	respCh chan *attestationDataResponse,
+	errCh chan *attestationDataError,
+) (
+	int,
+	int,
+) {
+	log := zerolog.Ctx(ctx)
+
+	// Wait for enough responses (or context done).
+	responded := 0
+	errored := 0
+	largestCount := 0
+	strictMajority := requests/2 + 1
+
+	for responded+errored != requests && largestCount < strictMajority {
+		select {
+		case resp := <-respCh:
+			responded++
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", resp.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Msg("Response received")
+			attestationDataRoot, err := resp.attestationData.HashTreeRoot()
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to obtain root of attestation data")
+			} else {
+				attestationData[attestationDataRoot] = resp.attestationData
+				attestationDataCounts[attestationDataRoot]++
+				if attestationDataCounts[attestationDataRoot] > largestCount {
+					largestCount = attestationDataCounts[attestationDataRoot]
+				}
+				attestationDataProviders[attestationDataRoot] = append(attestationDataProviders[attestationDataRoot], resp.provider)
+			}
+		case err := <-errCh:
+			errored++
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Err(err.err).
+				Msg("Error received")
+		case <-ctx.Done():
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", requests-responded-errored).
+				Msg("Soft timeout reached")
+			return responded, errored
+		}
+	}
+
+	return responded, errored
+}
+
+func (*Service) attestationDataLoop2(ctx context.Context,
+	started time.Time,
+	requests int,
+	attestationData map[[32]byte]*phase0.AttestationData,
+	attestationDataCounts map[[32]byte]int,
+	attestationDataProviders map[[32]byte][]string,
+	respCh chan *attestationDataResponse,
+	errCh chan *attestationDataError,
+	responded int,
+	errored int,
+) {
+	log := zerolog.Ctx(ctx)
+
+	largestCount := 0
+	for _, v := range attestationDataCounts {
+		if v > largestCount {
+			largestCount = v
+		}
+	}
+	strictMajority := requests/2 + 1
+
+	for responded+errored != requests && largestCount < strictMajority {
+		select {
+		case resp := <-respCh:
+			responded++
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", resp.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Msg("Response received")
+			attestationDataRoot, err := resp.attestationData.HashTreeRoot()
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to obtain root of attestation data")
+			} else {
+				attestationData[attestationDataRoot] = resp.attestationData
+				attestationDataCounts[attestationDataRoot]++
+				if attestationDataCounts[attestationDataRoot] > largestCount {
+					largestCount = attestationDataCounts[attestationDataRoot]
+				}
+				attestationDataProviders[attestationDataRoot] = append(attestationDataProviders[attestationDataRoot], resp.provider)
+			}
+		case err := <-errCh:
+			errored++
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Err(err.err).
+				Msg("Error received")
+		case <-ctx.Done():
+			// Anyone not responded by now is timed out.
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", requests-responded-errored).
+				Msg("Hard timeout reached")
+			return
+		}
+	}
+
+	log.Trace().
+		Dur("elapsed", time.Since(started)).
+		Int("responded", responded).
+		Int("errored", errored).
+		Msg("Results")
 }

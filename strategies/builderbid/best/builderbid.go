@@ -34,8 +34,6 @@ import (
 	"github.com/rs/zerolog/log"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // zeroExecutionAddress is used for comparison purposes.
@@ -83,16 +81,16 @@ func (s *Service) BuilderBid(ctx context.Context,
 	// At the soft timeout, we return if we have any responses so far.
 	// At the hard timeout, we return unconditionally.
 	// The soft timeout is half the duration of the hard timeout.
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	hardCtx, cancel := context.WithTimeout(ctx, s.timeout)
+	softCtx, softCancel := context.WithTimeout(hardCtx, s.timeout/2)
 
 	respCh, errCh := s.issueBuilderBidRequests(ctx, slot, parentHash, pubkey, proposerConfig, excludedBuilders, res)
 	span.AddEvent("Issued requests")
 
-	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
 	responded, errored, bestScore := s.builderBidLoop1(softCtx, started, requests, res, respCh, errCh)
 	softCancel()
 
-	s.builderBidLoop2(softCtx, started, requests, res, respCh, errCh, responded, errored, bestScore)
+	s.builderBidLoop2(hardCtx, started, requests, res, respCh, errCh, responded, errored, bestScore)
 	cancel()
 
 	if res.Bid == nil {
@@ -121,17 +119,23 @@ func (*Service) builderBidLoop1(ctx context.Context,
 	int,
 	*big.Int,
 ) {
+	log := zerolog.Ctx(ctx)
+
 	// Wait for all responses (or context done).
 	responded := 0
 	errored := 0
 	bestScore := big.NewInt(0)
 
-	timedOut := 0
-	for responded+errored+timedOut != requests {
+	for responded+errored != requests {
 		select {
 		case resp := <-respCh:
 			responded++
-			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Msg("Response received")
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", resp.provider.Address()).
+				Int("responded", responded).
+				Int("errored", errored).
+				Msg("Response received")
 			if resp.bid == nil {
 				// This means that the bid was ineligible, for example the bid value was too small.
 				continue
@@ -152,10 +156,21 @@ func (*Service) builderBidLoop1(ctx context.Context,
 			res.Values[resp.provider.Address()] = resp.score
 		case err := <-errCh:
 			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Str("provider", err.provider.Address()).Err(err.err).Msg("Error received")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider.Address()).
+				Int("responded", responded).
+				Int("errored", errored).
+				Err(err.err).
+				Msg("Error received")
 		case <-ctx.Done():
-			timedOut = requests - responded - errored
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Soft timeout reached")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", requests-responded-errored).
+				Msg("Soft timeout reached")
+			return responded, errored, bestScore
 		}
 	}
 
@@ -172,13 +187,16 @@ func (*Service) builderBidLoop2(ctx context.Context,
 	errored int,
 	bestScore *big.Int,
 ) {
-	timedOut := 0
-
-	for responded+errored+timedOut != requests {
+	for responded+errored != requests {
 		select {
 		case resp := <-respCh:
 			responded++
-			log.Trace().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Response received")
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", resp.provider.Address()).
+				Int("responded", responded).
+				Int("errored", errored).
+				Msg("Response received")
 			if resp.bid == nil {
 				// This means that the bid was ineligible, for example the bid value was too small.
 				continue
@@ -199,12 +217,29 @@ func (*Service) builderBidLoop2(ctx context.Context,
 			res.Values[resp.provider.Address()] = resp.score
 		case err := <-errCh:
 			errored++
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Str("provider", err.provider.Address()).Err(err.err).Msg("Error received")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider.Address()).
+				Int("responded", responded).
+				Int("errored", errored).
+				Err(err.err).
+				Msg("Error received")
 		case <-ctx.Done():
-			timedOut = requests - responded - errored
-			log.Debug().Dur("elapsed", time.Since(started)).Int("responded", responded).Int("errored", errored).Int("timed_out", timedOut).Msg("Hard timeout reached")
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", requests-responded-errored).
+				Msg("Hard timeout reached")
+			return
 		}
 	}
+
+	log.Trace().
+		Dur("elapsed", time.Since(started)).
+		Int("responded", responded).
+		Int("errored", errored).
+		Msg("Results")
 }
 
 // issueBuilderBidRequests issues the builder bid requests to all suitable providers.
@@ -258,16 +293,10 @@ func (s *Service) builderBid(ctx context.Context,
 	relayConfig *beaconblockproposer.RelayConfig,
 	excludedBuilders []phase0.BLSPubKey,
 ) {
-	ctx, span := otel.Tracer("attestantio.vouch.strategies.builderbid.best").Start(ctx, "builderBid", trace.WithAttributes(
-		attribute.String("relay", provider.Address()),
-	))
-	defer span.End()
-
 	log := s.log.With().Str("relay", provider.Address()).Logger()
 
 	if relayConfig.Grace > 0 {
 		time.Sleep(relayConfig.Grace)
-		span.AddEvent("Grace period over")
 	}
 
 	builderBid, err := s.obtainBid(ctx, provider, slot, parentHash, pubkey)

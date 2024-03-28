@@ -41,9 +41,6 @@ func (s *Service) AuctionBlock(ctx context.Context,
 	*blockauctioneer.Results,
 	error,
 ) {
-	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "AuctionBlock")
-	defer span.End()
-
 	account, err := s.accountsProvider.AccountByPublicKey(ctx, pubkey)
 	if err != nil {
 		return nil, errors.New("no account found for public key")
