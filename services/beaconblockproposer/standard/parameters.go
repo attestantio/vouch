@@ -42,6 +42,7 @@ type parameters struct {
 	beaconBlockSigner          signer.BeaconBlockSigner
 	blobSidecarSigner          signer.BlobSidecarSigner
 	unblindFromAllRelays       bool
+	builderBoostFactor         uint64
 }
 
 // Parameter is the interface for service parameters.
@@ -143,6 +144,13 @@ func WithBlobSidecarSigner(signer signer.BlobSidecarSigner) Parameter {
 func WithUnblindFromAllRelays(unblindFromAll bool) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.unblindFromAllRelays = unblindFromAll
+	})
+}
+
+// WithBuilderBoostFactor will set the comparative value of relay payloads compared to locally produced payloads.
+func WithBuilderBoostFactor(factor uint64) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.builderBoostFactor = factor
 	})
 }
 

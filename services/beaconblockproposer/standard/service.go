@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -48,6 +48,7 @@ type Service struct {
 	beaconBlockSigner          signer.BeaconBlockSigner
 	blobSidecarSigner          signer.BlobSidecarSigner
 	unblindFromAllRelays       bool
+	builderBoostFactor         uint64
 }
 
 // module-wide log.
@@ -82,6 +83,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		beaconBlockSigner:          parameters.beaconBlockSigner,
 		blobSidecarSigner:          parameters.blobSidecarSigner,
 		unblindFromAllRelays:       parameters.unblindFromAllRelays,
+		builderBoostFactor:         parameters.builderBoostFactor,
 	}
 
 	return s, nil

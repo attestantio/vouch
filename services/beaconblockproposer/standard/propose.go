@@ -168,9 +168,10 @@ func (s *Service) proposeBlock(ctx context.Context,
 	}
 
 	proposalResponse, err := s.proposalProvider.Proposal(ctx, &api.ProposalOpts{
-		Slot:         duty.Slot(),
-		RandaoReveal: duty.RANDAOReveal(),
-		Graffiti:     graffiti,
+		Slot:               duty.Slot(),
+		RandaoReveal:       duty.RANDAOReveal(),
+		Graffiti:           graffiti,
+		BuilderBoostFactor: &s.builderBoostFactor,
 	})
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain proposal")
