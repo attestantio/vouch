@@ -139,8 +139,6 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 	log := log.With().Uint64("slot", uint64(duty.Slot())).Uints64("validator_indices", uints).Logger()
 
 	// Fetch the attestation data.
-	// Give the beacon nodes time to work out the head of the chain before proceeding.
-	time.Sleep(500 * time.Millisecond)
 	attestationDataResponse, err := s.attestationDataProvider.AttestationData(ctx, &api.AttestationDataOpts{
 		Slot:           duty.Slot(),
 		CommitteeIndex: duty.CommitteeIndices()[0],
