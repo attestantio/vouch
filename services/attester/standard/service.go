@@ -16,6 +16,7 @@ package standard
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -138,6 +139,8 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 	log := log.With().Uint64("slot", uint64(duty.Slot())).Uints64("validator_indices", uints).Logger()
 
 	// Fetch the attestation data.
+	// Give the beacon nodes time to work out the head of the chain before proceeding.
+	time.Sleep(500 * time.Millisecond)
 	attestationDataResponse, err := s.attestationDataProvider.AttestationData(ctx, &api.AttestationDataOpts{
 		Slot:           duty.Slot(),
 		CommitteeIndex: duty.CommitteeIndices()[0],
@@ -147,7 +150,12 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 		return nil, errors.Wrap(err, "failed to obtain attestation data")
 	}
 	attestationData := attestationDataResponse.Data
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained attestation data")
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(attestationData)
+		if err == nil {
+			e.Dur("elapsed", time.Since(started)).RawJSON("data", data).Msg("Obtained attestation data")
+		}
+	}
 
 	if attestationData.Slot != duty.Slot() {
 		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")

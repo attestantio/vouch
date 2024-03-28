@@ -106,7 +106,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.9.0-alpha.2"
+var ReleaseVersion = "1.9.0-alpha.3"
 
 func main() {
 	exitCode := main2()
@@ -238,6 +238,7 @@ func fetchConfig() error {
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(30000000))
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.0005))
+	viper.SetDefault("beaconblockproposer.builder-boost-factor", 91)
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch {
@@ -675,6 +676,7 @@ func startSigningServices(ctx context.Context,
 		standardbeaconblockproposer.WithBeaconBlockSigner(signerSvc.(signer.BeaconBlockSigner)),
 		standardbeaconblockproposer.WithBlobSidecarSigner(signerSvc.(signer.BlobSidecarSigner)),
 		standardbeaconblockproposer.WithUnblindFromAllRelays(viper.GetBool("beaconblockproposer.unblind-from-all-relays")),
+		standardbeaconblockproposer.WithBuilderBoostFactor(viper.GetUint64("beaconblockproposer.builder-boost-factor")),
 	)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to start beacon block proposer service")

@@ -829,6 +829,39 @@ func (*BeaconBlockHeadersProvider) BeaconBlockHeader(_ context.Context,
 	}, nil
 }
 
+// ErroringBeaconBlockHeadersProvider is a mock for eth2client.BeaconBlockHeadersProvider.
+type ErroringBeaconBlockHeadersProvider struct{}
+
+// NewErroringBeaconBlockHeadersProvider returns a mock beacon block proposal provider.
+func NewErroringBeaconBlockHeadersProvider() eth2client.BeaconBlockHeadersProvider {
+	return &ErroringBeaconBlockHeadersProvider{}
+}
+
+// BeaconBlockHeader is a mock.
+func (*ErroringBeaconBlockHeadersProvider) BeaconBlockHeader(_ context.Context, _ *api.BeaconBlockHeaderOpts) (*api.Response[*apiv1.BeaconBlockHeader], error) {
+	return nil, errors.New("error")
+}
+
+// SleepyBeaconBlockHeadersProvider is a mock for eth2client.BeaconBlockHeadersProvider.
+type SleepyBeaconBlockHeadersProvider struct {
+	wait time.Duration
+	next eth2client.BeaconBlockHeadersProvider
+}
+
+// NewSleepyBeaconBlockHeadersProvider returns a mock beacon block root.
+func NewSleepyBeaconBlockHeadersProvider(wait time.Duration, next eth2client.BeaconBlockHeadersProvider) eth2client.BeaconBlockHeadersProvider {
+	return &SleepyBeaconBlockHeadersProvider{
+		wait: wait,
+		next: next,
+	}
+}
+
+// BeaconBlockHeader is a mock.
+func (m *SleepyBeaconBlockHeadersProvider) BeaconBlockHeader(ctx context.Context, opts *api.BeaconBlockHeaderOpts) (*api.Response[*apiv1.BeaconBlockHeader], error) {
+	time.Sleep(m.wait)
+	return m.next.BeaconBlockHeader(ctx, opts)
+}
+
 // SignedBeaconBlockProvider is a mock for eth2client.SignedBeaconBlockProvider.
 type SignedBeaconBlockProvider struct{}
 
@@ -855,6 +888,39 @@ func (*SignedBeaconBlockProvider) SignedBeaconBlock(_ context.Context,
 		},
 		Metadata: make(map[string]any),
 	}, nil
+}
+
+// ErroringSignedBeaconBlockProvider is a mock for eth2client.SignedBeaconBlockProvider.
+type ErroringSignedBeaconBlockProvider struct{}
+
+// NewErroringSignedBeaconBlockProvider returns a mock signed beacon block provider.
+func NewErroringSignedBeaconBlockProvider() eth2client.SignedBeaconBlockProvider {
+	return &ErroringSignedBeaconBlockProvider{}
+}
+
+// SignedBeaconBlock is a mock.
+func (*ErroringSignedBeaconBlockProvider) SignedBeaconBlock(_ context.Context, _ *api.SignedBeaconBlockOpts) (*api.Response[*spec.VersionedSignedBeaconBlock], error) {
+	return nil, errors.New("error")
+}
+
+// SleepySignedBeaconBlockProvider is a mock for eth2client.SignedBeaconBlockProvider.
+type SleepySignedBeaconBlockProvider struct {
+	wait time.Duration
+	next eth2client.SignedBeaconBlockProvider
+}
+
+// NewSleepySignedBeaconBlockProvider returns a mock beacon block root.
+func NewSleepySignedBeaconBlockProvider(wait time.Duration, next eth2client.SignedBeaconBlockProvider) eth2client.SignedBeaconBlockProvider {
+	return &SleepySignedBeaconBlockProvider{
+		wait: wait,
+		next: next,
+	}
+}
+
+// SignedBeaconBlock is a mock.
+func (m *SleepySignedBeaconBlockProvider) SignedBeaconBlock(ctx context.Context, opts *api.SignedBeaconBlockOpts) (*api.Response[*spec.VersionedSignedBeaconBlock], error) {
+	time.Sleep(m.wait)
+	return m.next.SignedBeaconBlock(ctx, opts)
 }
 
 // AttestationDataProvider is a mock for eth2client.AttestationDataProvider.

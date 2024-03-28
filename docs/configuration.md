@@ -65,6 +65,13 @@ beaconblockproposer:
   # selected bid.  This can potentially increase the reliability of obtaining an unblinded block, but will increment
   # failures in the eth_builder_client_operations_total metric for the relays that do not know of the bid.
   unblind-from-all-relays: false
+  # builder-boost-factor provides relative weightings between locally-produced and relay-supplied execution payloads.
+  # See https://ethereum.github.io/beacon-APIs/#/ValidatorRequiredApi/produceBlockV3 for full details, but some sample
+  # values are:
+  # -  50: `builder value` must be more than twice the local value (`local value*(100/50)`) to be used
+  # -  91: `builder value` must be more than ~10% higher than the local value (`local value*(100/91)`) to be used
+  # - 100: `builder value` must be more than the local value (`local value*(100/100)`) to be used
+  builder-boost-factor: 91
 
 # submitter submits data to beacon nodes.  If not present the nodes in beacon-node-address above will be used.
 submitter:
