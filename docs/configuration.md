@@ -35,6 +35,9 @@ beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
 # timeout is the timeout for all validating operations, for example fetching attesation data from beacon nodes.
 timeout: '2s'
 
+# reduced-memory-usage can be set on memory-constrained systems to reduce memory usage, at the cost of increased processing time.
+reduced-memory-usage: false
+
 eth2client:
   # timeout is the timeout for all operations against beacon nodes that are not related to a specific validating
   # operation, for example fetching the current list of active validators.  These operations are not time-sensitive,
