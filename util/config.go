@@ -14,7 +14,9 @@
 package util
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -94,4 +96,22 @@ func BeaconNodeAddressesForAttesting() []string {
 	sort.Strings(addresses)
 
 	return addresses
+}
+
+// HierarchicalBool returns the best configuration value for the path.
+func HierarchicalBool(variable string, path string) bool {
+	if path == "" {
+		return viper.GetBool(variable)
+	}
+
+	key := fmt.Sprintf("%s.%s", path, variable)
+	if viper.GetString(key) != "" {
+		return viper.GetBool(key)
+	}
+	// Lop off the child and try again.
+	lastPeriod := strings.LastIndex(path, ".")
+	if lastPeriod == -1 {
+		return HierarchicalBool(variable, "")
+	}
+	return HierarchicalBool(variable, path[0:lastPeriod])
 }
