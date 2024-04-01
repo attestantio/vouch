@@ -54,6 +54,7 @@ func fetchClient(ctx context.Context, monitor metrics.Service, address string) (
 			httpclient.WithExtraHeaders(map[string]string{
 				"User-Agent": fmt.Sprintf("Vouch/%s", ReleaseVersion),
 			}),
+			httpclient.WithReducedMemoryUsage(util.HierarchicalBool("reduced-memory-usage", fmt.Sprintf("eth2client.%s", address))),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate consensus client")
