@@ -1,4 +1,4 @@
-// Copyright © 2022, 2023 Attestant Limited.
+// Copyright © 2022 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,9 +21,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/blockrelay"
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
-	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	httpconfidant "github.com/wealdtech/go-majordomo/confidants/http"
 )
 
@@ -70,13 +71,9 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 	}
 
 	// Build list of public keys.
-	pubkeys := make([][]byte, 0, len(accounts))
+	pubkeys := make([]phase0.BLSPubKey, 0, len(accounts))
 	for _, account := range accounts {
-		if provider, isProvider := account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
-			pubkeys = append(pubkeys, provider.CompositePublicKey().Marshal())
-		} else {
-			pubkeys = append(pubkeys, account.PublicKey().Marshal())
-		}
+		pubkeys = append(pubkeys, util.ValidatorPubkey(account))
 	}
 
 	// Start with our current execution configuration.
@@ -112,7 +109,7 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 }
 
 func (s *Service) obtainExecutionConfig(ctx context.Context,
-	pubkeys [][]byte,
+	pubkeys []phase0.BLSPubKey,
 ) (
 	blockrelay.ExecutionConfigurator,
 	error,
@@ -156,7 +153,7 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 		ctx = context.WithValue(ctx, &httpconfidant.HTTPMethod{}, http.MethodPost)
 		pubkeyStrs := make([]string, 0, len(pubkeys))
 		for _, pubkey := range pubkeys {
-			pubkeyStrs = append(pubkeyStrs, fmt.Sprintf("%#x", pubkey))
+			pubkeyStrs = append(pubkeyStrs, pubkey.String())
 		}
 		// skipcq: GO-R4002
 		ctx = context.WithValue(ctx, &httpconfidant.Body{}, []byte(fmt.Sprintf(`["%s"]`, strings.Join(pubkeyStrs, `","`))))

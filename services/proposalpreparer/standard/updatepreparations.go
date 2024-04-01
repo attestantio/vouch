@@ -21,8 +21,8 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
-	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -62,12 +62,7 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 
 	proposalPreparations := make([]*apiv1.ProposalPreparation, 0, len(accounts))
 	for index, account := range accounts {
-		var pubkey phase0.BLSPubKey
-		if distributedAccount, isDistributedAccount := account.(e2wtypes.AccountCompositePublicKeyProvider); isDistributedAccount {
-			copy(pubkey[:], distributedAccount.CompositePublicKey().Marshal())
-		} else {
-			copy(pubkey[:], account.PublicKey().Marshal())
-		}
+		pubkey := util.ValidatorPubkey(account)
 		proposerConfig, err := s.executionConfigProvider.ProposerConfig(ctx, account, pubkey)
 		if err != nil {
 			// Error but keep going, as we want to provide as many preparations as possible.

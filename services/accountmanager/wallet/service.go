@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -27,10 +27,10 @@ import (
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/validatorsmanager"
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
-	"github.com/wealdtech/go-bytesutil"
 	e2wallet "github.com/wealdtech/go-eth2-wallet"
 	filesystem "github.com/wealdtech/go-eth2-wallet-store-filesystem"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -350,13 +350,6 @@ func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wa
 				return
 			}
 
-			var pubKey []byte
-			if provider, isProvider := account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
-				pubKey = provider.CompositePublicKey().Marshal()
-			} else {
-				pubKey = account.PublicKey().Marshal()
-			}
-
 			// Ensure we can unlock the account with a known passphrase.
 			unlocked := false
 			if unlocker, isUnlocker := account.(e2wtypes.AccountLocker); isUnlocker {
@@ -375,7 +368,7 @@ func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wa
 
 			// Set up account as unknown to beacon chain.
 			mu.Lock()
-			accounts[bytesutil.ToBytes48(pubKey)] = account
+			accounts[util.ValidatorPubkey(account)] = account
 			mu.Unlock()
 		}(ctx, sem, &wg, wallet, account, accounts, &mu)
 	}

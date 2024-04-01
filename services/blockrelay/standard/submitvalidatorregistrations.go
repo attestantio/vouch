@@ -162,12 +162,7 @@ func (s *Service) generateValidatorRegistrationsForAccount(ctx context.Context,
 	consensusRegistrations []*consensusapi.VersionedSignedValidatorRegistration,
 	relayRegistrations map[string][]*builderapi.VersionedSignedValidatorRegistration,
 ) error {
-	var pubkey phase0.BLSPubKey
-	if provider, isProvider := account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
-		copy(pubkey[:], provider.CompositePublicKey().Marshal())
-	} else {
-		copy(pubkey[:], account.PublicKey().Marshal())
-	}
+	pubkey := util.ValidatorPubkey(account)
 	controlledValidators[pubkey] = struct{}{}
 
 	proposerConfig, err := s.executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit)
