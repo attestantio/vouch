@@ -30,10 +30,10 @@ import (
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/validatorsmanager"
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
-	"github.com/wealdtech/go-bytesutil"
 	dirk "github.com/wealdtech/go-eth2-wallet-dirk"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
@@ -428,13 +428,6 @@ func (*Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wall
 	}
 
 	for account := range accounts {
-		var pubKey []byte
-		if provider, isProvider := account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
-			pubKey = provider.CompositePublicKey().Marshal()
-		} else {
-			pubKey = account.PublicKey().Marshal()
-		}
-
 		if !shortCircuit {
 			// Ensure the name matches one of our account paths.
 			name := fmt.Sprintf("%s/%s", wallet.Name(), account.Name())
@@ -451,7 +444,7 @@ func (*Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wall
 			}
 		}
 
-		res[bytesutil.ToBytes48(pubKey)] = account
+		res[util.ValidatorPubkey(account)] = account
 	}
 
 	return res

@@ -36,8 +36,8 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
-	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/sync/semaphore"
@@ -363,18 +363,12 @@ func (s *Service) auctionBlock(ctx context.Context,
 	*blockauctioneer.Results,
 	error,
 ) {
-	var pubkey phase0.BLSPubKey
-	if provider, isProvider := duty.Account().(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
-		copy(pubkey[:], provider.CompositePublicKey().Marshal())
-	} else {
-		copy(pubkey[:], duty.Account().PublicKey().Marshal())
-	}
 	hash, height := s.executionChainHeadProvider.ExecutionChainHead(ctx)
 	log.Trace().Str("hash", fmt.Sprintf("%#x", hash)).Uint64("height", height).Msg("Current execution chain state")
 	auctionResults, err := s.blockAuctioneer.AuctionBlock(ctx,
 		duty.Slot(),
 		hash,
-		pubkey)
+		util.ValidatorPubkey(duty.Account()))
 	if err != nil {
 		return nil, err
 	}
