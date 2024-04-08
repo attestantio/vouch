@@ -2,6 +2,8 @@ dev:
   - add proposal value and blinded status to trace
   - add beaconblockproposer.builder-boost-factor
   - add reduced memory mode for memory-constrained systems
+  - reduce memory usage when obtaining Dirk accounts
+  - reduce memory usage when generating beacon committee subscriptions
 
 1.9.0-alpha.2:
   - allow Vouch to act as an MEV-boost client for non-Vouch validators

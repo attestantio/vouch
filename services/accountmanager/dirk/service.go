@@ -232,6 +232,7 @@ func (s *Service) openWallet(ctx context.Context, name string) (e2wtypes.Wallet,
 	var err error
 	if !exists {
 		wallet, err = dirk.Open(ctx,
+			dirk.WithLogLevel(log.GetLevel()),
 			dirk.WithMonitor(s.monitor.(metrics.Service)),
 			dirk.WithName(name),
 			dirk.WithCredentials(s.credentials),

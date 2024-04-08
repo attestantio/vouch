@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -24,9 +24,13 @@ import (
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
 	"github.com/attestantio/vouch/services/beaconcommitteesubscriber"
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/sasha-s/go-deadlock"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -36,6 +40,11 @@ func (s *Service) Subscribe(ctx context.Context,
 	epoch phase0.Epoch,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 ) (map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.beaconcommitteesubscriber.standard").Start(ctx, "Subscribe", trace.WithAttributes(
+		attribute.Int64("epoch", int64(epoch)),
+	))
+	defer span.End()
+
 	if len(accounts) == 0 {
 		// Nothing to do.
 		return map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription{}, nil
@@ -58,8 +67,8 @@ func (s *Service) Subscribe(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to obtain attester duties")
 	}
 	attesterDuties := attesterDutiesResponse.Data
-
 	log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(validatorIndices)).Msg("Fetched attester duties")
+
 	duties, err := attester.MergeDuties(ctx, attesterDuties)
 	if err != nil {
 		s.monitor.BeaconCommitteeSubscriptionCompleted(started, "failed")
@@ -121,6 +130,9 @@ func (s *Service) calculateSubscriptionInfo(ctx context.Context,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 	duties []*attester.Duty,
 ) map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription {
+	ctx, span := otel.Tracer("attestantio.vouch.services.beaconcommitteesubscriber.standard").Start(ctx, "calculateSubscriptionInfo")
+	defer span.End()
+
 	// Map is slot => committee => info.
 	subscriptionInfo := make(map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription)
 	subscriptionInfoMutex := deadlock.RWMutex{}
@@ -132,68 +144,89 @@ func (s *Service) calculateSubscriptionInfo(ctx context.Context,
 	var wg sync.WaitGroup
 	for _, duty := range duties {
 		wg.Add(1)
-		go func(ctx context.Context, sem *semaphore.Weighted, wg *sync.WaitGroup, duty *attester.Duty) {
-			defer wg.Done()
-			for i := range duty.ValidatorIndices() {
-				wg.Add(1)
-				go func(ctx context.Context, sem *semaphore.Weighted, wg *sync.WaitGroup, duty *attester.Duty, i int) {
-					defer wg.Done()
-					if err := sem.Acquire(ctx, 1); err != nil {
-						log.Error().Err(err).Msg("Failed to obtain semaphore")
-						return
-					}
-					defer sem.Release(1)
-					subscriptionInfoMutex.RLock()
-					info, exists := subscriptionInfo[duty.Slot()][duty.CommitteeIndices()[i]]
-					subscriptionInfoMutex.RUnlock()
-					if exists && info.IsAggregator {
-						// Already an aggregator for this slot/committee; don't need to go further.
-						return
-					}
-					isAggregator, signature, err := s.attestationAggregator.(attestationaggregator.IsAggregatorProvider).
-						IsAggregator(ctx,
-							duty.ValidatorIndices()[i],
-							duty.Slot(),
-							duty.CommitteeSize(duty.CommitteeIndices()[i]))
-					if err != nil {
-						log.Error().
-							Uint64("slot", uint64(duty.Slot())).
-							Uint64("validator_index", uint64(duty.ValidatorIndices()[i])).
-							Err(err).
-							Msg("Failed to calculate if validator is an aggregator")
-						return
-					}
-					// Obtain composite public key if available, otherwise standard public key.
-					account := accounts[duty.ValidatorIndices()[i]]
-					var pubKey phase0.BLSPubKey
-					if provider, isProvider := account.(e2wtypes.AccountCompositePublicKeyProvider); isProvider {
-						copy(pubKey[:], provider.CompositePublicKey().Marshal())
-					} else {
-						copy(pubKey[:], account.PublicKey().Marshal())
-					}
-					subscriptionInfoMutex.Lock()
-					if _, exists := subscriptionInfo[duty.Slot()]; !exists {
-						subscriptionInfo[duty.Slot()] = make(map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription)
-					}
-					subscriptionInfo[duty.Slot()][duty.CommitteeIndices()[i]] = &beaconcommitteesubscriber.Subscription{
-						Duty: &apiv1.AttesterDuty{
-							PubKey:                  pubKey,
-							Slot:                    duty.Slot(),
-							ValidatorIndex:          duty.ValidatorIndices()[i],
-							CommitteeIndex:          duty.CommitteeIndices()[i],
-							CommitteeLength:         duty.CommitteeSize(duty.CommitteeIndices()[i]),
-							CommitteesAtSlot:        duty.CommitteesAtSlot(),
-							ValidatorCommitteeIndex: duty.ValidatorCommitteeIndices()[i],
-						},
-						IsAggregator: isAggregator,
-						Signature:    signature,
-					}
-					subscriptionInfoMutex.Unlock()
-				}(ctx, sem, wg, duty, i)
-			}
-		}(ctx, sem, &wg, duty)
+		go s.calculateSubscriptionInfoForDuty(ctx, sem, &wg, accounts, subscriptionInfo, &subscriptionInfoMutex, duty)
 	}
 	wg.Wait()
 
 	return subscriptionInfo
+}
+
+func (s *Service) calculateSubscriptionInfoForDuty(ctx context.Context,
+	sem *semaphore.Weighted,
+	wg *sync.WaitGroup,
+	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
+	subscriptionInfo map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription,
+	subscriptionInfoMutex *deadlock.RWMutex,
+	duty *attester.Duty,
+) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.beaconcommitteesubscriber.standard").Start(ctx, "calculateSubscriptionInfoForDuty")
+	defer span.End()
+
+	defer wg.Done()
+	for i := range duty.ValidatorIndices() {
+		s.calculateSubscriptionInfoForDutyValidator(ctx,
+			sem,
+			subscriptionInfo,
+			subscriptionInfoMutex,
+			duty,
+			i,
+			accounts[duty.ValidatorIndices()[i]],
+		)
+	}
+}
+
+func (s *Service) calculateSubscriptionInfoForDutyValidator(ctx context.Context,
+	sem *semaphore.Weighted,
+	subscriptionInfo map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription,
+	subscriptionInfoMutex *deadlock.RWMutex,
+	duty *attester.Duty,
+	i int,
+	account e2wtypes.Account,
+) {
+	if err := sem.Acquire(ctx, 1); err != nil {
+		log.Error().Err(err).Msg("Failed to obtain semaphore")
+		return
+	}
+	defer sem.Release(1)
+
+	subscriptionInfoMutex.RLock()
+	info, exists := subscriptionInfo[duty.Slot()][duty.CommitteeIndices()[i]]
+	subscriptionInfoMutex.RUnlock()
+	if exists && info.IsAggregator {
+		// Already an aggregator for this slot/committee; don't need to go further.
+		return
+	}
+
+	isAggregator, signature, err := s.attestationAggregator.(attestationaggregator.IsAggregatorProvider).
+		IsAggregator(ctx,
+			duty.ValidatorIndices()[i],
+			duty.Slot(),
+			duty.CommitteeSize(duty.CommitteeIndices()[i]))
+	if err != nil {
+		log.Error().
+			Uint64("slot", uint64(duty.Slot())).
+			Uint64("validator_index", uint64(duty.ValidatorIndices()[i])).
+			Err(err).
+			Msg("Failed to calculate if validator is an aggregator")
+		return
+	}
+
+	subscriptionInfoMutex.Lock()
+	if _, exists := subscriptionInfo[duty.Slot()]; !exists {
+		subscriptionInfo[duty.Slot()] = make(map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription)
+	}
+	subscriptionInfo[duty.Slot()][duty.CommitteeIndices()[i]] = &beaconcommitteesubscriber.Subscription{
+		Duty: &apiv1.AttesterDuty{
+			PubKey:                  util.ValidatorPubkey(account),
+			Slot:                    duty.Slot(),
+			ValidatorIndex:          duty.ValidatorIndices()[i],
+			CommitteeIndex:          duty.CommitteeIndices()[i],
+			CommitteeLength:         duty.CommitteeSize(duty.CommitteeIndices()[i]),
+			CommitteesAtSlot:        duty.CommitteesAtSlot(),
+			ValidatorCommitteeIndex: duty.ValidatorCommitteeIndices()[i],
+		},
+		IsAggregator: isAggregator,
+		Signature:    signature,
+	}
+	subscriptionInfoMutex.Unlock()
 }
