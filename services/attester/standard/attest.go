@@ -157,7 +157,7 @@ func (s *Service) attest(
 	return attestations, nil
 }
 
-func (s *Service) createAttestations(ctx context.Context,
+func (s *Service) createAttestations(_ context.Context,
 	duty *attester.Duty,
 	committeeIndices []phase0.CommitteeIndex,
 	validatorCommitteeIndices []phase0.ValidatorIndex,
