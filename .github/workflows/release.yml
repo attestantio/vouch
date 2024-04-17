@@ -3,8 +3,8 @@ name: Release
 on:
   push:
     tags:
-    - 'v*'
-    - 't*'
+      - 'v*'
+      - 't*'
 
 jobs:
   # Set variables that will be available to all builds.
@@ -44,8 +44,9 @@ jobs:
     needs: [create_release, env_vars]
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
+          cache: false
           go-version: '^1.21'
 
       - name: Check out repository into the Go module directory
@@ -119,8 +120,9 @@ jobs:
     needs: [create_release, env_vars]
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
+          cache: false
           go-version: '^1.21'
 
       - name: Check out repository into the Go module directory
@@ -164,8 +166,9 @@ jobs:
     needs: [create_release, env_vars]
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
+          cache: false
           go-version: '^1.21'
 
       - name: Check out repository into the Go module directory

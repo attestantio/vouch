@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -34,9 +34,8 @@ func MergeDuties(ctx context.Context, attesterDuties []*api.AttesterDuty) ([]*Du
 	committeeLengths := make(map[phase0.Slot]map[phase0.CommitteeIndex]uint64)
 	committeesAtSlots := make(map[phase0.Slot]uint64)
 
-	// Set the base capacity for our arrays based on the number of attester duties.
-	// This is much higher than we need, but is overall minimal and avoids reallocations.
-	arrayCap := uint64(len(attesterDuties))
+	// Make an educated guess at the capacity for our arrays based on the number of attester duties.
+	arrayCap := uint64(len(attesterDuties) / 32)
 
 	// Sort the response by slot, then committee index, then validator index.
 	sort.Slice(attesterDuties, func(i int, j int) bool {
@@ -61,10 +60,9 @@ func MergeDuties(ctx context.Context, attesterDuties []*api.AttesterDuty) ([]*Du
 		// However, if the validator is slashing its attestations are ignored by the network.
 		// Hence, if the validator is slashed we don't need to include its duty.
 
-		_, exists := validatorIndices[duty.Slot]
-		if !exists {
-			validatorIndices[duty.Slot] = make([]phase0.ValidatorIndex, 0, arrayCap)
-			committeeIndices[duty.Slot] = make([]phase0.CommitteeIndex, 0, arrayCap)
+		if _, exists := validatorIndices[duty.Slot]; !exists {
+			validatorIndices[duty.Slot] = make([]phase0.ValidatorIndex, arrayCap)
+			committeeIndices[duty.Slot] = make([]phase0.CommitteeIndex, arrayCap)
 			committeeLengths[duty.Slot] = make(map[phase0.CommitteeIndex]uint64)
 			committeesAtSlots[duty.Slot] = duty.CommitteesAtSlot
 		}
