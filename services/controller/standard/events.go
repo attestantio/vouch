@@ -125,18 +125,20 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	s.previousDutyDependentRoot = data.PreviousDutyDependentRoot
 	s.currentDutyDependentRoot = data.CurrentDutyDependentRoot
 
-	// We give the block some time to propagate around the rest of the
-	// nodes before kicking off attestations and sync committees for the block's slot.
-	time.Sleep(200 * time.Millisecond)
-	jobName := fmt.Sprintf("Attestations for slot %d", data.Slot)
-	if s.scheduler.JobExists(ctx, jobName) {
-		log.Trace().Msg("Kicking off attestations for slot early due to receiving relevant block")
-		s.scheduler.RunJobIfExists(ctx, jobName)
-	}
-	jobName = fmt.Sprintf("Sync committee messages for slot %d", data.Slot)
-	if s.scheduler.JobExists(ctx, jobName) {
-		log.Trace().Msg("Kicking off sync committee contributions for slot early due to receiving relevant block")
-		s.scheduler.RunJobIfExists(ctx, jobName)
+	if s.fastTrack {
+		// We give the block some time to propagate around the rest of the
+		// nodes before kicking off attestations and sync committees for the block's slot.
+		time.Sleep(200 * time.Millisecond)
+		jobName := fmt.Sprintf("Attestations for slot %d", data.Slot)
+		if s.scheduler.JobExists(ctx, jobName) {
+			log.Trace().Msg("Kicking off attestations for slot early due to receiving relevant block")
+			s.scheduler.RunJobIfExists(ctx, jobName)
+		}
+		jobName = fmt.Sprintf("Sync committee messages for slot %d", data.Slot)
+		if s.scheduler.JobExists(ctx, jobName) {
+			log.Trace().Msg("Kicking off sync committee contributions for slot early due to receiving relevant block")
+			s.scheduler.RunJobIfExists(ctx, jobName)
+		}
 	}
 
 	// Remove old subscriptions if present.

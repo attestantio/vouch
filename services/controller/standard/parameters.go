@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -65,6 +65,7 @@ type parameters struct {
 	attestationAggregationDelay   time.Duration
 	maxSyncCommitteeMessageDelay  time.Duration
 	syncCommitteeAggregationDelay time.Duration
+	fastTrack                     bool
 }
 
 // Parameter is the interface for service parameters.
@@ -271,6 +272,13 @@ func WithMaxSyncCommitteeMessageDelay(delay time.Duration) Parameter {
 func WithSyncCommitteeAggregationDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.syncCommitteeAggregationDelay = delay
+	})
+}
+
+// WithFastTrack sets the fast track flag, attesting as soon as possible.
+func WithFastTrack(fastTrack bool) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.fastTrack = fastTrack
 	})
 }
 

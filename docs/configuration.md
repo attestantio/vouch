@@ -62,6 +62,12 @@ graffiti:
   static:
     value: 'My graffiti'
 
+# controller controls when validating actions take place.
+controller:
+  # If fast-track is true then Vouch will attest and send sync committee messages as soon as it receives notification
+  # of receipt of a block for the duties' slot.
+  fast-track: true
+
 # beaconblockproposer provides control of the beacon block proposal process.
 beaconblockproposer:
   # If unblind-from-all-relays is true then Vouch will use all relays that it asked for blocks to unblind the
