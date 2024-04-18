@@ -61,8 +61,8 @@ func MergeDuties(ctx context.Context, attesterDuties []*api.AttesterDuty) ([]*Du
 		// Hence, if the validator is slashed we don't need to include its duty.
 
 		if _, exists := validatorIndices[duty.Slot]; !exists {
-			validatorIndices[duty.Slot] = make([]phase0.ValidatorIndex, arrayCap)
-			committeeIndices[duty.Slot] = make([]phase0.CommitteeIndex, arrayCap)
+			validatorIndices[duty.Slot] = make([]phase0.ValidatorIndex, 0, arrayCap)
+			committeeIndices[duty.Slot] = make([]phase0.CommitteeIndex, 0, arrayCap)
 			committeeLengths[duty.Slot] = make(map[phase0.CommitteeIndex]uint64)
 			committeesAtSlots[duty.Slot] = duty.CommitteesAtSlot
 		}
