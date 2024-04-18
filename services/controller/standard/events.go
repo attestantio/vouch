@@ -48,24 +48,13 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 		return
 	}
 
-	var zeroRoot phase0.Root
-
 	data := event.Data.(*api.HeadEvent)
-	log := log.With().Uint64("slot", uint64(data.Slot)).Logger()
-	log.Trace().Msg("Received head event")
+	log.Trace().Uint64("slot", uint64(data.Slot)).Msg("Received head event")
 
 	if data.Slot != s.chainTimeService.CurrentSlot() {
 		return
 	}
 
-	// Old versions of teku send a synthetic head event when they don't receive a block
-	// by a certain time after start of the slot.  We only care about real block updates
-	// for the purposes of this function, so ignore them.
-	if !bytes.Equal(s.lastBlockRoot[:], zeroRoot[:]) &&
-		bytes.Equal(s.lastBlockRoot[:], data.Block[:]) {
-		log.Trace().Msg("Synthetic head event; ignoring")
-		return
-	}
 	s.lastBlockRoot = data.Block
 	epoch := s.chainTimeService.SlotToEpoch(data.Slot)
 
@@ -76,75 +65,101 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	if data.Slot == s.chainTimeService.CurrentSlot()-1 && s.maxProposalDelay > 0 {
 		proposalJobName := fmt.Sprintf("Beacon block proposal for slot %d", s.chainTimeService.CurrentSlot())
 		if s.scheduler.JobExists(ctx, proposalJobName) {
-			log.Trace().Msg("Kicking off proposal for slot now that parent block for last slot has arrived")
+			log.Trace().Uint64("slot", uint64(data.Slot)).Msg("Kicking off proposal for slot now that parent block for last slot has arrived")
 			s.scheduler.RunJobIfExists(ctx, proposalJobName)
 		}
 	}
 
-	// Check to see if there is a reorganisation that requires re-fetching duties.
-	if s.lastBlockEpoch != 0 {
-		if epoch > s.lastBlockEpoch {
-			log.Trace().
-				Str("old_previous_dependent_root", fmt.Sprintf("%#x", s.previousDutyDependentRoot)).
-				Str("new_previous_dependent_root", fmt.Sprintf("%#x", data.PreviousDutyDependentRoot)).
-				Str("old_current_dependent_root", fmt.Sprintf("%#x", s.currentDutyDependentRoot)).
-				Str("new_current_dependent_root", fmt.Sprintf("%#x", data.CurrentDutyDependentRoot)).
-				Msg("Change of epoch")
-			// Change of epoch.  Ensure that the new previous dependent root is the same as
-			// the old current root.
-			if !bytes.Equal(s.previousDutyDependentRoot[:], zeroRoot[:]) &&
-				!bytes.Equal(s.currentDutyDependentRoot[:], data.PreviousDutyDependentRoot[:]) {
-				log.Debug().
-					Str("old_current_dependent_root", fmt.Sprintf("%#x", s.currentDutyDependentRoot[:])).
-					Str("new_previous_dependent_root", fmt.Sprintf("%#x", data.PreviousDutyDependentRoot[:])).
-					Msg("Previous duty dependent root has changed on epoch transition")
-				go s.handlePreviousDependentRootChanged(ctx)
-			}
-		} else {
-			// Existing epoch.  Ensure that the roots are the same.
-			if !bytes.Equal(s.previousDutyDependentRoot[:], zeroRoot[:]) &&
-				!bytes.Equal(s.previousDutyDependentRoot[:], data.PreviousDutyDependentRoot[:]) {
-				log.Debug().
-					Str("old_dependent_root", fmt.Sprintf("%#x", s.previousDutyDependentRoot[:])).
-					Str("new_dependent_root", fmt.Sprintf("%#x", data.PreviousDutyDependentRoot[:])).
-					Msg("Previous duty dependent root has changed")
-				go s.handlePreviousDependentRootChanged(ctx)
-			}
-
-			if !bytes.Equal(s.currentDutyDependentRoot[:], zeroRoot[:]) &&
-				!bytes.Equal(s.currentDutyDependentRoot[:], data.CurrentDutyDependentRoot[:]) {
-				log.Debug().
-					Str("old_dependent_root", fmt.Sprintf("%#x", s.currentDutyDependentRoot[:])).
-					Str("new_dependent_root", fmt.Sprintf("%#x", data.CurrentDutyDependentRoot[:])).
-					Msg("Current duty dependent root has changed")
-				go s.handleCurrentDependentRootChanged(ctx)
-			}
-		}
-	}
-	s.lastBlockEpoch = epoch
-	s.previousDutyDependentRoot = data.PreviousDutyDependentRoot
-	s.currentDutyDependentRoot = data.CurrentDutyDependentRoot
+	s.checkEventForReorg(ctx, epoch, data.Slot, data.PreviousDutyDependentRoot, data.CurrentDutyDependentRoot)
 
 	if s.fastTrack {
-		// We give the block some time to propagate around the rest of the
-		// nodes before kicking off attestations and sync committees for the block's slot.
-		time.Sleep(200 * time.Millisecond)
-		jobName := fmt.Sprintf("Attestations for slot %d", data.Slot)
-		if s.scheduler.JobExists(ctx, jobName) {
-			log.Trace().Msg("Kicking off attestations for slot early due to receiving relevant block")
-			s.scheduler.RunJobIfExists(ctx, jobName)
-		}
-		jobName = fmt.Sprintf("Sync committee messages for slot %d", data.Slot)
-		if s.scheduler.JobExists(ctx, jobName) {
-			log.Trace().Msg("Kicking off sync committee contributions for slot early due to receiving relevant block")
-			s.scheduler.RunJobIfExists(ctx, jobName)
-		}
+		s.fastTrackJobs(ctx, data.Slot)
 	}
 
 	// Remove old subscriptions if present.
 	s.subscriptionInfosMutex.Lock()
 	delete(s.subscriptionInfos, s.chainTimeService.SlotToEpoch(data.Slot)-2)
 	s.subscriptionInfosMutex.Unlock()
+}
+
+// checkEventForReorg check data in the event against information that we already have to see if
+// a chain reorg may have occurred, and if so handle it.
+func (s *Service) checkEventForReorg(ctx context.Context,
+	epoch phase0.Epoch,
+	slot phase0.Slot,
+	previousDutyDependentRoot phase0.Root,
+	currentDutyDependentRoot phase0.Root,
+) {
+	var zeroRoot phase0.Root
+
+	// Check to see if there is a reorganisation that requires re-fetching duties.
+	if s.lastBlockEpoch != 0 {
+		if epoch > s.lastBlockEpoch {
+			log.Trace().
+				Uint64("slot", uint64(slot)).
+				Str("old_previous_dependent_root", fmt.Sprintf("%#x", s.previousDutyDependentRoot)).
+				Str("new_previous_dependent_root", fmt.Sprintf("%#x", previousDutyDependentRoot)).
+				Str("old_current_dependent_root", fmt.Sprintf("%#x", s.currentDutyDependentRoot)).
+				Str("new_current_dependent_root", fmt.Sprintf("%#x", currentDutyDependentRoot)).
+				Msg("Change of epoch")
+			// Change of epoch.  Ensure that the new previous dependent root is the same as
+			// the old current root.
+			if !bytes.Equal(s.previousDutyDependentRoot[:], zeroRoot[:]) &&
+				!bytes.Equal(s.currentDutyDependentRoot[:], previousDutyDependentRoot[:]) {
+				log.Debug().
+					Uint64("slot", uint64(slot)).
+					Str("old_current_dependent_root", fmt.Sprintf("%#x", s.currentDutyDependentRoot[:])).
+					Str("new_previous_dependent_root", fmt.Sprintf("%#x", previousDutyDependentRoot[:])).
+					Msg("Previous duty dependent root has changed on epoch transition")
+				go s.handlePreviousDependentRootChanged(ctx)
+			}
+		} else {
+			// Existing epoch.  Ensure that the roots are the same.
+			if !bytes.Equal(s.previousDutyDependentRoot[:], zeroRoot[:]) &&
+				!bytes.Equal(s.previousDutyDependentRoot[:], previousDutyDependentRoot[:]) {
+				log.Debug().
+					Uint64("slot", uint64(slot)).
+					Str("old_dependent_root", fmt.Sprintf("%#x", s.previousDutyDependentRoot[:])).
+					Str("new_dependent_root", fmt.Sprintf("%#x", previousDutyDependentRoot[:])).
+					Msg("Previous duty dependent root has changed")
+				go s.handlePreviousDependentRootChanged(ctx)
+			}
+
+			if !bytes.Equal(s.currentDutyDependentRoot[:], zeroRoot[:]) &&
+				!bytes.Equal(s.currentDutyDependentRoot[:], currentDutyDependentRoot[:]) {
+				log.Debug().
+					Uint64("slot", uint64(slot)).
+					Str("old_dependent_root", fmt.Sprintf("%#x", s.currentDutyDependentRoot[:])).
+					Str("new_dependent_root", fmt.Sprintf("%#x", currentDutyDependentRoot[:])).
+					Msg("Current duty dependent root has changed")
+				go s.handleCurrentDependentRootChanged(ctx)
+			}
+		}
+	}
+
+	s.lastBlockEpoch = epoch
+	s.previousDutyDependentRoot = previousDutyDependentRoot
+	s.currentDutyDependentRoot = currentDutyDependentRoot
+}
+
+// fastTrackJobs kicks off jobs when a block has been seen early.
+func (s *Service) fastTrackJobs(ctx context.Context,
+	slot phase0.Slot,
+) {
+	// We wait before fast tracking jobs to allow the block some time to propagate around the rest
+	// of the network before kicking off attestations and sync committees for the block's slot.
+	time.Sleep(200 * time.Millisecond)
+
+	jobName := fmt.Sprintf("Attestations for slot %d", slot)
+	if s.scheduler.JobExists(ctx, jobName) {
+		log.Trace().Msg("Kicking off attestations for slot early due to receiving relevant block")
+		s.scheduler.RunJobIfExists(ctx, jobName)
+	}
+	jobName = fmt.Sprintf("Sync committee messages for slot %d", slot)
+	if s.scheduler.JobExists(ctx, jobName) {
+		log.Trace().Msg("Kicking off sync committee contributions for slot early due to receiving relevant block")
+		s.scheduler.RunJobIfExists(ctx, jobName)
+	}
 }
 
 // handlePreviousDependentRootChanged handles the situation where the previous
