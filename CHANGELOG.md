@@ -1,4 +1,4 @@
-dev:
+1.9.0-alpha.3
   - add proposal value and blinded status to trace
   - add beaconblockproposer.builder-boost-factor
   - add reduced memory mode for memory-constrained systems

@@ -47,7 +47,8 @@ func NewLogCapture() *LogCapture {
 	c := &LogCapture{
 		entries: make([]map[string]interface{}, 0),
 	}
-	logger := zerolog.New(c)
+	zerolog.SetGlobalLevel(zerolog.TraceLevel)
+	logger := zerolog.New(c).Level(zerolog.TraceLevel)
 	zerologger.Logger = logger
 	return c
 }
