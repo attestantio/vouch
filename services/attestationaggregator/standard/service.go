@@ -205,7 +205,7 @@ func (s *Service) IsAggregator(ctx context.Context,
 		return false, phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain validator")
 	}
 	if len(accounts) == 0 {
-		return false, phase0.BLSSignature{}, errors.New("validator unknown")
+		return false, phase0.BLSSignature{}, fmt.Errorf("validator %d unknown", validatorIndex)
 	}
 	account := accounts[validatorIndex]
 
