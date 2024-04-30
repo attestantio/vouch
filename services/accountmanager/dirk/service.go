@@ -128,10 +128,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
-	s.refreshAccounts(ctx)
-	if err := s.refreshValidators(ctx); err != nil {
-		return nil, errors.Wrap(err, "failed to fetch initial validator states")
-	}
+	s.Refresh(ctx)
 
 	return s, nil
 }
@@ -330,6 +327,11 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 				Str("state", state.String()).
 				Msg("Validating account")
 			validatingAccounts[index] = account
+		} else {
+			log.Trace().
+				Stringer("pubkey", validator.PublicKey).
+				Stringer("state", state).
+				Msg("Non-validating account")
 		}
 	}
 	s.mutex.RUnlock()
