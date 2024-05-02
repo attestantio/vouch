@@ -1,3 +1,6 @@
+dev:
+  - update internal active validators count when Dirk not available at start
+
 1.9.0-alpha.3
   - add proposal value and blinded status to trace
   - add beaconblockproposer.builder-boost-factor

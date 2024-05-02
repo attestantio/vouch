@@ -57,5 +57,17 @@ func (s *Service) refreshAccounts(ctx context.Context, _ interface{}) {
 	defer span.End()
 	started := time.Now()
 	s.accountsRefresher.Refresh(ctx)
+
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Refreshed accounts")
+
+	// Update active validators count.
+	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to obtain active validators on account refresh")
+		return
+	}
+	if len(validatorIndices) != s.activeValidators {
+		log.Info().Int("old_validators", s.activeValidators).Int("new_validators", len(validatorIndices)).Msg("Change in number of active validators")
+		s.activeValidators = len(validatorIndices)
+	}
 }
