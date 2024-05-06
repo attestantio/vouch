@@ -253,7 +253,9 @@ func (*Service) confirmProposalData(_ context.Context,
 		return errors.Wrap(err, "failed to obtain proposal graffiti")
 	}
 	if !bytes.Equal(proposalGraffiti[:], graffiti[:]) {
-		return errors.New("proposal data contains incorrect graffiti")
+		requestedGraffiti := string(bytes.Trim(graffiti[:], "\x00"))
+		receivedGraffiti := string(bytes.Trim(proposalGraffiti[:], "\x00"))
+		log.Warn().Str("requested_graffiti", requestedGraffiti).Str("received_graffiti", receivedGraffiti).Msg("Block graffiti not as requested")
 	}
 
 	return nil
