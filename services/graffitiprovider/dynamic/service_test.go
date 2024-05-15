@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,7 +16,6 @@ package dynamic_test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -48,7 +47,7 @@ func TestService(t *testing.T) {
 	}{
 		{
 			name:     "MajordomoMissing",
-			location: "direct://static",
+			location: "direct:///static",
 			err:      "problem with parameters: no majordomo specified",
 		},
 		{
@@ -59,7 +58,7 @@ func TestService(t *testing.T) {
 		{
 			name:      "Good",
 			majordomo: majordomoSvc,
-			location:  "direct://static",
+			location:  "direct:///static",
 		},
 	}
 
@@ -193,6 +192,90 @@ func TestReplacement(t *testing.T) {
 	}
 }
 
+func TestFallback(t *testing.T) {
+	ctx := context.Background()
+	majordomoSvc, err := standardmajordomo.New(ctx)
+	require.NoError(t, err)
+	directConfidant, err := directconfidant.New(ctx)
+	require.NoError(t, err)
+	require.NoError(t, majordomoSvc.RegisterConfidant(ctx, directConfidant))
+	fileConfidant, err := fileconfidant.New(ctx)
+	require.NoError(t, err)
+	require.NoError(t, majordomoSvc.RegisterConfidant(ctx, fileConfidant))
+
+	tests := []struct {
+		name             string
+		location         string
+		fallbackLocation string
+		expectedGraffiti string
+		err              string
+	}{
+		{
+			name:             "IgnoreOnLocationSuccess",
+			location:         "direct:///test",
+			fallbackLocation: "direct:///fallbacktest",
+			expectedGraffiti: "test",
+		},
+		{
+			name:             "FallbackOnMissingFile",
+			location:         "file:///not/here",
+			fallbackLocation: "direct:///fallbacktest",
+			expectedGraffiti: "fallbacktest",
+		},
+		{
+			name:             "EmptyOnNoFallback",
+			location:         "file:///not/here",
+			expectedGraffiti: "",
+		},
+		{
+			name:             "EmptyOnMissingFallback",
+			location:         "file:///not/here",
+			fallbackLocation: "file:///not/here",
+			expectedGraffiti: "",
+		},
+		{
+			name:     "ErrorOnBadLocation",
+			location: "notregistered://bad",
+			err:      "no confidants registered to handle that scheme",
+		},
+		{
+			name:             "FallbackOnBadLocationWithFallback",
+			location:         "notregistered://bad",
+			fallbackLocation: "direct:///fallbacktest",
+			expectedGraffiti: "fallbacktest",
+		},
+		{
+			name:             "ErrorOnBadLocations",
+			location:         "notregistered://bad",
+			fallbackLocation: "notregistered://bad",
+			err:              "no confidants registered to handle that scheme",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			svc, err := dynamic.New(ctx,
+				dynamic.WithLogLevel(zerolog.TraceLevel),
+				dynamic.WithMajordomo(majordomoSvc),
+				dynamic.WithLocation(test.location),
+				dynamic.WithFallbackLocation(test.fallbackLocation),
+			)
+			require.NoError(t, err)
+			for validatorIndex := uint64(0); validatorIndex < 16; validatorIndex++ {
+				for slot := uint64(0); slot < 16; slot++ {
+					graffiti, err := svc.Graffiti(ctx, phase0.Slot(slot), phase0.ValidatorIndex(validatorIndex))
+					if test.err != "" {
+						require.EqualError(t, err, test.err)
+					} else {
+						require.NoError(t, err)
+						require.Equal(t, test.expectedGraffiti, string(graffiti))
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestMultiline(t *testing.T) {
 	ctx := context.Background()
 	majordomoSvc, err := standardmajordomo.New(ctx)
@@ -202,7 +285,7 @@ func TestMultiline(t *testing.T) {
 	err = majordomoSvc.RegisterConfidant(ctx, fileConfidant)
 	require.NoError(t, err)
 
-	tmpDir, err := ioutil.TempDir(os.TempDir(), "TestMultiline")
+	tmpDir, err := os.MkdirTemp(os.TempDir(), "TestMultiline")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -290,7 +373,7 @@ func TestMultiline(t *testing.T) {
 			for expectedGraffiti := range test.expectedGraffitis {
 				obtainedGraffitis[expectedGraffiti] = true
 			}
-			err = ioutil.WriteFile(filepath.Join(tmpDir, test.name), []byte(test.content), 0o600)
+			err = os.WriteFile(filepath.Join(tmpDir, test.name), []byte(test.content), 0o600)
 			require.NoError(t, err)
 			svc, err := dynamic.New(ctx,
 				dynamic.WithLogLevel(zerolog.Disabled),

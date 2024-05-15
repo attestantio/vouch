@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -29,8 +29,9 @@ import (
 
 // Service is a graffiti provider service.
 type Service struct {
-	location  string
-	majordomo majordomo.Service
+	location         string
+	fallbackLocation string
+	majordomo        majordomo.Service
 }
 
 // module-wide log.
@@ -50,8 +51,9 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		location:  parameters.location,
-		majordomo: parameters.majordomo,
+		location:         parameters.location,
+		majordomo:        parameters.majordomo,
+		fallbackLocation: parameters.fallbackLocation,
 	}
 
 	return s, nil
@@ -67,22 +69,36 @@ func (s *Service) Graffiti(ctx context.Context, slot phase0.Slot, validatorIndex
 	location = strings.ReplaceAll(location, "{{VALIDATORINDEX}}", fmt.Sprintf("%d", validatorIndex))
 	log.Trace().Str("location", location).Msg("Resolved graffiti location")
 
-	// Fetch data from location.
-	locationData, err := s.majordomo.Fetch(ctx, location)
+	// Fetch data from location, using fallback if required.
+	data, err := s.majordomo.Fetch(ctx, location)
+	if err != nil && s.fallbackLocation != "" {
+		if !errors.Is(err, majordomo.ErrNotFound) {
+			log.Debug().Err(err).Uint64("slot", uint64(slot)).Msg("Failed to obtain graffiti from primary location; using fallback")
+		}
+		data, err = s.majordomo.Fetch(ctx, s.fallbackLocation)
+	}
+	//	if err != nil && errors.Is(err, majordomo.ErrNotFound) {
+	//		log.Trace().Uint64("slot", uint64(slot)).Msg("No graffiti obtained for proposer; using fallback")
+	//		data, err = s.majordomo.Fetch(ctx, s.fallbackLocation)
+	//	}
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to fetch graffiti")
+		if errors.Is(err, majordomo.ErrNotFound) {
+			log.Debug().Uint64("slot", uint64(slot)).Msg("No graffiti obtained for proposer")
+			return []byte{}, nil
+		}
+		log.Warn().Err(err).Msg("Failed to obtain graffiti")
 		return nil, err
 	}
 
 	// Need to remove blank lines and handle both DOS style (\r\n) and Unix style (\n) newlines.
 	graffitiLines := strings.Split(
 		strings.TrimSpace(
-			strings.ReplaceAll(strings.ReplaceAll(string(locationData), "\r\n", "\n"), "\n\n", "\n"),
+			strings.ReplaceAll(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n\n", "\n"),
 		),
 		"\n")
 	graffitiEntries := len(graffitiLines)
 	if graffitiEntries == 0 {
-		log.Debug().Msg("No graffiti found")
+		log.Debug().Msg("No graffiti available")
 		return []byte{}, nil
 	}
 

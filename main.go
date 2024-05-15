@@ -921,6 +921,7 @@ func startGraffitiProvider(ctx context.Context, majordomo majordomo.Service) (gr
 			dynamicgraffitiprovider.WithMajordomo(majordomo),
 			dynamicgraffitiprovider.WithLogLevel(util.LogLevel("graffiti.dynamic")),
 			dynamicgraffitiprovider.WithLocation(viper.GetString("graffiti.dynamic.location")),
+			dynamicgraffitiprovider.WithFallbackLocation(viper.GetString("graffiti.dynamic.fallback-location")),
 		)
 	default:
 		log.Info().Msg("Starting static graffiti provider")
