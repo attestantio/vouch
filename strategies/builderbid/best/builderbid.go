@@ -124,7 +124,7 @@ func (s *Service) BuilderBid(ctx context.Context,
 	return res, nil
 }
 
-func (*Service) builderBidLoop1(ctx context.Context,
+func (s *Service) builderBidLoop1(ctx context.Context,
 	started time.Time,
 	requests int,
 	res *blockauctioneer.Results,
@@ -168,36 +168,9 @@ func (*Service) builderBidLoop1(ctx context.Context,
 			}
 
 			if isPrivilegedBuilder(builder, privilegedBuilders) {
-				log.Trace().Str("provider", resp.provider.Address()).Str("builder", builder.String()).Msg("Privileged bid received before soft timeout")
-				switch {
-				case resp.score.Cmp(bestPrivilegedScore) > 0:
-					log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("New winning privileged bid")
-					resPrivileged.Bid = resp.bid
-					bestPrivilegedScore = resp.score
-					resPrivileged.Providers = make([]builderclient.BuilderBidProvider, 0)
-					resPrivileged.Providers = append(resPrivileged.Providers, resp.provider)
-				case resPrivileged.Bid != nil && resp.score.Cmp(bestPrivilegedScore) == 0 && bidsEqual(resPrivileged.Bid, resp.bid):
-					log.Trace().Str("provider", resp.provider.Address()).Msg("Matching bid from different privileged relay")
-					resPrivileged.Providers = append(resPrivileged.Providers, resp.provider)
-				default:
-					log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("Low or slow privileged bid")
-				}
-				resPrivileged.Values[resp.provider.Address()] = resp.score
+				s.setBuilderBid(resPrivileged, resp, bestPrivilegedScore, log.With().Str("is_privileged", "yes").Str("soft_timeout", "before").Logger())
 			} else {
-				switch {
-				case resp.score.Cmp(bestScore) > 0:
-					log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("New winning bid")
-					res.Bid = resp.bid
-					bestScore = resp.score
-					res.Providers = make([]builderclient.BuilderBidProvider, 0)
-					res.Providers = append(res.Providers, resp.provider)
-				case res.Bid != nil && resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
-					log.Trace().Str("provider", resp.provider.Address()).Msg("Matching bid from different relay")
-					res.Providers = append(res.Providers, resp.provider)
-				default:
-					log.Debug().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("Low or slow bid")
-				}
-				res.Values[resp.provider.Address()] = resp.score
+				s.setBuilderBid(res, resp, bestScore, log.With().Str("is_privileged", "no").Str("soft_timeout", "before").Logger())
 			}
 		case err := <-errCh:
 			errored++
@@ -222,7 +195,7 @@ func (*Service) builderBidLoop1(ctx context.Context,
 	return responded, errored, bestScore, bestPrivilegedScore
 }
 
-func (*Service) builderBidLoop2(ctx context.Context,
+func (s *Service) builderBidLoop2(ctx context.Context,
 	started time.Time,
 	requests int,
 	res *blockauctioneer.Results,
@@ -256,36 +229,9 @@ func (*Service) builderBidLoop2(ctx context.Context,
 			}
 
 			if isPrivilegedBuilder(builder, privilegedBuilders) {
-				log.Trace().Str("provider", resp.provider.Address()).Str("builder", builder.String()).Msg("Privileged bid received after soft timeout")
-				switch {
-				case resp.score.Cmp(bestPrivilegedScore) > 0:
-					log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("New winning privileged bid")
-					resPrivileged.Bid = resp.bid
-					bestPrivilegedScore = resp.score
-					resPrivileged.Providers = make([]builderclient.BuilderBidProvider, 0)
-					resPrivileged.Providers = append(resPrivileged.Providers, resp.provider)
-				case resPrivileged.Bid != nil && resp.score.Cmp(bestPrivilegedScore) == 0 && bidsEqual(resPrivileged.Bid, resp.bid):
-					log.Trace().Str("provider", resp.provider.Address()).Msg("Matching bid from different privileged relay")
-					resPrivileged.Providers = append(resPrivileged.Providers, resp.provider)
-				default:
-					log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("Low or slow privileged bid")
-				}
-				resPrivileged.Values[resp.provider.Address()] = resp.score
+				s.setBuilderBid(resPrivileged, resp, bestPrivilegedScore, log.With().Str("is_privileged", "yes").Str("soft_timeout", "after").Logger())
 			} else {
-				switch {
-				case resp.score.Cmp(bestScore) > 0:
-					log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("New winning bid")
-					res.Bid = resp.bid
-					bestScore = resp.score
-					res.Providers = make([]builderclient.BuilderBidProvider, 0)
-					res.Providers = append(res.Providers, resp.provider)
-				case res.Bid != nil && resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
-					log.Trace().Str("provider", resp.provider.Address()).Msg("Matching bid from different relay")
-					res.Providers = append(res.Providers, resp.provider)
-				default:
-					log.Debug().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("Low or slow bid")
-				}
-				res.Values[resp.provider.Address()] = resp.score
+				s.setBuilderBid(res, resp, bestScore, log.With().Str("is_privileged", "no").Str("soft_timeout", "after").Logger())
 			}
 		case err := <-errCh:
 			errored++
@@ -312,6 +258,23 @@ func (*Service) builderBidLoop2(ctx context.Context,
 		Int("responded", responded).
 		Int("errored", errored).
 		Msg("Results")
+}
+
+func (*Service) setBuilderBid(res *blockauctioneer.Results, resp *builderBidResponse, bestScore *big.Int, log zerolog.Logger) {
+	switch {
+	case resp.score.Cmp(bestScore) > 0:
+		res.Bid = resp.bid
+		bestScore = resp.score
+		res.Providers = make([]builderclient.BuilderBidProvider, 0)
+		res.Providers = append(res.Providers, resp.provider)
+		log.Trace().Str("provider", resp.provider.Address()).Stringer("score", bestScore).Msg("New winning bid")
+	case res.Bid != nil && resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
+		log.Trace().Str("provider", resp.provider.Address()).Msg("Matching bid from different relay")
+		res.Providers = append(res.Providers, resp.provider)
+	default:
+		log.Debug().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("Low or slow bid")
+	}
+	res.Values[resp.provider.Address()] = resp.score
 }
 
 // issueBuilderBidRequests issues the builder bid requests to all suitable providers.
