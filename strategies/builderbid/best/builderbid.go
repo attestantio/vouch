@@ -168,9 +168,9 @@ func (s *Service) builderBidLoop1(ctx context.Context,
 			}
 
 			if isPrivilegedBuilder(builder, privilegedBuilders) {
-				s.setBuilderBid(resPrivileged, resp, bestPrivilegedScore, log.With().Str("is_privileged", "yes").Str("soft_timeout", "before").Logger())
+				s.setBuilderBid(resPrivileged, resp, bestPrivilegedScore)
 			} else {
-				s.setBuilderBid(res, resp, bestScore, log.With().Str("is_privileged", "no").Str("soft_timeout", "before").Logger())
+				s.setBuilderBid(res, resp, bestScore)
 			}
 		case err := <-errCh:
 			errored++
@@ -229,9 +229,9 @@ func (s *Service) builderBidLoop2(ctx context.Context,
 			}
 
 			if isPrivilegedBuilder(builder, privilegedBuilders) {
-				s.setBuilderBid(resPrivileged, resp, bestPrivilegedScore, log.With().Str("is_privileged", "yes").Str("soft_timeout", "after").Logger())
+				s.setBuilderBid(resPrivileged, resp, bestPrivilegedScore)
 			} else {
-				s.setBuilderBid(res, resp, bestScore, log.With().Str("is_privileged", "no").Str("soft_timeout", "after").Logger())
+				s.setBuilderBid(res, resp, bestScore)
 			}
 		case err := <-errCh:
 			errored++
@@ -260,7 +260,7 @@ func (s *Service) builderBidLoop2(ctx context.Context,
 		Msg("Results")
 }
 
-func (*Service) setBuilderBid(res *blockauctioneer.Results, resp *builderBidResponse, bestScore *big.Int, log zerolog.Logger) {
+func (*Service) setBuilderBid(res *blockauctioneer.Results, resp *builderBidResponse, bestScore *big.Int) {
 	switch {
 	case resp.score.Cmp(bestScore) > 0:
 		res.Bid = resp.bid
