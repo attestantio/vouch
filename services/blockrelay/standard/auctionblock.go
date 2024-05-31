@@ -75,7 +75,7 @@ func (s *Service) auctionBlock(ctx context.Context,
 		}, nil
 	}
 
-	res, err := s.builderBidProvider.BuilderBid(ctx, slot, parentHash, pubkey, proposerConfig, s.excludedBuilders)
+	res, err := s.builderBidProvider.BuilderBid(ctx, slot, parentHash, pubkey, proposerConfig, s.excludedBuilders, s.privilegedBuilders)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain builder bid")
 	}

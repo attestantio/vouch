@@ -23,8 +23,9 @@ import (
 )
 
 var (
-	auctionBlockUsed  *prometheus.CounterVec
-	auctionBlockTimer prometheus.Histogram
+	auctionBlockUsed           *prometheus.CounterVec
+	auctionBlockTimer          prometheus.Histogram
+	auctionPrivilegedBlockUsed *prometheus.CounterVec
 )
 
 func registerMetrics(ctx context.Context, monitor metrics.Service) error {
@@ -51,6 +52,16 @@ func registerPrometheusMetrics(_ context.Context) error {
 	}, []string{"provider"})
 	if err := prometheus.Register(auctionBlockUsed); err != nil {
 		return errors.Wrap(err, "failed to register vouch_relay_auction_block_used_total")
+	}
+
+	auctionPrivilegedBlockUsed = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "vouch",
+		Subsystem: "relay_auction_privileged_block",
+		Name:      "privileged_used_total",
+		Help:      "The privileged auction block provider used by a relay.",
+	}, []string{"provider"})
+	if err := prometheus.Register(auctionPrivilegedBlockUsed); err != nil {
+		return errors.Wrap(err, "failed to register vouch_relay_auction_privileged_block_used_total")
 	}
 
 	auctionBlockTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -82,5 +93,17 @@ func monitorAuctionBlock(provider string, succeeded bool, duration time.Duration
 	auctionBlockTimer.Observe(duration.Seconds())
 	if succeeded {
 		auctionBlockUsed.WithLabelValues(provider).Add(1)
+	}
+}
+
+func monitorAuctionPrivilegedBlock(provider string, succeeded bool, duration time.Duration) {
+	if auctionPrivilegedBlockUsed == nil {
+		// Not yet registered.
+		return
+	}
+
+	auctionBlockTimer.Observe(duration.Seconds())
+	if succeeded {
+		auctionPrivilegedBlockUsed.WithLabelValues(provider).Add(1)
 	}
 }

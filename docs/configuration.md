@@ -166,6 +166,12 @@ strategies:
 # Configuration information for this section can be found in the execution layer documentation.
 blockrelay:
   fallback-fee-recipient: '0x0000000000000000000000000000000000000001'
+  # Privileged builders are a list of public keys of builders from which bids will be accepted
+  # first, even if the bid is lower. If no bids are received from the privileged builders,
+  # bids from other builders will be accepted.
+  privileged-builders:
+    - '0xaaaa...'
+    - '0xbbb...'
   # Excluded builders are a list of public keys of builders from which bids will not be accepted.
   # Note that this may result in no bid being available, if the only bids received from the MEV relays are from excluded builders.
   excluded-builders:
