@@ -31,7 +31,6 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 	"go.opentelemetry.io/otel"
 )
@@ -168,9 +167,9 @@ func (s *Service) builderBidLoop1(ctx context.Context,
 			}
 
 			if isPrivilegedBuilder(builder, privilegedBuilders) {
-				s.setBuilderBid(resPrivileged, resp, bestPrivilegedScore)
+				s.setBuilderBid(ctx, resPrivileged, resp, bestPrivilegedScore)
 			} else {
-				s.setBuilderBid(res, resp, bestScore)
+				s.setBuilderBid(ctx, res, resp, bestScore)
 			}
 		case err := <-errCh:
 			errored++
@@ -208,6 +207,8 @@ func (s *Service) builderBidLoop2(ctx context.Context,
 	bestPrivilegedScore *big.Int,
 	privilegedBuilders []phase0.BLSPubKey,
 ) {
+	log := zerolog.Ctx(ctx)
+
 	for responded+errored != requests {
 		select {
 		case resp := <-respCh:
@@ -229,9 +230,9 @@ func (s *Service) builderBidLoop2(ctx context.Context,
 			}
 
 			if isPrivilegedBuilder(builder, privilegedBuilders) {
-				s.setBuilderBid(resPrivileged, resp, bestPrivilegedScore)
+				s.setBuilderBid(ctx, resPrivileged, resp, bestPrivilegedScore)
 			} else {
-				s.setBuilderBid(res, resp, bestScore)
+				s.setBuilderBid(ctx, res, resp, bestScore)
 			}
 		case err := <-errCh:
 			errored++
@@ -260,7 +261,13 @@ func (s *Service) builderBidLoop2(ctx context.Context,
 		Msg("Results")
 }
 
-func (*Service) setBuilderBid(res *blockauctioneer.Results, resp *builderBidResponse, bestScore *big.Int) {
+func (*Service) setBuilderBid(ctx context.Context,
+	res *blockauctioneer.Results,
+	resp *builderBidResponse,
+	bestScore *big.Int,
+) {
+	log := zerolog.Ctx(ctx)
+
 	switch {
 	case resp.score.Cmp(bestScore) > 0:
 		res.Bid = resp.bid
@@ -330,7 +337,7 @@ func (s *Service) builderBid(ctx context.Context,
 	relayConfig *beaconblockproposer.RelayConfig,
 	excludedBuilders []phase0.BLSPubKey,
 ) {
-	log := s.log.With().Str("relay", provider.Address()).Logger()
+	log := zerolog.Ctx(ctx).With().Str("relay", provider.Address()).Logger()
 
 	if relayConfig.Grace > 0 {
 		time.Sleep(relayConfig.Grace)
@@ -470,6 +477,8 @@ func (s *Service) verifyBidDetails(ctx context.Context,
 	relayConfig *beaconblockproposer.RelayConfig,
 	provider builderclient.BuilderBidProvider,
 ) error {
+	log := zerolog.Ctx(ctx)
+
 	feeRecipient, err := bid.FeeRecipient()
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain builder bid fee recipient")
@@ -491,7 +500,7 @@ func (s *Service) verifyBidDetails(ctx context.Context,
 		return err
 	}
 	if !verified {
-		s.log.Warn().Msg("Failed to verify bid signature")
+		log.Warn().Msg("Failed to verify bid signature")
 		return errors.New("invalid signature")
 	}
 
@@ -499,7 +508,7 @@ func (s *Service) verifyBidDetails(ctx context.Context,
 }
 
 // verifyBidSignature verifies the signature of a bid to ensure it comes from the expected source.
-func (s *Service) verifyBidSignature(_ context.Context,
+func (s *Service) verifyBidSignature(ctx context.Context,
 	relayConfig *beaconblockproposer.RelayConfig,
 	bid *builderspec.VersionedSignedBuilderBid,
 	provider builderclient.BuilderBidProvider,
@@ -507,8 +516,7 @@ func (s *Service) verifyBidSignature(_ context.Context,
 	bool,
 	error,
 ) {
-	var err error
-	log := s.log.With().Str("provider", provider.Address()).Logger()
+	log := zerolog.Ctx(ctx).With().Str("provider", provider.Address()).Logger()
 
 	relayPubkey := relayConfig.PublicKey
 	if relayPubkey == nil {
@@ -524,6 +532,7 @@ func (s *Service) verifyBidSignature(_ context.Context,
 	pubkey, exists := s.relayPubkeys[*relayPubkey]
 	s.relayPubkeysMu.RUnlock()
 	if !exists {
+		var err error
 		pubkey, err = e2types.BLSPublicKeyFromBytes(relayPubkey[:])
 		if err != nil {
 			return false, errors.Wrap(err, "invalid public key supplied with bid")
