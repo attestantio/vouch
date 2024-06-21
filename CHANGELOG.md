@@ -2,6 +2,7 @@ dev:
   - update internal active validators count when Dirk not available at start
   - warn when graffiti is not as expected, rather than refuse to use the proposal
   - provide fallback location for dynamic graffiti
+  - relax proposal checks to enable DVT proposals
 
 1.9.0-alpha.3
   - add proposal value and blinded status to trace
