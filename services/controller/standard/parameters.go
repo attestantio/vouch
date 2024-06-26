@@ -65,7 +65,9 @@ type parameters struct {
 	attestationAggregationDelay   time.Duration
 	maxSyncCommitteeMessageDelay  time.Duration
 	syncCommitteeAggregationDelay time.Duration
-	fastTrack                     bool
+	fastTrackAttestations         bool
+	fastTrackSyncCommittees       bool
+	fastTrackGrace                time.Duration
 }
 
 // Parameter is the interface for service parameters.
@@ -275,10 +277,24 @@ func WithSyncCommitteeAggregationDelay(delay time.Duration) Parameter {
 	})
 }
 
-// WithFastTrack sets the fast track flag, attesting as soon as possible.
-func WithFastTrack(fastTrack bool) Parameter {
+// WithFastTrackAttestations sets the fast track flag, attesting as soon as possible.
+func WithFastTrackAttestations(fastTrack bool) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.fastTrack = fastTrack
+		p.fastTrackAttestations = fastTrack
+	})
+}
+
+// WithFastTrackSyncCommittees sets the fast track flag, generating sync committee messages as soon as possible.
+func WithFastTrackSyncCommittees(fastTrack bool) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.fastTrackSyncCommittees = fastTrack
+	})
+}
+
+// WithFastTrackGrace sets the grace period before initiating fast track operations.
+func WithFastTrackGrace(grace time.Duration) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.fastTrackGrace = grace
 	})
 }
 

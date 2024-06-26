@@ -72,9 +72,7 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 
 	s.checkEventForReorg(ctx, epoch, data.Slot, data.PreviousDutyDependentRoot, data.CurrentDutyDependentRoot)
 
-	if s.fastTrack {
-		s.fastTrackJobs(ctx, data.Slot)
-	}
+	s.fastTrackJobs(ctx, data.Slot)
 
 	// Remove old subscriptions if present.
 	s.subscriptionInfosMutex.Lock()
@@ -146,19 +144,29 @@ func (s *Service) checkEventForReorg(ctx context.Context,
 func (s *Service) fastTrackJobs(ctx context.Context,
 	slot phase0.Slot,
 ) {
+	if !(s.fastTrackAttestations || s.fastTrackSyncCommittees) {
+		// No fast track required.
+		return
+	}
+
 	// We wait before fast tracking jobs to allow the block some time to propagate around the rest
 	// of the network before kicking off attestations and sync committees for the block's slot.
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(s.fastTrackGrace)
 
-	jobName := fmt.Sprintf("Attestations for slot %d", slot)
-	if s.scheduler.JobExists(ctx, jobName) {
-		log.Trace().Msg("Kicking off attestations for slot early due to receiving relevant block")
-		s.scheduler.RunJobIfExists(ctx, jobName)
+	if s.fastTrackAttestations {
+		jobName := fmt.Sprintf("Attestations for slot %d", slot)
+		if s.scheduler.JobExists(ctx, jobName) {
+			log.Trace().Msg("Kicking off attestations for slot early due to receiving relevant block")
+			s.scheduler.RunJobIfExists(ctx, jobName)
+		}
 	}
-	jobName = fmt.Sprintf("Sync committee messages for slot %d", slot)
-	if s.scheduler.JobExists(ctx, jobName) {
-		log.Trace().Msg("Kicking off sync committee contributions for slot early due to receiving relevant block")
-		s.scheduler.RunJobIfExists(ctx, jobName)
+
+	if s.fastTrackSyncCommittees {
+		jobName := fmt.Sprintf("Sync committee messages for slot %d", slot)
+		if s.scheduler.JobExists(ctx, jobName) {
+			log.Trace().Msg("Kicking off sync committee contributions for slot early due to receiving relevant block")
+			s.scheduler.RunJobIfExists(ctx, jobName)
+		}
 	}
 }
 
