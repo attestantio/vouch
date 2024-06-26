@@ -183,7 +183,7 @@ func (s *Service) proposeBlock(ctx context.Context,
 		monitorBeaconBlockProposalSource("direct")
 	}
 
-	if err := s.confirmProposalData(ctx, proposal, duty, graffiti); err != nil {
+	if err := s.confirmProposalData(ctx, proposal, duty); err != nil {
 		return err
 	}
 
@@ -229,7 +229,6 @@ func (s *Service) proposeBlock(ctx context.Context,
 func (*Service) confirmProposalData(_ context.Context,
 	proposal *api.VersionedProposal,
 	duty *beaconblockproposer.Duty,
-	graffiti [32]byte,
 ) error {
 	proposalSlot, err := proposal.Slot()
 	if err != nil {
@@ -239,24 +238,10 @@ func (*Service) confirmProposalData(_ context.Context,
 		return errors.New("proposal data for incorrect slot")
 	}
 
-	randaoReveal := duty.RANDAOReveal()
-	proposalRandaoReveal, err := proposal.RandaoReveal()
-	if err != nil {
-		return errors.Wrap(err, "failed to obtain proposal RANDAO reveal")
-	}
-	if !bytes.Equal(proposalRandaoReveal[:], randaoReveal[:]) {
-		return errors.New("proposal data contains incorrect RANDAO reveal")
-	}
+	// RANDAO reveal can be different in DVT situations, so do not check it.  It wil have already been checked by the underlying
+	// library that obtained the proposal, which is DVT-aware.
 
-	proposalGraffiti, err := proposal.Graffiti()
-	if err != nil {
-		return errors.Wrap(err, "failed to obtain proposal graffiti")
-	}
-	if !bytes.Equal(proposalGraffiti[:], graffiti[:]) {
-		requestedGraffiti := string(bytes.Trim(graffiti[:], "\x00"))
-		receivedGraffiti := string(bytes.Trim(proposalGraffiti[:], "\x00"))
-		log.Warn().Str("requested_graffiti", requestedGraffiti).Str("received_graffiti", receivedGraffiti).Msg("Block graffiti not as requested")
-	}
+	// Graffiti can be different if the consensus nodes rewrites it, e.g. to add node version information, so do not check it.
 
 	return nil
 }
