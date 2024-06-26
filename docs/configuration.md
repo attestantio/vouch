@@ -64,9 +64,16 @@ graffiti:
 
 # controller controls when validating actions take place.
 controller:
-  # If fast-track is true then Vouch will attest and send sync committee messages as soon as it receives notification
-  # of receipt of a block for the duties' slot.
-  fast-track: true
+  fast-track: 
+    # If attestations is true then Vouch will attest as soon as it receives notification that the head block has been updated
+    # for the duties' slot.
+    attestations: true
+    # If sync-committees is true then Vouch will generate sync committee messages as soon as it receives notification that
+    # the head block has been updated for the duties' slot.
+    sync-committees: true
+    # grace is the delay between receiving the notification of the head block and starting the fast track process.  This allows
+    # the rest of the network to settle if we saw the head block early.
+    grace: '200ms'
 
 # beaconblockproposer provides control of the beacon block proposal process.
 beaconblockproposer:

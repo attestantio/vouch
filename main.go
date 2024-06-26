@@ -233,7 +233,9 @@ func fetchConfig() error {
 	viper.SetDefault("controller.max-sync-committee-message-delay", 4*time.Second)
 	viper.SetDefault("controller.attestation-aggregation-delay", 8*time.Second)
 	viper.SetDefault("controller.sync-committee-aggregation-delay", 8*time.Second)
-	viper.SetDefault("controller.fast-track", true)
+	viper.SetDefault("controller.fast-track.attestations", true)
+	viper.SetDefault("controller.fast-track.sync-committees", true)
+	viper.SetDefault("controller.fast-track.grace", 200*time.Millisecond)
 	viper.SetDefault("blockrelay.timeout", 1*time.Second)
 	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(30000000))
@@ -432,7 +434,9 @@ func startServices(ctx context.Context,
 		standardcontroller.WithAttestationAggregationDelay(viper.GetDuration("controller.attestation-aggregation-delay")),
 		standardcontroller.WithMaxSyncCommitteeMessageDelay(viper.GetDuration("controller.max-sync-committee-message-delay")),
 		standardcontroller.WithSyncCommitteeAggregationDelay(viper.GetDuration("controller.sync-committee-aggregation-delay")),
-		standardcontroller.WithFastTrack(viper.GetBool("controller.fast-track")),
+		standardcontroller.WithFastTrackAttestations(viper.GetBool("controller.fast-track.attestations")),
+		standardcontroller.WithFastTrackSyncCommittees(viper.GetBool("controller.fast-track.sync-committees")),
+		standardcontroller.WithFastTrackGrace(viper.GetDuration("controller.fast-track.grace")),
 	)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to start controller service")
