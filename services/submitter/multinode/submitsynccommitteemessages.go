@@ -135,7 +135,7 @@ func (s *Service) handleSubmitSyncCommitteeMessagesError(ctx context.Context,
 			log.Warn().Err(err).Msg("Failed to submit sync committee messages")
 			return err
 		}
-		for i := 0; i < len(resp.Failures); i++ {
+		for i := range len(resp.Failures) {
 			switch {
 			case strings.HasPrefix(resp.Failures[i].Message, "Verification: PriorSyncCommitteeMessageKnown"):
 				log.Trace().Str("provider", provider).Int("index", resp.Failures[i].Index).Msg("Message already received for that slot; ignoring")
@@ -154,7 +154,7 @@ func (s *Service) handleSubmitSyncCommitteeMessagesError(ctx context.Context,
 			log.Trace().Err(err).Msg("Failed to submit sync committee messages")
 			return err
 		}
-		for i := 0; i < len(resp.Failures); i++ {
+		for i := range len(resp.Failures) {
 			switch {
 			case resp.Failures[i].Message == "Ignoring sync committee message as a duplicate was processed during validation":
 				log.Trace().Str("provider", provider).Str("index", resp.Failures[i].Index).Msg("Message already received for that slot; ignoring")

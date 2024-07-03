@@ -108,7 +108,7 @@ func (s *Service) AttestationsCompleted(started time.Time, slot phase0.Slot, cou
 	// Only log times for successful completions.
 	if result == "succeeded" {
 		duration := time.Since(started).Seconds()
-		for i := 0; i < count; i++ {
+		for range count {
 			s.attestationProcessTimer.Observe(duration)
 		}
 		if s.chainTime != nil {

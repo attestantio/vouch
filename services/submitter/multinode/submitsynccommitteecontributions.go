@@ -110,7 +110,7 @@ func (s *Service) handleSubmitSyncCommitteeContributionsError(ctx context.Contex
 		if err := json.Unmarshal([]byte(errorStr[jsonIndex:]), &resp); err != nil {
 			return err
 		}
-		for i := 0; i < len(resp.Failures); i++ {
+		for i := range len(resp.Failures) {
 			switch {
 			case strings.HasPrefix(resp.Failures[i].Message, "Verification: AggregatorAlreadyKnown"):
 				log.Trace().Str("beacon_node_address", address).Int("index", resp.Failures[i].Index).Msg("Contribution and proof already received for that slot; ignoring")
