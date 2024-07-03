@@ -94,7 +94,7 @@ func (s *Service) updateBlockVotes(_ context.Context,
 		if !exists {
 			votes[data.Slot][data.Index] = bitfield.NewBitlist(attestation.AggregationBits.Len())
 		}
-		for i := uint64(0); i < attestation.AggregationBits.Len(); i++ {
+		for i := range attestation.AggregationBits.Len() {
 			if attestation.AggregationBits.BitAt(i) {
 				votes[data.Slot][data.Index].SetBitAt(i, true)
 			}

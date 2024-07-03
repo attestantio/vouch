@@ -44,7 +44,7 @@ func Scatter(inputLen int, concurrency int, work func(int, int, *sync.RWMutex) (
 	errorCh := make(chan error, workers)
 	defer close(errorCh)
 	mutex := new(sync.RWMutex)
-	for worker := 0; worker < workers; worker++ {
+	for worker := range workers {
 		offset := worker * extentSize
 		entries := extentSize
 		if offset+entries > inputLen {
@@ -66,7 +66,7 @@ func Scatter(inputLen int, concurrency int, work func(int, int, *sync.RWMutex) (
 	// Collect results from workers
 	results := make([]*ScatterResult, workers)
 	var err error
-	for i := 0; i < workers; i++ {
+	for i := range workers {
 		select {
 		case result := <-resultCh:
 			results[i] = result

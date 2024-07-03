@@ -326,7 +326,6 @@ func startServices(ctx context.Context,
 		case <-sigCh:
 			return nil, nil, errors.New("signal received")
 		case <-ctx.Done():
-			//nolint:errorlint
 			switch ctx.Err() {
 			case context.DeadlineExceeded:
 				log.Info().Msg("Genesis time")

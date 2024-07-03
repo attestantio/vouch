@@ -124,7 +124,7 @@ func (s *Service) SyncCommitteeAggregationsCompleted(started time.Time, slot pha
 	// Only log times for successful completions.
 	if result == "succeeded" {
 		duration := time.Since(started).Seconds()
-		for i := 0; i < count; i++ {
+		for range count {
 			s.syncCommitteeAggregationProcessTimer.Observe(duration)
 		}
 		if s.chainTime != nil {

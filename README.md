@@ -67,7 +67,7 @@ Jim McDonald: [@mcdee](https://github.com/mcdee).
 
 ## Contribute
 
-Contributions welcome. Please check out [the issues](https://github.com/attestantio/vouch/issues).
+Contributions welcome. Please see the [CONTRIBUTING.md](CONTRIBUTING.md) doc.
 
 ## License
 

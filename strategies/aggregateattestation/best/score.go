@@ -31,7 +31,7 @@ func (*Service) scoreAggregateAttestation(_ context.Context,
 
 	included := 0
 	total := aggregate.AggregationBits.Len()
-	for i := uint64(0); i < total; i++ {
+	for i := range total {
 		if aggregate.AggregationBits.BitAt(i) {
 			included++
 		}

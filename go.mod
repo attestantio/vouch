@@ -1,8 +1,8 @@
 module github.com/attestantio/vouch
 
-go 1.21
+go 1.22
 
-toolchain go1.21.6
+toolchain go1.22.4
 
 require (
 	github.com/attestantio/go-block-relay v0.3.1
