@@ -923,6 +923,26 @@ func (m *SleepySignedBeaconBlockProvider) SignedBeaconBlock(ctx context.Context,
 	return m.next.SignedBeaconBlock(ctx, opts)
 }
 
+// PrimedSignedBeaconBlockProvider is a mock for eth2client.SignedBeaconBlockProvider.
+type PrimedSignedBeaconBlockProvider struct {
+	response *api.Response[*spec.VersionedSignedBeaconBlock]
+}
+
+// NewPrimedSignedBeaconBlockProvider returns a mock beacon block proposal provider.
+func NewPrimedSignedBeaconBlockProvider() *PrimedSignedBeaconBlockProvider {
+	return &PrimedSignedBeaconBlockProvider{}
+}
+
+// SignedBeaconBlock is a mock.
+func (p *PrimedSignedBeaconBlockProvider) SignedBeaconBlock(_ context.Context, _ *api.SignedBeaconBlockOpts) (*api.Response[*spec.VersionedSignedBeaconBlock], error) {
+	return p.response, nil
+}
+
+// PrimeResponse is a mock.
+func (p *PrimedSignedBeaconBlockProvider) PrimeResponse(response *api.Response[*spec.VersionedSignedBeaconBlock]) {
+	p.response = response
+}
+
 // AttestationDataProvider is a mock for eth2client.AttestationDataProvider.
 type AttestationDataProvider struct{}
 

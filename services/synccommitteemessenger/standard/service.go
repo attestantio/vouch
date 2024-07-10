@@ -54,6 +54,8 @@ type Service struct {
 	syncCommitteeMessagesSubmitter    submitter.SyncCommitteeMessagesSubmitter
 	syncCommitteeSelectionSigner      signer.SyncCommitteeSelectionSigner
 	syncCommitteeRootSigner           signer.SyncCommitteeRootSigner
+	beaconBlockRootsReported          map[phase0.Slot]synccommitteemessenger.RootReported
+	beaconBlockRootsReportedMu        sync.Mutex
 }
 
 // module-wide log.
@@ -112,6 +114,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeMessagesSubmitter:    parameters.syncCommitteeMessagesSubmitter,
 		syncCommitteeSelectionSigner:      parameters.syncCommitteeSelectionSigner,
 		syncCommitteeRootSigner:           parameters.syncCommitteeRootSigner,
+		beaconBlockRootsReported:          make(map[phase0.Slot]synccommitteemessenger.RootReported),
 	}
 
 	return s, nil
@@ -182,6 +185,9 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 	for validatorIndex := range duty.ContributionIndices() {
 		validatorIndices = append(validatorIndices, validatorIndex)
 	}
+
+	s.SetBeaconBlockRootReported(duty.Slot(), *beaconBlockRoot, validatorIndices)
+
 	var wg sync.WaitGroup
 	for i := range validatorIndices {
 		wg.Add(1)
@@ -224,6 +230,17 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 	s.monitor.SyncCommitteeMessagesCompleted(started, duty.Slot(), len(msgs), "succeeded")
 
 	return msgs, nil
+}
+
+func (s *Service) SetBeaconBlockRootReported(slot phase0.Slot, root phase0.Root, validatorIndices []phase0.ValidatorIndex) {
+	s.beaconBlockRootsReportedMu.Lock()
+	s.beaconBlockRootsReported[slot] = synccommitteemessenger.RootReported{Root: root, ValidatorIndices: validatorIndices}
+	s.beaconBlockRootsReportedMu.Unlock()
+}
+
+func (s *Service) GetBeaconBlockRootReported(slot phase0.Slot) (synccommitteemessenger.RootReported, bool) {
+	root, found := s.beaconBlockRootsReported[slot]
+	return root, found
 }
 
 func (s *Service) contribute(ctx context.Context,
