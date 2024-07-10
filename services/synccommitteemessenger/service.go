@@ -132,4 +132,12 @@ type Service interface {
 	// Message generates and broadcasts sync committee messages for a slot.
 	// It returns a list of messages made.
 	Message(ctx context.Context, data interface{}) ([]*altair.SyncCommitteeMessage, error)
+
+	// GetBeaconBlockRootReported gets the beacon block we reported via sync committee messenger
+	GetBeaconBlockRootReported(slot phase0.Slot) (RootReported, bool)
+}
+
+type RootReported struct {
+	ValidatorIndices []phase0.ValidatorIndex
+	Root             phase0.Root
 }
