@@ -111,24 +111,29 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 	}
 
 	epoch := phase0.Epoch(100)
-	slot := phase0.Slot(epoch * 32)
+	currentSlot := phase0.Slot(epoch * 32)
+	previousSlot := currentSlot - 1
 	root := testutil.HexToRoot("0x0606060606060606060606060606060606060606060606060606060606060606")
 	mismatchingRoot := testutil.HexToRoot("0x0909090909090909090909090909090909090909090909090909090909090909")
-	messageIndices := testutil.CreateMessageIndices()
-	duty := synccommitteemessenger.NewDuty(slot, messageIndices)
+	validatorIndexToCommitteeIndices := testutil.CreateValidatorIndexToCommitteeIndicesTestData()
+	duty := synccommitteemessenger.NewDuty(previousSlot, validatorIndexToCommitteeIndices)
 
-	validatorIndices := make([]phase0.ValidatorIndex, 10)
-	for validatorIndex := range 10 {
-		validatorIndices[validatorIndex] = phase0.ValidatorIndex(validatorIndex)
+	// Extract validator indices to array and create bitvector to mock SyncAggregate data.
+	validatorIndices := make([]phase0.ValidatorIndex, len(validatorIndexToCommitteeIndices))
+	bitvector512 := bitfield.NewBitvector512()
+	for validatorIndex, committeeIndices := range validatorIndexToCommitteeIndices {
+		validatorIndices[validatorIndex] = validatorIndex
+		for _, committeeIndex := range committeeIndices {
+			bitvector512.SetBitAt(uint64(committeeIndex), true)
+		}
 	}
+
 	accounts, err := testutil.CreateTestWalletAndAccounts(validatorIndices, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
 	require.NoError(t, err)
 
-	bitvector512 := bitfield.NewBitvector512()
 	for validIndex, testAccount := range accounts {
 		duty.SetAccount(validIndex, testAccount)
 		mockValidatingAccountsProvider.AddAccount(validIndex, testAccount)
-		bitvector512.SetBitAt(uint64(validIndex), true)
 	}
 
 	responseBlock := api.Response[*spec.VersionedSignedBeaconBlock]{
@@ -136,7 +141,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			Version: spec.DataVersionAltair,
 			Altair: &altair.SignedBeaconBlock{
 				Message: &altair.BeaconBlock{
-					Slot:       slot,
+					Slot:       currentSlot,
 					ParentRoot: root,
 					Body: &altair.BeaconBlockBody{
 						SyncAggregate: &altair.SyncAggregate{
@@ -148,8 +153,6 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			},
 		},
 	}
-
-	primedSignedBeaconBlockProvider.PrimeResponse(&responseBlock)
 
 	tests := []struct {
 		name                string
@@ -165,7 +168,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 				"Received head event",
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {
-				service.PrimeLastReported(slot, synccommitteemessenger.RootReported{Root: root, ValidatorIndices: validatorIndices})
+				service.PrimeLastReported(previousSlot, synccommitteemessenger.SlotData{Root: root, ValidatorToCommitteeIndex: validatorIndexToCommitteeIndices})
 			},
 		},
 		{
@@ -173,10 +176,10 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			params: append(params, standard.WithSignedBeaconBlockProvider(unhappySignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
-				fmt.Sprintf("failed to retrieve block: %s for slot: %d with err: %v", root.String(), slot, errors.New("error")),
+				fmt.Sprintf("Failed to retrieve block: %s during slot: %d with err: %v", root.String(), currentSlot, errors.New("error")),
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {
-				service.PrimeLastReported(slot, synccommitteemessenger.RootReported{Root: root, ValidatorIndices: validatorIndices})
+				service.PrimeLastReported(previousSlot, synccommitteemessenger.SlotData{Root: root, ValidatorToCommitteeIndex: validatorIndexToCommitteeIndices})
 			},
 		},
 		{
@@ -184,7 +187,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			params: append(params, standard.WithSignedBeaconBlockProvider(happySignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
-				fmt.Sprintf("no reported sync committee message data for slot: %d, skipping validation", slot),
+				fmt.Sprintf("No reported sync committee message data for slot: %d, skipping validation", previousSlot),
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {},
 		},
@@ -193,21 +196,34 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			params: append(params, standard.WithSignedBeaconBlockProvider(happySignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
-				fmt.Sprintf("mismatch in block root for slot: %d. Reported: %s and observed: %s", slot, mismatchingRoot.String(), root.String()),
+				fmt.Sprintf("Mismatch in block root for slot: %d. Reported: %s and observed: %s", previousSlot, mismatchingRoot.String(), root.String()),
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {
-				service.PrimeLastReported(slot, synccommitteemessenger.RootReported{Root: mismatchingRoot, ValidatorIndices: validatorIndices})
+				service.PrimeLastReported(previousSlot, synccommitteemessenger.SlotData{Root: mismatchingRoot, ValidatorToCommitteeIndex: validatorIndexToCommitteeIndices})
 			},
 		},
 		{
 			name:   "FailedToGetSyncAggregate",
-			params: append(params, standard.WithSignedBeaconBlockProvider(happySignedBeaconBlockProvider)),
+			params: append(params, standard.WithSignedBeaconBlockProvider(primedSignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
-				fmt.Sprintf("failed to get sync aggregate for block: %s for slot: %d with err: %v", root.String(), slot, errors.New("phase0 block does not have sync aggregate")),
+				"Failed to get sync aggregate for block: 0x0606060606060606060606060606060606060606060606060606060606060606 during slot: 3200 with err: no altair block",
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {
-				service.PrimeLastReported(slot, synccommitteemessenger.RootReported{Root: root, ValidatorIndices: validatorIndices})
+				missingAggregateResponseBlock := api.Response[*spec.VersionedSignedBeaconBlock]{
+					Data: &spec.VersionedSignedBeaconBlock{
+						Version: spec.DataVersionAltair,
+						Altair: &altair.SignedBeaconBlock{
+							Message: &altair.BeaconBlock{
+								Slot:       currentSlot,
+								ParentRoot: root,
+								Body:       nil,
+							},
+						},
+					},
+				}
+				primedSignedBeaconBlockProvider.PrimeResponse(&missingAggregateResponseBlock)
+				service.PrimeLastReported(previousSlot, synccommitteemessenger.SlotData{Root: root, ValidatorToCommitteeIndex: validatorIndexToCommitteeIndices})
 			},
 		},
 		{
@@ -215,10 +231,12 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			params: append(params, standard.WithSignedBeaconBlockProvider(primedSignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
-				fmt.Sprintf("validator with index: %d not included in sync committee aggregate bits", 11),
+				"Validator with index: 11 and committee index: 200 not included in SyncAggregate SyncCommitteeBits",
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {
-				service.PrimeLastReported(slot, synccommitteemessenger.RootReported{Root: root, ValidatorIndices: append(validatorIndices, 11)})
+				validatorIndexToCommitteeWithExtraValidator := validatorIndexToCommitteeIndices
+				validatorIndexToCommitteeWithExtraValidator[11] = []phase0.CommitteeIndex{200}
+				service.PrimeLastReported(previousSlot, synccommitteemessenger.SlotData{Root: root, ValidatorToCommitteeIndex: validatorIndexToCommitteeWithExtraValidator})
 			},
 		},
 	}
@@ -229,23 +247,26 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			standardService, err := standard.New(ctx, test.params...)
 			require.NoError(t, err)
 
-			// Reset and prime the mock for each test
+			// Reset and prime the mock for each test.
 			mockSyncCommitteeMessenger.ResetMock()
+			// Prime the block provider before each test. The test specific priming may override this.
+			primedSignedBeaconBlockProvider.PrimeResponse(&responseBlock)
 			test.testSpecificPriming(mockSyncCommitteeMessenger)
 
 			data := &apiv1.HeadEvent{
-				Slot:  slot,
+				Slot:  currentSlot,
 				Block: root,
 			}
 			standardService.VerifySyncCommitteeMessages(ctx, data)
 			foundLogEntries := 0
 			for _, logEntry := range test.logEntries {
-				logMap := map[string]any{"slot": uint64(3200)}
+				// Filter on slot field to ignore output from other controller functions.
+				logMap := map[string]any{"slot": uint64(currentSlot)}
 				logMap["message"] = logEntry
-				require.True(t, capture.HasLog(logMap))
+				require.True(t, capture.HasLog(logMap), fmt.Sprintf(`failed to find message "%s" in output`, logEntry))
 				foundLogEntries++
 			}
-			require.Equal(t, len(test.logEntries), foundLogEntries, "unexpected number of log entries")
+			require.Equal(t, len(test.logEntries), foundLogEntries, "Unexpected number of log entries")
 		})
 	}
 }
