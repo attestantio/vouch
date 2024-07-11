@@ -23,12 +23,12 @@ import (
 
 // Service is a mock sync committee contributor.
 type Service struct {
-	lastReported map[phase0.Slot]synccommitteemessenger.RootReported
+	lastReported map[phase0.Slot]synccommitteemessenger.SlotData
 }
 
 // New creates a new mock sync committee contributor.
 func New() *Service {
-	return &Service{lastReported: make(map[phase0.Slot]synccommitteemessenger.RootReported)}
+	return &Service{lastReported: make(map[phase0.Slot]synccommitteemessenger.SlotData)}
 }
 
 // Prepare prepares in advance of a sync committee message.
@@ -42,18 +42,21 @@ func (*Service) Message(_ context.Context, _ interface{}) ([]*altair.SyncCommitt
 	return make([]*altair.SyncCommitteeMessage, 0), nil
 }
 
-// GetBeaconBlockRootReported is a mock.
-func (s *Service) GetBeaconBlockRootReported(slot phase0.Slot) (synccommitteemessenger.RootReported, bool) {
+// GetDataUsedForSlot is a mock.
+func (s *Service) GetDataUsedForSlot(slot phase0.Slot) (synccommitteemessenger.SlotData, bool) {
 	root, found := s.lastReported[slot]
 	return root, found
 }
 
+// RemoveHistoricDataUsedForSlotValidation is a mock.
+func (s *Service) RemoveHistoricDataUsedForSlotValidation(_ phase0.Slot) {}
+
 // PrimeLastReported is used to prime the mock.
-func (s *Service) PrimeLastReported(slot phase0.Slot, lastReported synccommitteemessenger.RootReported) {
+func (s *Service) PrimeLastReported(slot phase0.Slot, lastReported synccommitteemessenger.SlotData) {
 	s.lastReported[slot] = lastReported
 }
 
 // ResetMock is used to reset the mock.
 func (s *Service) ResetMock() {
-	s.lastReported = make(map[phase0.Slot]synccommitteemessenger.RootReported)
+	s.lastReported = make(map[phase0.Slot]synccommitteemessenger.SlotData)
 }

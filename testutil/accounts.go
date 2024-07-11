@@ -26,18 +26,7 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
-func CreateMessageIndices() map[phase0.ValidatorIndex][]phase0.CommitteeIndex {
-	messageIndices := make(map[phase0.ValidatorIndex][]phase0.CommitteeIndex, 10)
-	for validatorIndex := range 10 {
-		var committeeIndices []phase0.CommitteeIndex
-		for syncCommitteeIndex := range 5 {
-			committeeIndices = append(committeeIndices, phase0.CommitteeIndex(syncCommitteeIndex))
-		}
-		messageIndices[phase0.ValidatorIndex(validatorIndex)] = committeeIndices
-	}
-	return messageIndices
-}
-
+// CreateTestWalletAndAccounts creates a map of validator indices to accounts for unit tests.
 func CreateTestWalletAndAccounts(validatorIndices []phase0.ValidatorIndex, hex string) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
 	accountMapping := make(map[phase0.ValidatorIndex]e2wtypes.Account)
 	err := e2types.InitBLS()

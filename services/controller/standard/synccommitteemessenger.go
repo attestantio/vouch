@@ -138,10 +138,10 @@ func (s *Service) prepareMessageSyncCommittee(ctx context.Context, data interfac
 		log.Error().Msg("Passed invalid data")
 		return
 	}
-	logger := log.With().Uint64("slot", uint64(s.chainTimeService.CurrentSlot())).Logger()
+	log := log.With().Uint64("slot", uint64(s.chainTimeService.CurrentSlot())).Logger()
 
 	if err := s.syncCommitteeMessenger.Prepare(ctx, duty); err != nil {
-		logger.Error().Uint64("sync_committee_slot", uint64(duty.Slot())).Err(err).Msg("Failed to prepare sync committee message")
+		log.Error().Uint64("sync_committee_slot", uint64(duty.Slot())).Err(err).Msg("Failed to prepare sync committee message")
 		return
 	}
 
@@ -154,11 +154,11 @@ func (s *Service) prepareMessageSyncCommittee(ctx context.Context, data interfac
 		s.messageSyncCommittee,
 		duty,
 	); err != nil {
-		logger.Error().Err(err).Msg("Failed to schedule sync committee messages")
+		log.Error().Err(err).Msg("Failed to schedule sync committee messages")
 		return
 	}
 
-	logger.Trace().Dur("elapsed", time.Since(started)).Msg("Prepared")
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Prepared")
 }
 
 func (s *Service) messageSyncCommittee(ctx context.Context, data interface{}) {
@@ -168,11 +168,11 @@ func (s *Service) messageSyncCommittee(ctx context.Context, data interface{}) {
 		log.Error().Msg("Passed invalid data")
 		return
 	}
-	logger := log.With().Uint64("slot", uint64(s.chainTimeService.CurrentSlot())).Logger()
+	log := log.With().Uint64("slot", uint64(s.chainTimeService.CurrentSlot())).Logger()
 
 	_, err := s.syncCommitteeMessenger.Message(ctx, duty)
 	if err != nil {
-		logger.Warn().Err(err).Msg("Failed to submit sync committee message")
+		log.Warn().Err(err).Msg("Failed to submit sync committee message")
 		return
 	}
 

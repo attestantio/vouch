@@ -80,9 +80,11 @@ func (s *Service) HandleHeadEvent(event *apiv1.Event) {
 	delete(s.subscriptionInfos, s.chainTimeService.SlotToEpoch(data.Slot)-2)
 	s.subscriptionInfosMutex.Unlock()
 
-	// Verify sync committee participation
-	// s.syncCommitteeMessenger.VerifyCommitteeParticipation(ctx, data)
+	// Verify sync committee participation.
 	s.VerifySyncCommitteeMessages(ctx, data)
+
+	// Remove old sync committee data.
+	s.syncCommitteeMessenger.RemoveHistoricDataUsedForSlotValidation(data.Slot)
 }
 
 // checkEventForReorg check data in the event against information that we already have to see if
@@ -343,35 +345,53 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data *apiv1.H
 	_, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "VerifySyncCommitteeMessages")
 	defer span.End()
 
-	logger := log.With().Uint64("slot", uint64(data.Slot)).Logger()
+	// We verify against the previous slot as that is when the sync committee will have reported.
+	previousSlot := data.Slot - 1
+	currentSlot := data.Slot
+
+	// Logging with the current slot as that is when this code is executed.
+	logger := log.With().Uint64("slot", uint64(currentSlot)).Logger()
 	logger.Trace().Msg("Received head event")
 
-	rootReported, found := s.syncCommitteeMessenger.GetBeaconBlockRootReported(data.Slot)
+	previousSlotData, found := s.syncCommitteeMessenger.GetDataUsedForSlot(previousSlot)
 	if !found {
-		logger.Trace().Msg(fmt.Sprintf("no reported sync committee message data for slot: %d, skipping validation", data.Slot))
+		logger.Trace().Msg(fmt.Sprintf("No reported sync committee message data for slot: %d, skipping validation", previousSlot))
 		return
 	}
-
-	if rootReported.Root != data.Block {
-		logger.Trace().Msg(fmt.Sprintf("mismatch in block root for slot: %d. Reported: %s and observed: %s", data.Slot, rootReported.Root.String(), data.Block.String()))
-		// TODO: Check that it is correct to return here. If we do not match the block root we shouldn't be part of the SyncAggregate
+	// TODO: Verify if it is correct to compare the recorded previous slot root with head event block or whether we just need to compare the head event block's parent root with previous slot root (as below).
+	if previousSlotData.Root != data.Block {
+		logger.Trace().Msg(fmt.Sprintf("Mismatch in block root for slot: %d. Reported: %s and observed: %s", previousSlot, previousSlotData.Root.String(), data.Block.String()))
 		return
 	}
 	blockResponse, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, &api.SignedBeaconBlockOpts{
 		Block: data.Block.String(),
 	})
 	if err != nil {
-		logger.Trace().Msg(fmt.Sprintf("failed to retrieve block: %s for slot: %d with err: %v", data.Block.String(), data.Slot, err))
+		logger.Trace().Msg(fmt.Sprintf("Failed to retrieve block: %s during slot: %d with err: %v", data.Block.String(), currentSlot, err))
+		return
+	}
+	parentRoot, err := blockResponse.Data.ParentRoot()
+	if err != nil {
+		logger.Trace().Msg(fmt.Sprintf("Failed to get parent root of block: %s during slot: %d with err: %v", data.Block.String(), currentSlot, err))
+		return
+	}
+	if parentRoot.String() != previousSlotData.Root.String() {
+		logger.Trace().Msg(fmt.Sprintf("Parent root of %s not equal to previous sync committee root of: %s reported in slot: %d", parentRoot.String(), previousSlotData.Root.String(), previousSlot))
 		return
 	}
 	syncAggregate, err := blockResponse.Data.SyncAggregate()
 	if err != nil {
-		logger.Trace().Msg(fmt.Sprintf("failed to get sync aggregate for block: %s for slot: %d with err: %v", data.Block.String(), data.Slot, err))
+		logger.Trace().Msg(fmt.Sprintf("Failed to get sync aggregate for block: %s during slot: %d with err: %v", data.Block.String(), currentSlot, err))
 		return
 	}
-	for _, index := range rootReported.ValidatorIndices {
-		if !syncAggregate.SyncCommitteeBits.BitAt(uint64(index)) {
-			logger.Trace().Msg(fmt.Sprintf("validator with index: %d not included in sync committee aggregate bits", index))
+
+	// The previousSlotData.ValidatorToCommitteeIndex maps all of our validators to their committee indices for every slot in the epoch.
+	// Assumption here is that for every slot each validator should have contributed to all their committee indices for the whole epoch.
+	for index, committeeIndices := range previousSlotData.ValidatorToCommitteeIndex {
+		for _, committeeIndex := range committeeIndices {
+			if !syncAggregate.SyncCommitteeBits.BitAt(uint64(committeeIndex)) {
+				logger.Trace().Msg(fmt.Sprintf("Validator with index: %d and committee index: %d not included in SyncAggregate SyncCommitteeBits", index, committeeIndex))
+			}
 		}
 	}
 }
