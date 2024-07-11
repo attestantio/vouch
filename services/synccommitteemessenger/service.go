@@ -133,11 +133,14 @@ type Service interface {
 	// It returns a list of messages made.
 	Message(ctx context.Context, data interface{}) ([]*altair.SyncCommitteeMessage, error)
 
-	// GetBeaconBlockRootReported gets the beacon block we reported via sync committee messenger
-	GetBeaconBlockRootReported(slot phase0.Slot) (RootReported, bool)
+	// GetDataUsedForSlot returns slot data recorded for the sync committee message for a given slot.
+	GetDataUsedForSlot(slot phase0.Slot) (SlotData, bool)
+
+	// RemoveHistoricDataUsedForSlotValidation goes through the sync committee data stored for each slot and removes old slots.
+	RemoveHistoricDataUsedForSlotValidation(currentSlot phase0.Slot)
 }
 
-type RootReported struct {
-	ValidatorIndices []phase0.ValidatorIndex
-	Root             phase0.Root
+type SlotData struct {
+	Root                      phase0.Root
+	ValidatorToCommitteeIndex map[phase0.ValidatorIndex][]phase0.CommitteeIndex
 }

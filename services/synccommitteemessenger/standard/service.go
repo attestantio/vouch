@@ -39,6 +39,12 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
+// TODO: Check if we need to add this to the config.
+const (
+	maxSlotDataRecordsBeforeCleanUp = 100
+	minSlotDataRecordsToKeep        = 32
+)
+
 // Service is a beacon block attester.
 type Service struct {
 	monitor                           metrics.SyncCommitteeMessageMonitor
@@ -54,8 +60,8 @@ type Service struct {
 	syncCommitteeMessagesSubmitter    submitter.SyncCommitteeMessagesSubmitter
 	syncCommitteeSelectionSigner      signer.SyncCommitteeSelectionSigner
 	syncCommitteeRootSigner           signer.SyncCommitteeRootSigner
-	beaconBlockRootsReported          map[phase0.Slot]synccommitteemessenger.RootReported
-	beaconBlockRootsReportedMu        sync.Mutex
+	slotDataRecords                   map[phase0.Slot]synccommitteemessenger.SlotData
+	slotDataRecordsMu                 sync.Mutex
 }
 
 // module-wide log.
@@ -114,7 +120,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeMessagesSubmitter:    parameters.syncCommitteeMessagesSubmitter,
 		syncCommitteeSelectionSigner:      parameters.syncCommitteeSelectionSigner,
 		syncCommitteeRootSigner:           parameters.syncCommitteeRootSigner,
-		beaconBlockRootsReported:          make(map[phase0.Slot]synccommitteemessenger.RootReported),
+		slotDataRecords:                   make(map[phase0.Slot]synccommitteemessenger.SlotData),
 	}
 
 	return s, nil
@@ -181,12 +187,9 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 	// Sign in parallel.
 	msgs := make([]*altair.SyncCommitteeMessage, 0, len(duty.ContributionIndices()))
 	var msgsMu sync.Mutex
-	validatorIndices := make([]phase0.ValidatorIndex, 0, len(duty.ContributionIndices()))
-	for validatorIndex := range duty.ContributionIndices() {
-		validatorIndices = append(validatorIndices, validatorIndex)
-	}
+	validatorIndices := duty.ValidatorIndices()
 
-	s.SetBeaconBlockRootReported(duty.Slot(), *beaconBlockRoot, validatorIndices)
+	s.UpdateSyncCommitteeDataRecord(duty.Slot(), *beaconBlockRoot, duty.ContributionIndices())
 
 	var wg sync.WaitGroup
 	for i := range validatorIndices {
@@ -232,15 +235,32 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 	return msgs, nil
 }
 
-func (s *Service) SetBeaconBlockRootReported(slot phase0.Slot, root phase0.Root, validatorIndices []phase0.ValidatorIndex) {
-	s.beaconBlockRootsReportedMu.Lock()
-	s.beaconBlockRootsReported[slot] = synccommitteemessenger.RootReported{Root: root, ValidatorIndices: validatorIndices}
-	s.beaconBlockRootsReportedMu.Unlock()
+// UpdateSyncCommitteeDataRecord updates the internal map of slot to slot data used for the sync committee message.
+func (s *Service) UpdateSyncCommitteeDataRecord(slot phase0.Slot, root phase0.Root, validatorToCommitteeIndex map[phase0.ValidatorIndex][]phase0.CommitteeIndex) {
+	s.slotDataRecordsMu.Lock()
+	s.slotDataRecords[slot] = synccommitteemessenger.SlotData{Root: root, ValidatorToCommitteeIndex: validatorToCommitteeIndex}
+	s.slotDataRecordsMu.Unlock()
 }
 
-func (s *Service) GetBeaconBlockRootReported(slot phase0.Slot) (synccommitteemessenger.RootReported, bool) {
-	root, found := s.beaconBlockRootsReported[slot]
+// GetDataUsedForSlot returns slot data recorded for the sync committee message for a given slot.
+func (s *Service) GetDataUsedForSlot(slot phase0.Slot) (synccommitteemessenger.SlotData, bool) {
+	root, found := s.slotDataRecords[slot]
 	return root, found
+}
+
+// RemoveHistoricDataUsedForSlotValidation goes through the sync committee data stored for each slot and removes old slots.
+func (s *Service) RemoveHistoricDataUsedForSlotValidation(currentSlot phase0.Slot) {
+	// Only trigger if we have crossed threshold of max slot records to keep.
+	if len(s.slotDataRecords) > maxSlotDataRecordsBeforeCleanUp {
+		lowestSlotToKeep := currentSlot - minSlotDataRecordsToKeep
+		s.slotDataRecordsMu.Lock()
+		for slot := range s.slotDataRecords {
+			if slot < lowestSlotToKeep {
+				delete(s.slotDataRecords, slot)
+			}
+		}
+		s.slotDataRecordsMu.Unlock()
+	}
 }
 
 func (s *Service) contribute(ctx context.Context,
