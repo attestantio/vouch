@@ -390,7 +390,7 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data *apiv1.H
 	for validatorIndex, committeeIndices := range previousSlotData.ValidatorToCommitteeIndex {
 		for _, committeeIndex := range committeeIndices {
 			if !syncAggregate.SyncCommitteeBits.BitAt(uint64(committeeIndex)) {
-				log.Trace().Uint64("validator_index", uint64(validatorIndex)).
+				log.Debug().Uint64("validator_index", uint64(validatorIndex)).
 					Uint64("committee_index", uint64(committeeIndex)).
 					Msg("Validator not included in SyncAggregate SyncCommitteeBits")
 			}
