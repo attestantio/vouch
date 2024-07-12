@@ -353,7 +353,7 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data *apiv1.H
 	log := log.With().
 		Uint64("current_slot", uint64(currentSlot)).
 		Uint64("previous_slot", uint64(previousSlot)).
-		Str("block_header", data.Block.String()).
+		Stringer("block_root", data.Block).
 		Logger()
 	log.Trace().Msg("Received head event")
 
@@ -366,22 +366,22 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data *apiv1.H
 		Block: data.Block.String(),
 	})
 	if err != nil {
-		log.Trace().Err(err).Msg("Failed to retrieve head block for sync committee validation")
+		log.Debug().Err(err).Msg("Failed to retrieve head block for sync committee validation")
 		return
 	}
 	parentRoot, err := blockResponse.Data.ParentRoot()
 	if err != nil {
-		log.Trace().Err(err).Msg("Failed to get parent root of head block")
+		log.Debug().Err(err).Msg("Failed to get parent root of head block")
 		return
 	}
-	if parentRoot.String() != previousSlotData.Root.String() {
-		log.Trace().Str("head_parent_root", parentRoot.String()).Str("broadcast_root", previousSlotData.Root.String()).
+	if !bytes.Equal(parentRoot[:], previousSlotData.Root[:]) {
+		log.Trace().Stringer("head_parent_root", parentRoot).Stringer("broadcast_root", previousSlotData.Root).
 			Msg("Parent root does not equal sync committee root broadcast")
 		return
 	}
 	syncAggregate, err := blockResponse.Data.SyncAggregate()
 	if err != nil {
-		log.Trace().Err(err).Msg("Failed to get sync aggregate retrieved from head block")
+		log.Debug().Err(err).Msg("Failed to get sync aggregate retrieved from head block")
 		return
 	}
 
