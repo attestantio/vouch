@@ -46,9 +46,6 @@ go get github.com/attestantio/vouch
 ### Prysm
 Prysm must be started with the `--enable-debug-rpc-endpoints` option for Vouch to operate correctly.
 
-### Lodestar
-Lodestar must be started with the `--rest.namespace=beacon,config,events,node,validator,lightclient,debug` option for Vouch to operate correctly.
-
 ## Usage
 Vouch sits between the beacon node(s) and signer(s) in an Ethereum 2 validating infrastructure.  It runs as a standard daemon process.  The following documents provide information about configuring and using Vouch:
 
