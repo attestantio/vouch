@@ -15,7 +15,6 @@ package standard_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
@@ -176,7 +175,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			params: append(params, standard.WithSignedBeaconBlockProvider(unhappySignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
-				fmt.Sprintf("Failed to retrieve block: %s during slot: %d with err: %v", root.String(), currentSlot, errors.New("error")),
+				"Failed to retrieve head block for sync committee validation",
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {
 				service.PrimeLastReported(previousSlot, synccommitteemessenger.SlotData{Root: root, ValidatorToCommitteeIndex: validatorIndexToCommitteeIndices})
@@ -187,7 +186,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			params: append(params, standard.WithSignedBeaconBlockProvider(happySignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
-				fmt.Sprintf("No reported sync committee message data for slot: %d, skipping validation", previousSlot),
+				"No reported sync committee message data for slot; skipping validation",
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {},
 		},
@@ -196,7 +195,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			params: append(params, standard.WithSignedBeaconBlockProvider(happySignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
-				fmt.Sprintf("Mismatch in block root for slot: %d. Reported: %s and observed: %s", previousSlot, mismatchingRoot.String(), root.String()),
+				"Parent root does not equal sync committee root broadcast",
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {
 				service.PrimeLastReported(previousSlot, synccommitteemessenger.SlotData{Root: mismatchingRoot, ValidatorToCommitteeIndex: validatorIndexToCommitteeIndices})
@@ -207,7 +206,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			params: append(params, standard.WithSignedBeaconBlockProvider(primedSignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
-				"Failed to get sync aggregate for block: 0x0606060606060606060606060606060606060606060606060606060606060606 during slot: 3200 with err: no altair block",
+				"Failed to get sync aggregate retrieved from head block",
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {
 				missingAggregateResponseBlock := api.Response[*spec.VersionedSignedBeaconBlock]{
@@ -231,7 +230,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			params: append(params, standard.WithSignedBeaconBlockProvider(primedSignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
-				"Validator with index: 11 and committee index: 200 not included in SyncAggregate SyncCommitteeBits",
+				"Validator not included in SyncAggregate SyncCommitteeBits",
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {
 				validatorIndexToCommitteeWithExtraValidator := validatorIndexToCommitteeIndices
@@ -261,7 +260,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			foundLogEntries := 0
 			for _, logEntry := range test.logEntries {
 				// Filter on slot field to ignore output from other controller functions.
-				logMap := map[string]any{"slot": uint64(currentSlot)}
+				logMap := map[string]any{"current_slot": uint64(currentSlot)}
 				logMap["message"] = logEntry
 				require.True(t, capture.HasLog(logMap), fmt.Sprintf(`failed to find message "%s" in output`, logEntry))
 				foundLogEntries++
