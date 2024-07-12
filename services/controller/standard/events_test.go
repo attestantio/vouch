@@ -262,7 +262,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 				// Filter on slot field to ignore output from other controller functions.
 				logMap := map[string]any{"current_slot": uint64(currentSlot)}
 				logMap["message"] = logEntry
-				require.True(t, capture.HasLog(logMap), fmt.Sprintf(`failed to find message "%s" in output`, logEntry))
+				require.True(t, capture.HasLog(logMap), fmt.Sprintf("failed to find message %q in output", logEntry))
 				foundLogEntries++
 			}
 			require.Equal(t, len(test.logEntries), foundLogEntries, "Unexpected number of log entries")
