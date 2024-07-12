@@ -39,7 +39,6 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
-// TODO: Check if we need to add this to the config.
 const (
 	maxSlotDataRecordsBeforeCleanUp = 100
 	minSlotDataRecordsToKeep        = 32
