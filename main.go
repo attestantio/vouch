@@ -85,8 +85,6 @@ import (
 	firstbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/first"
 	firstbeaconblockrootstrategy "github.com/attestantio/vouch/strategies/beaconblockroot/first"
 	majoritybeaconblockrootstrategy "github.com/attestantio/vouch/strategies/beaconblockroot/majority"
-	bestblindedbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/blindedbeaconblockproposal/best"
-	firstblindedbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/blindedbeaconblockproposal/first"
 	"github.com/attestantio/vouch/strategies/builderbid"
 	bestbuilderbidstrategy "github.com/attestantio/vouch/strategies/builderbid/best"
 	bestsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/best"
@@ -108,7 +106,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.8.1"
+var ReleaseVersion = "1.8.2"
 
 func main() {
 	exitCode := main2()
@@ -536,7 +534,6 @@ func startProviders(ctx context.Context,
 ) (
 	graffitiprovider.Service,
 	eth2client.ProposalProvider,
-	eth2client.BlindedProposalProvider,
 	eth2client.AttestationDataProvider,
 	eth2client.AggregateAttestationProvider,
 	error,
@@ -544,34 +541,28 @@ func startProviders(ctx context.Context,
 	log.Trace().Msg("Starting graffiti provider")
 	graffitiProvider, err := startGraffitiProvider(ctx, majordomo)
 	if err != nil {
-		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to start graffiti provider")
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to start graffiti provider")
 	}
 
 	log.Trace().Msg("Selecting beacon block proposal provider")
 	beaconBlockProposalProvider, err := selectProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
 	if err != nil {
-		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to select beacon block proposal provider")
-	}
-
-	log.Trace().Msg("Selecting blinded beacon block proposal provider")
-	blindedProposalProvider, err := selectBlindedProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
-	if err != nil {
-		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to select blinded beacon block proposal provider")
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to select beacon block proposal provider")
 	}
 
 	log.Trace().Msg("Selecting attestation data provider")
 	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, eth2Client, chainTime, cache)
 	if err != nil {
-		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to select attestation data provider")
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to select attestation data provider")
 	}
 
 	log.Trace().Msg("Selecting aggregate attestation provider")
 	aggregateAttestationProvider, err := selectAggregateAttestationProvider(ctx, monitor, eth2Client)
 	if err != nil {
-		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to select aggregate attestation provider")
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to select aggregate attestation provider")
 	}
 
-	return graffitiProvider, beaconBlockProposalProvider, blindedProposalProvider, attestationDataProvider, aggregateAttestationProvider, nil
+	return graffitiProvider, beaconBlockProposalProvider, attestationDataProvider, aggregateAttestationProvider, nil
 }
 
 func startAltairServices(ctx context.Context,
@@ -664,7 +655,7 @@ func startSigningServices(ctx context.Context,
 	beaconcommitteesubscriber.Service,
 	error,
 ) {
-	graffitiProvider, proposalProvider, blindedProposalProvider, attestationDataProvider, aggregateAttestationProvider, err := startProviders(ctx, majordomo, monitor, eth2Client, chainTime, cacheSvc)
+	graffitiProvider, proposalProvider, attestationDataProvider, aggregateAttestationProvider, err := startProviders(ctx, majordomo, monitor, eth2Client, chainTime, cacheSvc)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -673,7 +664,6 @@ func startSigningServices(ctx context.Context,
 		standardbeaconblockproposer.WithLogLevel(util.LogLevel("beaconblockproposer")),
 		standardbeaconblockproposer.WithChainTime(chainTime),
 		standardbeaconblockproposer.WithProposalDataProvider(proposalProvider),
-		standardbeaconblockproposer.WithBlindedProposalDataProvider(blindedProposalProvider),
 		standardbeaconblockproposer.WithBlockAuctioneer(blockRelay.(blockauctioneer.BlockAuctioneer)),
 		standardbeaconblockproposer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardbeaconblockproposer.WithExecutionChainHeadProvider(cacheSvc.(cache.ExecutionChainHeadProvider)),
@@ -1254,69 +1244,6 @@ func selectProposalProvider(ctx context.Context,
 	}
 
 	return proposalProvider, nil
-}
-
-// selectBlindedProposalProvider selects the appropriate blinded proposal provider given user input.
-func selectBlindedProposalProvider(ctx context.Context,
-	monitor metrics.Service,
-	eth2Client eth2client.Service,
-	chainTime chaintime.Service,
-	cacheSvc cache.Service,
-) (eth2client.BlindedProposalProvider, error) {
-	var blindedProposalProvider eth2client.BlindedProposalProvider
-	var err error
-	switch viper.GetString("strategies.blindedbeaconblockproposal.style") {
-	case "best":
-		log.Info().Msg("Starting best blinded beacon block proposal strategy")
-		blindedProposalProviders := make(map[string]eth2client.BlindedProposalProvider)
-		for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best") {
-			client, err := fetchClient(ctx, monitor, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
-			}
-			blindedProposalProviders[address] = client.(eth2client.BlindedProposalProvider)
-		}
-		blindedProposalProvider, err = bestblindedbeaconblockproposalstrategy.New(ctx,
-			bestblindedbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			bestblindedbeaconblockproposalstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.blindedbeaconblockproposal.best")),
-			bestblindedbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.blindedbeaconblockproposal.best")),
-			bestblindedbeaconblockproposalstrategy.WithEventsProvider(eth2Client.(eth2client.EventsProvider)),
-			bestblindedbeaconblockproposalstrategy.WithChainTimeService(chainTime),
-			bestblindedbeaconblockproposalstrategy.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
-			bestblindedbeaconblockproposalstrategy.WithBlindedProposalProviders(blindedProposalProviders),
-			bestblindedbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
-			bestblindedbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.blindedbeaconblockproposal.best")),
-			bestblindedbeaconblockproposalstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to start best blinded beacon block proposal strategy")
-		}
-	case "first":
-		log.Info().Msg("Starting first blinded beacon block proposal strategy")
-		blindedProposalProviders := make(map[string]eth2client.BlindedProposalProvider)
-		for _, address := range util.BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first") {
-			client, err := fetchClient(ctx, monitor, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for blinded beacon block proposal strategy", address))
-			}
-			blindedProposalProviders[address] = client.(eth2client.BlindedProposalProvider)
-		}
-		blindedProposalProvider, err = firstblindedbeaconblockproposalstrategy.New(ctx,
-			firstblindedbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			firstblindedbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.blindedbeaconblockproposal.first")),
-			firstblindedbeaconblockproposalstrategy.WithChainTimeService(chainTime),
-			firstblindedbeaconblockproposalstrategy.WithBlindedProposalProviders(blindedProposalProviders),
-			firstblindedbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.blindedbeaconblockproposal.first")),
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to start first blinded beacon block proposal strategy")
-		}
-	default:
-		log.Info().Msg("Starting simple blinded beacon block proposal strategy")
-		blindedProposalProvider = eth2Client.(eth2client.BlindedProposalProvider)
-	}
-
-	return blindedProposalProvider, nil
 }
 
 // selectSyncCommitteeContributionProvider selects the appropriate sync committee contribution provider given user input.

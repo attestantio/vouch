@@ -16,6 +16,7 @@ package best
 import (
 	"bytes"
 	"context"
+	"math/big"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -204,6 +205,10 @@ func (s *Service) Proposal(ctx context.Context,
 		s.clientMonitor.StrategyOperation("best", bestProvider, "beacon block proposal", time.Since(started))
 	}
 
+	span.SetAttributes(
+		attribute.String("value", new(big.Int).Add(bestProposal.ConsensusValue, bestProposal.ExecutionValue).String()),
+		attribute.Bool("blinded", bestProposal.Blinded),
+	)
 	return &api.Response[*api.VersionedProposal]{
 		Data:     bestProposal,
 		Metadata: make(map[string]any),

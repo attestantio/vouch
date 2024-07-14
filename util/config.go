@@ -39,21 +39,6 @@ func BeaconNodeAddressesForProposing() []string {
 		}
 	}
 
-	switch viper.GetString("strategies.blindedbeaconblockproposal.style") {
-	case "best":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
-	case "first":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
-	default:
-		for _, nodeAddress := range BeaconNodeAddresses("") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
-	}
-
 	addresses := make([]string, 0, len(nodeAddresses))
 	for nodeAddress := range nodeAddresses {
 		addresses = append(addresses, nodeAddress)
