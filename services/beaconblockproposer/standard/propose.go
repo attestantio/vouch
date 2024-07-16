@@ -236,7 +236,7 @@ func (*Service) confirmProposalData(_ context.Context,
 		return errors.New("proposal data for incorrect slot")
 	}
 
-	// RANDAO reveal can be different in DVT situations, so do not check it.  It wil have already been checked by the underlying
+	// RANDAO reveal can be different in DVT situations, so do not check it. It will have already been checked by the underlying
 	// library that obtained the proposal, which is DVT-aware.
 
 	// Graffiti can be different if the consensus nodes rewrites it, e.g. to add node version information, so do not check it.
