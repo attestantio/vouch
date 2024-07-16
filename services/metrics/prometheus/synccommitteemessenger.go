@@ -99,7 +99,6 @@ func (s *Service) setupSyncCommitteeMessageMetrics() error {
 			return err
 		}
 	}
-
 	return nil
 }
 
