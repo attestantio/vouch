@@ -1,3 +1,8 @@
+1.8.2:
+  - update go-eth2-client dependency (compatibility with lodestar 1.20.0)
+  - use proposer V3 APIs
+  - do not error if proposal graffiti has been altered
+
 1.8.1:
   - ensure proposer-config-check command operates correctly
   - avoid crash by suitably locking a controller read/write map

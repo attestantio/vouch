@@ -114,19 +114,6 @@ strategies:
     # timeout defines the maximum amount of time the strategy will wait for a response.  Different strategies may return earlier
     # if they have obtained enough information from their beacon node(s).
     timeout: '2s'
-  # The blindedbeaconblockproposal strategy obtains blinded beacon block proposals from multiple beacon nodes when using the block
-  # relay module to obtain execution payloads from MEV relays.
-  blindedbeaconblockproposal:
-    # style can be 'best', which obtains blocks from all beacon nodes and selects the best, or 'first', which uses the first returned
-    style: 'best'
-    # beacon-node-addresses are the addresses from which to receive beacon block proposals.
-    beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
-    # timeout defines the maximum amount of time the strategy will wait for a response.  As soon as a response from all beacon
-    # nodes has been obtained,the strategy will return with the best.  Half-way through the timeout period, Vouch will check to see
-    # if there have been any responses from the beacon nodes, and if so will return with the best.
-    # This allows Vouch to remain responsive in the situation where some beacon nodes are significantly slower than others, for
-    # example if one is remote.
-    timeout: '2s'
   # The attestationdata strategy obtains attestation data from multiple sources.
   attestationdata:
     # style can be 'best', which obtains attestation data from all nodes and selects the best, 'first', which uses the first returned,
@@ -239,7 +226,6 @@ Modules levels are used for each module, overriding the global log level.  The a
   - **strategies.attestationdata** decisions on how to obtain information from multiple beacon nodes
   - **strategies.aggregateattestation** decisions on how to obtain information from multiple beacon nodes
   - **strategies.beaconblockproposal** decisions on how to obtain information from multiple beacon nodes
-  - **strategies.blindedbeaconblockproposal** decisions on how to obtain information from multiple beacon nodes
   - **strategies.synccommitteecontribution** decisions on how to obtain information from multiple beacon nodes
   - **submitter** decisions on how to submit information to multiple beacon nodes
   - **validatorsmanager** obtaining validator state from beacon nodes and providing it to other modules

@@ -34,7 +34,6 @@ type parameters struct {
 	chainTime                  chaintime.Service
 	blockAuctioneer            blockauctioneer.BlockAuctioneer
 	proposalProvider           eth2client.ProposalProvider
-	blindedProposalProvider    eth2client.BlindedProposalProvider
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	executionChainHeadProvider cache.ExecutionChainHeadProvider
 	graffitiProvider           graffitiprovider.Service
@@ -81,13 +80,6 @@ func WithBlockAuctioneer(auctioneer blockauctioneer.BlockAuctioneer) Parameter {
 func WithProposalDataProvider(provider eth2client.ProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalProvider = provider
-	})
-}
-
-// WithBlindedProposalDataProvider sets the proposal data provider.
-func WithBlindedProposalDataProvider(provider eth2client.BlindedProposalProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.blindedProposalProvider = provider
 	})
 }
 
@@ -174,9 +166,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	// Some items are required if the auctioneer is present.
 	if parameters.blockAuctioneer != nil {
-		if parameters.blindedProposalProvider == nil {
-			return nil, errors.New("no blinded proposal data provider specified")
-		}
 		if parameters.executionChainHeadProvider == nil {
 			return nil, errors.New("no execution chain head provider specified")
 		}
