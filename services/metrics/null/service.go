@@ -108,3 +108,18 @@ func (*Service) SyncCommitteeSubscriptionCompleted(_ time.Time, _ string) {
 // SyncCommitteeSubscribers sets the number of sync committees to which our validators are subscribed.
 func (*Service) SyncCommitteeSubscribers(_ int) {
 }
+
+// SyncCommitteeSyncAggregateFoundInc is called when our sync committee participation was included in the SyncAggregate for the next head.
+func (*Service) SyncCommitteeSyncAggregateFoundInc(_ phase0.Slot, _ phase0.ValidatorIndex, _ phase0.CommitteeIndex) {
+}
+
+// SyncCommitteeSyncAggregateMissingInc is called when our sync committee participation was not included in the SyncAggregate for the next head.
+func (*Service) SyncCommitteeSyncAggregateMissingInc(_ phase0.Slot, _ phase0.ValidatorIndex, _ phase0.CommitteeIndex) {
+}
+
+// SyncCommitteeGetHeadBlockFailedInc is called when validation for a sync committee fails due to being unable to retrieve the head block.
+func (*Service) SyncCommitteeGetHeadBlockFailedInc(_ phase0.Slot, _ string) {}
+
+// SyncCommitteeMessagesHeadMismatchInc is called when a sync committee message was known to not match the next head block.
+func (*Service) SyncCommitteeMessagesHeadMismatchInc(_ phase0.Slot, _, _ string) {
+}

@@ -22,6 +22,7 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/metrics"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -345,6 +346,8 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data *apiv1.H
 	_, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "VerifySyncCommitteeMessages")
 	defer span.End()
 
+	messengerMonitor := s.monitor.(metrics.SyncCommitteeValidationMonitor)
+
 	// We verify against the previous slot as that is when the sync committee will have reported.
 	previousSlot := data.Slot - 1
 	currentSlot := data.Slot
@@ -367,6 +370,7 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data *apiv1.H
 	})
 	if err != nil {
 		log.Debug().Err(err).Msg("Failed to retrieve head block for sync committee validation")
+		messengerMonitor.SyncCommitteeGetHeadBlockFailedInc(previousSlot, data.Block.String())
 		return
 	}
 	parentRoot, err := blockResponse.Data.ParentRoot()
@@ -375,8 +379,11 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data *apiv1.H
 		return
 	}
 	if !bytes.Equal(parentRoot[:], previousSlotData.Root[:]) {
-		log.Trace().Stringer("head_parent_root", parentRoot).Stringer("broadcast_root", previousSlotData.Root).
+		parentRootString := parentRoot.String()
+		previousSlotRoot := previousSlotData.Root.String()
+		log.Trace().Str("head_parent_root", parentRootString).Str("broadcast_root", previousSlotRoot).
 			Msg("Parent root does not equal sync committee root broadcast")
+		messengerMonitor.SyncCommitteeMessagesHeadMismatchInc(previousSlot, parentRootString, previousSlotRoot)
 		return
 	}
 	syncAggregate, err := blockResponse.Data.SyncAggregate()
@@ -393,7 +400,10 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data *apiv1.H
 				log.Debug().Uint64("validator_index", uint64(validatorIndex)).
 					Uint64("committee_index", uint64(committeeIndex)).
 					Msg("Validator not included in SyncAggregate SyncCommitteeBits")
+				messengerMonitor.SyncCommitteeSyncAggregateMissingInc(previousSlot, validatorIndex, committeeIndex)
+				continue
 			}
+			messengerMonitor.SyncCommitteeSyncAggregateFoundInc(previousSlot, validatorIndex, committeeIndex)
 		}
 	}
 }
