@@ -108,5 +108,5 @@ func (s *Service) SyncCommitteeGetHeadBlockFailedInc(slot phase0.Slot, block str
 
 // SyncCommitteeMessagesHeadMismatchInc is called when a sync committee message was known to not match the next head block.
 func (s *Service) SyncCommitteeMessagesHeadMismatchInc(slot phase0.Slot, headParentRoot, broadcastRoot string) {
-	s.syncCommitteeValidationAggregateMissing.WithLabelValues(strconv.FormatUint(uint64(slot), 10), headParentRoot, broadcastRoot).Add(1)
+	s.syncCommitteeValidationHeadMismatches.WithLabelValues(strconv.FormatUint(uint64(slot), 10), headParentRoot, broadcastRoot).Add(1)
 }
