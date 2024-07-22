@@ -400,10 +400,10 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data *apiv1.H
 				log.Debug().Uint64("validator_index", uint64(validatorIndex)).
 					Uint64("committee_index", uint64(committeeIndex)).
 					Msg("Validator not included in SyncAggregate SyncCommitteeBits")
-				messengerMonitor.SyncCommitteeSyncAggregateMissingInc(previousSlot, validatorIndex, committeeIndex)
+				messengerMonitor.SyncCommitteeSyncAggregateMissingInc(previousSlot)
 				continue
 			}
-			messengerMonitor.SyncCommitteeSyncAggregateFoundInc(previousSlot, validatorIndex, committeeIndex)
+			messengerMonitor.SyncCommitteeSyncAggregateFoundInc(previousSlot)
 		}
 	}
 }
