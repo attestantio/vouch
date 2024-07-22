@@ -106,9 +106,9 @@ type SyncCommitteeSubscriptionMonitor interface {
 // SyncCommitteeValidationMonitor provides methods to monitor the sync committee validation process.
 type SyncCommitteeValidationMonitor interface {
 	// SyncCommitteeSyncAggregateFoundInc is called when our sync committee participation was included in the SyncAggregate for the next head.
-	SyncCommitteeSyncAggregateFoundInc(slot phase0.Slot, validatorIndex phase0.ValidatorIndex, committeeIndex phase0.CommitteeIndex)
+	SyncCommitteeSyncAggregateFoundInc(slot phase0.Slot)
 	// SyncCommitteeSyncAggregateMissingInc is called when our sync committee participation was not included in the SyncAggregate for the next head.
-	SyncCommitteeSyncAggregateMissingInc(slot phase0.Slot, validatorIndex phase0.ValidatorIndex, committeeIndex phase0.CommitteeIndex)
+	SyncCommitteeSyncAggregateMissingInc(slot phase0.Slot)
 	// SyncCommitteeGetHeadBlockFailedInc is called when validation for a sync committee fails due to being unable to retrieve the head block.
 	SyncCommitteeGetHeadBlockFailedInc(slot phase0.Slot, block string)
 	// SyncCommitteeMessagesHeadMismatchInc is called when a sync committee message was known to not match the next head block.

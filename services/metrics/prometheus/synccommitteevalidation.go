@@ -57,7 +57,7 @@ func (s *Service) setupSyncCommitteeValidationMetrics() error {
 		Subsystem: "synccommitteevalidation",
 		Name:      "found_total",
 		Help:      "The number of sync committee messages that were included in the sync aggregate.",
-	}, []string{"slot", "validator_index", "contribution_index"})
+	}, []string{"slot"})
 	if err := prometheus.Register(s.syncCommitteeValidationAggregateFound); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
@@ -72,7 +72,7 @@ func (s *Service) setupSyncCommitteeValidationMetrics() error {
 		Subsystem: "synccommitteevalidation",
 		Name:      "missing_total",
 		Help:      "The number of sync committee messages that were not included in the sync aggregate.",
-	}, []string{"slot", "validator_index", "contribution_index"})
+	}, []string{"slot"})
 	if err := prometheus.Register(s.syncCommitteeValidationAggregateMissing); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
@@ -86,19 +86,19 @@ func (s *Service) setupSyncCommitteeValidationMetrics() error {
 }
 
 // SyncCommitteeSyncAggregateFoundInc is called when our sync committee participation was included in the SyncAggregate for the next head.
-func (s *Service) SyncCommitteeSyncAggregateFoundInc(slot phase0.Slot, validatorIndex phase0.ValidatorIndex, committeeIndex phase0.CommitteeIndex) {
+func (s *Service) SyncCommitteeSyncAggregateFoundInc(slot phase0.Slot) {
 	converter := func(unitToConvert uint64) string {
 		return strconv.FormatUint(unitToConvert, 10)
 	}
-	s.syncCommitteeValidationAggregateFound.WithLabelValues(converter(uint64(slot)), converter(uint64(validatorIndex)), converter(uint64(committeeIndex))).Add(1)
+	s.syncCommitteeValidationAggregateFound.WithLabelValues(converter(uint64(slot))).Add(1)
 }
 
 // SyncCommitteeSyncAggregateMissingInc is called when our sync committee participation was not included in the SyncAggregate for the next head.
-func (s *Service) SyncCommitteeSyncAggregateMissingInc(slot phase0.Slot, validatorIndex phase0.ValidatorIndex, committeeIndex phase0.CommitteeIndex) {
+func (s *Service) SyncCommitteeSyncAggregateMissingInc(slot phase0.Slot) {
 	converter := func(unitToConvert uint64) string {
 		return strconv.FormatUint(unitToConvert, 10)
 	}
-	s.syncCommitteeValidationAggregateMissing.WithLabelValues(converter(uint64(slot)), converter(uint64(validatorIndex)), converter(uint64(committeeIndex))).Add(1)
+	s.syncCommitteeValidationAggregateMissing.WithLabelValues(converter(uint64(slot))).Add(1)
 }
 
 // SyncCommitteeGetHeadBlockFailedInc is called when validation for a sync committee fails due to being unable to retrieve the head block.

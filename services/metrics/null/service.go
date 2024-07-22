@@ -110,11 +110,11 @@ func (*Service) SyncCommitteeSubscribers(_ int) {
 }
 
 // SyncCommitteeSyncAggregateFoundInc is called when our sync committee participation was included in the SyncAggregate for the next head.
-func (*Service) SyncCommitteeSyncAggregateFoundInc(_ phase0.Slot, _ phase0.ValidatorIndex, _ phase0.CommitteeIndex) {
+func (*Service) SyncCommitteeSyncAggregateFoundInc(_ phase0.Slot) {
 }
 
 // SyncCommitteeSyncAggregateMissingInc is called when our sync committee participation was not included in the SyncAggregate for the next head.
-func (*Service) SyncCommitteeSyncAggregateMissingInc(_ phase0.Slot, _ phase0.ValidatorIndex, _ phase0.CommitteeIndex) {
+func (*Service) SyncCommitteeSyncAggregateMissingInc(_ phase0.Slot) {
 }
 
 // SyncCommitteeGetHeadBlockFailedInc is called when validation for a sync committee fails due to being unable to retrieve the head block.
