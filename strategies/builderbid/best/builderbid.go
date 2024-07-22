@@ -271,7 +271,7 @@ func (*Service) setBuilderBid(ctx context.Context,
 	switch {
 	case resp.score.Cmp(bestScore) > 0:
 		res.Bid = resp.bid
-		bestScore = resp.score
+		bestScore.Set(resp.score)
 		res.Providers = make([]builderclient.BuilderBidProvider, 0)
 		res.Providers = append(res.Providers, resp.provider)
 		log.Trace().Str("provider", resp.provider.Address()).Stringer("score", bestScore).Msg("New winning bid")
