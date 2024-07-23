@@ -175,7 +175,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			params: append(params, standard.WithSignedBeaconBlockProvider(unhappySignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
-				"Failed to retrieve head block for sync committee validation",
+				"Failed to retrieve head block for sync committee verification",
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {
 				service.PrimeLastReported(previousSlot, synccommitteemessenger.SlotData{Root: root, ValidatorToCommitteeIndex: validatorIndexToCommitteeIndices})
@@ -186,7 +186,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			params: append(params, standard.WithSignedBeaconBlockProvider(happySignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
-				"No reported sync committee message data for slot; skipping validation",
+				"No reported sync committee message data for slot; skipping verification",
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {},
 		},
