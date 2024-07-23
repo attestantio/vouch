@@ -49,7 +49,7 @@ func (s *Service) GetDataUsedForSlot(slot phase0.Slot) (synccommitteemessenger.S
 }
 
 // RemoveHistoricDataUsedForSlotValidation is a mock.
-func (*Service) RemoveHistoricDataUsedForSlotValidation(_ phase0.Slot) {}
+func (*Service) RemoveHistoricDataUsedForSlotVerification(_ phase0.Slot) {}
 
 // PrimeLastReported is used to prime the mock.
 func (s *Service) PrimeLastReported(slot phase0.Slot, lastReported synccommitteemessenger.SlotData) {

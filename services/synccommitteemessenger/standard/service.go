@@ -248,7 +248,7 @@ func (s *Service) GetDataUsedForSlot(slot phase0.Slot) (synccommitteemessenger.S
 }
 
 // RemoveHistoricDataUsedForSlotValidation goes through the sync committee data stored for each slot and removes old slots.
-func (s *Service) RemoveHistoricDataUsedForSlotValidation(currentSlot phase0.Slot) {
+func (s *Service) RemoveHistoricDataUsedForSlotVerification(currentSlot phase0.Slot) {
 	// Only trigger if we have crossed threshold of max slot records to keep.
 	if len(s.slotDataRecords) > maxSlotDataRecordsBeforeCleanUp {
 		lowestSlotToKeep := currentSlot - minSlotDataRecordsToKeep
