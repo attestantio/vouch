@@ -137,7 +137,7 @@ type Service interface {
 	GetDataUsedForSlot(slot phase0.Slot) (SlotData, bool)
 
 	// RemoveHistoricDataUsedForSlotValidation goes through the sync committee data stored for each slot and removes old slots.
-	RemoveHistoricDataUsedForSlotValidation(currentSlot phase0.Slot)
+	RemoveHistoricDataUsedForSlotVerification(currentSlot phase0.Slot)
 }
 
 type SlotData struct {

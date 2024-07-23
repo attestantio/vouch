@@ -444,7 +444,7 @@ func TestServiceRemoveHistoricDataUsedForSlotValidation(t *testing.T) {
 			}
 
 			// Call the clean up method.
-			messageService.RemoveHistoricDataUsedForSlotValidation(slot)
+			messageService.RemoveHistoricDataUsedForSlotVerification(slot)
 
 			// Assert we have removed the data.
 			if test.slotToVerifyBeforeAndAfter > 0 {

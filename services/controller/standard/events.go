@@ -81,11 +81,16 @@ func (s *Service) HandleHeadEvent(event *apiv1.Event) {
 	delete(s.subscriptionInfos, s.chainTimeService.SlotToEpoch(data.Slot)-2)
 	s.subscriptionInfosMutex.Unlock()
 
-	// Verify sync committee participation.
-	s.VerifySyncCommitteeMessages(ctx, data)
+	// Only verify on current slot.
+	if data.Slot == s.chainTimeService.CurrentSlot() {
+		// Verify sync committee participation.
+		go func() {
+			s.prepareSyncCommitteeVerification(ctx, data)
+		}()
 
-	// Remove old sync committee data.
-	s.syncCommitteeMessenger.RemoveHistoricDataUsedForSlotValidation(data.Slot)
+		// Remove old sync committee data.
+		s.syncCommitteeMessenger.RemoveHistoricDataUsedForSlotVerification(data.Slot)
+	}
 }
 
 // checkEventForReorg check data in the event against information that we already have to see if
@@ -341,36 +346,61 @@ func (s *Service) subscribeToBeaconCommittees(ctx context.Context,
 	s.subscriptionInfosMutex.Unlock()
 }
 
-// VerifySyncCommitteeMessages handles the "head" events from the beacon node for sync committee validation.
-func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data *apiv1.HeadEvent) {
+func (s *Service) prepareSyncCommitteeVerification(ctx context.Context, headEvent *apiv1.HeadEvent) {
+	started := time.Now()
+	slot := s.chainTimeService.CurrentSlot()
+	log := log.With().Uint64("slot", uint64(slot)).Logger()
+
+	jobTime := s.chainTimeService.StartOfSlot(slot).Add(6 * time.Second)
+	if err := s.scheduler.ScheduleJob(ctx,
+		"Verify sync committee participation",
+		fmt.Sprintf("Sync committee verification for slot %d", slot),
+		jobTime,
+		s.VerifySyncCommitteeMessages,
+		headEvent,
+	); err != nil {
+		log.Error().Err(err).Msg("Failed to schedule sync committee verification")
+		return
+	}
+
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Sync committee verification prepared")
+}
+
+// VerifySyncCommitteeMessages handles the "head" events from the beacon node for sync committee verification.
+func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
+	headEvent, ok := data.(*apiv1.HeadEvent)
+	if !ok {
+		log.Error().Msg("Passed invalid data")
+		return
+	}
 	_, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "VerifySyncCommitteeMessages")
 	defer span.End()
 
 	messengerMonitor := s.monitor.(metrics.SyncCommitteeValidationMonitor)
 
 	// We verify against the previous slot as that is when the sync committee will have reported.
-	previousSlot := data.Slot - 1
-	currentSlot := data.Slot
+	previousSlot := headEvent.Slot - 1
+	currentSlot := headEvent.Slot
 
 	// Logging with the current slot as that is when this code is executed.
 	log := log.With().
 		Uint64("current_slot", uint64(currentSlot)).
 		Uint64("previous_slot", uint64(previousSlot)).
-		Stringer("block_root", data.Block).
+		Stringer("block_root", headEvent.Block).
 		Logger()
 	log.Trace().Msg("Received head event")
 
 	previousSlotData, found := s.syncCommitteeMessenger.GetDataUsedForSlot(previousSlot)
 	if !found {
-		log.Trace().Msg("No reported sync committee message data for slot; skipping validation")
+		log.Trace().Msg("No reported sync committee message data for slot; skipping verification")
 		return
 	}
 	blockResponse, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, &api.SignedBeaconBlockOpts{
-		Block: data.Block.String(),
+		Block: headEvent.Block.String(),
 	})
 	if err != nil {
-		log.Debug().Err(err).Msg("Failed to retrieve head block for sync committee validation")
-		messengerMonitor.SyncCommitteeGetHeadBlockFailedInc(previousSlot, data.Block.String())
+		log.Debug().Err(err).Msg("Failed to retrieve head block for sync committee verification")
+		messengerMonitor.SyncCommitteeGetHeadBlockFailedInc(previousSlot, headEvent.Block.String())
 		return
 	}
 	parentRoot, err := blockResponse.Data.ParentRoot()
