@@ -82,7 +82,7 @@ func (s *Service) HandleHeadEvent(event *apiv1.Event) {
 	s.subscriptionInfosMutex.Unlock()
 
 	// Only verify on current slot.
-	if data.Slot == s.chainTimeService.CurrentSlot() {
+	if s.verifySyncCommitteeInclusion && data.Slot == s.chainTimeService.CurrentSlot() {
 		// Verify sync committee participation.
 		s.VerifySyncCommitteeMessages(ctx, data)
 

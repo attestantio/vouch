@@ -237,6 +237,7 @@ func fetchConfig() error {
 	viper.SetDefault("controller.max-sync-committee-message-delay", 4*time.Second)
 	viper.SetDefault("controller.attestation-aggregation-delay", 8*time.Second)
 	viper.SetDefault("controller.sync-committee-aggregation-delay", 8*time.Second)
+	viper.SetDefault("controller.verify-sync-committee-inclusion", false)
 	viper.SetDefault("controller.fast-track.attestations", true)
 	viper.SetDefault("controller.fast-track.sync-committees", true)
 	viper.SetDefault("controller.fast-track.grace", 200*time.Millisecond)
@@ -457,6 +458,7 @@ func startServices(ctx context.Context,
 		standardcontroller.WithAttestationAggregationDelay(viper.GetDuration("controller.attestation-aggregation-delay")),
 		standardcontroller.WithMaxSyncCommitteeMessageDelay(viper.GetDuration("controller.max-sync-committee-message-delay")),
 		standardcontroller.WithSyncCommitteeAggregationDelay(viper.GetDuration("controller.sync-committee-aggregation-delay")),
+		standardcontroller.WithVerifySyncCommitteeInclusion(viper.GetBool("controller.verify-sync-committee-inclusion")),
 		standardcontroller.WithFastTrackAttestations(viper.GetBool("controller.fast-track.attestations")),
 		standardcontroller.WithFastTrackSyncCommittees(viper.GetBool("controller.fast-track.sync-committees")),
 		standardcontroller.WithFastTrackGrace(viper.GetDuration("controller.fast-track.grace")),
