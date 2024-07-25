@@ -188,7 +188,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 				"Received head event",
 				"No reported sync committee message data for slot; skipping verification",
 			},
-			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {},
+			testSpecificPriming: func(_ *mocksynccommitteemessenger.Service) {},
 		},
 		{
 			name:   "MismatchRootBetweenBlockAndReported",

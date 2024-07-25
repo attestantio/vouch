@@ -25,7 +25,7 @@ func (s *Service) setupSyncCommitteeValidationMetrics() error {
 		Subsystem: "synccommitteevalidation",
 		Name:      "mismatches_total",
 		Help:      "The number of sync committee messages we broadcast that did not match the next head root.",
-	}, []string{"slot", "head_parent_root", "broadcast_root"})
+	}, []string{})
 	if err := prometheus.Register(s.syncCommitteeValidationHeadMismatches); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
@@ -40,7 +40,7 @@ func (s *Service) setupSyncCommitteeValidationMetrics() error {
 		Subsystem: "synccommitteevalidation",
 		Name:      "get_head_failures_total",
 		Help:      "The number of times sync committee validation failed due to being unable to retrieve the head block.",
-	}, []string{"slot", "block"})
+	}, []string{})
 	if err := prometheus.Register(s.syncCommitteeValidationGetHeadFailures); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
@@ -55,7 +55,7 @@ func (s *Service) setupSyncCommitteeValidationMetrics() error {
 		Subsystem: "synccommitteevalidation",
 		Name:      "found_total",
 		Help:      "The number of sync committee messages that were included in the sync aggregate.",
-	}, []string{"slot"})
+	}, []string{})
 	if err := prometheus.Register(s.syncCommitteeValidationAggregateFound); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
@@ -70,7 +70,7 @@ func (s *Service) setupSyncCommitteeValidationMetrics() error {
 		Subsystem: "synccommitteevalidation",
 		Name:      "missing_total",
 		Help:      "The number of sync committee messages that were not included in the sync aggregate.",
-	}, []string{"slot"})
+	}, []string{})
 	if err := prometheus.Register(s.syncCommitteeValidationAggregateMissing); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
