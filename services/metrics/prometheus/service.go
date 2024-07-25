@@ -53,10 +53,10 @@ type Service struct {
 	syncCommitteeMessageMarkTimer         prometheus.Histogram
 	syncCommitteeMessageProcessLatestSlot prometheus.Gauge
 
-	syncCommitteeValidationHeadMismatches   *prometheus.CounterVec
-	syncCommitteeValidationAggregateFound   *prometheus.CounterVec
-	syncCommitteeValidationAggregateMissing *prometheus.CounterVec
-	syncCommitteeValidationGetHeadFailures  *prometheus.CounterVec
+	syncCommitteeVerificationHeadMismatches   *prometheus.CounterVec
+	syncCommitteeVerificationAggregateFound   *prometheus.CounterVec
+	syncCommitteeVerificationAggregateMissing *prometheus.CounterVec
+	syncCommitteeVerificationGetHeadFailures  *prometheus.CounterVec
 
 	syncCommitteeAggregationProcessTimer      prometheus.Histogram
 	syncCommitteeAggregationProcessRequests   *prometheus.CounterVec
@@ -149,7 +149,7 @@ func (s *Service) setupAllSyncCommitteeMetrics() error {
 	if err := s.setupSyncCommitteeMessageMetrics(); err != nil {
 		return errors.Wrap(err, "failed to set up sync committee message metrics")
 	}
-	if err := s.setupSyncCommitteeValidationMetrics(); err != nil {
+	if err := s.setupSyncCommitteeVerificationMetrics(); err != nil {
 		return errors.Wrap(err, "failed to set up sync committee validation metrics")
 	}
 	if err := s.setupSyncCommitteeAggregationMetrics(); err != nil {

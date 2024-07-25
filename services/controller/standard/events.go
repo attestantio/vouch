@@ -354,7 +354,7 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 	_, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "VerifySyncCommitteeMessages")
 	defer span.End()
 
-	messengerMonitor := s.monitor.(metrics.SyncCommitteeValidationMonitor)
+	messengerMonitor := s.monitor.(metrics.SyncCommitteeVerificationMonitor)
 
 	// We verify against the previous slot as that is when the sync committee will have reported.
 	previousSlot := headEvent.Slot - 1

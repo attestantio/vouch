@@ -19,62 +19,62 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-func (s *Service) setupSyncCommitteeValidationMetrics() error {
-	s.syncCommitteeValidationHeadMismatches = prometheus.NewCounterVec(prometheus.CounterOpts{
+func (s *Service) setupSyncCommitteeVerificationMetrics() error {
+	s.syncCommitteeVerificationHeadMismatches = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
-		Subsystem: "synccommitteevalidation",
+		Subsystem: "synccommitteeverification",
 		Name:      "mismatches_total",
 		Help:      "The number of sync committee messages we broadcast that did not match the next head root.",
 	}, []string{})
-	if err := prometheus.Register(s.syncCommitteeValidationHeadMismatches); err != nil {
+	if err := prometheus.Register(s.syncCommitteeVerificationHeadMismatches); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
-			s.syncCommitteeValidationHeadMismatches = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+			s.syncCommitteeVerificationHeadMismatches = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
 		} else {
 			return err
 		}
 	}
 
-	s.syncCommitteeValidationGetHeadFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
+	s.syncCommitteeVerificationGetHeadFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
-		Subsystem: "synccommitteevalidation",
+		Subsystem: "synccommitteeverification",
 		Name:      "get_head_failures_total",
-		Help:      "The number of times sync committee validation failed due to being unable to retrieve the head block.",
+		Help:      "The number of times sync committee verification failed due to being unable to retrieve the head block.",
 	}, []string{})
-	if err := prometheus.Register(s.syncCommitteeValidationGetHeadFailures); err != nil {
+	if err := prometheus.Register(s.syncCommitteeVerificationGetHeadFailures); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
-			s.syncCommitteeValidationGetHeadFailures = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+			s.syncCommitteeVerificationGetHeadFailures = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
 		} else {
 			return err
 		}
 	}
 
-	s.syncCommitteeValidationAggregateFound = prometheus.NewCounterVec(prometheus.CounterOpts{
+	s.syncCommitteeVerificationAggregateFound = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
-		Subsystem: "synccommitteevalidation",
+		Subsystem: "synccommitteeverification",
 		Name:      "found_total",
 		Help:      "The number of sync committee messages that were included in the sync aggregate.",
 	}, []string{})
-	if err := prometheus.Register(s.syncCommitteeValidationAggregateFound); err != nil {
+	if err := prometheus.Register(s.syncCommitteeVerificationAggregateFound); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
-			s.syncCommitteeValidationAggregateFound = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+			s.syncCommitteeVerificationAggregateFound = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
 		} else {
 			return err
 		}
 	}
 
-	s.syncCommitteeValidationAggregateMissing = prometheus.NewCounterVec(prometheus.CounterOpts{
+	s.syncCommitteeVerificationAggregateMissing = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
-		Subsystem: "synccommitteevalidation",
+		Subsystem: "synccommitteeverification",
 		Name:      "missing_total",
 		Help:      "The number of sync committee messages that were not included in the sync aggregate.",
 	}, []string{})
-	if err := prometheus.Register(s.syncCommitteeValidationAggregateMissing); err != nil {
+	if err := prometheus.Register(s.syncCommitteeVerificationAggregateMissing); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
-			s.syncCommitteeValidationAggregateMissing = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+			s.syncCommitteeVerificationAggregateMissing = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
 		} else {
 			return err
 		}
@@ -85,20 +85,20 @@ func (s *Service) setupSyncCommitteeValidationMetrics() error {
 
 // SyncCommitteeSyncAggregateFoundInc is called when our sync committee participation was included in the SyncAggregate for the next head.
 func (s *Service) SyncCommitteeSyncAggregateFoundInc() {
-	s.syncCommitteeValidationAggregateFound.WithLabelValues("").Add(1)
+	s.syncCommitteeVerificationAggregateFound.WithLabelValues().Add(1)
 }
 
 // SyncCommitteeSyncAggregateMissingInc is called when our sync committee participation was not included in the SyncAggregate for the next head.
 func (s *Service) SyncCommitteeSyncAggregateMissingInc() {
-	s.syncCommitteeValidationAggregateMissing.WithLabelValues("").Add(1)
+	s.syncCommitteeVerificationAggregateMissing.WithLabelValues().Add(1)
 }
 
-// SyncCommitteeGetHeadBlockFailedInc is called when validation for a sync committee fails due to being unable to retrieve the head block.
+// SyncCommitteeGetHeadBlockFailedInc is called when verification for a sync committee fails due to being unable to retrieve the head block.
 func (s *Service) SyncCommitteeGetHeadBlockFailedInc() {
-	s.syncCommitteeValidationGetHeadFailures.WithLabelValues("").Add(1)
+	s.syncCommitteeVerificationGetHeadFailures.WithLabelValues().Add(1)
 }
 
 // SyncCommitteeMessagesHeadMismatchInc is called when a sync committee message was known to not match the next head block.
 func (s *Service) SyncCommitteeMessagesHeadMismatchInc() {
-	s.syncCommitteeValidationHeadMismatches.WithLabelValues("").Add(1)
+	s.syncCommitteeVerificationHeadMismatches.WithLabelValues().Add(1)
 }

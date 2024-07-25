@@ -103,8 +103,8 @@ type SyncCommitteeSubscriptionMonitor interface {
 	SyncCommitteeSubscribers(subscribers int)
 }
 
-// SyncCommitteeValidationMonitor provides methods to monitor the sync committee validation process.
-type SyncCommitteeValidationMonitor interface {
+// SyncCommitteeVerificationMonitor provides methods to monitor the sync committee verification process.
+type SyncCommitteeVerificationMonitor interface {
 	// SyncCommitteeSyncAggregateFoundInc is called when our sync committee participation was included in the SyncAggregate for the next head.
 	SyncCommitteeSyncAggregateFoundInc()
 	// SyncCommitteeSyncAggregateMissingInc is called when our sync committee participation was not included in the SyncAggregate for the next head.
