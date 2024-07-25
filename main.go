@@ -409,7 +409,7 @@ func startServices(ctx context.Context,
 	}
 
 	// The block header provider from the configured strategy to define how we get block headers.
-	signedBeaconBlockProvider, err := selectSignedBeaconBlockProvider(ctx, monitor, eth2Client)
+	signedBeaconBlockProvider, err := selectSignedBeaconBlockProvider(ctx, monitor)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to fetch signed beacon block provider for controller")
 	}
@@ -1798,4 +1798,47 @@ func obtainBuilderConfigsForPrivilegedBuilders(_ context.Context,
 	}
 
 	return nil
+}
+
+// select the signed beacon block provider based on user input.
+func selectSignedBeaconBlockProvider(ctx context.Context,
+	monitor metrics.Service,
+) (
+	eth2client.SignedBeaconBlockProvider,
+	error,
+) {
+	log.Trace().Msg("Selecting signed beacon block strategy")
+
+	var provider eth2client.SignedBeaconBlockProvider
+	var err error
+
+	style := "strategies.signedbeaconblock.style"
+	switch viper.GetString(style) {
+	case "first", "":
+		log.Info().Msg("Starting first signed beacon block strategy")
+		signedBeaconBlockProviders := make(map[string]eth2client.SignedBeaconBlockProvider)
+		path := "strategies.signedbeaconblock.first"
+		for _, address := range util.BeaconNodeAddresses(path) {
+			client, err := fetchClient(ctx, monitor, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for signed beacon block strategy", address))
+			}
+			signedBeaconBlockProviders[address] = client.(eth2client.SignedBeaconBlockProvider)
+		}
+
+		provider, err = firstsignedbeaconblockstrategy.New(ctx,
+			firstsignedbeaconblockstrategy.WithTimeout(util.Timeout(path)),
+			firstsignedbeaconblockstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			firstsignedbeaconblockstrategy.WithLogLevel(util.LogLevel(path)),
+			firstsignedbeaconblockstrategy.WithSignedBeaconBlockProviders(signedBeaconBlockProviders),
+		)
+	default:
+		err = fmt.Errorf("unknown signed beacon block strategy %s", viper.GetString(style))
+	}
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to instantiate signed beacon block strategy")
+	}
+
+	return provider, nil
 }
