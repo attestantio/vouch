@@ -89,6 +89,7 @@ import (
 	"github.com/attestantio/vouch/strategies/builderbid"
 	bestbuilderbidstrategy "github.com/attestantio/vouch/strategies/builderbid/best"
 	deadlinebuilderbidstrategy "github.com/attestantio/vouch/strategies/builderbid/deadline"
+	firstsignedbeaconblockstrategy "github.com/attestantio/vouch/strategies/signedbeaconblock/first"
 	bestsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/best"
 	firstsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/first"
 	"github.com/attestantio/vouch/util"
@@ -407,6 +408,12 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to fetch multiclient for controller")
 	}
 
+	// The block header provider from the configured strategy to define how we get block headers.
+	signedBeaconBlockProvider, err := selectSignedBeaconBlockProvider(ctx, monitor, eth2Client)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to fetch signed beacon block provider for controller")
+	}
+
 	log.Trace().Msg("Starting controller")
 	controller, err := standardcontroller.New(ctx,
 		standardcontroller.WithLogLevel(util.LogLevel("controller")),
@@ -425,7 +432,7 @@ func startServices(ctx context.Context,
 		standardcontroller.WithSyncCommitteeAggregator(syncCommitteeAggregator),
 		standardcontroller.WithBeaconBlockProposer(beaconBlockProposer),
 		standardcontroller.WithBeaconBlockHeadersProvider(eth2Client.(eth2client.BeaconBlockHeadersProvider)),
-		standardcontroller.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
+		standardcontroller.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 		standardcontroller.WithProposalsPreparer(proposalPreparer),
 		standardcontroller.WithAttestationAggregator(attestationAggregator),
 		standardcontroller.WithBeaconCommitteeSubscriber(beaconCommitteeSubscriber),

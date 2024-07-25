@@ -84,9 +84,7 @@ func (s *Service) HandleHeadEvent(event *apiv1.Event) {
 	// Only verify on current slot.
 	if data.Slot == s.chainTimeService.CurrentSlot() {
 		// Verify sync committee participation.
-		go func() {
-			s.prepareSyncCommitteeVerification(ctx, data)
-		}()
+		s.VerifySyncCommitteeMessages(ctx, data)
 
 		// Remove old sync committee data.
 		s.syncCommitteeMessenger.RemoveHistoricDataUsedForSlotVerification(data.Slot)
@@ -346,26 +344,6 @@ func (s *Service) subscribeToBeaconCommittees(ctx context.Context,
 	s.subscriptionInfosMutex.Unlock()
 }
 
-func (s *Service) prepareSyncCommitteeVerification(ctx context.Context, headEvent *apiv1.HeadEvent) {
-	started := time.Now()
-	slot := s.chainTimeService.CurrentSlot()
-	log := log.With().Uint64("slot", uint64(slot)).Logger()
-
-	jobTime := s.chainTimeService.StartOfSlot(slot).Add(6 * time.Second)
-	if err := s.scheduler.ScheduleJob(ctx,
-		"Verify sync committee participation",
-		fmt.Sprintf("Sync committee verification for slot %d", slot),
-		jobTime,
-		s.VerifySyncCommitteeMessages,
-		headEvent,
-	); err != nil {
-		log.Error().Err(err).Msg("Failed to schedule sync committee verification")
-		return
-	}
-
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Sync committee verification prepared")
-}
-
 // VerifySyncCommitteeMessages handles the "head" events from the beacon node for sync committee verification.
 func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 	headEvent, ok := data.(*apiv1.HeadEvent)
@@ -400,7 +378,7 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 	})
 	if err != nil {
 		log.Debug().Err(err).Msg("Failed to retrieve head block for sync committee verification")
-		messengerMonitor.SyncCommitteeGetHeadBlockFailedInc(previousSlot, headEvent.Block.String())
+		messengerMonitor.SyncCommitteeGetHeadBlockFailedInc()
 		return
 	}
 	parentRoot, err := blockResponse.Data.ParentRoot()
@@ -413,7 +391,7 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 		previousSlotRoot := previousSlotData.Root.String()
 		log.Trace().Str("head_parent_root", parentRootString).Str("broadcast_root", previousSlotRoot).
 			Msg("Parent root does not equal sync committee root broadcast")
-		messengerMonitor.SyncCommitteeMessagesHeadMismatchInc(previousSlot, parentRootString, previousSlotRoot)
+		messengerMonitor.SyncCommitteeMessagesHeadMismatchInc()
 		return
 	}
 	syncAggregate, err := blockResponse.Data.SyncAggregate()
@@ -430,10 +408,10 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 				log.Debug().Uint64("validator_index", uint64(validatorIndex)).
 					Uint64("committee_index", uint64(committeeIndex)).
 					Msg("Validator not included in SyncAggregate SyncCommitteeBits")
-				messengerMonitor.SyncCommitteeSyncAggregateMissingInc(previousSlot)
+				messengerMonitor.SyncCommitteeSyncAggregateMissingInc()
 				continue
 			}
-			messengerMonitor.SyncCommitteeSyncAggregateFoundInc(previousSlot)
+			messengerMonitor.SyncCommitteeSyncAggregateFoundInc()
 		}
 	}
 }

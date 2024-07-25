@@ -136,7 +136,7 @@ type Service interface {
 	// GetDataUsedForSlot returns slot data recorded for the sync committee message for a given slot.
 	GetDataUsedForSlot(slot phase0.Slot) (SlotData, bool)
 
-	// RemoveHistoricDataUsedForSlotValidation goes through the sync committee data stored for each slot and removes old slots.
+	// RemoveHistoricDataUsedForSlotVerification goes through the sync committee data stored for each slot and removes old slots.
 	RemoveHistoricDataUsedForSlotVerification(currentSlot phase0.Slot)
 }
 

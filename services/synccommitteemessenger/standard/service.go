@@ -44,7 +44,7 @@ const (
 	minSlotDataRecordsToKeep        = 32
 )
 
-// Service is a beacon block attester.
+// Service is a sync committee messenger.
 type Service struct {
 	monitor                           metrics.SyncCommitteeMessageMonitor
 	processConcurrency                int64
@@ -247,7 +247,7 @@ func (s *Service) GetDataUsedForSlot(slot phase0.Slot) (synccommitteemessenger.S
 	return root, found
 }
 
-// RemoveHistoricDataUsedForSlotValidation goes through the sync committee data stored for each slot and removes old slots.
+// RemoveHistoricDataUsedForSlotVerification goes through the sync committee data stored for each slot and removes old slots.
 func (s *Service) RemoveHistoricDataUsedForSlotVerification(currentSlot phase0.Slot) {
 	// Only trigger if we have crossed threshold of max slot records to keep.
 	if len(s.slotDataRecords) > maxSlotDataRecordsBeforeCleanUp {

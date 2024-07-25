@@ -15,9 +15,7 @@ package prometheus
 
 import (
 	"errors"
-	"strconv"
 
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -86,27 +84,21 @@ func (s *Service) setupSyncCommitteeValidationMetrics() error {
 }
 
 // SyncCommitteeSyncAggregateFoundInc is called when our sync committee participation was included in the SyncAggregate for the next head.
-func (s *Service) SyncCommitteeSyncAggregateFoundInc(slot phase0.Slot) {
-	converter := func(unitToConvert uint64) string {
-		return strconv.FormatUint(unitToConvert, 10)
-	}
-	s.syncCommitteeValidationAggregateFound.WithLabelValues(converter(uint64(slot))).Add(1)
+func (s *Service) SyncCommitteeSyncAggregateFoundInc() {
+	s.syncCommitteeValidationAggregateFound.WithLabelValues("").Add(1)
 }
 
 // SyncCommitteeSyncAggregateMissingInc is called when our sync committee participation was not included in the SyncAggregate for the next head.
-func (s *Service) SyncCommitteeSyncAggregateMissingInc(slot phase0.Slot) {
-	converter := func(unitToConvert uint64) string {
-		return strconv.FormatUint(unitToConvert, 10)
-	}
-	s.syncCommitteeValidationAggregateMissing.WithLabelValues(converter(uint64(slot))).Add(1)
+func (s *Service) SyncCommitteeSyncAggregateMissingInc() {
+	s.syncCommitteeValidationAggregateMissing.WithLabelValues("").Add(1)
 }
 
 // SyncCommitteeGetHeadBlockFailedInc is called when validation for a sync committee fails due to being unable to retrieve the head block.
-func (s *Service) SyncCommitteeGetHeadBlockFailedInc(slot phase0.Slot, block string) {
-	s.syncCommitteeValidationGetHeadFailures.WithLabelValues(strconv.FormatUint(uint64(slot), 10), block).Add(1)
+func (s *Service) SyncCommitteeGetHeadBlockFailedInc() {
+	s.syncCommitteeValidationGetHeadFailures.WithLabelValues("").Add(1)
 }
 
 // SyncCommitteeMessagesHeadMismatchInc is called when a sync committee message was known to not match the next head block.
-func (s *Service) SyncCommitteeMessagesHeadMismatchInc(slot phase0.Slot, headParentRoot, broadcastRoot string) {
-	s.syncCommitteeValidationHeadMismatches.WithLabelValues(strconv.FormatUint(uint64(slot), 10), headParentRoot, broadcastRoot).Add(1)
+func (s *Service) SyncCommitteeMessagesHeadMismatchInc() {
+	s.syncCommitteeValidationHeadMismatches.WithLabelValues("").Add(1)
 }
