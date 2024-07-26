@@ -1332,14 +1332,14 @@ func selectBeaconBlockRootProvider(ctx context.Context,
 
 		beaconBlockRootProvider, err = majoritybeaconblockrootstrategy.New(ctx,
 			majoritybeaconblockrootstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			majoritybeaconblockrootstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.beaconblockroot.best")),
-			majoritybeaconblockrootstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockroot.best")),
+			majoritybeaconblockrootstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.beaconblockroot.majority")),
+			majoritybeaconblockrootstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockroot.majority")),
 			majoritybeaconblockrootstrategy.WithBeaconBlockRootProviders(beaconBlockRootProviders),
-			majoritybeaconblockrootstrategy.WithTimeout(util.Timeout("strategies.beaconblockroot.best")),
+			majoritybeaconblockrootstrategy.WithTimeout(util.Timeout("strategies.beaconblockroot.majority")),
 			majoritybeaconblockrootstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
 		)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to start best sync committee contribution strategy")
+			return nil, errors.Wrap(err, "failed to start majority sync committee contribution strategy")
 		}
 	case "first":
 		log.Info().Msg("Starting first beacon block root strategy")
