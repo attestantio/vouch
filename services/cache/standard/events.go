@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"context"
 
-	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -30,7 +29,7 @@ func (s *Service) handleBlock(event *apiv1.Event) {
 	}
 
 	data := event.Data.(*apiv1.BlockEvent)
-	log.Trace().Stringer("root", data.Block).Uint64("slot", uint64(data.Slot)).Msg("Received block event")
+	s.log.Trace().Stringer("root", data.Block).Uint64("slot", uint64(data.Slot)).Msg("Received block event")
 
 	s.SetBlockRootToSlot(data.Block, data.Slot)
 }
@@ -42,13 +41,13 @@ func (s *Service) handleHead(event *apiv1.Event) {
 	}
 
 	data := event.Data.(*apiv1.HeadEvent)
-	log.Trace().Stringer("root", data.Block).Uint64("slot", uint64(data.Slot)).Msg("Received head event")
+	s.log.Trace().Stringer("root", data.Block).Uint64("slot", uint64(data.Slot)).Msg("Received head event")
 
-	blockResponse, err := s.consensusClient.(consensusclient.SignedBeaconBlockProvider).SignedBeaconBlock(context.Background(), &api.SignedBeaconBlockOpts{
+	blockResponse, err := s.signedBeaconBlockProvider.SignedBeaconBlock(context.Background(), &api.SignedBeaconBlockOpts{
 		Block: data.Block.String(),
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to obtain block")
+		s.log.Error().Err(err).Msg("Failed to obtain block")
 		return
 	}
 	block := blockResponse.Data
@@ -65,7 +64,7 @@ func (s *Service) updateExecutionHeadFromBlock(block *spec.VersionedSignedBeacon
 		if block.Bellatrix != nil && block.Bellatrix.Message != nil && block.Bellatrix.Message.Body != nil {
 			executionPayload := block.Bellatrix.Message.Body.ExecutionPayload
 			if executionPayload != nil && !bytes.Equal(executionPayload.StateRoot[:], []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) {
-				log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
+				s.log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
 				s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
 			}
 		}
@@ -73,17 +72,17 @@ func (s *Service) updateExecutionHeadFromBlock(block *spec.VersionedSignedBeacon
 		// Execution information available.
 		executionPayload := block.Capella.Message.Body.ExecutionPayload
 		if executionPayload != nil && !bytes.Equal(executionPayload.StateRoot[:], []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) {
-			log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
+			s.log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
 			s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
 		}
 	case spec.DataVersionDeneb:
 		// Execution information available.
 		executionPayload := block.Deneb.Message.Body.ExecutionPayload
 		if executionPayload != nil && !executionPayload.StateRoot.IsZero() {
-			log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
+			s.log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
 			s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
 		}
 	default:
-		log.Error().Msg("Unhandled block version")
+		s.log.Error().Msg("Unhandled block version")
 	}
 }

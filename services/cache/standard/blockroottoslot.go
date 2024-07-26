@@ -16,7 +16,6 @@ package standard
 import (
 	"context"
 
-	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
@@ -28,53 +27,24 @@ func (s *Service) BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0
 	slot, exists := s.blockRootToSlot[root]
 	s.blockRootToSlotMu.RUnlock()
 	if exists {
-		log.Trace().Stringer("root", root).Uint64("slot", uint64(slot)).Msg("Obtained slot from cache")
+		s.log.Trace().Stringer("root", root).Uint64("slot", uint64(slot)).Msg("Obtained slot from cache")
 		monitorBlockRootToSlot("hit")
 		return slot, nil
 	}
 
-	if headersProvider, isProvider := s.consensusClient.(eth2client.BeaconBlockHeadersProvider); isProvider {
-		blockResponse, err := headersProvider.BeaconBlockHeader(ctx, &api.BeaconBlockHeaderOpts{
-			Block: root.String(),
-		})
-		if err != nil {
-			monitorBlockRootToSlot("failed")
-			return 0, errors.Wrap(err, "failed to obtain block header")
-		}
-		block := blockResponse.Data
-
-		slot = block.Header.Message.Slot
-		s.SetBlockRootToSlot(root, slot)
-
-		log.Trace().Stringer("root", root).Uint64("slot", uint64(slot)).Msg("Obtained slot from block header")
-		monitorBlockRootToSlot("miss (block header)")
-		return slot, nil
+	blockResponse, err := s.beaconBlockHeadersProvider.BeaconBlockHeader(ctx, &api.BeaconBlockHeaderOpts{
+		Block: root.String(),
+	})
+	if err != nil {
+		monitorBlockRootToSlot("failed")
+		return 0, errors.Wrap(err, "failed to obtain block header")
 	}
+	s.SetBlockRootToSlot(root, blockResponse.Data.Header.Message.Slot)
 
-	if blocksProvider, isProvider := s.consensusClient.(eth2client.SignedBeaconBlockProvider); isProvider {
-		blockResponse, err := blocksProvider.SignedBeaconBlock(ctx, &api.SignedBeaconBlockOpts{
-			Block: root.String(),
-		})
-		if err != nil {
-			monitorBlockRootToSlot("failed")
-			return 0, errors.Wrap(err, "failed to obtain block")
-		}
-		block := blockResponse.Data
-		slot, err = block.Slot()
-		if err != nil {
-			monitorBlockRootToSlot("failed")
-			return 0, errors.Wrap(err, "failed to obtain block slot")
-		}
-
-		s.SetBlockRootToSlot(root, slot)
-
-		log.Trace().Stringer("root", root).Uint64("slot", uint64(slot)).Msg("Obtained slot from block")
-		monitorBlockRootToSlot("miss (block)")
-		return slot, nil
-	}
-
+	s.log.Trace().Stringer("root", root).Uint64("slot", uint64(slot)).Msg("Obtained slot from block header")
 	monitorBlockRootToSlot("miss")
-	return 0, errors.New("failed to obtain slot from cache or client")
+
+	return slot, nil
 }
 
 // SetBlockRootToSlot sets the block root to slot mapping.
@@ -105,5 +75,5 @@ func (s *Service) cleanBlockRootToSlot(_ context.Context, _ interface{}) {
 	monitorBlockRootToSlotEntriesUpdated(len(s.blockRootToSlot))
 	s.blockRootToSlotMu.Unlock()
 
-	log.Trace().Int("cleaned", cleaned).Msg("Cleaned block root to slot cache")
+	s.log.Trace().Int("cleaned", cleaned).Msg("Cleaned block root to slot cache")
 }
