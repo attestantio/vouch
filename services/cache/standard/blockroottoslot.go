@@ -38,6 +38,7 @@ func (s *Service) BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0
 			Block: root.String(),
 		})
 		if err != nil {
+			monitorBlockRootToSlot("failed")
 			return 0, errors.Wrap(err, "failed to obtain block header")
 		}
 		block := blockResponse.Data
@@ -55,11 +56,13 @@ func (s *Service) BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0
 			Block: root.String(),
 		})
 		if err != nil {
+			monitorBlockRootToSlot("failed")
 			return 0, errors.Wrap(err, "failed to obtain block")
 		}
 		block := blockResponse.Data
 		slot, err = block.Slot()
 		if err != nil {
+			monitorBlockRootToSlot("failed")
 			return 0, errors.Wrap(err, "failed to obtain block slot")
 		}
 
