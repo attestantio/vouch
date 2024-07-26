@@ -79,11 +79,11 @@ func monitorBlockRootToSlotEntriesUpdated(entries int) {
 	blockRootToSlotEntries.Set(float64(entries))
 }
 
-func monitorBlockRootToSlot(source string) {
+func monitorBlockRootToSlot(result string) {
 	if blockRootToSlotProcessed == nil {
 		return
 	}
-	blockRootToSlotProcessed.WithLabelValues(source).Inc()
+	blockRootToSlotProcessed.WithLabelValues(result).Inc()
 }
 
 func monitorExecutionChainHeadUpdated(height uint64) {
