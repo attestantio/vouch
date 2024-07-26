@@ -906,7 +906,9 @@ func startCache(ctx context.Context,
 		standardcache.WithMonitor(monitor),
 		standardcache.WithScheduler(scheduler),
 		standardcache.WithChainTime(chainTime),
-		standardcache.WithConsensusClient(consensusClient),
+		standardcache.WithEventsProvider(consensusClient.(eth2client.EventsProvider)),
+		standardcache.WithSignedBeaconBlockProvider(consensusClient.(eth2client.SignedBeaconBlockProvider)),
+		standardcache.WithBeaconBlockHeadersProvider(consensusClient.(eth2client.BeaconBlockHeadersProvider)),
 	)
 	if err != nil {
 		return nil, err

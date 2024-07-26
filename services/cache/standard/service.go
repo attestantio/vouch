@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -29,8 +29,11 @@ import (
 
 // Service provides cached information.
 type Service struct {
-	chainTime       chaintime.Service
-	consensusClient consensusclient.Service
+	log zerolog.Logger
+
+	chainTime                  chaintime.Service
+	signedBeaconBlockProvider  consensusclient.SignedBeaconBlockProvider
+	beaconBlockHeadersProvider consensusclient.BeaconBlockHeadersProvider
 
 	blockRootToSlotMu sync.RWMutex
 	blockRootToSlot   map[phase0.Root]phase0.Slot
@@ -40,9 +43,6 @@ type Service struct {
 	executionChainHeadRoot   phase0.Hash32
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new cache.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -51,7 +51,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "cache").Str("impl", "standard").Logger()
+	log := zerologger.With().Str("service", "cache").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -61,13 +61,15 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		chainTime:       parameters.chainTime,
-		consensusClient: parameters.consensusClient,
-		blockRootToSlot: make(map[phase0.Root]phase0.Slot),
+		log:                        log,
+		chainTime:                  parameters.chainTime,
+		signedBeaconBlockProvider:  parameters.signedBeaconBlockProvider,
+		beaconBlockHeadersProvider: parameters.beaconBlockHeadersProvider,
+		blockRootToSlot:            make(map[phase0.Root]phase0.Slot),
 	}
 
 	// Fetch the current execution head.
-	blockResponse, err := s.consensusClient.(consensusclient.SignedBeaconBlockProvider).SignedBeaconBlock(context.Background(), &api.SignedBeaconBlockOpts{
+	blockResponse, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, &api.SignedBeaconBlockOpts{
 		Block: "head",
 	})
 	if err != nil {
@@ -77,25 +79,21 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		s.updateExecutionHeadFromBlock(blockResponse.Data)
 	}
 
-	if eventsProvider, isProvider := s.consensusClient.(consensusclient.EventsProvider); isProvider {
-		if err := eventsProvider.Events(ctx, []string{"block"}, s.handleBlock); err != nil {
-			return nil, errors.Wrap(err, "failed to configure block event")
-		}
-
-		if err := eventsProvider.Events(ctx, []string{"head"}, s.handleHead); err != nil {
-			return nil, errors.Wrap(err, "failed to configure head event")
-		}
+	if err := parameters.eventsProvider.Events(ctx, []string{"block"}, s.handleBlock); err != nil {
+		return nil, errors.Wrap(err, "failed to configure block event")
 	}
 
-	runtimeFunc := func(_ context.Context, _ interface{}) (time.Time, error) {
-		// Run approximately every 15 minutes.
-		return time.Now().Add(15 * time.Minute), nil
+	if err := parameters.eventsProvider.Events(ctx, []string{"head"}, s.handleHead); err != nil {
+		return nil, errors.Wrap(err, "failed to configure head event")
 	}
 
 	if err := parameters.scheduler.SchedulePeriodicJob(ctx,
 		"Cache",
 		"Clean block root to slot cache",
-		runtimeFunc,
+		func(_ context.Context, _ interface{}) (time.Time, error) {
+			// Run approximately every 15 minutes.
+			return time.Now().Add(15 * time.Minute), nil
+		},
 		nil,
 		s.cleanBlockRootToSlot,
 		nil,
