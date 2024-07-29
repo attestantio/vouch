@@ -99,7 +99,7 @@ func (s *Service) BuilderBid(ctx context.Context,
 	cancel()
 
 	if resPrivileged.Bid == nil && res.Bid == nil {
-		log.Debug().Msg("No useful bids received")
+		log.Trace().Msg("No useful bids received")
 		monitorAuctionBlock("", false, time.Since(started))
 		return res, nil
 	}
