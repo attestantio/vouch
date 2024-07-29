@@ -83,7 +83,7 @@ func (s *Service) auctionBlock(ctx context.Context,
 	bidToCache := res.Bid
 	if bidToCache == nil {
 		// No bid returned; create a dummy for the purposes of caching.
-		log.Debug().Msg("Bid is nil; creating dummy")
+		log.Trace().Msg("Bid is nil; creating dummy")
 		bidToCache = &builderspec.VersionedSignedBuilderBid{
 			Version: spec.DataVersionDeneb,
 			Deneb: &deneb.SignedBuilderBid{
@@ -96,7 +96,7 @@ func (s *Service) auctionBlock(ctx context.Context,
 
 	key := fmt.Sprintf("%d", slot)
 	subKey := fmt.Sprintf("%x:%x", parentHash, pubkey)
-	log.Info().Str("key", key).Str("subkey", subKey).Msg("Caching bid")
+	log.Trace().Str("key", key).Str("subkey", subKey).Msg("Caching bid")
 	s.builderBidsCacheMu.Lock()
 	if _, exists := s.builderBidsCache[key]; !exists {
 		s.builderBidsCache[key] = make(map[string]*builderspec.VersionedSignedBuilderBid)
