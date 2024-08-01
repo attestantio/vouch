@@ -373,6 +373,15 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 		log.Trace().Msg("No reported sync committee message data for slot; skipping verification")
 		return
 	}
+
+	inScopeValidators := make([]uint64, len(previousSlotData.ValidatorToCommitteeIndex))
+	keyCount := 0
+	for key := range previousSlotData.ValidatorToCommitteeIndex {
+		inScopeValidators[keyCount] = uint64(key)
+		keyCount++
+	}
+	log.Trace().Uints64("validators", inScopeValidators).Msg("Verifying sync committee messages for validators")
+
 	blockResponse, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, &api.SignedBeaconBlockOpts{
 		Block: headEvent.Block.String(),
 	})
