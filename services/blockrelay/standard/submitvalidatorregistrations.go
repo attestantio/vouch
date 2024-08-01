@@ -229,7 +229,9 @@ func (s *Service) submitRelayRegistrations(ctx context.Context,
 				log.Error().Str("builder", builder).Msg("Builder client does not accept validator registrations")
 				return
 			}
-			if err := submitter.SubmitValidatorRegistrations(ctx, providerRegistrations); err != nil {
+			if err := submitter.SubmitValidatorRegistrations(ctx, &builderapi.SubmitValidatorRegistrationsOpts{
+				Registrations: providerRegistrations,
+			}); err != nil {
 				log.Error().Err(err).Str("builder", builder).Msg("Failed to submit validator registrations")
 				return
 			}

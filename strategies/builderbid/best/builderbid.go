@@ -23,6 +23,7 @@ import (
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	builderclient "github.com/attestantio/go-builder-client"
+	builderapi "github.com/attestantio/go-builder-client/api"
 	builderspec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -431,10 +432,15 @@ func (*Service) obtainBid(ctx context.Context,
 ) {
 	log := zerolog.Ctx(ctx).With().Str("bidder", provider.Address()).Logger()
 
-	builderBid, err := provider.BuilderBid(ctx, slot, parentHash, pubkey)
+	builderBidResponse, err := provider.BuilderBid(ctx, &builderapi.BuilderBidOpts{
+		Slot:       slot,
+		ParentHash: parentHash,
+		PubKey:     pubkey,
+	})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain builder bid")
 	}
+	builderBid := builderBidResponse.Data
 	if builderBid == nil {
 		return nil, nil
 	}

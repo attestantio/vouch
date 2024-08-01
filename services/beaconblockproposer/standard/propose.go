@@ -23,6 +23,7 @@ import (
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	builderclient "github.com/attestantio/go-builder-client"
+	builderapi "github.com/attestantio/go-builder-client/api"
 	builderspec "github.com/attestantio/go-builder-client/spec"
 	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
@@ -388,15 +389,17 @@ func (*Service) unblindProposal(ctx context.Context,
 			// As we cannot fall back we move to a retry system.
 			retryInterval := 250 * time.Millisecond
 
-			var signedProposal *api.VersionedSignedProposal
+			var signedProposalResponse *builderapi.Response[*api.VersionedSignedProposal]
 			var err error
 			for retries := 3; retries > 0; retries-- {
 				// Unblind the blinded block.
-				signedProposal, err = provider.UnblindProposal(ctx, &api.VersionedSignedBlindedProposal{
-					Version:   proposal.Version,
-					Bellatrix: proposal.BellatrixBlinded,
-					Capella:   proposal.CapellaBlinded,
-					Deneb:     proposal.DenebBlinded,
+				signedProposalResponse, err = provider.UnblindProposal(ctx, &builderapi.UnblindProposalOpts{
+					Proposal: &api.VersionedSignedBlindedProposal{
+						Version:   proposal.Version,
+						Bellatrix: proposal.BellatrixBlinded,
+						Capella:   proposal.CapellaBlinded,
+						Deneb:     proposal.DenebBlinded,
+					},
 				})
 
 				if !sem.TryAcquire(1) {
@@ -418,7 +421,7 @@ func (*Service) unblindProposal(ctx context.Context,
 				}
 				break
 			}
-			if signedProposal == nil {
+			if signedProposalResponse == nil {
 				log.Debug().Msg("No signed block received")
 				return
 			}
@@ -427,7 +430,7 @@ func (*Service) unblindProposal(ctx context.Context,
 			// Acquire the semaphore to confirm that a block has been received.
 			// Use TryAcquire in case two providers return the block at the same time.
 			sem.TryAcquire(1)
-			ch <- signedProposal
+			ch <- signedProposalResponse.Data
 		}(ctx, provider, respCh)
 	}
 

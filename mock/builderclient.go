@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,6 +16,7 @@ package mock
 import (
 	"context"
 
+	builderapi "github.com/attestantio/go-builder-client/api"
 	builderspec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
@@ -41,11 +42,9 @@ func (m *BuilderClient) Pubkey() *phase0.BLSPubKey {
 
 // BuilderBidProvider obtains a builder bid.
 func (*BuilderClient) BuilderBid(_ context.Context,
-	_ phase0.Slot,
-	_ phase0.Hash32,
-	_ phase0.BLSPubKey,
+	_ *builderapi.BuilderBidOpts,
 ) (
-	*builderspec.VersionedSignedBuilderBid,
+	*builderapi.Response[*builderspec.VersionedSignedBuilderBid],
 	error,
 ) {
 	return nil, nil
