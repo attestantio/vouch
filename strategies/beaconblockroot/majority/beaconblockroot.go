@@ -57,7 +57,7 @@ func (s *Service) BeaconBlockRoot(ctx context.Context,
 	// At the soft timeout, we return if we have any responses so far.
 	// At the hard timeout, we return unconditionally.
 	// The soft timeout is half the duration of the hard timeout.
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	hardCtx, cancel := context.WithTimeout(ctx, s.timeout)
 	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
 
 	requests := len(s.beaconBlockRootProviders)
@@ -66,7 +66,7 @@ func (s *Service) BeaconBlockRoot(ctx context.Context,
 	errCh := make(chan *beaconBlockRootError, requests)
 	// Kick off the requests.
 	for name, provider := range s.beaconBlockRootProviders {
-		go s.beaconBlockRoot(ctx, started, name, provider, respCh, errCh, opts)
+		go s.beaconBlockRoot(hardCtx, started, name, provider, respCh, errCh, opts)
 	}
 
 	// Wait for all responses (or context done).
@@ -159,7 +159,7 @@ func (s *Service) BeaconBlockRoot(ctx context.Context,
 				Int("timed_out", timedOut).
 				Err(err.err).
 				Msg("Error received")
-		case <-ctx.Done():
+		case <-hardCtx.Done():
 			// Anyone not responded by now is considered errored.
 			timedOut = requests - responded - errored
 			log.Debug().
