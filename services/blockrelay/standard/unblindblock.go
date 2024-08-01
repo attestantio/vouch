@@ -21,6 +21,7 @@ import (
 	"time"
 
 	builderclient "github.com/attestantio/go-builder-client"
+	builderapi "github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -144,15 +145,17 @@ func (*Service) unblindProposal(ctx context.Context,
 			// As we cannot fall back we move to a retry system.
 			retryInterval := 250 * time.Millisecond
 
-			var signedProposal *api.VersionedSignedProposal
+			var signedProposalResponse *builderapi.Response[*api.VersionedSignedProposal]
 			var err error
 			for retries := 3; retries > 0; retries-- {
 				// Unblind the blinded block.
-				signedProposal, err = provider.UnblindProposal(ctx, &api.VersionedSignedBlindedProposal{
-					Version:   proposal.Version,
-					Bellatrix: proposal.BellatrixBlinded,
-					Capella:   proposal.CapellaBlinded,
-					Deneb:     proposal.DenebBlinded,
+				signedProposalResponse, err = provider.UnblindProposal(ctx, &builderapi.UnblindProposalOpts{
+					Proposal: &api.VersionedSignedBlindedProposal{
+						Version:   proposal.Version,
+						Bellatrix: proposal.BellatrixBlinded,
+						Capella:   proposal.CapellaBlinded,
+						Deneb:     proposal.DenebBlinded,
+					},
 				})
 
 				if !sem.TryAcquire(1) {
@@ -174,7 +177,7 @@ func (*Service) unblindProposal(ctx context.Context,
 				}
 				break
 			}
-			if signedProposal == nil {
+			if signedProposalResponse == nil || signedProposalResponse.Data == nil {
 				log.Debug().Msg("No signed block received")
 				return
 			}
@@ -183,7 +186,7 @@ func (*Service) unblindProposal(ctx context.Context,
 			// Acquire the semaphore to confirm that a block has been received.
 			// Use TryAcquire in case two providers return the block at the same time.
 			sem.TryAcquire(1)
-			ch <- signedProposal
+			ch <- signedProposalResponse.Data
 		}(ctx, provider, respCh)
 	}
 
@@ -191,28 +194,36 @@ func (*Service) unblindProposal(ctx context.Context,
 	case <-ctx.Done():
 		log.Warn().Msg("Failed to obtain unblinded block")
 		return errors.New("failed to obtain unblinded block")
-	case signedBlock := <-respCh:
+	case signedProposal := <-respCh:
 		if e := log.Trace(); e.Enabled() {
-			data, err := json.Marshal(signedBlock)
+			data, err := json.Marshal(signedProposal)
 			if err == nil {
 				e.RawJSON("signed_block", data).Msg("Recomposed block to submit")
 			}
 		}
-		switch proposal.Version {
-		case spec.DataVersionBellatrix:
-			proposal.BellatrixBlinded = nil
-			proposal.Bellatrix = signedBlock.Bellatrix
-		case spec.DataVersionCapella:
-			proposal.CapellaBlinded = nil
-			proposal.Capella = signedBlock.Capella
-		case spec.DataVersionDeneb:
-			proposal.DenebBlinded = nil
-			proposal.Deneb = signedBlock.Deneb
-		default:
-			return fmt.Errorf("unsupported version %v", proposal.Version)
+		if err := assignSignedProposal(proposal, signedProposal); err != nil {
+			return err
 		}
-		proposal.Blinded = false
 
 		return nil
 	}
+}
+
+func assignSignedProposal(proposal *api.VersionedSignedProposal, signedProposal *api.VersionedSignedProposal) error {
+	switch proposal.Version {
+	case spec.DataVersionBellatrix:
+		proposal.BellatrixBlinded = nil
+		proposal.Bellatrix = signedProposal.Bellatrix
+	case spec.DataVersionCapella:
+		proposal.CapellaBlinded = nil
+		proposal.Capella = signedProposal.Capella
+	case spec.DataVersionDeneb:
+		proposal.DenebBlinded = nil
+		proposal.Deneb = signedProposal.Deneb
+	default:
+		return fmt.Errorf("unsupported version %v", proposal.Version)
+	}
+	proposal.Blinded = false
+
+	return nil
 }
