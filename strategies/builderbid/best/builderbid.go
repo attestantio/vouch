@@ -432,7 +432,7 @@ func (*Service) obtainBid(ctx context.Context,
 ) {
 	log := zerolog.Ctx(ctx).With().Str("bidder", provider.Address()).Logger()
 
-	builderBidResponse, err := provider.BuilderBid(ctx, &builderapi.BuilderBidOpts{
+	resp, err := provider.BuilderBid(ctx, &builderapi.BuilderBidOpts{
 		Slot:       slot,
 		ParentHash: parentHash,
 		PubKey:     pubkey,
@@ -440,7 +440,7 @@ func (*Service) obtainBid(ctx context.Context,
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain builder bid")
 	}
-	builderBid := builderBidResponse.Data
+	builderBid := resp.Data
 	if builderBid == nil {
 		return nil, nil
 	}
