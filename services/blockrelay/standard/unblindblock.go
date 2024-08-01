@@ -194,28 +194,36 @@ func (*Service) unblindProposal(ctx context.Context,
 	case <-ctx.Done():
 		log.Warn().Msg("Failed to obtain unblinded block")
 		return errors.New("failed to obtain unblinded block")
-	case signedBlock := <-respCh:
+	case signedProposal := <-respCh:
 		if e := log.Trace(); e.Enabled() {
-			data, err := json.Marshal(signedBlock)
+			data, err := json.Marshal(signedProposal)
 			if err == nil {
 				e.RawJSON("signed_block", data).Msg("Recomposed block to submit")
 			}
 		}
-		switch proposal.Version {
-		case spec.DataVersionBellatrix:
-			proposal.BellatrixBlinded = nil
-			proposal.Bellatrix = signedBlock.Bellatrix
-		case spec.DataVersionCapella:
-			proposal.CapellaBlinded = nil
-			proposal.Capella = signedBlock.Capella
-		case spec.DataVersionDeneb:
-			proposal.DenebBlinded = nil
-			proposal.Deneb = signedBlock.Deneb
-		default:
-			return fmt.Errorf("unsupported version %v", proposal.Version)
+		if err := assignSignedProposal(proposal, signedProposal); err != nil {
+			return err
 		}
-		proposal.Blinded = false
 
 		return nil
 	}
+}
+
+func assignSignedProposal(proposal *api.VersionedSignedProposal, signedProposal *api.VersionedSignedProposal) error {
+	switch proposal.Version {
+	case spec.DataVersionBellatrix:
+		proposal.BellatrixBlinded = nil
+		proposal.Bellatrix = signedProposal.Bellatrix
+	case spec.DataVersionCapella:
+		proposal.CapellaBlinded = nil
+		proposal.Capella = signedProposal.Capella
+	case spec.DataVersionDeneb:
+		proposal.DenebBlinded = nil
+		proposal.Deneb = signedProposal.Deneb
+	default:
+		return fmt.Errorf("unsupported version %v", proposal.Version)
+	}
+	proposal.Blinded = false
+
+	return nil
 }
