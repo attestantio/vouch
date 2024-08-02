@@ -120,6 +120,26 @@ submitter:
 
 # strategies provide advanced strategies for dealing with multiple beacon nodes
 strategies:
+  # The attestationdata strategy obtains attestation data from multiple sources.
+  attestationdata:
+    # style can be 'best', which obtains attestation data from all nodes and selects the best, 'first', which uses the first returned,
+    # or 'majority', which obtains attestation data from all nodes and selects the most common.
+    style: 'best'
+    # beacon-node-addresses are the addresses from which to receive attestation data.
+    beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
+    majority:
+      # threshold is the minimum number of beacon nodes that have to provide the same attestation data for Vouch with the 'majority'
+      # strategy to use it.
+      threshold: 2
+  # The aggregateattestation strategy obtains aggregate attestations from multiple sources.
+  # Note that the list of nodes here must be a subset of those in the attestationdata strategy.  If not, the nodes will not have
+  # been gathering the attestations to aggregate and will error when the aggregate request is made.
+  aggregateattestation:
+    # style can be 'best', which obtains aggregates from all nodes and selects the best, or 'first', which uses the first returned
+    style: 'best'
+    # beacon-node-addresses are the addresses from which to receive aggregate attestations.
+    # Note that prysm nodes are not supported at current in this strategy.
+    beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
   # The beaconblockproposal strategy obtains beacon block proposals from multiple beacon nodes.
   beaconblockproposal:
     # style can be 'best', which obtains blocks from all nodes and selects the best, or 'first', which uses the first returned
@@ -142,26 +162,18 @@ strategies:
     # timeout defines the maximum amount of time the strategy will wait for a response.  Different strategies may return earlier
     # if they have obtained enough information from their beacon node(s).
     timeout: '2s'
-  # The attestationdata strategy obtains attestation data from multiple sources.
-  attestationdata:
-    # style can be 'best', which obtains attestation data from all nodes and selects the best, 'first', which uses the first returned,
-    # or 'majority', which obtains attestation data from all nodes and selects the most common.
+  builderbid:
+    # style can be 'best', which uses the best bid returned from a single request to each of the configured relays, or 'deadline',
+    # which repeatedly queries the configured relays until the deadline is reached.
     style: 'best'
-    # beacon-node-addresses are the addresses from which to receive attestation data.
-    beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
-    majority:
-      # threshold is the minimum number of beacon nodes that have to provide the same attestation data for Vouch with the 'majority'
-      # strategy to use it.
-      threshold: 2
-  # The aggregateattestation strategy obtains aggregate attestations from multiple sources.
-  # Note that the list of nodes here must be a subset of those in the attestationdata strategy.  If not, the nodes will not have
-  # been gathering the attestations to aggregate and will error when the aggregate request is made.
-  aggregateattestation:
-    # style can be 'best', which obtains aggregates from all nodes and selects the best, or 'first', which uses the first returned
-    style: 'best'
-    # beacon-node-addresses are the addresses from which to receive aggregate attestations.
-    # Note that prysm nodes are not supported at current in this strategy.
-    beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
+    best:
+      # timeout defines the maximum amount of time that Vouch will wait for relays to respond.
+      timeout: '2s'
+    deadline:
+      # deadline defines the maximum amount of time that Vouch will query relays before stopping.
+      deadline: '1s'
+      # bid-gap is the gap between receiving a response from a relay and querying it again.
+      bid-gap: '100ms'
   # The synccommitteecontribution strategy obtains sync committee contributions from multiple sources.
   synccommitteecontribution:
     # style can be 'best', which obtains contributions from all nodes and selects the best, or 'first', which uses the first returned
