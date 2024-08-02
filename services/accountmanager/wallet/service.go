@@ -234,7 +234,7 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 	for index, validator := range validators {
 		state := apiv1.ValidatorToState(validator, nil, epoch, s.farFutureEpoch)
 		stateCount[state]++
-		if state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting {
+		if isInScopeForValidating(state) {
 			account := s.accounts[validator.PublicKey]
 			log.Trace().
 				Str("name", account.Name()).
@@ -255,6 +255,11 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 	}
 
 	return validatingAccounts, nil
+}
+
+// TODO: verify if we should also include apiv1.ValidatorStateExitedSlashed. Also should we move this to go-eth2-client as a convenience and remove duplication?
+func isInScopeForValidating(state apiv1.ValidatorState) bool {
+	return state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting || state == apiv1.ValidatorStateExitedUnslashed
 }
 
 // ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
@@ -280,7 +285,7 @@ func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch p
 			continue
 		}
 		state := apiv1.ValidatorToState(validator, nil, epoch, s.farFutureEpoch)
-		if state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting {
+		if isInScopeForValidating(state) {
 			validatingAccounts[index] = s.accounts[validator.PublicKey]
 		}
 	}

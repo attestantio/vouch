@@ -318,7 +318,7 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 	for index, validator := range validators {
 		state := api.ValidatorToState(validator, nil, epoch, s.farFutureEpoch)
 		stateCount[state]++
-		if state == api.ValidatorStateActiveOngoing || state == api.ValidatorStateActiveExiting {
+		if isInScopeForValidating(state) {
 			account := s.accounts[validator.PublicKey]
 			log.Trace().
 				Str("name", account.Name()).
@@ -347,6 +347,11 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 	return validatingAccounts, nil
 }
 
+// TODO: verify if we should also include api.ValidatorStateExitedSlashed? Also should we move this to go-eth2-client as a convenience and remove duplication?
+func isInScopeForValidating(state api.ValidatorState) bool {
+	return state == api.ValidatorStateActiveOngoing || state == api.ValidatorStateActiveExiting || state == api.ValidatorStateExitedUnslashed
+}
+
 // ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
 func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch phase0.Epoch, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "ValidatingAccountsForEpochByIndex", trace.WithAttributes(
@@ -369,7 +374,7 @@ func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch p
 			continue
 		}
 		state := api.ValidatorToState(validator, nil, epoch, s.farFutureEpoch)
-		if state == api.ValidatorStateActiveOngoing || state == api.ValidatorStateActiveExiting {
+		if isInScopeForValidating(state) {
 			s.mutex.RLock()
 			validatingAccounts[index] = s.accounts[validator.PublicKey]
 			s.mutex.RUnlock()
