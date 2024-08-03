@@ -87,6 +87,7 @@ import (
 	majoritybeaconblockrootstrategy "github.com/attestantio/vouch/strategies/beaconblockroot/majority"
 	"github.com/attestantio/vouch/strategies/builderbid"
 	bestbuilderbidstrategy "github.com/attestantio/vouch/strategies/builderbid/best"
+	deadlinebuilderbidstrategy "github.com/attestantio/vouch/strategies/builderbid/deadline"
 	bestsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/best"
 	firstsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/first"
 	"github.com/attestantio/vouch/util"
@@ -242,6 +243,8 @@ func fetchConfig() error {
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.0005))
 	viper.SetDefault("beaconblockproposer.builder-boost-factor", 91)
+	viper.SetDefault("strategies.builderbid.deadline.deadline", time.Second)
+	viper.SetDefault("strategies.builderbid.deadline.bid-gap", 100*time.Millisecond)
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch {
@@ -1670,6 +1673,18 @@ func selectBuilderBidProvider(ctx context.Context,
 	var err error
 
 	switch viper.GetString("strategies.builderbid.style") {
+	case "deadline":
+		log.Info().Msg("Starting deadline builder bid strategy")
+		provider, err = deadlinebuilderbidstrategy.New(ctx,
+			deadlinebuilderbidstrategy.WithLogLevel(util.LogLevel("strategies.builderbid.deadline")),
+			deadlinebuilderbidstrategy.WithMonitor(monitor),
+			deadlinebuilderbidstrategy.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
+			deadlinebuilderbidstrategy.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
+			deadlinebuilderbidstrategy.WithChainTime(chainTime),
+			deadlinebuilderbidstrategy.WithDeadline(viper.GetDuration("strategies.builderbid.deadline.deadline")),
+			deadlinebuilderbidstrategy.WithBidGap(viper.GetDuration("strategies.builderbid.deadline.bid-gap")),
+			deadlinebuilderbidstrategy.WithReleaseVersion(ReleaseVersion),
+		)
 	case "best", "":
 		log.Info().Msg("Starting best builder bid strategy")
 		provider, err = bestbuilderbidstrategy.New(ctx,
