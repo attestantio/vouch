@@ -28,6 +28,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/util"
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
@@ -61,8 +62,7 @@ func (s *Service) BuilderBid(ctx context.Context,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
 	proposerConfig *beaconblockproposer.ProposerConfig,
-	excludedBuilders []phase0.BLSPubKey,
-	privilegedBuilders []phase0.BLSPubKey,
+	builderConfigs map[phase0.BLSPubKey]*blockrelay.BuilderConfig,
 ) (
 	*blockauctioneer.Results,
 	error,
@@ -70,19 +70,19 @@ func (s *Service) BuilderBid(ctx context.Context,
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.builderbid.deadline").Start(ctx, "BuilderBid")
 	defer span.End()
 	started := time.Now()
-	log := util.LogWithID(ctx, s.log, "strategy_id").With().Str("operation", "builderbid").Uint64("slot", uint64(slot)).Str("pubkey", fmt.Sprintf("%#x", pubkey)).Logger()
+	log := util.LogWithID(ctx, s.log, "strategy_id").With().
+		Str("operation", "builderbid").
+		Uint64("slot", uint64(slot)).
+		Stringer("pubkey", pubkey).
+		Logger()
 	ctx = log.WithContext(ctx)
 
 	res := &blockauctioneer.Results{
-		AllProviders: make([]builderclient.BuilderBidProvider, 0),
-		Values:       make(map[string]*big.Int),
-		Providers:    make([]builderclient.BuilderBidProvider, 0),
+		AllProviders:  make([]builderclient.BuilderBidProvider, 0),
+		Providers:     make([]builderclient.BuilderBidProvider, 0),
+		Participation: make(map[string]*blockauctioneer.Participation),
 	}
-	resPrivileged := &blockauctioneer.Results{
-		AllProviders: make([]builderclient.BuilderBidProvider, 0),
-		Values:       make(map[string]*big.Int),
-		Providers:    make([]builderclient.BuilderBidProvider, 0),
-	}
+
 	requests := len(proposerConfig.Relays)
 
 	// We repeatedly query the relays until the deadline passes.
@@ -92,6 +92,7 @@ func (s *Service) BuilderBid(ctx context.Context,
 	respCh := make(chan *builderBidResponse, requests)
 	errCh := make(chan *builderBidError, requests)
 	// Kick off the requests.
+
 	for _, relay := range proposerConfig.Relays {
 		builderClient, err := util.FetchBuilderClient(ctx, relay.Address, s.monitor, s.releaseVersion)
 		if err != nil {
@@ -106,15 +107,12 @@ func (s *Service) BuilderBid(ctx context.Context,
 			continue
 		}
 		res.AllProviders = append(res.AllProviders, provider)
-		resPrivileged.AllProviders = append(resPrivileged.AllProviders, provider)
-		go s.builderBid(ctx, provider, respCh, errCh, slot, parentHash, pubkey, relay, excludedBuilders, deadline)
+		go s.builderBid(ctx, provider, respCh, errCh, slot, parentHash, pubkey, relay, deadline)
 	}
 
 	// Wait for context done.
 	providerResponses := make(map[string]int)
 	providerErrors := make(map[string]int)
-	bestScore := big.NewInt(0)
-	bestPrivilegedScore := big.NewInt(0)
 
 	done := false
 	for !done {
@@ -126,17 +124,7 @@ func (s *Service) BuilderBid(ctx context.Context,
 				// This means that the bid was ineligible, for example the bid value was too small.
 				continue
 			}
-			builder, err := resp.bid.Builder()
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to obtain builder from bid, response is invalid")
-				continue
-			}
-
-			if isPrivilegedBuilder(builder, privilegedBuilders) {
-				s.setBuilderBid(ctx, resPrivileged, resp, bestPrivilegedScore)
-			} else {
-				s.setBuilderBid(ctx, res, resp, bestScore)
-			}
+			s.setBuilderBid(ctx, res, resp, builderConfigs)
 		case err := <-errCh:
 			providerErrors[err.provider.Address()]++
 			log.Debug().Dur("elapsed", time.Since(started)).Str("provider", err.provider.Address()).Err(err.err).Msg("Error received")
@@ -145,28 +133,11 @@ func (s *Service) BuilderBid(ctx context.Context,
 			done = true
 		}
 	}
+
 	cancel()
 
-	if resPrivileged.Bid == nil && res.Bid == nil {
-		log.Trace().Msg("No useful bids received")
-		monitorAuctionBlock("", false, time.Since(started))
-		return res, nil
-	}
-
-	if resPrivileged.Bid != nil {
-		log.Trace().Stringer("bid", resPrivileged.Bid).Msg("Selected best privileged bid")
-
-		for _, provider := range resPrivileged.Providers {
-			monitorAuctionPrivilegedBlock(provider.Address(), true, time.Since(started))
-		}
-
-		return resPrivileged, nil
-	}
-
-	log.Trace().Stringer("bid", res.Bid).Msg("Selected best bid")
-
 	for _, provider := range res.Providers {
-		monitorAuctionBlock(provider.Address(), true, time.Since(started))
+		monitorAuctionBlock(provider.Address(), res.WinningParticipation.Category, true, time.Since(started))
 	}
 
 	return res, nil
@@ -180,7 +151,6 @@ func (s *Service) builderBid(ctx context.Context,
 	parentHash phase0.Hash32,
 	pubkey phase0.BLSPubKey,
 	relayConfig *beaconblockproposer.RelayConfig,
-	excludedBuilders []phase0.BLSPubKey,
 	deadline time.Time,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.builderbid.deadline").Start(ctx, "builderBid", trace.WithAttributes(
@@ -190,7 +160,7 @@ func (s *Service) builderBid(ctx context.Context,
 
 	if relayConfig.Grace > 0 {
 		time.Sleep(relayConfig.Grace)
-		span.AddEvent("grace period over")
+		span.AddEvent("Grace period over")
 	}
 
 	var firstBid *builderspec.VersionedSignedBuilderBid
@@ -224,27 +194,6 @@ func (s *Service) builderBid(ctx context.Context,
 			continue
 		}
 
-		if len(excludedBuilders) > 0 {
-			builder, err := builderBid.Builder()
-			if err != nil {
-				errCh <- &builderBidError{
-					provider: provider,
-					err:      err,
-				}
-				return
-			}
-			for _, excludedBuilder := range excludedBuilders {
-				if bytes.Equal(builder[:], excludedBuilder[:]) {
-					log.Debug().Stringer("builder", builder).Msg("Ignoring bid by excluded builder")
-					respCh <- &builderBidResponse{
-						provider: provider,
-						score:    big.NewInt(0),
-					}
-					return
-				}
-			}
-		}
-
 		if e := log.Trace(); e.Enabled() {
 			data, err := json.Marshal(builderBid)
 			if err == nil {
@@ -255,68 +204,32 @@ func (s *Service) builderBid(ctx context.Context,
 			continue
 		}
 
-		value, err := builderBid.Value()
+		value, err := s.getBidValue(ctx, builderBid)
 		if err != nil {
 			errCh <- &builderBidError{
 				provider: provider,
-				err:      errors.Wrap(err, "failed to obtain value"),
+				err:      err,
 			}
-			continue
+
+			return
 		}
-		if zeroValue.Cmp(value) == 0 {
-			continue
-		}
+
 		if value.ToBig().Cmp(relayConfig.MinValue.BigInt()) < 0 {
-			log.Trace().Uint64("slot", uint64(slot)).Stringer("value", value.ToBig()).Stringer("min_value", relayConfig.MinValue.BigInt()).Msg("Value below minimum; ignoring")
+			log.Trace().
+				Uint64("slot", uint64(slot)).
+				Stringer("value", value.ToBig()).
+				Stringer("min_value", relayConfig.MinValue.BigInt()).
+				Msg("Value below minimum; ignoring")
 			continue
 		}
 
-		feeRecipient, err := builderBid.FeeRecipient()
-		if err != nil {
+		if err := s.verifyBidDetails(ctx, builderBid, slot, relayConfig, provider); err != nil {
 			errCh <- &builderBidError{
 				provider: provider,
-				err:      errors.Wrap(err, "failed to obtain fee recipient"),
+				err:      err,
 			}
-			continue
-		}
-		if bytes.Equal(feeRecipient[:], zeroExecutionAddress[:]) {
-			errCh <- &builderBidError{
-				provider: provider,
-				err:      errors.New("zero fee recipient"),
-			}
-			continue
-		}
 
-		timestamp, err := builderBid.Timestamp()
-		if err != nil {
-			errCh <- &builderBidError{
-				provider: provider,
-				err:      errors.Wrap(err, "failed to obtain timestamp"),
-			}
-			continue
-		}
-		if uint64(s.chainTime.StartOfSlot(slot).Unix()) != timestamp {
-			errCh <- &builderBidError{
-				provider: provider,
-				err:      fmt.Errorf("provided timestamp %d for slot %d not expected value of %d", timestamp, slot, s.chainTime.StartOfSlot(slot).Unix()),
-			}
-			continue
-		}
-
-		verified, err := s.verifyBidSignature(ctx, relayConfig, builderBid, provider)
-		if err != nil {
-			errCh <- &builderBidError{
-				provider: provider,
-				err:      errors.Wrap(err, "error verifying bid signature"),
-			}
-			continue
-		}
-		if !verified {
-			errCh <- &builderBidError{
-				provider: provider,
-				err:      errors.New("invalid signature"),
-			}
-			continue
+			return
 		}
 
 		bids++
@@ -337,6 +250,7 @@ func (s *Service) builderBid(ctx context.Context,
 		if time.Until(deadline) <= s.bidGap {
 			log.Trace().Int64("remaining_ms", time.Until(deadline).Milliseconds()).Msg("Not enough time to re-request bid")
 			s.logBidResults(span, slot, provider.Address(), firstBid, lastBid, bids)
+
 			return
 		}
 	}
@@ -345,24 +259,95 @@ func (s *Service) builderBid(ctx context.Context,
 func (*Service) setBuilderBid(ctx context.Context,
 	res *blockauctioneer.Results,
 	resp *builderBidResponse,
-	bestScore *big.Int,
+	builderConfigs map[phase0.BLSPubKey]*blockrelay.BuilderConfig,
 ) {
 	log := zerolog.Ctx(ctx)
 
-	switch {
-	case resp.score.Cmp(bestScore) > 0:
-		res.Bid = resp.bid
-		bestScore.Set(resp.score)
-		res.Providers = make([]builderclient.BuilderBidProvider, 0)
-		res.Providers = append(res.Providers, resp.provider)
-		log.Trace().Str("provider", resp.provider.Address()).Stringer("score", bestScore).Msg("New winning bid")
-	case res.Bid != nil && resp.score.Cmp(bestScore) == 0 && bidsEqual(res.Bid, resp.bid):
-		log.Trace().Str("provider", resp.provider.Address()).Msg("Matching bid from different relay")
-		res.Providers = append(res.Providers, resp.provider)
-	default:
-		log.Debug().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("Low or slow bid")
+	// Obtain the builder config.
+	builder, err := resp.bid.Builder()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to obtain builder from bid, response is invalid")
+		return
 	}
-	res.Values[resp.provider.Address()] = resp.score
+	builderConfig, exists := builderConfigs[builder]
+	if !exists {
+		// Generate a blank builder config.
+		builderConfig = &blockrelay.BuilderConfig{
+			Category: blockrelay.StandardBuilderCategory,
+		}
+	}
+
+	// Calculate the bid score, with modifiers.
+	score := resp.score
+	if builderConfig.Offset != nil {
+		score = new(big.Int).Add(score, builderConfig.Offset)
+	}
+	if builderConfig.Factor != nil {
+		score = new(big.Int).Mul(score, builderConfig.Factor)
+	}
+
+	participation := &blockauctioneer.Participation{
+		Score:    score,
+		Category: builderConfig.Category,
+		Bid:      resp.bid,
+	}
+
+	// Set the winning participation.
+	if score.Cmp(big.NewInt(0)) == 0 {
+		log.Debug().Str("provider", resp.provider.Address()).Msg("Zero-score bid")
+	} else {
+		switch {
+		case res.WinningParticipation == nil || score.Cmp(res.WinningParticipation.Score) > 0:
+			log.Trace().Str("provider", resp.provider.Address()).Stringer("score", score).Msg("New high score")
+			res.WinningParticipation = participation
+			res.Providers = []builderclient.BuilderBidProvider{resp.provider}
+		case res.WinningParticipation != nil && bidsEqual(participation.Bid, res.WinningParticipation.Bid):
+			log.Trace().Str("provider", resp.provider.Address()).Msg("Additional provider with bid")
+			res.Providers = append(res.Providers, resp.provider)
+		default:
+			log.Trace().Str("provider", resp.provider.Address()).Stringer("score", resp.score).Msg("Low or slow bid")
+		}
+	}
+
+	// Set the provider participation.
+	res.Participation[resp.provider.Address()] = participation
+}
+
+func (s *Service) verifyBidDetails(ctx context.Context,
+	bid *builderspec.VersionedSignedBuilderBid,
+	slot phase0.Slot,
+	relayConfig *beaconblockproposer.RelayConfig,
+	provider builderclient.BuilderBidProvider,
+) error {
+	log := zerolog.Ctx(ctx)
+
+	feeRecipient, err := bid.FeeRecipient()
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain builder bid fee recipient")
+	}
+	if bytes.Equal(feeRecipient[:], zeroExecutionAddress[:]) {
+		return errors.New("zero fee recipient")
+	}
+
+	timestamp, err := bid.Timestamp()
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain builder bid timestamp")
+	}
+	slotTimestamp := s.chainTime.StartOfSlot(slot)
+	if uint64(slotTimestamp.Unix()) != timestamp {
+		return fmt.Errorf("provided timestamp %d for slot %d not expected value of %d", timestamp, slot, slotTimestamp.Unix())
+	}
+
+	verified, err := s.verifyBidSignature(ctx, relayConfig, bid, provider)
+	if err != nil {
+		return err
+	}
+	if !verified {
+		log.Warn().Msg("Failed to verify bid signature")
+		return errors.New("invalid signature")
+	}
+
+	return nil
 }
 
 func (s *Service) logBidResults(span trace.Span,
@@ -476,6 +461,23 @@ func (s *Service) verifyBidSignature(_ context.Context,
 	return verified, nil
 }
 
+func (*Service) getBidValue(_ context.Context,
+	bid *builderspec.VersionedSignedBuilderBid,
+) (
+	*uint256.Int,
+	error,
+) {
+	value, err := bid.Value()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain bid value")
+	}
+	if zeroValue.Cmp(value) == 0 {
+		return nil, errors.New("bid has 0 value")
+	}
+
+	return value, nil
+}
+
 // bidsEqual returns true if the two bids are equal.
 // Bids are considered equal if they have the same header.
 // Note that this function is only called if the bids have the same value, so that is not checked here.
@@ -503,13 +505,4 @@ func bidBetter(bid1 *builderspec.VersionedSignedBuilderBid, bid2 *builderspec.Ve
 	}
 
 	return new(uint256.Int).Sub(value2, value1).Sign() == 1
-}
-
-func isPrivilegedBuilder(pubkey phase0.BLSPubKey, privilegedBuilders []phase0.BLSPubKey) bool {
-	for _, builder := range privilegedBuilders {
-		if bytes.Equal(pubkey[:], builder[:]) {
-			return true
-		}
-	}
-	return false
 }

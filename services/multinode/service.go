@@ -11,29 +11,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mock
+// package multinode handles multiple active Vouch instances.
+package multinode
 
 import (
 	"context"
-
-	"github.com/attestantio/go-block-relay/services/blockauctioneer"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/beaconblockproposer"
-	"github.com/attestantio/vouch/services/blockrelay"
 )
 
-type BuilderBidProvider struct{}
+// Service provides a multinode service.
+type Service interface{}
 
-// BuilderBid returns a builder bid.
-func (BuilderBidProvider) BuilderBid(_ context.Context,
-	_ phase0.Slot,
-	_ phase0.Hash32,
-	_ phase0.BLSPubKey,
-	_ *beaconblockproposer.ProposerConfig,
-	_ map[phase0.BLSPubKey]*blockrelay.BuilderConfig,
-) (
-	*blockauctioneer.Results,
-	error,
-) {
-	return &blockauctioneer.Results{}, nil
+// ActivityProvider provides information on the activity state of a node.
+type ActivityProvider interface {
+	// ShouldValidate returns true if this node should carry out validating operations.
+	ShouldValidate(ctx context.Context) bool
 }

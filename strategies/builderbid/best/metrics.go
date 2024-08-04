@@ -23,9 +23,8 @@ import (
 )
 
 var (
-	auctionBlockUsed           *prometheus.CounterVec
-	auctionBlockTimer          prometheus.Histogram
-	auctionPrivilegedBlockUsed *prometheus.CounterVec
+	auctionBlockUsed  *prometheus.CounterVec
+	auctionBlockTimer prometheus.Histogram
 )
 
 func registerMetrics(ctx context.Context, monitor metrics.Service) error {
@@ -49,19 +48,9 @@ func registerPrometheusMetrics(_ context.Context) error {
 		Subsystem: "relay_auction_block",
 		Name:      "used_total",
 		Help:      "The auction block provider used by a relay.",
-	}, []string{"provider"})
+	}, []string{"provider", "category"})
 	if err := prometheus.Register(auctionBlockUsed); err != nil {
 		return errors.Wrap(err, "failed to register vouch_relay_auction_block_used_total")
-	}
-
-	auctionPrivilegedBlockUsed = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "vouch",
-		Subsystem: "relay_auction_privileged_block",
-		Name:      "privileged_used_total",
-		Help:      "The privileged auction block provider used by a relay.",
-	}, []string{"provider"})
-	if err := prometheus.Register(auctionPrivilegedBlockUsed); err != nil {
-		return errors.Wrap(err, "failed to register vouch_relay_auction_privileged_block_used_total")
 	}
 
 	auctionBlockTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -84,7 +73,7 @@ func registerPrometheusMetrics(_ context.Context) error {
 }
 
 // monitorAuctionBlock provides metrics for an auction block operation.
-func monitorAuctionBlock(provider string, succeeded bool, duration time.Duration) {
+func monitorAuctionBlock(provider string, category string, succeeded bool, duration time.Duration) {
 	if auctionBlockUsed == nil {
 		// Not yet registered.
 		return
@@ -92,18 +81,6 @@ func monitorAuctionBlock(provider string, succeeded bool, duration time.Duration
 
 	auctionBlockTimer.Observe(duration.Seconds())
 	if succeeded {
-		auctionBlockUsed.WithLabelValues(provider).Add(1)
-	}
-}
-
-func monitorAuctionPrivilegedBlock(provider string, succeeded bool, duration time.Duration) {
-	if auctionPrivilegedBlockUsed == nil {
-		// Not yet registered.
-		return
-	}
-
-	auctionBlockTimer.Observe(duration.Seconds())
-	if succeeded {
-		auctionPrivilegedBlockUsed.WithLabelValues(provider).Add(1)
+		auctionBlockUsed.WithLabelValues(provider, category).Add(1)
 	}
 }
