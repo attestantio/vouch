@@ -81,7 +81,7 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 	}
 
 	// Obtain the accounts for the validator indices.
-	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, firstEpoch, validatorIndices)
+	accounts, err := s.validatingAccountsProvider.SyncCommitteeAccountsForEpochByIndex(ctx, firstEpoch, validatorIndices)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain validating accounts for epoch")
 		return

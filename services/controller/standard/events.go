@@ -314,15 +314,15 @@ func (s *Service) refreshSyncCommitteeDutiesForEpochPeriod(ctx context.Context, 
 		}
 	}
 
-	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, firstEpoch)
+	validatorIndices, err := s.syncCommitteeIndicesForEpoch(ctx, firstEpoch)
 	if err != nil {
-		log.Error().Err(err).Uint64("epoch", uint64(firstEpoch)).Msg("Failed to obtain active validators for epoch")
+		log.Error().Err(err).Uint64("epoch", uint64(firstEpoch)).Msg("Failed to obtain sync committee eligible validators for epoch")
 		return
 	}
 
 	// Expect at least one validator.
 	if len(validatorIndices) == 0 {
-		log.Warn().Msg("No active validators; not validating")
+		log.Warn().Msg("No eligible sync committee validators for epoch; not scheduling sync committee messages")
 		return
 	}
 
