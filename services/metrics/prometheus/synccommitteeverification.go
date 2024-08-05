@@ -80,6 +80,21 @@ func (s *Service) setupSyncCommitteeVerificationMetrics() error {
 		}
 	}
 
+	s.syncCommitteeVerificationCurrentCount = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "vouch",
+		Subsystem: "synccommitteeverification",
+		Name:      "current_assigned",
+		Help:      "The current number of sync committee assigned validators.",
+	})
+	if err := prometheus.Register(s.syncCommitteeVerificationCurrentCount); err != nil {
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			s.syncCommitteeVerificationCurrentCount = alreadyRegisteredError.ExistingCollector.(prometheus.Gauge)
+		} else {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -101,4 +116,9 @@ func (s *Service) SyncCommitteeGetHeadBlockFailedInc() {
 // SyncCommitteeMessagesHeadMismatchInc is called when a sync committee message was known to not match the next head block.
 func (s *Service) SyncCommitteeMessagesHeadMismatchInc() {
 	s.syncCommitteeVerificationHeadMismatches.WithLabelValues().Add(1)
+}
+
+// SyncCommitteeCurrentCountSet is called to set the current number of sync committee assigned validators.
+func (s *Service) SyncCommitteeCurrentCountSet(count int) {
+	s.syncCommitteeVerificationCurrentCount.Set(float64(count))
 }

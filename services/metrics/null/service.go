@@ -123,3 +123,6 @@ func (*Service) SyncCommitteeGetHeadBlockFailedInc() {}
 // SyncCommitteeMessagesHeadMismatchInc is called when a sync committee message was known to not match the next head block.
 func (*Service) SyncCommitteeMessagesHeadMismatchInc() {
 }
+
+// SyncCommitteeCurrentCountSet is called to set the current number of sync committee assigned validators.
+func (*Service) SyncCommitteeCurrentCountSet(_ int) {}

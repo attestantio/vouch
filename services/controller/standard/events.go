@@ -381,6 +381,7 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 		keyCount++
 	}
 	log.Trace().Uints64("validators", inScopeValidators).Msg("Verifying sync committee messages for validators")
+	messengerMonitor.SyncCommitteeCurrentCountSet(len(inScopeValidators))
 
 	blockResponse, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, &api.SignedBeaconBlockOpts{
 		Block: headEvent.Block.String(),

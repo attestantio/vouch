@@ -57,6 +57,7 @@ type Service struct {
 	syncCommitteeVerificationAggregateFound   *prometheus.CounterVec
 	syncCommitteeVerificationAggregateMissing *prometheus.CounterVec
 	syncCommitteeVerificationGetHeadFailures  *prometheus.CounterVec
+	syncCommitteeVerificationCurrentCount     prometheus.Gauge
 
 	syncCommitteeAggregationProcessTimer      prometheus.Histogram
 	syncCommitteeAggregationProcessRequests   *prometheus.CounterVec
