@@ -1602,30 +1602,6 @@ func startBlockRelay(ctx context.Context,
 		return nil, errors.New("blockrelay: fee recipient supplied is zero")
 	}
 
-	excludedBuilders := make([]phase0.BLSPubKey, len(viper.GetStringSlice("blockrelay.excluded-builders")))
-	for i, excludedBuilder := range viper.GetStringSlice("blockrelay.excluded-builders") {
-		tmp, err := hex.DecodeString(strings.TrimPrefix(excludedBuilder, "0x"))
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to decode excluded builder")
-		}
-		if len(tmp) != phase0.PublicKeyLength {
-			return nil, errors.New("incorrect length for excluded builder")
-		}
-		copy(excludedBuilders[i][:], tmp)
-	}
-
-	privilegedBuilders := make([]phase0.BLSPubKey, len(viper.GetStringSlice("blockrelay.privileged-builders")))
-	for i, privilegedBuilder := range viper.GetStringSlice("blockrelay.privileged-builders") {
-		tmp, err := hex.DecodeString(strings.TrimPrefix(privilegedBuilder, "0x"))
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to decode privileged builder")
-		}
-		if len(tmp) != phase0.PublicKeyLength {
-			return nil, errors.New("incorrect length for privileged builder")
-		}
-		copy(privilegedBuilders[i][:], tmp)
-	}
-
 	builderConfigs, err := obtainBuilderConfigs(ctx)
 	if err != nil {
 		return nil, err
