@@ -169,83 +169,7 @@ func (s *Service) builderBid(ctx context.Context,
 
 	log := s.log.With().Str("relay", provider.Address()).Logger()
 	for ; ; time.Sleep(s.bidGap) {
-		resp, err := provider.BuilderBid(ctx, &builderapi.BuilderBidOpts{
-			Slot:       slot,
-			ParentHash: parentHash,
-			PubKey:     pubkey,
-		})
-		if err != nil {
-			if ctx.Err() == nil {
-				// Error not on the context, report it.
-				errCh <- &builderBidError{
-					provider: provider,
-					err:      err,
-				}
-			}
-			s.logBidResults(span, slot, provider.Address(), firstBid, lastBid, bids)
-			return
-		}
-		builderBid := resp.Data
-		if builderBid == nil {
-			respCh <- &builderBidResponse{
-				provider: provider,
-				score:    big.NewInt(0),
-			}
-			continue
-		}
-
-		if e := log.Trace(); e.Enabled() {
-			data, err := json.Marshal(builderBid)
-			if err == nil {
-				e.Uint64("slot", uint64(slot)).RawJSON("builder_bid", data).Msg("Obtained builder bid")
-			}
-		}
-		if builderBid.IsEmpty() {
-			continue
-		}
-
-		value, err := s.getBidValue(ctx, builderBid)
-		if err != nil {
-			errCh <- &builderBidError{
-				provider: provider,
-				err:      err,
-			}
-
-			return
-		}
-
-		if value.ToBig().Cmp(relayConfig.MinValue.BigInt()) < 0 {
-			log.Trace().
-				Uint64("slot", uint64(slot)).
-				Stringer("value", value.ToBig()).
-				Stringer("min_value", relayConfig.MinValue.BigInt()).
-				Msg("Value below minimum; ignoring")
-			continue
-		}
-
-		if err := s.verifyBidDetails(ctx, builderBid, slot, relayConfig, provider); err != nil {
-			errCh <- &builderBidError{
-				provider: provider,
-				err:      err,
-			}
-
-			return
-		}
-
-		bids++
-
-		if firstBid == nil {
-			firstBid = builderBid
-		}
-
-		if lastBid == nil || bidBetter(lastBid, builderBid) {
-			lastBid = builderBid
-			respCh <- &builderBidResponse{
-				bid:      builderBid,
-				provider: provider,
-				score:    value.ToBig(),
-			}
-		}
+		firstBid, lastBid, bids = s.builderBidAttempt(ctx, &log, span, provider, respCh, errCh, slot, parentHash, pubkey, relayConfig, firstBid, lastBid, bids)
 
 		if time.Until(deadline) <= s.bidGap {
 			log.Trace().Int64("remaining_ms", time.Until(deadline).Milliseconds()).Msg("Not enough time to re-request bid")
@@ -254,6 +178,107 @@ func (s *Service) builderBid(ctx context.Context,
 			return
 		}
 	}
+}
+
+func (s *Service) builderBidAttempt(ctx context.Context,
+	log *zerolog.Logger,
+	span trace.Span,
+	provider builderclient.BuilderBidProvider,
+	respCh chan *builderBidResponse,
+	errCh chan *builderBidError,
+	slot phase0.Slot,
+	parentHash phase0.Hash32,
+	pubkey phase0.BLSPubKey,
+	relayConfig *beaconblockproposer.RelayConfig,
+	firstBid *builderspec.VersionedSignedBuilderBid,
+	lastBid *builderspec.VersionedSignedBuilderBid,
+	bids int,
+) (
+	*builderspec.VersionedSignedBuilderBid,
+	*builderspec.VersionedSignedBuilderBid,
+	int,
+) {
+	resp, err := provider.BuilderBid(ctx, &builderapi.BuilderBidOpts{
+		Slot:       slot,
+		ParentHash: parentHash,
+		PubKey:     pubkey,
+	})
+	if err != nil {
+		if ctx.Err() == nil {
+			// Error not on the context, report it.
+			errCh <- &builderBidError{
+				provider: provider,
+				err:      err,
+			}
+		}
+		s.logBidResults(span, slot, provider.Address(), firstBid, lastBid, bids)
+
+		return firstBid, lastBid, bids
+	}
+	builderBid := resp.Data
+	if builderBid == nil {
+		respCh <- &builderBidResponse{
+			provider: provider,
+			score:    big.NewInt(0),
+		}
+		return firstBid, lastBid, bids
+	}
+
+	if e := log.Trace(); e.Enabled() {
+		data, err := json.Marshal(builderBid)
+		if err == nil {
+			e.Uint64("slot", uint64(slot)).RawJSON("builder_bid", data).Msg("Obtained builder bid")
+		}
+	}
+	if builderBid.IsEmpty() {
+		return firstBid, lastBid, bids
+	}
+
+	value, err := s.getBidValue(ctx, builderBid)
+	if err != nil {
+		errCh <- &builderBidError{
+			provider: provider,
+			err:      err,
+		}
+
+		return firstBid, lastBid, bids
+	}
+
+	if value.ToBig().Cmp(relayConfig.MinValue.BigInt()) < 0 {
+		log.Trace().
+			Uint64("slot", uint64(slot)).
+			Stringer("value", value.ToBig()).
+			Stringer("min_value", relayConfig.MinValue.BigInt()).
+			Msg("Value below minimum; ignoring")
+
+		return firstBid, lastBid, bids
+	}
+
+	if err := s.verifyBidDetails(ctx, builderBid, slot, relayConfig, provider); err != nil {
+		errCh <- &builderBidError{
+			provider: provider,
+			err:      err,
+		}
+
+		return firstBid, lastBid, bids
+	}
+
+	bids++
+
+	if firstBid == nil {
+		firstBid = builderBid
+	}
+
+	if lastBid == nil || bidBetter(lastBid, builderBid) {
+		lastBid = builderBid
+		respCh <- &builderBidResponse{
+			bid:      builderBid,
+			provider: provider,
+			score:    value.ToBig(),
+		}
+	}
+
+	return firstBid, lastBid, bids
 }
 
 func (*Service) setBuilderBid(ctx context.Context,
