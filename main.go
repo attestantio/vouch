@@ -1771,7 +1771,7 @@ func obtainBuilderConfigsForPrivilegedBuilders(_ context.Context,
 	res map[phase0.BLSPubKey]*blockrelay.BuilderConfig,
 ) error {
 	if viper.Get("blockrelay.privileged-builders") != nil {
-		log.Warn().Msg("blockrelay.privileged-builders is deprecated; please used blockrelay.builder-configs")
+		log.Warn().Msg("blockrelay.privileged-builders is deprecated; please use blockrelay.builder-configs")
 	}
 	for _, addr := range viper.GetStringSlice("blockrelay.privileged-builders") {
 		tmp, err := hex.DecodeString(strings.TrimPrefix(addr, "0x"))
