@@ -62,8 +62,7 @@ type Service struct {
 	logResults                                bool
 	releaseVersion                            string
 	builderBidProvider                        builderbid.Provider
-	excludedBuilders                          []phase0.BLSPubKey
-	privilegedBuilders                        []phase0.BLSPubKey
+	builderConfigs                            map[phase0.BLSPubKey]*blockrelay.BuilderConfig
 
 	// builderBidMu ensures that only one builder bid operation is actively talking to
 	// relays at a time.
@@ -125,9 +124,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		executionConfig:      &v2.ExecutionConfig{Version: 2},
 		activitySem:          semaphore.NewWeighted(1),
 		builderBidProvider:   parameters.builderBidProvider,
-		excludedBuilders:     parameters.excludedBuilders,
+		builderConfigs:       parameters.builderConfigs,
 		controlledValidators: make(map[phase0.BLSPubKey]struct{}),
-		privilegedBuilders:   parameters.privilegedBuilders,
 	}
 
 	// Carry out initial fetch of execution configuration.

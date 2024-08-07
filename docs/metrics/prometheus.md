@@ -122,9 +122,10 @@ Relay metrics provide information about the performance, both individually and c
 
 `vouch_relay_auction_block_duration_seconds` is provided as a histogram, with buckets in increments of 0.1 seconds up to 4 seconds.  It provides details of the total time taken for Vouch to obtain the best bid from competing relays.  There is also a companion metric `vouch_relay_auction_block_duration_seconds_count`, which is a simple count of the number of operations that have taken place.
 
-`vouch_relay_auction_block_used_total` provides the number of blocks used.  It has a single label:
+`vouch_relay_auction_block_used_total` provides the number of blocks used.  It has two labels:
 
   - `provider` is the address of the relay used from which the winning bid comes
+  - `category` is the categorization of the builder from which the winning bid comes.  This is free-form text, and supplied by the user in the builder confguration (defaults to "standard" if no category is supplied)
 
 `vouch_relay_builder_bid_delta_meth_bucket` is provided as a histogram, with buckets in increments of 10 milliEther up to 1 Ether.  It provides details of the difference in value between the winning bid and the bid from the given provider. It has a single label:
 

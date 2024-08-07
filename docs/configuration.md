@@ -185,17 +185,21 @@ strategies:
 # Configuration information for this section can be found in the execution layer documentation.
 blockrelay:
   fallback-fee-recipient: '0x0000000000000000000000000000000000000001'
-  # Privileged builders are a list of public keys of builders from which bids will be accepted
-  # first, even if the bid is lower. If no bids are received from the privileged builders,
-  # bids from other builders will be accepted.
-  privileged-builders:
-    - '0xaaaa...'
-    - '0xbbb...'
-  # Excluded builders are a list of public keys of builders from which bids will not be accepted.
-  # Note that this may result in no bid being available, if the only bids received from the MEV relays are from excluded builders.
-  excluded-builders:
-    - '0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111'
-    - '0x222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222'
+  # builder-configs contain specific configurations for different builders, with each builder defined by its public key.
+  # The base score for each bid is the value to the proposer, in wei.  The final score is calculated by adding
+  # the 'offset' value for the specific builder, and then multiplying it by the 'factor' value.  For example,
+  # if the base value is 1000, the offset is 10 and the factor is 2 then the final score is (1000+10)*2 = 2020.  If the
+  # offset is not configured it defaults to 0; if the factor is not configured it defaults to 1.  The category is used
+  # for differentiation of bids in metrics.
+  builder-configs:
+    '0xaaaa...':
+      category: 'privileged'
+      # With a factor of 1000000000 bids from this builder are pretty much guaranteed to be included above bids from other builders.
+      factor: 1000000000
+    '0xbbbb...':
+      category: 'excluded'
+      # With a factor of 0 bids from this builder will be ignored.
+      factor: 0
 
 # tracing sends OTLP trace data to the supplied endpoint.
 tracing:

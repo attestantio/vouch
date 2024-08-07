@@ -107,13 +107,14 @@ func (s *Service) immediateBuilderBid(ctx context.Context,
 	log.Trace().Uint64("slot", uint64(slot)).Stringer("pubkey", pubkey).Msg("Obtaining immediate builder bid for validator")
 
 	results, err := s.auctionBlock(ctx, slot, parentHash, pubkey, nil)
-	if err != nil {
+	if err != nil || results == nil || results.WinningParticipation == nil {
 		monitorBuilderBid(time.Since(started), false)
 		return nil, err
 	}
 
 	monitorBuilderBid(time.Since(started), true)
-	return results.Bid, nil
+
+	return results.WinningParticipation.Bid, nil
 }
 
 func (s *Service) cachedBid(_ context.Context,

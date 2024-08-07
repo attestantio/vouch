@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"net/http"
 
 	// #nosec G108
@@ -107,7 +108,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.9.0-alpha.4-dev"
+var ReleaseVersion = "1.9.0-alpha.8-dev"
 
 func main() {
 	exitCode := main2()
@@ -1601,28 +1602,9 @@ func startBlockRelay(ctx context.Context,
 		return nil, errors.New("blockrelay: fee recipient supplied is zero")
 	}
 
-	excludedBuilders := make([]phase0.BLSPubKey, len(viper.GetStringSlice("blockrelay.excluded-builders")))
-	for i, excludedBuilder := range viper.GetStringSlice("blockrelay.excluded-builders") {
-		tmp, err := hex.DecodeString(strings.TrimPrefix(excludedBuilder, "0x"))
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to decode excluded builder")
-		}
-		if len(tmp) != phase0.PublicKeyLength {
-			return nil, errors.New("incorrect length for excluded builder")
-		}
-		copy(excludedBuilders[i][:], tmp)
-	}
-
-	privilegedBuilders := make([]phase0.BLSPubKey, len(viper.GetStringSlice("blockrelay.privileged-builders")))
-	for i, privilegedBuilder := range viper.GetStringSlice("blockrelay.privileged-builders") {
-		tmp, err := hex.DecodeString(strings.TrimPrefix(privilegedBuilder, "0x"))
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to decode privileged builder")
-		}
-		if len(tmp) != phase0.PublicKeyLength {
-			return nil, errors.New("incorrect length for privileged builder")
-		}
-		copy(privilegedBuilders[i][:], tmp)
+	builderConfigs, err := obtainBuilderConfigs(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	var blockRelay blockrelay.Service
@@ -1647,8 +1629,7 @@ func startBlockRelay(ctx context.Context,
 		standardblockrelay.WithLogResults(viper.GetBool("blockrelay.log-results")),
 		standardblockrelay.WithReleaseVersion(ReleaseVersion),
 		standardblockrelay.WithBuilderBidProvider(builderBidProvider),
-		standardblockrelay.WithExcludedBuilders(excludedBuilders),
-		standardblockrelay.WithPrivilegedBuilders(privilegedBuilders),
+		standardblockrelay.WithBuilderConfigs(builderConfigs),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start block relay")
@@ -1705,4 +1686,109 @@ func selectBuilderBidProvider(ctx context.Context,
 	}
 
 	return provider, nil
+}
+
+func obtainBuilderConfigs(ctx context.Context) (map[phase0.BLSPubKey]*blockrelay.BuilderConfig, error) {
+	res := make(map[phase0.BLSPubKey]*blockrelay.BuilderConfig)
+
+	if err := obtainBuilderConfigsForExcludedBuilders(ctx, res); err != nil {
+		return nil, err
+	}
+	if err := obtainBuilderConfigsForPrivilegedBuilders(ctx, res); err != nil {
+		return nil, err
+	}
+
+	for addr := range viper.GetStringMap("blockrelay.builder-configs") {
+		tmp, err := hex.DecodeString(strings.TrimPrefix(addr, "0x"))
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to decode builder public key %s", addr)
+		}
+		if len(tmp) != phase0.PublicKeyLength {
+			return nil, fmt.Errorf("incorrect length for builder public key %s", addr)
+		}
+		var publicKey phase0.BLSPubKey
+		copy(publicKey[:], tmp)
+
+		category := blockrelay.StandardBuilderCategory
+		var factor *big.Int
+		var offset *big.Int
+
+		var success bool
+		for k, v := range viper.GetStringMapString(fmt.Sprintf("blockrelay.builder-configs.%s", addr)) {
+			switch {
+			case strings.EqualFold(k, "category"):
+				category = v
+			case strings.EqualFold(k, "factor"):
+				factor, success = new(big.Int).SetString(v, 10)
+				if !success {
+					return nil, fmt.Errorf("failed to decode factor %s for builder %s", v, addr)
+				}
+			case strings.EqualFold(k, "offset"):
+				offset, success = new(big.Int).SetString(v, 10)
+				if !success {
+					return nil, fmt.Errorf("failed to decode offset %s for builder %s", v, addr)
+				}
+			}
+		}
+
+		res[publicKey] = &blockrelay.BuilderConfig{
+			Category: category,
+			Factor:   factor,
+			Offset:   offset,
+		}
+	}
+
+	return res, nil
+}
+
+func obtainBuilderConfigsForExcludedBuilders(_ context.Context,
+	res map[phase0.BLSPubKey]*blockrelay.BuilderConfig,
+) error {
+	if viper.Get("blockrelay.excluded-builders") != nil {
+		log.Warn().Msg("blockrelay.excluded-builders is deprecated; please use blockrelay.builder-configs")
+	}
+	for _, addr := range viper.GetStringSlice("blockrelay.excluded-builders") {
+		tmp, err := hex.DecodeString(strings.TrimPrefix(addr, "0x"))
+		if err != nil {
+			return errors.Wrapf(err, "failed to decode builder public key %s", addr)
+		}
+		if len(tmp) != phase0.PublicKeyLength {
+			return fmt.Errorf("incorrect length for builder public key %s", addr)
+		}
+		var publicKey phase0.BLSPubKey
+		copy(publicKey[:], tmp)
+
+		res[publicKey] = &blockrelay.BuilderConfig{
+			Category: "excluded",
+			Factor:   big.NewInt(0),
+		}
+	}
+
+	return nil
+}
+
+func obtainBuilderConfigsForPrivilegedBuilders(_ context.Context,
+	res map[phase0.BLSPubKey]*blockrelay.BuilderConfig,
+) error {
+	if viper.Get("blockrelay.privileged-builders") != nil {
+		log.Warn().Msg("blockrelay.privileged-builders is deprecated; please use blockrelay.builder-configs")
+	}
+	for _, addr := range viper.GetStringSlice("blockrelay.privileged-builders") {
+		tmp, err := hex.DecodeString(strings.TrimPrefix(addr, "0x"))
+		if err != nil {
+			return errors.Wrapf(err, "failed to decode builder public key %s", addr)
+		}
+		if len(tmp) != phase0.PublicKeyLength {
+			return fmt.Errorf("incorrect length for builder public key %s", addr)
+		}
+		var publicKey phase0.BLSPubKey
+		copy(publicKey[:], tmp)
+
+		res[publicKey] = &blockrelay.BuilderConfig{
+			Category: "privileged",
+			Factor:   big.NewInt(1000000000000000000),
+		}
+	}
+
+	return nil
 }

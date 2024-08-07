@@ -179,9 +179,9 @@ func (s *Service) proposeBlock(ctx context.Context,
 	}
 	proposal := proposalResponse.Data
 	if proposal.Blinded {
-		monitorBeaconBlockProposalSource("auction")
+		monitorBeaconBlockProposalSource("relay")
 	} else {
-		monitorBeaconBlockProposalSource("direct")
+		monitorBeaconBlockProposalSource("local")
 	}
 
 	if err := s.confirmProposalData(ctx, proposal, duty); err != nil {

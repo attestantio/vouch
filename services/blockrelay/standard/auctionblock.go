@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
+	builderclient "github.com/attestantio/go-builder-client"
 	"github.com/attestantio/go-builder-client/api/deneb"
 	builderspec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -30,6 +31,7 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // AuctionBlock obtains the best available use of the block space.
@@ -71,20 +73,41 @@ func (s *Service) auctionBlock(ctx context.Context,
 	if len(proposerConfig.Relays) == 0 {
 		log.Trace().Msg("No relays in proposer configuration")
 		return &blockauctioneer.Results{
-			Values: make(map[string]*big.Int),
+			Participation: make(map[string]*blockauctioneer.Participation),
+			AllProviders:  make([]builderclient.BuilderBidProvider, 0),
+			Providers:     make([]builderclient.BuilderBidProvider, 0),
 		}, nil
 	}
 
-	res, err := s.builderBidProvider.BuilderBid(ctx, slot, parentHash, pubkey, proposerConfig, s.excludedBuilders, s.privilegedBuilders)
+	res, err := s.builderBidProvider.BuilderBid(ctx, slot, parentHash, pubkey, proposerConfig, s.builderConfigs)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain builder bid")
 	}
 
-	bidToCache := res.Bid
-	if bidToCache == nil {
-		// No bid returned; create a dummy for the purposes of caching.
+	var bid *builderspec.VersionedSignedBuilderBid
+	if res.WinningParticipation != nil {
+		bid = res.WinningParticipation.Bid
+	}
+
+	s.cacheBid(ctx, slot, parentHash, pubkey, bid)
+
+	s.logParticipation(ctx, span, slot, res)
+
+	return res, nil
+}
+
+func (s *Service) cacheBid(_ context.Context,
+	slot phase0.Slot,
+	parentHash phase0.Hash32,
+	pubkey phase0.BLSPubKey,
+	bid *builderspec.VersionedSignedBuilderBid,
+) {
+	if bid == nil {
+		// No bid supplied; create a dummy for the purposes of caching so that if asked for this bid
+		// we can actively respond to say we don't have anything (as opposed to attempting to fetch
+		// a bid when we're queried).
 		log.Trace().Msg("Bid is nil; creating dummy")
-		bidToCache = &builderspec.VersionedSignedBuilderBid{
+		bid = &builderspec.VersionedSignedBuilderBid{
 			Version: spec.DataVersionDeneb,
 			Deneb: &deneb.SignedBuilderBid{
 				Message: &deneb.BuilderBid{
@@ -101,53 +124,72 @@ func (s *Service) auctionBlock(ctx context.Context,
 	if _, exists := s.builderBidsCache[key]; !exists {
 		s.builderBidsCache[key] = make(map[string]*builderspec.VersionedSignedBuilderBid)
 	}
-	s.builderBidsCache[key][subKey] = bidToCache
+	s.builderBidsCache[key][subKey] = bid
 	s.builderBidsCacheMu.Unlock()
+}
+
+func (s *Service) logParticipation(_ context.Context,
+	span trace.Span,
+	slot phase0.Slot,
+	res *blockauctioneer.Results,
+) {
+	if res.WinningParticipation == nil {
+		// Nothing to log.
+		return
+	}
 
 	selectedProviders := make(map[string]struct{})
 	for _, provider := range res.Providers {
 		selectedProviders[strings.ToLower(provider.Address())] = struct{}{}
 	}
 
-	if res.Bid != nil {
-		val, err := res.Bid.Value()
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to obtain bid value")
-		} else {
-			// Update metrics.
-			for provider, value := range res.Values {
-				delta := new(big.Int).Sub(val.ToBig(), value)
-				_, isSelected := selectedProviders[strings.ToLower(provider)]
-				if !isSelected {
-					monitorBuilderBidDelta(provider, delta)
-				}
-				var logger *zerolog.Event
-				if s.logResults {
-					//nolint:zerologlint
-					logger = log.Info()
-				} else {
-					//nolint:zerologlint
-					logger = log.Trace()
-				}
-				logger.
-					Uint64("slot", uint64(slot)).
-					Str("provider", provider).
-					Stringer("value", value).
-					Stringer("delta", delta).
-					Bool("selected", isSelected).
-					Msg("Auction participant")
-			}
-
-			// Add result to trace.
-			// Has to be a string due to the potential size being >maxint64.
-			span.SetAttributes(attribute.String("value", val.ToBig().String()))
-			providerAddresses := make([]string, 0, len(selectedProviders))
-			for k := range selectedProviders {
-				providerAddresses = append(providerAddresses, k)
-			}
-			span.SetAttributes(attribute.StringSlice("providers", providerAddresses))
-		}
+	winningScore := res.WinningParticipation.Score
+	winningValue, err := res.WinningParticipation.Bid.Value()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to obtain value of winning bid")
+		return
 	}
 
-	return res, nil
+	for provider, participation := range res.Participation {
+		providerScore := participation.Score
+		scoreDelta := new(big.Int).Sub(winningScore, providerScore)
+		providerValue, err := participation.Bid.Value()
+		if err != nil {
+			log.Warn().Str("provider", provider).Err(err).Msg("Failed to obtain value of participating bid")
+			continue
+		}
+		valueDelta := new(big.Int).Sub(winningValue.ToBig(), providerValue.ToBig())
+
+		_, isSelected := selectedProviders[strings.ToLower(provider)]
+		if !isSelected {
+			monitorBuilderBidDelta(provider, valueDelta)
+		}
+
+		var logger *zerolog.Event
+		if s.logResults {
+			//nolint:zerologlint
+			logger = log.Info()
+		} else {
+			//nolint:zerologlint
+			logger = log.Trace()
+		}
+		logger.
+			Uint64("slot", uint64(slot)).
+			Str("provider", provider).
+			Stringer("value", providerValue).
+			Stringer("value_delta", valueDelta).
+			Stringer("score", providerScore).
+			Stringer("score_delta", scoreDelta).
+			Bool("selected", isSelected).
+			Msg("Auction participant")
+	}
+
+	// Add result to trace.
+	// Has to be a string due to the potential size being >maxint64.
+	span.SetAttributes(attribute.String("value", winningValue.ToBig().String()))
+	providerAddresses := make([]string, 0, len(selectedProviders))
+	for k := range selectedProviders {
+		providerAddresses = append(providerAddresses, k)
+	}
+	span.SetAttributes(attribute.StringSlice("providers", providerAddresses))
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	"github.com/attestantio/vouch/services/blockrelay"
 )
 
 type BuilderBidProvider struct{}
@@ -29,8 +30,7 @@ func (BuilderBidProvider) BuilderBid(_ context.Context,
 	_ phase0.Hash32,
 	_ phase0.BLSPubKey,
 	_ *beaconblockproposer.ProposerConfig,
-	_ []phase0.BLSPubKey,
-	_ []phase0.BLSPubKey,
+	_ map[phase0.BLSPubKey]*blockrelay.BuilderConfig,
 ) (
 	*blockauctioneer.Results,
 	error,

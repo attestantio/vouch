@@ -24,11 +24,10 @@ import (
 )
 
 var (
-	auctionBlockUsed           *prometheus.CounterVec
-	auctionBlockTimer          prometheus.Histogram
-	auctionPrivilegedBlockUsed *prometheus.CounterVec
-	bidDelta                   *prometheus.HistogramVec
-	bidPctDelta                *prometheus.HistogramVec
+	auctionBlockUsed  *prometheus.CounterVec
+	auctionBlockTimer prometheus.Histogram
+	bidDelta          *prometheus.HistogramVec
+	bidPctDelta       *prometheus.HistogramVec
 
 	weiToETH = big.NewInt(1e18)
 )
@@ -54,19 +53,9 @@ func registerPrometheusMetrics(_ context.Context) error {
 		Subsystem: "relay_auction_block",
 		Name:      "used_total",
 		Help:      "The auction block provider used by a relay.",
-	}, []string{"provider"})
+	}, []string{"provider", "category"})
 	if err := prometheus.Register(auctionBlockUsed); err != nil {
 		return errors.Wrap(err, "failed to register vouch_relay_auction_block_used_total")
-	}
-
-	auctionPrivilegedBlockUsed = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: "vouch",
-		Subsystem: "relay_auction_privileged_block",
-		Name:      "privileged_used_total",
-		Help:      "The privileged auction block provider used by a relay.",
-	}, []string{"provider"})
-	if err := prometheus.Register(auctionPrivilegedBlockUsed); err != nil {
-		return errors.Wrap(err, "failed to register vouch_relay_auction_privileged_block_used_total")
 	}
 
 	auctionBlockTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -91,11 +80,11 @@ func registerPrometheusMetrics(_ context.Context) error {
 		Name:      "bid_delta",
 		Help:      "The absolute bid delta obtained by deadline strategy (ETH).",
 		Buckets: []float64{
-			0.25, 0.5, 0.75, 1.0,
-			1.25, 1.5, 1.75, 2.0,
-			2.25, 2.5, 2.75, 3.0,
-			3.25, 3.5, 3.75, 4.0,
-			4.25, 4.5, 4.75, 5.0,
+			0.0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09,
+			0.10, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19,
+			0.20, 0.21, 0.22, 0.23, 0.24, 0.25, 0.26, 0.27, 0.28, 0.29,
+			0.30, 0.31, 0.32, 0.33, 0.34, 0.35, 0.36, 0.37, 0.38, 0.39,
+			0.40, 0.41, 0.42, 0.43, 0.44, 0.45, 0.46, 0.47, 0.48, 0.49,
 		},
 	}, []string{"provider"})
 	if err := prometheus.Register(bidDelta); err != nil {
@@ -106,9 +95,9 @@ func registerPrometheusMetrics(_ context.Context) error {
 		Namespace: "vouch",
 		Subsystem: "builderbid_strategy",
 		Name:      "bid_pctdelta",
-		Help:      "The percentage bid delta obtained by deadline strategy (ETH).",
+		Help:      "The percentage bid delta obtained by deadline strategy.",
 		Buckets: []float64{
-			10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
+			0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
 		},
 	}, []string{"provider"})
 	if err := prometheus.Register(bidPctDelta); err != nil {
@@ -119,7 +108,7 @@ func registerPrometheusMetrics(_ context.Context) error {
 }
 
 // monitorAuctionBlock provides metrics for an auction block operation.
-func monitorAuctionBlock(provider string, succeeded bool, duration time.Duration) {
+func monitorAuctionBlock(provider string, category string, succeeded bool, duration time.Duration) {
 	if auctionBlockUsed == nil {
 		// Not yet registered.
 		return
@@ -127,19 +116,7 @@ func monitorAuctionBlock(provider string, succeeded bool, duration time.Duration
 
 	auctionBlockTimer.Observe(duration.Seconds())
 	if succeeded {
-		auctionBlockUsed.WithLabelValues(provider).Add(1)
-	}
-}
-
-func monitorAuctionPrivilegedBlock(provider string, succeeded bool, duration time.Duration) {
-	if auctionPrivilegedBlockUsed == nil {
-		// Not yet registered.
-		return
-	}
-
-	auctionBlockTimer.Observe(duration.Seconds())
-	if succeeded {
-		auctionPrivilegedBlockUsed.WithLabelValues(provider).Add(1)
+		auctionBlockUsed.WithLabelValues(provider, category).Add(1)
 	}
 }
 

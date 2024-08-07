@@ -21,6 +21,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/scheduler"
@@ -52,8 +53,7 @@ type parameters struct {
 	logResults                                bool
 	releaseVersion                            string
 	builderBidProvider                        builderbid.Provider
-	excludedBuilders                          []phase0.BLSPubKey
-	privilegedBuilders                        []phase0.BLSPubKey
+	builderConfigs                            map[phase0.BLSPubKey]*blockrelay.BuilderConfig
 }
 
 // Parameter is the interface for service parameters.
@@ -207,16 +207,10 @@ func WithBuilderBidProvider(provider builderbid.Provider) Parameter {
 	})
 }
 
-// WithExcludedBuilders is the list of builders whose bids will be excluded.
-func WithExcludedBuilders(builders []phase0.BLSPubKey) Parameter {
+// WithBuilderConfigs are the builder configurations.
+func WithBuilderConfigs(builderConfigs map[phase0.BLSPubKey]*blockrelay.BuilderConfig) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.excludedBuilders = builders
-	})
-}
-
-func WithPrivilegedBuilders(builders []phase0.BLSPubKey) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.privilegedBuilders = builders
+		p.builderConfigs = builderConfigs
 	})
 }
 
@@ -226,7 +220,8 @@ var zeroExecutionAddress bellatrix.ExecutionAddress
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel: zerolog.GlobalLevel(),
+		logLevel:       zerolog.GlobalLevel(),
+		builderConfigs: map[phase0.BLSPubKey]*blockrelay.BuilderConfig{},
 	}
 	for _, p := range params {
 		p.apply(&parameters)
@@ -274,6 +269,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.builderBidProvider == nil {
 		return nil, errors.New("no builder bid provider specified")
+	}
+	if parameters.builderConfigs == nil {
+		return nil, errors.New("no builder configs specified")
 	}
 
 	return &parameters, nil
