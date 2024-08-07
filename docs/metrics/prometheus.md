@@ -145,5 +145,6 @@ Sync Committee Verification metrics can be enabled using the `controller.verify-
 
 - `vouch_synccommitteeverification_current_assigned` is a gauge that is set to the current number of vouch validators that are participating in Sync Committee duty.
 - `vouch_synccommitteeverification_mismatches_total` is a counter that increments each time vouch receives a head event where the parent block root does not match the root vouch broadcast in the Sync Committee messages. 
-- `vouch_synccommitteeverification_found_total` is a counter that increments for each vouch validator that has been included in the SyncAggregate.
-- `vouch_synccommitteeverification_missing_total` is a counter that increments for each vouch validator that has NOT been included in the SyncAggregate.
+- `vouch_synccommitteeverification_found_total` is a counter that increments for each vouch validator that has been included in the SyncAggregate. This is not incremented if we already detected a root mismatch or if we didn't record the Sync Committee head (expected after a restart)
+- `vouch_synccommitteeverification_missing_total` is a counter that increments for each vouch validator that has NOT been included in the SyncAggregate. This is not incremented if we already detected a root mismatch or if we didn't record the Sync Committee head (expected after a restart)
+
