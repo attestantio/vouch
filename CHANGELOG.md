@@ -6,6 +6,7 @@ dev:
   - add individual "controller.fast-track" flags for attestations and sync committees
   - add 'failed' dimension for root to slot lookup metrics
   - add 'deadline' builder bid strategy
+  - add builder configurations to allow more control over selection of bids
 
 1.9.0-alpha.3
   - add proposal value and blinded status to trace

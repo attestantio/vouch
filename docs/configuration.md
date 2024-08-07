@@ -194,9 +194,11 @@ blockrelay:
   builder-configs:
     '0xaaaa...':
       category: 'privileged'
+      # With a factor of 1000000000 bids from this builder are pretty much guaranteed to be included above bids from other builders.
       factor: 1000000000
     '0xbbbb...':
       category: 'excluded'
+      # With a factor of 0 bids from this builder will be ignored.
       factor: 0
 
 # tracing sends OTLP trace data to the supplied endpoint.
