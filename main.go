@@ -318,28 +318,9 @@ func startServices(ctx context.Context,
 	}
 
 	// Some beacon nodes do not respond pre-genesis, so we must wait for genesis before proceeding.
-	genesisTime := chainTime.GenesisTime()
-	now := time.Now()
-	waitedForGenesis := false
-	if now.Before(genesisTime) {
-		waitedForGenesis = true
-		// Wait for genesis (or signal, or context cancel).
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-		log.Info().Str("genesis", fmt.Sprintf("%v", genesisTime)).Msg("Waiting for genesis")
-		ctx, cancel := context.WithDeadline(ctx, genesisTime)
-		defer cancel()
-		select {
-		case <-sigCh:
-			return nil, nil, errors.New("signal received")
-		case <-ctx.Done():
-			switch ctx.Err() {
-			case context.DeadlineExceeded:
-				log.Info().Msg("Genesis time")
-			case context.Canceled:
-				return nil, nil, errors.New("context cancelled")
-			}
-		}
+	waitedForGenesis, err := waitForGenesis(ctx, chainTime)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to wait for genesis block")
 	}
 
 	altairCapable, bellatrixCapable, _, err := consensusClientCapabilities(ctx, eth2Client)
@@ -347,16 +328,9 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	// The signed beacon block provider from the configured strategy to define how we get signed beacon blocks.
-	signedBeaconBlockProvider, err := selectSignedBeaconBlockProvider(ctx, monitor, eth2Client)
+	signedBeaconBlockProvider, beaconBlockHeaderProvider, err := startProviderServices(ctx, monitor, eth2Client)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to fetch signed beacon block provider for controller")
-	}
-
-	// The block header provider from the configured strategy to define how we get block headers.
-	beaconBlockHeaderProvider, err := selectBeaconHeaderProvider(ctx, monitor, eth2Client)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to fetch beacon block header provider for controller")
+		return nil, nil, err
 	}
 
 	scheduler, cacheSvc, signerSvc, accountManager, err := startSharedServices(ctx, eth2Client, majordomo, chainTime, monitor, beaconBlockHeaderProvider, signedBeaconBlockProvider)
@@ -462,6 +436,48 @@ func startServices(ctx context.Context,
 	}
 
 	return chainTime, controller, nil
+}
+
+func waitForGenesis(ctx context.Context, chainTime chaintime.Service) (bool, error) {
+	genesisTime := chainTime.GenesisTime()
+	now := time.Now()
+	waitedForGenesis := false
+	if now.Before(genesisTime) {
+		waitedForGenesis = true
+		// Wait for genesis (or signal, or context cancel).
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+		log.Info().Str("genesis", fmt.Sprintf("%v", genesisTime)).Msg("Waiting for genesis")
+		ctx, cancel := context.WithDeadline(ctx, genesisTime)
+		defer cancel()
+		select {
+		case <-sigCh:
+			return false, errors.New("signal received")
+		case <-ctx.Done():
+			switch ctx.Err() {
+			case context.DeadlineExceeded:
+				log.Info().Msg("Genesis time")
+			case context.Canceled:
+				return false, errors.New("context cancelled")
+			}
+		}
+	}
+	return waitedForGenesis, nil
+}
+
+func startProviderServices(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (eth2client.SignedBeaconBlockProvider, eth2client.BeaconBlockHeadersProvider, error) {
+	// The signed beacon block provider from the configured strategy to define how we get signed beacon blocks.
+	signedBeaconBlockProvider, err := selectSignedBeaconBlockProvider(ctx, monitor, eth2Client)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to fetch signed beacon block provider for controller")
+	}
+
+	// The block header provider from the configured strategy to define how we get block headers.
+	beaconBlockHeaderProvider, err := selectBeaconHeaderProvider(ctx, monitor, eth2Client)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to fetch beacon block header provider for controller")
+	}
+	return signedBeaconBlockProvider, beaconBlockHeaderProvider, nil
 }
 
 func startBasicServices(ctx context.Context,
