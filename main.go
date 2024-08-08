@@ -422,12 +422,6 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to fetch multiclient for controller")
 	}
 
-	// The block header provider from the configured strategy to define how we get block headers.
-	signedBeaconBlockProvider, err := selectSignedBeaconBlockProvider(ctx, monitor)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to fetch signed beacon block provider for controller")
-	}
-
 	log.Trace().Msg("Starting controller")
 	controller, err := standardcontroller.New(ctx,
 		standardcontroller.WithLogLevel(util.LogLevel("controller")),
@@ -1863,7 +1857,6 @@ func selectSignedBeaconBlockProvider(ctx context.Context,
 
 	return provider, nil
 }
-
 
 // select the beacon header provider based on user input.
 func selectBeaconHeaderProvider(ctx context.Context,
