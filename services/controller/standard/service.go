@@ -80,6 +80,7 @@ type Service struct {
 	attestationAggregationDelay   time.Duration
 	maxSyncCommitteeMessageDelay  time.Duration
 	syncCommitteeAggregationDelay time.Duration
+	verifySyncCommitteeInclusion  bool
 	fastTrackAttestations         bool
 	fastTrackSyncCommittees       bool
 	fastTrackGrace                time.Duration
@@ -193,6 +194,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		attestationAggregationDelay:   parameters.attestationAggregationDelay,
 		maxSyncCommitteeMessageDelay:  parameters.maxSyncCommitteeMessageDelay,
 		syncCommitteeAggregationDelay: parameters.syncCommitteeAggregationDelay,
+		verifySyncCommitteeInclusion:  parameters.verifySyncCommitteeInclusion,
 		fastTrackAttestations:         parameters.fastTrackAttestations,
 		fastTrackSyncCommittees:       parameters.fastTrackSyncCommittees,
 		fastTrackGrace:                parameters.fastTrackGrace,

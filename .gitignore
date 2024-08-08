@@ -21,5 +21,8 @@ coverage.html
 # IntelliJ and friends
 .idea/
 
+# Makefile
+Makefile
+
 # Local TODO
 TODO.md

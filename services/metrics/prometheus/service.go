@@ -53,6 +53,12 @@ type Service struct {
 	syncCommitteeMessageMarkTimer         prometheus.Histogram
 	syncCommitteeMessageProcessLatestSlot prometheus.Gauge
 
+	syncCommitteeVerificationHeadMismatches   *prometheus.CounterVec
+	syncCommitteeVerificationAggregateFound   *prometheus.CounterVec
+	syncCommitteeVerificationAggregateMissing *prometheus.CounterVec
+	syncCommitteeVerificationGetHeadFailures  *prometheus.CounterVec
+	syncCommitteeVerificationCurrentCount     prometheus.Gauge
+
 	syncCommitteeAggregationProcessTimer      prometheus.Histogram
 	syncCommitteeAggregationProcessRequests   *prometheus.CounterVec
 	syncCommitteeAggregationCoverageRatio     prometheus.Histogram
@@ -108,11 +114,8 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	if err := s.setupAttestationAggregationMetrics(); err != nil {
 		return nil, errors.Wrap(err, "failed to set up attestation aggregation metrics")
 	}
-	if err := s.setupSyncCommitteeMessageMetrics(); err != nil {
-		return nil, errors.Wrap(err, "failed to set up sync committee message metrics")
-	}
-	if err := s.setupSyncCommitteeAggregationMetrics(); err != nil {
-		return nil, errors.Wrap(err, "failed to set up sync committee aggregation metrics")
+	if err := s.setupAllSyncCommitteeMetrics(); err != nil {
+		return nil, err
 	}
 	if err := s.setupBeaconCommitteeSubscriptionMetrics(); err != nil {
 		return nil, errors.Wrap(err, "failed to set up beacon committee subscription metrics")
@@ -141,6 +144,19 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	return s, nil
+}
+
+func (s *Service) setupAllSyncCommitteeMetrics() error {
+	if err := s.setupSyncCommitteeMessageMetrics(); err != nil {
+		return errors.Wrap(err, "failed to set up sync committee message metrics")
+	}
+	if err := s.setupSyncCommitteeVerificationMetrics(); err != nil {
+		return errors.Wrap(err, "failed to set up sync committee validation metrics")
+	}
+	if err := s.setupSyncCommitteeAggregationMetrics(); err != nil {
+		return errors.Wrap(err, "failed to set up sync committee aggregation metrics")
+	}
+	return nil
 }
 
 // Presenter returns the presenter for the events.

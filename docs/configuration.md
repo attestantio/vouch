@@ -74,6 +74,8 @@ controller:
     # grace is the delay between receiving the notification of the head block and starting the fast track process.  This allows
     # the rest of the network to settle if we saw the head block early.
     grace: '200ms'
+  # This flag enables verification of sync committee messages included in SyncAggregate. Exposes information via metrics and logs, defaults to false.
+  verify-sync-committee-inclusion: true
 
 # beaconblockproposer provides control of the beacon block proposal process.
 beaconblockproposer:
