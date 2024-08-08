@@ -124,47 +124,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, err
 	}
 
-	// Handling altair if we have the service and spec to do so.
-	handlingAltair := parameters.syncCommitteeAggregator != nil && epochsPerSyncCommitteePeriod != 0
-	// Fetch the altair fork epoch from the fork schedule.
-	var altairForkEpoch phase0.Epoch
-	if handlingAltair {
-		altairForkEpoch, err = fetchAltairForkEpoch(ctx, parameters.specProvider)
-		if err != nil {
-			// Not handling altair after all.
-			handlingAltair = false
-		} else {
-			log.Trace().Uint64("epoch", uint64(altairForkEpoch)).Msg("Obtained Altair fork epoch")
-		}
-	}
-	if !handlingAltair {
-		log.Debug().Msg("Not handling Altair")
-	}
-
-	// Handling bellatrix if we can obtain its fork epoch.
-	handlingBellatrix := true
-	// Fetch the bellatrix fork epoch from the fork schedule.
-	var bellatrixForkEpoch phase0.Epoch
-	bellatrixForkEpoch, err = fetchBellatrixForkEpoch(ctx, parameters.specProvider)
-	if err != nil {
-		// Not handling bellatrix after all.
-		handlingBellatrix = false
-		bellatrixForkEpoch = 0xffffffffffffffff
-	} else {
-		log.Trace().Uint64("epoch", uint64(bellatrixForkEpoch)).Msg("Obtained Bellatrix fork epoch")
-	}
-	if !handlingBellatrix {
-		log.Debug().Msg("Not handling Bellatrix")
-	}
-
-	// Fetch the Capella fork epoch from the fork schedule.
-	var capellaForkEpoch phase0.Epoch
-	capellaForkEpoch, err = fetchCapellaForkEpoch(ctx, parameters.specProvider)
-	if err != nil {
-		capellaForkEpoch = 0xffffffffffffffff
-	} else {
-		log.Trace().Uint64("epoch", uint64(capellaForkEpoch)).Msg("Obtained Capella fork epoch")
-	}
+	handlingAltair, altairForkEpoch := altairDetails(ctx, parameters.specProvider, parameters.syncCommitteeAggregator, epochsPerSyncCommitteePeriod)
+	handlingBellatrix, bellatrixForkEpoch := bellatrixDetails(ctx, parameters.specProvider)
+	capellaForkEpoch := capellaDetails(ctx, parameters.specProvider)
 
 	s := &Service{
 		monitor:                       parameters.monitor,
@@ -270,6 +232,18 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}()
 
 	return s, nil
+}
+
+func capellaDetails(ctx context.Context, specProvider eth2client.SpecProvider) phase0.Epoch {
+	// Fetch the Capella fork epoch from the fork schedule.
+	var capellaForkEpoch phase0.Epoch
+	capellaForkEpoch, err := fetchCapellaForkEpoch(ctx, specProvider)
+	if err != nil {
+		capellaForkEpoch = 0xffffffffffffffff
+	} else {
+		log.Trace().Uint64("epoch", uint64(capellaForkEpoch)).Msg("Obtained Capella fork epoch")
+	}
+	return capellaForkEpoch
 }
 
 // startTickers starts the various tickers for the controller's operations.
@@ -649,4 +623,43 @@ func obtainSpecValues(ctx context.Context,
 	}
 
 	return slotDuration, slotsPerEpoch, epochsPerSyncCommitteePeriod, nil
+}
+
+func bellatrixDetails(ctx context.Context, specProvider eth2client.SpecProvider) (bool, phase0.Epoch) {
+	// Handling bellatrix if we can obtain its fork epoch.
+	handlingBellatrix := true
+	// Fetch the bellatrix fork epoch from the fork schedule.
+	var bellatrixForkEpoch phase0.Epoch
+	bellatrixForkEpoch, err := fetchBellatrixForkEpoch(ctx, specProvider)
+	if err != nil {
+		// Not handling bellatrix after all.
+		handlingBellatrix = false
+		bellatrixForkEpoch = 0xffffffffffffffff
+	} else {
+		log.Trace().Uint64("epoch", uint64(bellatrixForkEpoch)).Msg("Obtained Bellatrix fork epoch")
+	}
+	if !handlingBellatrix {
+		log.Debug().Msg("Not handling Bellatrix")
+	}
+	return handlingBellatrix, bellatrixForkEpoch
+}
+
+func altairDetails(ctx context.Context, specProvider eth2client.SpecProvider, syncCommitteeAggregator synccommitteeaggregator.Service, epochsPerSyncCommitteePeriod uint64) (bool, phase0.Epoch) {
+	// Handling altair if we have the service and spec to do so.
+	handlingAltair := syncCommitteeAggregator != nil && epochsPerSyncCommitteePeriod != 0
+	// Fetch the altair fork epoch from the fork schedule.
+	var altairForkEpoch phase0.Epoch
+	if handlingAltair {
+		altairForkEpoch, err := fetchAltairForkEpoch(ctx, specProvider)
+		if err != nil {
+			// Not handling altair after all.
+			handlingAltair = false
+		} else {
+			log.Trace().Uint64("epoch", uint64(altairForkEpoch)).Msg("Obtained Altair fork epoch")
+		}
+	}
+	if !handlingAltair {
+		log.Debug().Msg("Not handling Altair")
+	}
+	return handlingAltair, altairForkEpoch
 }
