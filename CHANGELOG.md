@@ -7,6 +7,8 @@ dev:
   - add 'failed' dimension for root to slot lookup metrics
   - add 'deadline' builder bid strategy
   - add builder configurations to allow more control over selection of bids
+  - add sync committee verification metrics to highlight when we were and were not included in a SyncAggregate.
+  - add config setting to enable the above metrics.
 
 1.9.0-alpha.3
   - add proposal value and blinded status to trace

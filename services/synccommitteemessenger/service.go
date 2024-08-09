@@ -132,4 +132,15 @@ type Service interface {
 	// Message generates and broadcasts sync committee messages for a slot.
 	// It returns a list of messages made.
 	Message(ctx context.Context, data interface{}) ([]*altair.SyncCommitteeMessage, error)
+
+	// GetDataUsedForSlot returns slot data recorded for the sync committee message for a given slot.
+	GetDataUsedForSlot(slot phase0.Slot) (SlotData, bool)
+
+	// RemoveHistoricDataUsedForSlotVerification goes through the sync committee data stored for each slot and removes old slots.
+	RemoveHistoricDataUsedForSlotVerification(currentSlot phase0.Slot)
+}
+
+type SlotData struct {
+	Root                      phase0.Root
+	ValidatorToCommitteeIndex map[phase0.ValidatorIndex][]phase0.CommitteeIndex
 }

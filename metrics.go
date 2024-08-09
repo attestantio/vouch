@@ -70,7 +70,7 @@ func registerPrometheusMetrics() error {
 		Help:      "1 if ready to serve requests, otherwise 0.",
 	})
 	if err := prometheus.Register(readyMetric); err != nil {
-		return errors.Wrap(err, "failed to regsiter ready")
+		return errors.Wrap(err, "failed to register ready")
 	}
 
 	return nil

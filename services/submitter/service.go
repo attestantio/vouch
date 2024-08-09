@@ -39,7 +39,7 @@ type ProposalSubmitter interface {
 
 // BeaconCommitteeSubscriptionsSubmitter is the interface for a submitter of beacon committee subscriptions.
 type BeaconCommitteeSubscriptionsSubmitter interface {
-	// SubmitBeaconCommitteeSubscription submits a batch of beacon committee subscriptions.
+	// SubmitBeaconCommitteeSubscriptions submits a batch of beacon committee subscriptions.
 	SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscriptions []*apiv1.BeaconCommitteeSubscription) error
 }
 
@@ -63,7 +63,7 @@ type SyncCommitteeMessagesSubmitter interface {
 
 // SyncCommitteeSubscriptionsSubmitter is the interface for a submitter of sync committee subscriptions.
 type SyncCommitteeSubscriptionsSubmitter interface {
-	// SubmitSyncCommitteeSubscription submits a batch of sync committee subscriptions.
+	// SubmitSyncCommitteeSubscriptions submits a batch of sync committee subscriptions.
 	SubmitSyncCommitteeSubscriptions(ctx context.Context, subscriptions []*apiv1.SyncCommitteeSubscription) error
 }
 

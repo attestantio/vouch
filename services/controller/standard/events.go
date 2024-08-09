@@ -19,8 +19,10 @@ import (
 	"fmt"
 	"time"
 
-	api "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/api"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/metrics"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -28,19 +30,19 @@ import (
 )
 
 // HandleBlockEvent handles the "block" events from the beacon node.
-func (s *Service) HandleBlockEvent(event *api.Event) {
+func (s *Service) HandleBlockEvent(event *apiv1.Event) {
 	if event.Data == nil {
 		return
 	}
 
-	data := event.Data.(*api.BlockEvent)
+	data := event.Data.(*apiv1.BlockEvent)
 	// We update the block to slot cache here, in an attempt to avoid
 	// unnecessary lookups.
 	s.blockToSlotSetter.SetBlockRootToSlot(data.Block, data.Slot)
 }
 
 // HandleHeadEvent handles the "head" events from the beacon node.
-func (s *Service) HandleHeadEvent(event *api.Event) {
+func (s *Service) HandleHeadEvent(event *apiv1.Event) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(context.Background(), "HandleHeadEvent")
 	defer span.End()
 
@@ -48,7 +50,7 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 		return
 	}
 
-	data := event.Data.(*api.HeadEvent)
+	data := event.Data.(*apiv1.HeadEvent)
 	log.Trace().Uint64("slot", uint64(data.Slot)).Msg("Received head event")
 
 	if data.Slot != s.chainTimeService.CurrentSlot() {
@@ -78,6 +80,15 @@ func (s *Service) HandleHeadEvent(event *api.Event) {
 	s.subscriptionInfosMutex.Lock()
 	delete(s.subscriptionInfos, s.chainTimeService.SlotToEpoch(data.Slot)-2)
 	s.subscriptionInfosMutex.Unlock()
+
+	// Only verify on current slot.
+	if s.verifySyncCommitteeInclusion && data.Slot == s.chainTimeService.CurrentSlot() {
+		// Verify sync committee participation.
+		s.VerifySyncCommitteeMessages(ctx, data)
+
+		// Remove old sync committee data.
+		s.syncCommitteeMessenger.RemoveHistoricDataUsedForSlotVerification(data.Slot)
+	}
 }
 
 // checkEventForReorg check data in the event against information that we already have to see if
@@ -331,4 +342,86 @@ func (s *Service) subscribeToBeaconCommittees(ctx context.Context,
 	s.subscriptionInfosMutex.Lock()
 	s.subscriptionInfos[epoch] = subscriptionInfo
 	s.subscriptionInfosMutex.Unlock()
+}
+
+// VerifySyncCommitteeMessages handles the "head" events from the beacon node for sync committee verification.
+func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
+	headEvent, ok := data.(*apiv1.HeadEvent)
+	if !ok {
+		log.Error().Msg("Passed invalid data")
+		return
+	}
+	_, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "VerifySyncCommitteeMessages")
+	defer span.End()
+
+	messengerMonitor := s.monitor.(metrics.SyncCommitteeVerificationMonitor)
+
+	// We verify against the previous slot as that is when the sync committee will have reported.
+	previousSlot := headEvent.Slot - 1
+	currentSlot := headEvent.Slot
+
+	// Logging with the current slot as that is when this code is executed.
+	log := log.With().
+		Uint64("current_slot", uint64(currentSlot)).
+		Uint64("previous_slot", uint64(previousSlot)).
+		Stringer("block_root", headEvent.Block).
+		Logger()
+	log.Trace().Msg("Received head event")
+
+	previousSlotData, found := s.syncCommitteeMessenger.GetDataUsedForSlot(previousSlot)
+	if !found {
+		log.Trace().Msg("No reported sync committee message data for slot; skipping verification")
+		return
+	}
+
+	inScopeValidators := make([]uint64, len(previousSlotData.ValidatorToCommitteeIndex))
+	keyCount := 0
+	for key := range previousSlotData.ValidatorToCommitteeIndex {
+		inScopeValidators[keyCount] = uint64(key)
+		keyCount++
+	}
+	log.Trace().Uints64("validators", inScopeValidators).Msg("Verifying sync committee messages for validators")
+	messengerMonitor.SyncCommitteeCurrentCountSet(len(inScopeValidators))
+
+	blockResponse, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, &api.SignedBeaconBlockOpts{
+		Block: headEvent.Block.String(),
+	})
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to retrieve head block for sync committee verification")
+		messengerMonitor.SyncCommitteeGetHeadBlockFailedInc()
+		return
+	}
+	parentRoot, err := blockResponse.Data.ParentRoot()
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to get parent root of head block")
+		return
+	}
+	if !bytes.Equal(parentRoot[:], previousSlotData.Root[:]) {
+		parentRootString := parentRoot.String()
+		previousSlotRoot := previousSlotData.Root.String()
+		log.Trace().Str("head_parent_root", parentRootString).Str("broadcast_root", previousSlotRoot).
+			Msg("Parent root does not equal sync committee root broadcast")
+		messengerMonitor.SyncCommitteeMessagesHeadMismatchInc(len(inScopeValidators))
+		return
+	}
+	syncAggregate, err := blockResponse.Data.SyncAggregate()
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to get sync aggregate retrieved from head block")
+		return
+	}
+
+	// The previousSlotData.ValidatorToCommitteeIndex maps all of our validators to their committee indices for every slot in the epoch.
+	// Assumption here is that for every slot each validator should have contributed to all their committee indices for the whole epoch.
+	for validatorIndex, committeeIndices := range previousSlotData.ValidatorToCommitteeIndex {
+		for _, committeeIndex := range committeeIndices {
+			if !syncAggregate.SyncCommitteeBits.BitAt(uint64(committeeIndex)) {
+				log.Debug().Uint64("validator_index", uint64(validatorIndex)).
+					Uint64("committee_index", uint64(committeeIndex)).
+					Msg("Validator not included in SyncAggregate SyncCommitteeBits")
+				messengerMonitor.SyncCommitteeSyncAggregateMissingInc()
+				continue
+			}
+			messengerMonitor.SyncCommitteeSyncAggregateFoundInc()
+		}
+	}
 }

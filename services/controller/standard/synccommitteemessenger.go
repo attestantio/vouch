@@ -176,7 +176,7 @@ func (s *Service) messageSyncCommittee(ctx context.Context, data interface{}) {
 		return
 	}
 
-	// At this point we can schedule an aggregation job if reqiured.
+	// At this point we can schedule an aggregation job if required.
 	aggregateValidatorIndices := make([]phase0.ValidatorIndex, 0)
 	selectionProofs := make(map[phase0.ValidatorIndex]map[uint64]phase0.BLSSignature)
 	for _, validatorIndex := range duty.ValidatorIndices() {

@@ -103,6 +103,21 @@ type SyncCommitteeSubscriptionMonitor interface {
 	SyncCommitteeSubscribers(subscribers int)
 }
 
+// SyncCommitteeVerificationMonitor provides methods to monitor the sync committee verification process.
+type SyncCommitteeVerificationMonitor interface {
+	// SyncCommitteeSyncAggregateFoundInc is called when our sync committee participation was included in the SyncAggregate for the next head.
+	SyncCommitteeSyncAggregateFoundInc()
+	// SyncCommitteeSyncAggregateMissingInc is called when our sync committee participation was not included in the SyncAggregate for the next head.
+	SyncCommitteeSyncAggregateMissingInc()
+	// SyncCommitteeGetHeadBlockFailedInc is called when validation for a sync committee fails due to being unable to retrieve the head block.
+	SyncCommitteeGetHeadBlockFailedInc()
+	// SyncCommitteeMessagesHeadMismatchInc is called when a sync committee message was known to not match the next head block.
+	// The count is the number of Sync Committee assigned validators.
+	SyncCommitteeMessagesHeadMismatchInc(count int)
+	// SyncCommitteeCurrentCountSet is called to set the current number of sync committee assigned validators.
+	SyncCommitteeCurrentCountSet(count int)
+}
+
 // AccountManagerMonitor provides methods to monitor the account manager.
 type AccountManagerMonitor interface {
 	// Accounts sets the number of accounts in a given state.

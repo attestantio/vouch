@@ -65,6 +65,7 @@ type parameters struct {
 	attestationAggregationDelay   time.Duration
 	maxSyncCommitteeMessageDelay  time.Duration
 	syncCommitteeAggregationDelay time.Duration
+	verifySyncCommitteeInclusion  bool
 	fastTrackAttestations         bool
 	fastTrackSyncCommittees       bool
 	fastTrackGrace                time.Duration
@@ -274,6 +275,13 @@ func WithMaxSyncCommitteeMessageDelay(delay time.Duration) Parameter {
 func WithSyncCommitteeAggregationDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.syncCommitteeAggregationDelay = delay
+	})
+}
+
+// WithVerifySyncCommitteeInclusion sets the flag for whether we should verify sync committee inclusion in SyncAggregate.
+func WithVerifySyncCommitteeInclusion(shouldVerify bool) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.verifySyncCommitteeInclusion = shouldVerify
 	})
 }
 
