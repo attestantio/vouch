@@ -37,6 +37,22 @@ type ValidatingAccountsProvider interface {
 		map[phase0.ValidatorIndex]e2wtypes.Account,
 		error,
 	)
+
+	// SyncCommitteeAccountsForEpoch obtains the accounts eligible for Sync Committee duty for a given epoch.
+	// The Ethereum specification has different criteria for Sync Committee eligibility compared to other validating duties.
+	// This includes an edge case where we are still in scope for sync committee duty between exited and withdrawal states.
+	SyncCommitteeAccountsForEpoch(ctx context.Context, epoch phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error)
+
+	// SyncCommitteeAccountsForEpochByIndex obtains the specified Sync Committee eligible accounts for a given epoch.
+	// The Ethereum specification has different criteria for Sync Committee eligibility compared to other validating duties.
+	// This includes an edge case where we are still in scope for sync committee duty between exited and withdrawal states.
+	SyncCommitteeAccountsForEpochByIndex(ctx context.Context,
+		epoch phase0.Epoch,
+		indices []phase0.ValidatorIndex,
+	) (
+		map[phase0.ValidatorIndex]e2wtypes.Account,
+		error,
+	)
 }
 
 // Refresher refreshes account information from the remote source.

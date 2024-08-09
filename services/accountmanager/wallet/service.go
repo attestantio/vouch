@@ -204,7 +204,26 @@ func (s *Service) refreshValidators(ctx context.Context) error {
 
 // ValidatingAccountsForEpoch obtains the validating accounts for a given epoch.
 func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
-	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, "ValidatingAccountsForEpoch", trace.WithAttributes(
+	filterFunc := func(state apiv1.ValidatorState) bool {
+		return state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting
+	}
+	return s.accountsForEpochWithFilter(ctx, epoch, "Validating", filterFunc)
+}
+
+// SyncCommitteeAccountsForEpoch obtains the accounts eligible for Sync Committee duty for a given epoch.
+// The Ethereum specification has different criteria for Sync Committee eligibility compared to other validating duties.
+// This includes an edge case where we are still in scope for sync committee duty between exited and withdrawal states.
+func (s *Service) SyncCommitteeAccountsForEpoch(ctx context.Context, epoch phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	filterFunc := func(state apiv1.ValidatorState) bool {
+		return state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting ||
+			state == apiv1.ValidatorStateExitedUnslashed || state == apiv1.ValidatorStateActiveSlashed
+	}
+	return s.accountsForEpochWithFilter(ctx, epoch, "SyncCommittee", filterFunc)
+}
+
+// accountsForEpochWithFilter obtains the accounts for a given epoch with a filter on the state of validators returned.
+func (s *Service) accountsForEpochWithFilter(ctx context.Context, epoch phase0.Epoch, accountType string, filterFunc func(state apiv1.ValidatorState) bool) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, fmt.Sprintf("%sAccountsForEpoch", accountType), trace.WithAttributes(
 		attribute.Int64("epoch", int64(epoch)),
 	))
 	defer span.End()
@@ -233,14 +252,14 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 	for index, validator := range validators {
 		state := apiv1.ValidatorToState(validator, nil, epoch, s.farFutureEpoch)
 		stateCount[state]++
-		if state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting {
+		if filterFunc(state) {
 			account := s.accounts[validator.PublicKey]
 			s.log.Trace().
 				Str("name", account.Name()).
 				Str("public_key", fmt.Sprintf("%x", account.PublicKey().Marshal())).
 				Uint64("index", uint64(index)).
 				Str("state", state.String()).
-				Msg("Validating account")
+				Msg(fmt.Sprintf("%s account", accountType))
 			validatingAccounts[index] = account
 		}
 	}
@@ -258,7 +277,25 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 
 // ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
 func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch phase0.Epoch, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
-	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, "ValidatingAccountsForEpochByIndex", trace.WithAttributes(
+	filterFunc := func(state apiv1.ValidatorState) bool {
+		return state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting
+	}
+	return s.accountsForEpochByIndexWithFilter(ctx, epoch, indices, "Validating", filterFunc)
+}
+
+// SyncCommitteeAccountsForEpochByIndex obtains the specified Sync Committee eligible accounts for a given epoch.
+// The Ethereum specification has different criteria for Sync Committee eligibility compared to other validating duties.
+// This includes an edge case where we are still in scope for sync committee duty between exited and withdrawal states.
+func (s *Service) SyncCommitteeAccountsForEpochByIndex(ctx context.Context, epoch phase0.Epoch, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	filterFunc := func(state apiv1.ValidatorState) bool {
+		return state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting
+	}
+	return s.accountsForEpochByIndexWithFilter(ctx, epoch, indices, "SyncCommittee", filterFunc)
+}
+
+// accountsForEpochByIndexWithFilter obtains the specified accounts for a given epoch with a filter on the state of validators returned.
+func (s *Service) accountsForEpochByIndexWithFilter(ctx context.Context, epoch phase0.Epoch, indices []phase0.ValidatorIndex, accountType string, filterFunc func(state apiv1.ValidatorState) bool) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, fmt.Sprintf("%sAccountsForEpochByIndex", accountType), trace.WithAttributes(
 		attribute.Int64("epoch", int64(epoch)),
 	))
 	defer span.End()
@@ -279,7 +316,7 @@ func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch p
 			continue
 		}
 		state := apiv1.ValidatorToState(validator, nil, epoch, s.farFutureEpoch)
-		if state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting {
+		if filterFunc(state) {
 			validatingAccounts[index] = s.accounts[validator.PublicKey]
 		}
 	}
