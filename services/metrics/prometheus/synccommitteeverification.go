@@ -114,8 +114,9 @@ func (s *Service) SyncCommitteeGetHeadBlockFailedInc() {
 }
 
 // SyncCommitteeMessagesHeadMismatchInc is called when a sync committee message was known to not match the next head block.
-func (s *Service) SyncCommitteeMessagesHeadMismatchInc() {
-	s.syncCommitteeVerificationHeadMismatches.WithLabelValues().Add(1)
+// The count is the number of Sync Committee assigned validators.
+func (s *Service) SyncCommitteeMessagesHeadMismatchInc(count int) {
+	s.syncCommitteeVerificationHeadMismatches.WithLabelValues().Add(float64(count))
 }
 
 // SyncCommitteeCurrentCountSet is called to set the current number of sync committee assigned validators.

@@ -144,7 +144,9 @@ There is also a companion metric `vouch_relay_auction_block_duration_seconds_cou
 Sync Committee Verification metrics can be enabled using the `controller.verify-sync-committee-inclusion` flag in the configuration. This gives more insight in to the participation of Sync Committee duties:
 
 - `vouch_synccommitteeverification_current_assigned` is a gauge that is set to the current number of vouch validators that are participating in Sync Committee duty.
-- `vouch_synccommitteeverification_mismatches_total` is a counter that increments each time vouch receives a head event where the parent block root does not match the root vouch broadcast in the Sync Committee messages. 
+- `vouch_synccommitteeverification_mismatches_total` is a counter that increments for each Sync Committee participating validator when vouch receives a head event where the parent block root does not match the root vouch broadcast in the Sync Committee messages. 
 - `vouch_synccommitteeverification_found_total` is a counter that increments for each vouch validator that has been included in the SyncAggregate. This is not incremented if we already detected a root mismatch or if we didn't record the Sync Committee head (expected after a restart)
 - `vouch_synccommitteeverification_missing_total` is a counter that increments for each vouch validator that has NOT been included in the SyncAggregate. This is not incremented if we already detected a root mismatch or if we didn't record the Sync Committee head (expected after a restart)
+- `vouch_synccommitteeverification_get_head_failures_total` is a counter that increments if we fail to get the head block to verify validator inclusion in the SyncAggregate. This is incremented once per slot we fail.
 
+**Note:** It is expected that the sum of (`found_total` + `missing_total` + `mismatches_total`) == number of Sync Committee participating validators for a given slot. 

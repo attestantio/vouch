@@ -112,7 +112,8 @@ type SyncCommitteeVerificationMonitor interface {
 	// SyncCommitteeGetHeadBlockFailedInc is called when validation for a sync committee fails due to being unable to retrieve the head block.
 	SyncCommitteeGetHeadBlockFailedInc()
 	// SyncCommitteeMessagesHeadMismatchInc is called when a sync committee message was known to not match the next head block.
-	SyncCommitteeMessagesHeadMismatchInc()
+	// The count is the number of Sync Committee assigned validators.
+	SyncCommitteeMessagesHeadMismatchInc(count int)
 	// SyncCommitteeCurrentCountSet is called to set the current number of sync committee assigned validators.
 	SyncCommitteeCurrentCountSet(count int)
 }

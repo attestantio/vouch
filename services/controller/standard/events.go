@@ -401,7 +401,7 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 		previousSlotRoot := previousSlotData.Root.String()
 		log.Trace().Str("head_parent_root", parentRootString).Str("broadcast_root", previousSlotRoot).
 			Msg("Parent root does not equal sync committee root broadcast")
-		messengerMonitor.SyncCommitteeMessagesHeadMismatchInc()
+		messengerMonitor.SyncCommitteeMessagesHeadMismatchInc(len(inScopeValidators))
 		return
 	}
 	syncAggregate, err := blockResponse.Data.SyncAggregate()
