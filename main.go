@@ -1474,7 +1474,11 @@ func genericAddressToClientMapper[T any](ctx context.Context, monitor metrics.Se
 		if err != nil {
 			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for %s", address, description))
 		}
-		addressToClientMap[address] = client.(T)
+		clientCast, ok := client.(T)
+		if !ok {
+			return nil, fmt.Errorf("failed to cast client %s for %s", address, description)
+		}
+		addressToClientMap[address] = clientCast
 	}
 	return addressToClientMap, nil
 }
