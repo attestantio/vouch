@@ -62,6 +62,29 @@ func (s *ValidatingAccountsProvider) ValidatingAccountsForEpochByIndex(_ context
 	return accounts, nil
 }
 
+// SyncCommitteeAccountsForEpoch is a mock.
+func (s *ValidatingAccountsProvider) SyncCommitteeAccountsForEpoch(_ context.Context, _ phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	return s.validatingAccounts, nil
+}
+
+// SyncCommitteeAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
+func (s *ValidatingAccountsProvider) SyncCommitteeAccountsForEpochByIndex(_ context.Context,
+	_ phase0.Epoch,
+	indices []phase0.ValidatorIndex,
+) (
+	map[phase0.ValidatorIndex]e2wtypes.Account,
+	error,
+) {
+	accounts := make(map[phase0.ValidatorIndex]e2wtypes.Account)
+	for _, index := range indices {
+		if account, exists := s.validatingAccounts[index]; exists {
+			accounts[index] = account
+		}
+	}
+
+	return accounts, nil
+}
+
 type accountsProvider struct{}
 
 // NewAccountsProvider is a mock.
@@ -98,6 +121,22 @@ func (*erroringValidatingAccountsProvider) ValidatingAccountsForEpoch(_ context.
 
 // ValidatingAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
 func (*erroringValidatingAccountsProvider) ValidatingAccountsForEpochByIndex(_ context.Context,
+	_ phase0.Epoch,
+	_ []phase0.ValidatorIndex,
+) (
+	map[phase0.ValidatorIndex]e2wtypes.Account,
+	error,
+) {
+	return nil, errors.New("error")
+}
+
+// SyncCommitteeAccountsForEpoch is a mock.
+func (*erroringValidatingAccountsProvider) SyncCommitteeAccountsForEpoch(_ context.Context, _ phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+	return nil, errors.New("error")
+}
+
+// SyncCommitteeAccountsForEpochByIndex obtains the specified validating accounts for a given epoch.
+func (*erroringValidatingAccountsProvider) SyncCommitteeAccountsForEpochByIndex(_ context.Context,
 	_ phase0.Epoch,
 	_ []phase0.ValidatorIndex,
 ) (
