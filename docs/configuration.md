@@ -22,7 +22,7 @@ log-level: 'debug'
 # Overridden by beacon-node-addresses if present.
 beacon-node-address: 'localhost:4000'
 
-# beacon-node-addresseses is the list of address of the beacon nodes.  Can be lighthouse, nimbus, prysm or teku.
+# beacon-node-addresses is the list of address of the beacon nodes.  Can be lighthouse, nimbus, prysm or teku.
 # If multiple addresses are supplied here it makes Vouch resilient in the situation where a beacon
 # node goes offline entirely.  If this occurs to the currently used node then the next in the list will
 # be used.  If a beacon node comes back online it is added to the end of the list of potential nodes to
@@ -32,7 +32,7 @@ beacon-node-address: 'localhost:4000'
 # ensure they are happy with the event output of all beacon nodes in this list.
 beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
 
-# timeout is the timeout for all validating operations, for example fetching attesation data from beacon nodes.
+# timeout is the timeout for all validating operations, for example fetching attestation data from beacon nodes.
 timeout: '2s'
 
 # reduced-memory-usage can be set on memory-constrained systems to reduce memory usage, at the cost of increased processing time.
@@ -155,6 +155,16 @@ strategies:
     # This allows Vouch to remain responsive in the situation where some beacon nodes are significantly slower than others, for
     # example if one is remote.
     timeout: '2s'
+  # The beaconblockheader strategy obtains the beacon block headers from multiple beacon nodes.
+  beaconblockheader:
+    # style can be 'first'. If not defined or set to another value Vouch will default to using the multiclient.
+    style: 'first'
+    first:
+      # beacon-node-addresses are the addresses from which to receive beacon block headers.
+      beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
+      # timeout defines the maximum amount of time the strategy will wait for a response.  Different strategies may return earlier
+      # if they have obtained enough information from their beacon node(s).
+      timeout: '2s'
   # The beaconblockroot strategy obtains the beacon block root from multiple beacon nodes.
   beaconblockroot:
     # style can be 'first', which uses the first returned, 'latest', which uses the latest returned, or 'majority', which uses
@@ -177,6 +187,16 @@ strategies:
       deadline: '1s'
       # bid-gap is the gap between receiving a response from a relay and querying it again.
       bid-gap: '100ms'
+  # The signedbeaconblock strategy obtains the signed beacon blocks from multiple beacon nodes.
+  signedbeaconblock:
+    # style can be 'first'. If not defined or set to another value Vouch will default to using the multiclient.
+    style: 'first'
+    first:
+      # beacon-node-addresses are the addresses from which to receive signed beacon blocks.
+      beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
+      # timeout defines the maximum amount of time the strategy will wait for a response.  Different strategies may return earlier
+      # if they have obtained enough information from their beacon node(s).
+      timeout: '2s'
   # The synccommitteecontribution strategy obtains sync committee contributions from multiple sources.
   synccommitteecontribution:
     # style can be 'best', which obtains contributions from all nodes and selects the best, or 'first', which uses the first returned

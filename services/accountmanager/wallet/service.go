@@ -24,6 +24,7 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/accountmanager/utils"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/validatorsmanager"
@@ -214,11 +215,7 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 // The Ethereum specification has different criteria for Sync Committee eligibility compared to other validating duties.
 // This includes an edge case where we are still in scope for sync committee duty between exited and withdrawal states.
 func (s *Service) SyncCommitteeAccountsForEpoch(ctx context.Context, epoch phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
-	filterFunc := func(state apiv1.ValidatorState) bool {
-		return state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting ||
-			state == apiv1.ValidatorStateExitedUnslashed || state == apiv1.ValidatorStateActiveSlashed
-	}
-	return s.accountsForEpochWithFilter(ctx, epoch, "SyncCommittee", filterFunc)
+	return s.accountsForEpochWithFilter(ctx, epoch, "SyncCommittee", utils.IsSyncCommitteeEligible)
 }
 
 // accountsForEpochWithFilter obtains the accounts for a given epoch with a filter on the state of validators returned.
@@ -287,10 +284,7 @@ func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch p
 // The Ethereum specification has different criteria for Sync Committee eligibility compared to other validating duties.
 // This includes an edge case where we are still in scope for sync committee duty between exited and withdrawal states.
 func (s *Service) SyncCommitteeAccountsForEpochByIndex(ctx context.Context, epoch phase0.Epoch, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
-	filterFunc := func(state apiv1.ValidatorState) bool {
-		return state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting
-	}
-	return s.accountsForEpochByIndexWithFilter(ctx, epoch, indices, "SyncCommittee", filterFunc)
+	return s.accountsForEpochByIndexWithFilter(ctx, epoch, indices, "SyncCommittee", utils.IsSyncCommitteeEligible)
 }
 
 // accountsForEpochByIndexWithFilter obtains the specified accounts for a given epoch with a filter on the state of validators returned.
