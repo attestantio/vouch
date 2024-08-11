@@ -70,7 +70,7 @@ func TestJob(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
@@ -88,7 +88,7 @@ func TestJobExists(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
@@ -109,7 +109,7 @@ func TestCancelJob(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
@@ -138,7 +138,7 @@ func TestCancelJobs(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
@@ -161,7 +161,7 @@ func TestCancelJobIfExists(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
@@ -183,7 +183,7 @@ func TestCancelParentContext(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
@@ -203,7 +203,7 @@ func TestRunJob(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
@@ -223,7 +223,7 @@ func TestRunJobIfExists(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
@@ -252,11 +252,11 @@ func TestPeriodicJob(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
@@ -283,11 +283,11 @@ func TestCancelPeriodicJob(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
@@ -307,11 +307,11 @@ func TestCancelPeriodicParentContext(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
@@ -331,11 +331,11 @@ func TestLimitedPeriodicJob(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		if run == 3 {
 			return time.Now(), scheduler.ErrNoMoreInstances
 		}
@@ -357,11 +357,11 @@ func TestBadPeriodicJob(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		if run == 3 {
 			return time.Now(), errors.New("Bad")
 		}
@@ -383,11 +383,11 @@ func TestDuplicateJobName(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
@@ -414,11 +414,11 @@ func TestBadJobs(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
@@ -442,7 +442,7 @@ func TestManyJobs(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
@@ -477,7 +477,7 @@ func TestListJobs(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
@@ -512,13 +512,13 @@ func TestLongRunningPeriodicJob(t *testing.T) {
 
 	// Job takes 100 ms.
 	run := uint32(0)
-	jobFunc := func(ctx context.Context, data any) {
+	jobFunc := func(_ context.Context, _ any) {
 		time.Sleep(100 * time.Millisecond)
 		atomic.AddUint32(&run, 1)
 	}
 
 	// Job runs every 50 ms.
-	runtimeFunc := func(ctx context.Context, data any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(50 * time.Millisecond), nil
 	}
 
@@ -543,7 +543,7 @@ func TestOverlappingJobs(t *testing.T) {
 
 	// Job takes 200ms.
 	run := uint32(0)
-	jobFunc := func(ctx context.Context, data any) {
+	jobFunc := func(_ context.Context, _ any) {
 		time.Sleep(200 * time.Millisecond)
 		atomic.AddUint32(&run, 1)
 	}
@@ -569,7 +569,7 @@ func TestMulti(t *testing.T) {
 
 	// Create a job for the future.
 	run := uint32(0)
-	jobFunc := func(ctx context.Context, data any) {
+	jobFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(10*time.Second), jobFunc, nil))
@@ -610,12 +610,12 @@ func TestCancelWhilstRunning(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data any) {
+	runFunc := func(_ context.Context, _ any) {
 		time.Sleep(50 * time.Millisecond)
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(50 * time.Millisecond), nil
 	}
 

@@ -50,6 +50,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		log:               log,
 		proposalProviders: parameters.proposalProviders,
 		timeout:           parameters.timeout,
 		clientMonitor:     parameters.clientMonitor,
