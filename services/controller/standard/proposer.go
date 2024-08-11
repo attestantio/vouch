@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -37,18 +37,18 @@ func (s *Service) scheduleProposals(ctx context.Context,
 	}
 
 	started := time.Now()
-	log.Trace().Uint64("epoch", uint64(epoch)).Msg("Scheduling proposals")
+	s.log.Trace().Uint64("epoch", uint64(epoch)).Msg("Scheduling proposals")
 
 	proposerDutiesResponse, err := s.proposerDutiesProvider.ProposerDuties(ctx, &api.ProposerDutiesOpts{
 		Epoch:   epoch,
 		Indices: validatorIndices,
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to fetch proposer duties")
+		s.log.Error().Err(err).Msg("Failed to fetch proposer duties")
 		return
 	}
 	proposerDuties := proposerDutiesResponse.Data
-	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(proposerDuties)).Msg("Fetched proposer duties")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(proposerDuties)).Msg("Fetched proposer duties")
 
 	// Generate Vouch duties from the response.
 	duties := make([]*beaconblockproposer.Duty, 0, len(proposerDuties))
@@ -56,7 +56,7 @@ func (s *Service) scheduleProposals(ctx context.Context,
 	lastSlot := s.chainTimeService.FirstSlotOfEpoch(epoch+1) - 1
 	for _, respDuty := range proposerDuties {
 		if respDuty.Slot < firstSlot || respDuty.Slot > lastSlot {
-			log.Warn().
+			s.log.Warn().
 				Uint64("epoch", uint64(epoch)).
 				Uint64("duty_slot", uint64(respDuty.Slot)).
 				Msg("Proposer duty has invalid slot for requested epoch; ignoring")
@@ -64,20 +64,20 @@ func (s *Service) scheduleProposals(ctx context.Context,
 		}
 		duties = append(duties, beaconblockproposer.NewDuty(respDuty.Slot, respDuty.ValidatorIndex))
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(duties)).Msg("Filtered proposer duties")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(duties)).Msg("Filtered proposer duties")
 
 	currentSlot := s.chainTimeService.CurrentSlot()
 	for _, duty := range duties {
 		// Do not schedule proposals for past slots (or the current slot if so instructed).
 		if duty.Slot() < currentSlot {
-			log.Debug().
+			s.log.Debug().
 				Uint64("proposal_slot", uint64(duty.Slot())).
 				Uint64("current_slot", uint64(currentSlot)).
 				Msg("Beacon block proposal for a past slot; not scheduling")
 			continue
 		}
 		if duty.Slot() == currentSlot && notCurrentSlot {
-			log.Debug().
+			s.log.Debug().
 				Uint64("proposal_slot", uint64(duty.Slot())).
 				Uint64("current_slot", uint64(currentSlot)).
 				Msg("Beacon block proposal for the current slot; not scheduling")
@@ -85,7 +85,7 @@ func (s *Service) scheduleProposals(ctx context.Context,
 		}
 		go func(duty *beaconblockproposer.Duty) {
 			if err := s.beaconBlockProposer.Prepare(ctx, duty); err != nil {
-				log.Error().Uint64("proposal_slot", uint64(duty.Slot())).Err(err).Msg("Failed to prepare beacon block proposal")
+				s.log.Error().Uint64("proposal_slot", uint64(duty.Slot())).Err(err).Msg("Failed to prepare beacon block proposal")
 				return
 			}
 			// Only bother trying to propose early if the alternative is later.
@@ -98,7 +98,7 @@ func (s *Service) scheduleProposals(ctx context.Context,
 					duty,
 				); err != nil {
 					// Don't return here; we want to try to set up as many proposer jobs as possible.
-					log.Error().Err(err).Msg("Failed to schedule early beacon block proposal")
+					s.log.Error().Err(err).Msg("Failed to schedule early beacon block proposal")
 				}
 			}
 			if err := s.scheduler.ScheduleJob(ctx,
@@ -109,11 +109,11 @@ func (s *Service) scheduleProposals(ctx context.Context,
 				duty,
 			); err != nil {
 				// Don't return here; we want to try to set up as many proposer jobs as possible.
-				log.Error().Err(err).Msg("Failed to schedule beacon block proposal")
+				s.log.Error().Err(err).Msg("Failed to schedule beacon block proposal")
 			}
 		}(duty)
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Scheduled beacon block proposals")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Scheduled beacon block proposals")
 }
 
 // proposeEarly attempts to propose as soon as the slot starts, as long
@@ -124,7 +124,7 @@ func (s *Service) proposeEarly(ctx context.Context, data interface{}) {
 
 	duty, ok := data.(*beaconblockproposer.Duty)
 	if !ok {
-		log.Error().Msg("Invalid duty data for proposal")
+		s.log.Error().Msg("Invalid duty data for proposal")
 		return
 	}
 	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))
@@ -134,16 +134,16 @@ func (s *Service) proposeEarly(ctx context.Context, data interface{}) {
 		Block: "head",
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to obtain beacon block header")
+		s.log.Error().Err(err).Msg("Failed to obtain beacon block header")
 		return
 	}
 	header := headerResponse.Data
 
 	// If the current head is up to the prior slot then we can propose immediately.
 	if header.Header.Message.Slot == duty.Slot()-1 {
-		log.Trace().Uint64("slot", uint64(duty.Slot())).Uint64("header_slot", uint64(header.Header.Message.Slot)).Uint64("validator_index", uint64(duty.ValidatorIndex())).Str("header", header.String()).Msg("Head of chain is up to date; proposing immediately")
+		s.log.Trace().Uint64("slot", uint64(duty.Slot())).Uint64("header_slot", uint64(header.Header.Message.Slot)).Uint64("validator_index", uint64(duty.ValidatorIndex())).Str("header", header.String()).Msg("Head of chain is up to date; proposing immediately")
 		s.scheduler.RunJobIfExists(ctx, fmt.Sprintf("Beacon block proposal for slot %d", duty.Slot()))
 	} else {
-		log.Trace().Uint64("slot", uint64(duty.Slot())).Uint64("header_slot", uint64(header.Header.Message.Slot)).Uint64("validator_index", uint64(duty.ValidatorIndex())).Str("header", header.String()).Msg("Head of chain is not up to date; not proposing immediately")
+		s.log.Trace().Uint64("slot", uint64(duty.Slot())).Uint64("header_slot", uint64(header.Header.Message.Slot)).Uint64("validator_index", uint64(duty.ValidatorIndex())).Str("header", header.String()).Msg("Head of chain is not up to date; not proposing immediately")
 	}
 }

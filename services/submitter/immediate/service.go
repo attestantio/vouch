@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -32,6 +32,7 @@ import (
 
 // Service is the submitter for signed items.
 type Service struct {
+	log                                   zerolog.Logger
 	clientMonitor                         metrics.ClientMonitor
 	attestationsSubmitter                 eth2client.AttestationsSubmitter
 	proposalSubmitter                     eth2client.ProposalSubmitter
@@ -43,9 +44,6 @@ type Service struct {
 	syncCommitteeContributionsSubmitter   eth2client.SyncCommitteeContributionsSubmitter
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new submitter.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -54,12 +52,13 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "submitter").Str("impl", "immediate").Logger()
+	log := zerologger.With().Str("service", "submitter").Str("impl", "immediate").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
 
 	s := &Service{
+		log:                                   log,
 		clientMonitor:                         parameters.clientMonitor,
 		attestationsSubmitter:                 parameters.attestationsSubmitter,
 		proposalSubmitter:                     parameters.proposalSubmitter,
@@ -96,7 +95,7 @@ func (s *Service) SubmitProposal(ctx context.Context, proposal *api.VersionedSig
 		return errors.Wrap(err, "failed to submit proposal")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(proposal)
 		if err == nil {
 			e.Str("proposal", string(data)).Msg("Submitted proposal")
@@ -126,7 +125,7 @@ func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0
 		return errors.Wrap(err, "failed to submit attestations")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(attestations)
 		if err == nil {
 			e.Str("attestations", string(data)).Msg("Submitted attestations")
@@ -156,7 +155,7 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 		return errors.Wrap(err, "failed to submit beacon committee subscriptions")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		// Summary counts.
 		aggregating := 0
 		for i := range subscriptions {
@@ -194,7 +193,7 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []
 		return errors.Wrap(err, "failed to submit aggregate attestation")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(aggregates)
 		if err == nil {
 			e.Str("attestation", string(data)).Msg("Submitted aggregate attestations")
@@ -224,7 +223,7 @@ func (s *Service) SubmitProposalPreparations(ctx context.Context, preparations [
 		return errors.Wrap(err, "failed to submit proposal preparations")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(preparations)
 		if err == nil {
 			e.Str("preparations", string(data)).Msg("Submitted proposal preparations")
@@ -254,7 +253,7 @@ func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*a
 		return errors.Wrap(err, "failed to submit sync committee messages")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(messages)
 		if err == nil {
 			e.Str("messages", string(data)).Msg("Submitted sync committee messages")
@@ -284,7 +283,7 @@ func (s *Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscrip
 		return errors.Wrap(err, "failed to submit sync committee subscriptions")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(subscriptions)
 		if err == nil {
 			e.Str("subscriptions", string(data)).Int("subscribing", len(subscriptions)).Msg("Submitted subscriptions")
@@ -314,7 +313,7 @@ func (s *Service) SubmitSyncCommitteeContributions(ctx context.Context, contribu
 		return errors.Wrap(err, "failed to submit sync committee contribution and proofs")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(contributionAndProofs)
 		if err == nil {
 			e.Str("contribution_and_proofs", string(data)).Msg("Submitted contribution and proofs")

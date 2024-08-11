@@ -71,7 +71,7 @@ func (s *Service) auctionBlock(ctx context.Context,
 	s.executionConfigMu.RUnlock()
 
 	if len(proposerConfig.Relays) == 0 {
-		log.Trace().Msg("No relays in proposer configuration")
+		s.log.Trace().Msg("No relays in proposer configuration")
 		return &blockauctioneer.Results{
 			Participation: make(map[string]*blockauctioneer.Participation),
 			AllProviders:  make([]builderclient.BuilderBidProvider, 0),
@@ -106,7 +106,7 @@ func (s *Service) cacheBid(_ context.Context,
 		// No bid supplied; create a dummy for the purposes of caching so that if asked for this bid
 		// we can actively respond to say we don't have anything (as opposed to attempting to fetch
 		// a bid when we're queried).
-		log.Trace().Msg("Bid is nil; creating dummy")
+		s.log.Trace().Msg("Bid is nil; creating dummy")
 		bid = &builderspec.VersionedSignedBuilderBid{
 			Version: spec.DataVersionDeneb,
 			Deneb: &deneb.SignedBuilderBid{
@@ -119,7 +119,7 @@ func (s *Service) cacheBid(_ context.Context,
 
 	key := fmt.Sprintf("%d", slot)
 	subKey := fmt.Sprintf("%x:%x", parentHash, pubkey)
-	log.Trace().Str("key", key).Str("subkey", subKey).Msg("Caching bid")
+	s.log.Trace().Str("key", key).Str("subkey", subKey).Msg("Caching bid")
 	s.builderBidsCacheMu.Lock()
 	if _, exists := s.builderBidsCache[key]; !exists {
 		s.builderBidsCache[key] = make(map[string]*builderspec.VersionedSignedBuilderBid)
@@ -146,7 +146,7 @@ func (s *Service) logParticipation(_ context.Context,
 	winningScore := res.WinningParticipation.Score
 	winningValue, err := res.WinningParticipation.Bid.Value()
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to obtain value of winning bid")
+		s.log.Warn().Err(err).Msg("Failed to obtain value of winning bid")
 		return
 	}
 
@@ -155,7 +155,7 @@ func (s *Service) logParticipation(_ context.Context,
 		scoreDelta := new(big.Int).Sub(winningScore, providerScore)
 		providerValue, err := participation.Bid.Value()
 		if err != nil {
-			log.Warn().Str("provider", provider).Err(err).Msg("Failed to obtain value of participating bid")
+			s.log.Warn().Str("provider", provider).Err(err).Msg("Failed to obtain value of participating bid")
 			continue
 		}
 		valueDelta := new(big.Int).Sub(winningValue.ToBig(), providerValue.ToBig())
@@ -168,10 +168,10 @@ func (s *Service) logParticipation(_ context.Context,
 		var logger *zerolog.Event
 		if s.logResults {
 			//nolint:zerologlint
-			logger = log.Info()
+			logger = s.log.Info()
 		} else {
 			//nolint:zerologlint
-			logger = log.Trace()
+			logger = s.log.Trace()
 		}
 		logger.
 			Uint64("slot", uint64(slot)).

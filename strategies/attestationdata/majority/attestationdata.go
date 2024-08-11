@@ -52,7 +52,7 @@ func (s *Service) AttestationData(ctx context.Context,
 	defer span.End()
 
 	started := time.Now()
-	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(opts.Slot)).Logger()
+	log := util.LogWithID(ctx, s.log, "strategy_id").With().Uint64("slot", uint64(opts.Slot)).Logger()
 	ctx = log.WithContext(ctx)
 
 	requests := len(s.attestationDataProviders)

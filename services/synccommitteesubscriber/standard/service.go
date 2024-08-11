@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2021, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -29,12 +29,10 @@ import (
 
 // Service is an beacon committee subscriber.
 type Service struct {
+	log       zerolog.Logger
 	monitor   metrics.SyncCommitteeSubscriptionMonitor
 	submitter submitter.SyncCommitteeSubscriptionsSubmitter
 }
-
-// module-wide log.
-var log zerolog.Logger
 
 // New creates a new sync committee subscriber.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
@@ -44,12 +42,13 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "synccommitteesubscriber").Str("impl", "standard").Logger()
+	log := zerologger.With().Str("service", "synccommitteesubscriber").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
 
 	s := &Service{
+		log:       log,
 		monitor:   parameters.monitor,
 		submitter: parameters.syncCommitteeSubmitter,
 	}
@@ -71,7 +70,7 @@ func (s *Service) Subscribe(ctx context.Context,
 	}
 
 	started := time.Now()
-	log := log.With().Uint64("end_epoch", uint64(endEpoch)).Logger()
+	log := s.log.With().Uint64("end_epoch", uint64(endEpoch)).Logger()
 	log.Trace().Msg("Subscribing")
 
 	subscriptions := s.calculateSubscriptions(ctx, endEpoch, duties)

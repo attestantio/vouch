@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -58,14 +58,14 @@ func (s *Service) prepareProposals(ctx context.Context, _ interface{}) {
 	started := time.Now()
 
 	if s.chainTimeService.CurrentEpoch() < s.bellatrixForkEpoch {
-		log.Trace().Dur("elapsed", time.Since(started)).Msg("Not at bellatrix fork epoch; not preparing proposals")
+		s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Not at bellatrix fork epoch; not preparing proposals")
 		return
 	}
 
 	if err := s.proposalsPreparer.UpdatePreparations(ctx); err != nil {
-		log.Error().Err(err).Msg("Failed to prepare proposals")
+		s.log.Error().Err(err).Msg("Failed to prepare proposals")
 		return
 	}
 
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Prepared proposals")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Prepared proposals")
 }

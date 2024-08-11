@@ -45,6 +45,7 @@ import (
 
 // Service is the manager for dirk accounts.
 type Service struct {
+	log                  zerolog.Logger
 	mutex                sync.RWMutex
 	monitor              metrics.AccountManagerMonitor
 	clientMonitor        metrics.ClientMonitor
@@ -63,9 +64,6 @@ type Service struct {
 	walletsMutex         sync.RWMutex
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new dirk account manager.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -74,7 +72,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "accountmanager").Str("impl", "dirk").Logger()
+	log := zerologger.With().Str("service", "accountmanager").Str("impl", "dirk").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -113,6 +111,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		log:                  log,
 		monitor:              parameters.monitor,
 		clientMonitor:        parameters.clientMonitor,
 		timeout:              parameters.timeout,
@@ -148,7 +147,7 @@ func (s *Service) Refresh(ctx context.Context) {
 
 	if numAccounts > 0 {
 		if err := s.refreshValidators(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed to refresh validators")
+			s.log.Error().Err(err).Msg("Failed to refresh validators")
 		}
 	}
 }
@@ -169,10 +168,10 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 		pathsByWallet[pathBits[0]] = append(pathsByWallet[pathBits[0]], path)
 	}
 
-	verificationRegexes := accountPathsToVerificationRegexes(s.accountPaths)
+	verificationRegexes := s.accountPathsToVerificationRegexes(s.accountPaths)
 
 	// Fetch accounts for each wallet in parallel.
-	log.Trace().Int("wallets", len(pathsByWallet)).Msg("Fetching accounts for wallets")
+	s.log.Trace().Int("wallets", len(pathsByWallet)).Msg("Fetching accounts for wallets")
 	started := time.Now()
 	accounts := make(map[phase0.BLSPubKey]e2wtypes.Account)
 	var accountsMu sync.Mutex
@@ -184,16 +183,16 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 		go func(ctx context.Context, sem *semaphore.Weighted, wg *sync.WaitGroup, walletName string, mu *sync.Mutex) {
 			defer wg.Done()
 			if err := sem.Acquire(ctx, 1); err != nil {
-				log.Error().Err(err).Msg("Failed to acquire semaphore")
+				s.log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
 			}
 			defer sem.Release(1)
 			wallet, err := s.openWallet(ctx, walletName)
 			if err != nil {
-				log.Warn().Err(err).Str("wallet", walletName).Msg("Failed to open wallet")
+				s.log.Warn().Err(err).Str("wallet", walletName).Msg("Failed to open wallet")
 				return
 			}
-			log := log.With().Str("wallet", wallet.Name()).Logger()
+			log := s.log.With().Str("wallet", wallet.Name()).Logger()
 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained semaphore")
 			walletAccounts := s.fetchAccountsForWallet(ctx, wallet, verificationRegexes[wallet.Name()])
 			log.Trace().Dur("elapsed", time.Since(started)).Int("accounts", len(walletAccounts)).Msg("Obtained accounts")
@@ -207,12 +206,12 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 		}(ctx, sem, &wg, walletName, &accountsMu)
 	}
 	wg.Wait()
-	log.Trace().Int("accounts", len(accounts)).Msg("Obtained accounts")
+	s.log.Trace().Int("accounts", len(accounts)).Msg("Obtained accounts")
 
 	s.mutex.Lock()
 	if len(accounts) == 0 && len(s.accounts) != 0 {
 		s.mutex.Unlock()
-		log.Warn().Msg("No accounts obtained; retaining old list")
+		s.log.Warn().Msg("No accounts obtained; retaining old list")
 		return
 	}
 	s.accounts = accounts
@@ -229,7 +228,7 @@ func (s *Service) openWallet(ctx context.Context, name string) (e2wtypes.Wallet,
 	var err error
 	if !exists {
 		wallet, err = dirk.Open(ctx,
-			dirk.WithLogLevel(log.GetLevel()),
+			dirk.WithLogLevel(s.log.GetLevel()),
 			dirk.WithMonitor(s.monitor.(metrics.Service)),
 			dirk.WithName(name),
 			dirk.WithCredentials(s.credentials),
@@ -254,7 +253,7 @@ func (s *Service) refreshValidators(ctx context.Context) error {
 	s.mutex.RLock()
 	pubKeys := s.pubKeys
 	s.mutex.RUnlock()
-	log.Trace().Int("accounts", len(pubKeys)).Msg("Refreshing validators of accounts")
+	s.log.Trace().Int("accounts", len(pubKeys)).Msg("Refreshing validators of accounts")
 
 	if err := s.validatorsManager.RefreshValidatorsFromBeaconNode(ctx, pubKeys); err != nil {
 		return errors.Wrap(err, "failed to refresh validators")
@@ -320,7 +319,7 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 		stateCount[state]++
 		if state == api.ValidatorStateActiveOngoing || state == api.ValidatorStateActiveExiting {
 			account := s.accounts[validator.PublicKey]
-			log.Trace().
+			s.log.Trace().
 				Str("name", account.Name()).
 				Str("public_key", fmt.Sprintf("%x", account.PublicKey().Marshal())).
 				Uint64("index", uint64(index)).
@@ -328,7 +327,7 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 				Msg("Validating account")
 			validatingAccounts[index] = account
 		} else {
-			log.Trace().
+			s.log.Trace().
 				Stringer("pubkey", validator.PublicKey).
 				Stringer("state", state).
 				Msg("Non-validating account")
@@ -380,10 +379,10 @@ func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch p
 }
 
 // accountPathsToVerificationRegexes turns account paths in to regexes to allow verification.
-func accountPathsToVerificationRegexes(paths []string) map[string][]*regexp.Regexp {
+func (s *Service) accountPathsToVerificationRegexes(paths []string) map[string][]*regexp.Regexp {
 	regexes := make(map[string][]*regexp.Regexp, len(paths))
 	for _, path := range paths {
-		log := log.With().Str("path", path).Logger()
+		log := s.log.With().Str("path", path).Logger()
 		parts := strings.Split(path, "/")
 		if len(parts) == 0 || parts[0] == "" {
 			log.Debug().Msg("Invalid path")
@@ -413,7 +412,7 @@ func accountPathsToVerificationRegexes(paths []string) map[string][]*regexp.Rege
 	return regexes
 }
 
-func (*Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wallet, verificationRegexes []*regexp.Regexp) map[phase0.BLSPubKey]e2wtypes.Account {
+func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wallet, verificationRegexes []*regexp.Regexp) map[phase0.BLSPubKey]e2wtypes.Account {
 	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "fetchAccountsForWallet", trace.WithAttributes(
 		attribute.String("wallet", wallet.Name()),
 	))
@@ -426,7 +425,7 @@ func (*Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wall
 	shortCircuitRegex := fmt.Sprintf("^%s/.*$", wallet.Name())
 	shortCircuit := false
 	if len(verificationRegexes) == 1 && verificationRegexes[0].String() == shortCircuitRegex {
-		log.Trace().Str("wallet", wallet.Name()).Msg("Short-circuiting regex checks")
+		s.log.Trace().Str("wallet", wallet.Name()).Msg("Short-circuiting regex checks")
 		shortCircuit = true
 	}
 
@@ -442,7 +441,7 @@ func (*Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wall
 				}
 			}
 			if !verified {
-				log.Debug().Str("account", name).Msg("Received unwanted account from server; ignoring")
+				s.log.Debug().Str("account", name).Msg("Received unwanted account from server; ignoring")
 				continue
 			}
 		}

@@ -65,18 +65,18 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 
 	duty, ok := data.(*beaconblockproposer.Duty)
 	if !ok {
-		log.Error().Msg("Passed invalid data structure")
+		s.log.Error().Msg("Passed invalid data structure")
 		monitorBeaconBlockProposalCompleted(started, 0, s.chainTime.StartOfSlot(0), "failed")
 		return
 	}
 	slot, err := validateDuty(duty)
 	if err != nil {
-		log.Error().Err(err).Msg("Invalid duty")
+		s.log.Error().Err(err).Msg("Invalid duty")
 		monitorBeaconBlockProposalCompleted(started, slot, s.chainTime.StartOfSlot(slot), "failed")
 		return
 	}
 	span.SetAttributes(attribute.Int64("slot", int64(slot)))
-	log := log.With().Uint64("proposing_slot", uint64(slot)).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
+	log := s.log.With().Uint64("proposing_slot", uint64(slot)).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Proposing")
 
 	graffiti, err := s.obtainGraffiti(ctx, slot, duty.ValidatorIndex())
@@ -140,7 +140,7 @@ func (s *Service) obtainGraffiti(ctx context.Context,
 		if nodeClientProvider, isProvider := s.proposalProvider.(consensusclient.NodeClientProvider); isProvider {
 			nodeClientResponse, err := nodeClientProvider.NodeClient(ctx)
 			if err != nil {
-				log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
+				s.log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
 			} else {
 				graffiti = bytes.ReplaceAll(graffiti, []byte("{{CLIENT}}"), []byte(nodeClientResponse.Data))
 			}
@@ -162,7 +162,7 @@ func (s *Service) proposeBlock(ctx context.Context,
 	if s.blockAuctioneer != nil {
 		auctionResults, err = s.auctionBlock(ctx, duty)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to auction block")
+			s.log.Error().Err(err).Msg("Failed to auction block")
 		} else {
 			monitorBestBidRelayCount(len(auctionResults.Providers))
 		}
@@ -198,14 +198,14 @@ func (s *Service) proposeBlock(ctx context.Context,
 		providers := make([]builderclient.UnblindedProposalProvider, 0, len(auctionResults.AllProviders))
 		unblindingCandidates := auctionResults.Providers
 		if len(unblindingCandidates) == 0 || s.unblindFromAllRelays {
-			log.Trace().Int("providers", len(auctionResults.AllProviders)).Msg("Unblinding from all providers")
+			s.log.Trace().Int("providers", len(auctionResults.AllProviders)).Msg("Unblinding from all providers")
 			unblindingCandidates = auctionResults.AllProviders
 		}
 
 		for _, provider := range unblindingCandidates {
 			unblindedProposalProvider, isProvider := provider.(builderclient.UnblindedProposalProvider)
 			if !isProvider {
-				log.Warn().Str("provider", provider.Name()).Msg("Auctioneer cannot unblind the proposal")
+				s.log.Warn().Str("provider", provider.Name()).Msg("Auctioneer cannot unblind the proposal")
 				continue
 			}
 			providers = append(providers, unblindedProposalProvider)
@@ -214,7 +214,7 @@ func (s *Service) proposeBlock(ctx context.Context,
 			return errors.New("no relays to unblind the block")
 		}
 
-		log.Trace().Int("providers", len(providers)).Msg("Obtained relays that can unblind the proposal")
+		s.log.Trace().Int("providers", len(providers)).Msg("Obtained relays that can unblind the proposal")
 		if err := s.unblindProposal(ctx, signedProposal, providers); err != nil {
 			return errors.Wrap(err, "failed to unblind block")
 		}
@@ -352,7 +352,7 @@ func (s *Service) auctionBlock(ctx context.Context,
 	error,
 ) {
 	hash, height := s.executionChainHeadProvider.ExecutionChainHead(ctx)
-	log.Trace().Str("hash", fmt.Sprintf("%#x", hash)).Uint64("height", height).Msg("Current execution chain state")
+	s.log.Trace().Str("hash", fmt.Sprintf("%#x", hash)).Uint64("height", height).Msg("Current execution chain state")
 	auctionResults, err := s.blockAuctioneer.AuctionBlock(ctx,
 		duty.Slot(),
 		hash,
@@ -361,7 +361,7 @@ func (s *Service) auctionBlock(ctx context.Context,
 		return nil, err
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(auctionResults)
 		if err == nil {
 			e.RawJSON("results", data).Msg("Auction complete")
@@ -371,7 +371,7 @@ func (s *Service) auctionBlock(ctx context.Context,
 	return auctionResults, nil
 }
 
-func (*Service) unblindProposal(ctx context.Context,
+func (s *Service) unblindProposal(ctx context.Context,
 	proposal *api.VersionedSignedProposal,
 	providers []builderclient.UnblindedProposalProvider,
 ) error {
@@ -383,7 +383,7 @@ func (*Service) unblindProposal(ctx context.Context,
 	respCh := make(chan *api.VersionedSignedProposal, 1)
 	for _, provider := range providers {
 		go func(ctx context.Context, provider builderclient.UnblindedProposalProvider, ch chan *api.VersionedSignedProposal) {
-			log := log.With().Str("provider", provider.Address()).Logger()
+			log := s.log.With().Str("provider", provider.Address()).Logger()
 			log.Trace().Msg("Unblinding block with provider")
 
 			// As we cannot fall back we move to a retry system.
@@ -436,10 +436,10 @@ func (*Service) unblindProposal(ctx context.Context,
 
 	select {
 	case <-ctx.Done():
-		log.Warn().Msg("Failed to obtain unblinded block")
+		s.log.Warn().Msg("Failed to obtain unblinded block")
 		return errors.New("failed to obtain unblinded block")
 	case signedBlock := <-respCh:
-		if e := log.Trace(); e.Enabled() {
+		if e := s.log.Trace(); e.Enabled() {
 			data, err := json.Marshal(signedBlock)
 			if err == nil {
 				e.RawJSON("signed_block", data).Msg("Recomposed block to submit")

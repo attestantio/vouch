@@ -49,6 +49,7 @@ var syncCommitteePreparationEpochs = uint64(5)
 // It runs purely against clock events, setting up jobs for the validator's processes of block proposal, attestation
 // creation and attestation aggregation.
 type Service struct {
+	log                           zerolog.Logger
 	monitor                       metrics.ControllerMonitor
 	slotDuration                  time.Duration
 	slotsPerEpoch                 uint64
@@ -103,9 +104,6 @@ type Service struct {
 	pendingAttestationsMutex sync.RWMutex
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new controller.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -114,7 +112,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "controller").Str("impl", "standard").Logger()
+	log := zerologger.With().Str("service", "controller").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -167,6 +165,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		log:                           log,
 		monitor:                       parameters.monitor,
 		slotDuration:                  slotDuration,
 		slotsPerEpoch:                 slotsPerEpoch,
@@ -267,20 +266,20 @@ func (s *Service) startTickers(ctx context.Context,
 	handlingBellatrix bool,
 ) error {
 	// Start epoch ticker.
-	log.Trace().Msg("Starting epoch tickers")
+	s.log.Trace().Msg("Starting epoch tickers")
 	if err := s.startEpochTicker(ctx); err != nil {
 		return errors.Wrap(err, "failed to start epoch ticker")
 	}
 
 	// Start account refresher.
-	log.Trace().Msg("Starting accounts refresher")
+	s.log.Trace().Msg("Starting accounts refresher")
 	if err := s.startAccountsRefresher(ctx); err != nil {
 		return errors.Wrap(err, "failed to start accounts refresher")
 	}
 
 	// Start proposals preparer.
 	if handlingBellatrix {
-		log.Trace().Msg("Starting proposals preparer ticker")
+		s.log.Trace().Msg("Starting proposals preparer ticker")
 		if err := s.startProposalsPreparer(ctx); err != nil {
 			return errors.Wrap(err, "failed to start proposals preparer")
 		}
@@ -324,10 +323,10 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	// Ensure we don't run for the same epoch twice.
 	epochTickerData := data.(*epochTickerData)
 	currentEpoch := s.chainTimeService.CurrentEpoch()
-	log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Starting per-epoch job")
+	s.log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Starting per-epoch job")
 	epochTickerData.mutex.Lock()
 	if epochTickerData.latestEpochRan >= int64(currentEpoch) {
-		log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Already ran for this epoch; skipping")
+		s.log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Already ran for this epoch; skipping")
 		epochTickerData.mutex.Unlock()
 		return
 	}
@@ -340,7 +339,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 
 	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, currentEpoch)
 	if err != nil {
-		log.Error().Err(err).Uint64("epoch", uint64(currentEpoch)).Msg("Failed to obtain active validators for epoch")
+		s.log.Error().Err(err).Uint64("epoch", uint64(currentEpoch)).Msg("Failed to obtain active validators for epoch")
 		cancel()
 		return
 	}
@@ -348,7 +347,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	// Expect at least one validator, but keep going even if we don't have any
 	// as there may be some in the next epoch.
 	if len(validatorIndices) == 0 {
-		log.Warn().Msg("No active validators; not validating")
+		s.log.Warn().Msg("No active validators; not validating")
 	}
 
 	// Done the preparation work available to us; wait for the end of the timer.
@@ -359,7 +358,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	if s.handlingAltair {
 		// Handle the Altair hard fork transition epoch.
 		if currentEpoch == s.altairForkEpoch {
-			log.Info().Msg("At Altair fork epoch")
+			s.log.Info().Msg("At Altair fork epoch")
 			go s.handleAltairForkEpoch(ctx)
 		}
 
@@ -372,7 +371,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	if s.handlingBellatrix {
 		// Handle the Bellatrix hard fork transition epoch.
 		if currentEpoch == s.bellatrixForkEpoch {
-			log.Info().Msg("At Bellatrix fork epoch")
+			s.log.Info().Msg("At Bellatrix fork epoch")
 			go s.handleBellatrixForkEpoch(ctx)
 		}
 	}
@@ -393,7 +392,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 			epoch: currentEpoch + 1,
 		},
 	); err != nil {
-		log.Error().Err(err).Uint64("epoch", uint64(currentEpoch)).Msg("Failed to schedule preparation for following epoch")
+		s.log.Error().Err(err).Uint64("epoch", uint64(currentEpoch)).Msg("Failed to schedule preparation for following epoch")
 		return
 	}
 
@@ -408,12 +407,12 @@ func (s *Service) prepareForEpoch(ctx context.Context, data interface{}) {
 	prepareForEpochData := data.(*prepareForEpochData)
 	accounts, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, prepareForEpochData.epoch)
 	if err != nil {
-		log.Error().Err(err).Uint64("epoch", uint64(prepareForEpochData.epoch)).Msg("Failed to obtain active validators for epoch")
+		s.log.Error().Err(err).Uint64("epoch", uint64(prepareForEpochData.epoch)).Msg("Failed to obtain active validators for epoch")
 		return
 	}
 	// Expect at least one validator.
 	if len(validatorIndices) == 0 {
-		log.Warn().Msg("No active validators; not validating")
+		s.log.Warn().Msg("No active validators; not validating")
 		return
 	}
 
@@ -529,7 +528,7 @@ func (s *Service) handleAltairForkEpoch(ctx context.Context) {
 	go func() {
 		_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, s.altairForkEpoch)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to obtain active validator indices for the Altair fork epoch")
+			s.log.Error().Err(err).Msg("Failed to obtain active validator indices for the Altair fork epoch")
 			return
 		}
 		go s.scheduleSyncCommitteeMessages(ctx, s.altairForkEpoch, validatorIndices, false /* notCurrentSlot */)
@@ -540,7 +539,7 @@ func (s *Service) handleAltairForkEpoch(ctx context.Context) {
 		if uint64(nextPeriodEpoch-s.altairForkEpoch) <= syncCommitteePreparationEpochs {
 			_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, nextPeriodEpoch)
 			if err != nil {
-				log.Error().Err(err).Msg("Failed to obtain active validator indices for the period following the Altair fork epoch")
+				s.log.Error().Err(err).Msg("Failed to obtain active validator indices for the period following the Altair fork epoch")
 				return
 			}
 			go s.scheduleSyncCommitteeMessages(ctx, nextPeriodEpoch, validatorIndices, false /* notCurrentSlot */)

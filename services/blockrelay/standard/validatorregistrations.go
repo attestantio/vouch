@@ -39,14 +39,14 @@ func (s *Service) ValidatorRegistrations(ctx context.Context,
 	relayRegistrations := make(map[string][]*builderapi.VersionedSignedValidatorRegistration)
 	for _, registration := range registrations {
 		if _, exists := controlledValidators[registration.Message.Pubkey]; exists {
-			log.Trace().Stringer("pubkey", registration.Message.Pubkey).Msg("Validator controlled by Vouch; not forwarding registration")
+			s.log.Trace().Stringer("pubkey", registration.Message.Pubkey).Msg("Validator controlled by Vouch; not forwarding registration")
 			continue
 		}
-		log.Trace().Stringer("pubkey", registration.Message.Pubkey).Msg("Validator not controlled by Vouch; forwarding registration")
+		s.log.Trace().Stringer("pubkey", registration.Message.Pubkey).Msg("Validator not controlled by Vouch; forwarding registration")
 
 		proposerConfig, err := s.ProposerConfig(ctx, nil, registration.Message.Pubkey)
 		if err != nil {
-			log.Warn().Err(err).Stringer("pubkey", registration.Message.Pubkey).Msg("Failed to obtain execution configuration for validator; skipping")
+			s.log.Warn().Err(err).Stringer("pubkey", registration.Message.Pubkey).Msg("Failed to obtain execution configuration for validator; skipping")
 			continue
 		}
 

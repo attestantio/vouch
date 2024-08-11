@@ -37,18 +37,18 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 	}
 
 	started := time.Now()
-	log.Trace().Uint64("epoch", uint64(epoch)).Msg("Scheduling attestations")
+	s.log.Trace().Uint64("epoch", uint64(epoch)).Msg("Scheduling attestations")
 
 	attesterDutiesResponse, err := s.attesterDutiesProvider.AttesterDuties(ctx, &api.AttesterDutiesOpts{
 		Epoch:   epoch,
 		Indices: validatorIndices,
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to fetch attester duties")
+		s.log.Error().Err(err).Msg("Failed to fetch attester duties")
 		return
 	}
 	attesterDuties := attesterDutiesResponse.Data
-	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(attesterDuties)).Msg("Fetched attester duties")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(attesterDuties)).Msg("Fetched attester duties")
 
 	// Generate Vouch duties from the response.
 	filteredDuties := make([]*apiv1.AttesterDuty, 0, len(attesterDuties))
@@ -56,7 +56,7 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 	lastSlot := s.chainTimeService.FirstSlotOfEpoch(epoch+1) - 1
 	for _, duty := range attesterDuties {
 		if duty.Slot < firstSlot || duty.Slot > lastSlot {
-			log.Warn().
+			s.log.Warn().
 				Uint64("epoch", uint64(epoch)).
 				Uint64("duty_slot", uint64(duty.Slot)).
 				Msg("Attester duty has invalid slot for requested epoch; ignoring")
@@ -64,19 +64,19 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 		}
 		filteredDuties = append(filteredDuties, duty)
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(filteredDuties)).Msg("Filtered attester duties")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(filteredDuties)).Msg("Filtered attester duties")
 
 	duties, err := attester.MergeDuties(ctx, filteredDuties)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to merge attester duties")
+		s.log.Error().Err(err).Msg("Failed to merge attester duties")
 		return
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(duties)).Msg("Merged attester duties")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(duties)).Msg("Merged attester duties")
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		e.Msg("Received attester duties")
 		for _, duty := range duties {
-			log.Trace().
+			s.log.Trace().
 				Uint64("slot", uint64(duty.Slot())).
 				Strs("duties", duty.Tuples()).
 				Msg("Attester duties for slot")
@@ -87,14 +87,14 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 	for _, duty := range duties {
 		// Do not schedule attestations for past slots (or the current slot if so instructed).
 		if duty.Slot() < currentSlot {
-			log.Debug().
+			s.log.Debug().
 				Uint64("attestation_slot", uint64(duty.Slot())).
 				Uint64("current_slot", uint64(currentSlot)).
 				Msg("Attestation for a past slot; not scheduling")
 			continue
 		}
 		if duty.Slot() == currentSlot && notCurrentSlot {
-			log.Debug().
+			s.log.Debug().
 				Uint64("attestation_slot", uint64(duty.Slot())).
 				Uint64("current_slot", uint64(currentSlot)).
 				Msg("Attestation for the current slot; not scheduling")
@@ -116,11 +116,11 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 				duty,
 			); err != nil {
 				// Don't return here; we want to try to set up as many attester jobs as possible.
-				log.Error().Err(err).Msg("Failed to schedule attestation")
+				s.log.Error().Err(err).Msg("Failed to schedule attestation")
 			}
 		}(duty)
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Scheduled attestations")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Scheduled attestations")
 }
 
 // AttestAndScheduleAggregate attests, then schedules aggregation jobs as required.
@@ -128,10 +128,10 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 	started := time.Now()
 	duty, ok := data.(*attester.Duty)
 	if !ok {
-		log.Error().Msg("Passed invalid data")
+		s.log.Error().Msg("Passed invalid data")
 		return
 	}
-	log := log.With().Uint64("slot", uint64(duty.Slot())).Logger()
+	log := s.log.With().Uint64("slot", uint64(duty.Slot())).Logger()
 
 	// At the end of this function note that we have carried out the attestation process
 	// for this slot, regardless of result.  This allows the main codebase to shut down

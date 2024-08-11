@@ -39,6 +39,7 @@ import (
 
 // Service is the builder service for Vouch.
 type Service struct {
+	log                                       zerolog.Logger
 	monitor                                   metrics.Service
 	majordomo                                 majordomo.Service
 	chainTime                                 chaintime.Service
@@ -81,9 +82,6 @@ type Service struct {
 	activitySem *semaphore.Weighted
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new controller.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -92,7 +90,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "blockrelay").Str("impl", "standard").Logger()
+	log := zerologger.With().Str("service", "blockrelay").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -102,6 +100,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		log:                          log,
 		monitor:                      parameters.monitor,
 		majordomo:                    parameters.majordomo,
 		chainTime:                    parameters.chainTime,

@@ -155,7 +155,7 @@ func TestSubmitProposalPreparationsErroring(t *testing.T) {
 			FeeRecipient:   bellatrix.ExecutionAddress{},
 		},
 	})
-	require.EqualError(t, err, "no successful proposal preparations before timeout")
+	require.EqualError(t, err, "no successful submissions before timeout")
 }
 
 func TestSubmitProposalPreparationsSleepy(t *testing.T) {
@@ -198,7 +198,7 @@ func TestSubmitProposalPreparationsSleepy(t *testing.T) {
 			FeeRecipient:   bellatrix.ExecutionAddress{},
 		},
 	})
-	require.EqualError(t, err, "no successful proposal preparations before timeout")
+	require.EqualError(t, err, "no successful submissions before timeout")
 }
 
 func TestSubmitProposalPreparationsSleepySuccess(t *testing.T) {

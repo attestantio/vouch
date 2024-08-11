@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2021, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -22,7 +22,7 @@ import (
 
 // scoreSyncCommitteeContribution generates a score for an aggregate attestation.
 // The score is relative to the completeness of the aggregate.
-func (*Service) scoreSyncCommitteeContribution(_ context.Context,
+func (s *Service) scoreSyncCommitteeContribution(_ context.Context,
 	name string,
 	contribution *altair.SyncCommitteeContribution,
 ) float64 {
@@ -32,7 +32,7 @@ func (*Service) scoreSyncCommitteeContribution(_ context.Context,
 
 	score := float64(contribution.AggregationBits.Count())
 
-	log.Trace().
+	s.log.Trace().
 		Str("provider", name).
 		Uint64("sync_committee_slot", uint64(contribution.Slot)).
 		Uint64("subcommittee_index", contribution.SubcommitteeIndex).

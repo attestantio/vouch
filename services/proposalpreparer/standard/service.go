@@ -27,14 +27,12 @@ import (
 
 // Service is a proposal preparer.
 type Service struct {
+	log                            zerolog.Logger
 	chainTimeService               chaintime.Service
 	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
 	proposalPreparationsSubmitters []eth2client.ProposalPreparationsSubmitter
 	executionConfigProvider        blockrelay.ExecutionConfigProvider
 }
-
-// module-wide log.
-var log zerolog.Logger
 
 // New creates a new proposal preparer.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
@@ -44,7 +42,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "proposalpreparer").Str("impl", "standard").Logger()
+	log := zerologger.With().Str("service", "proposalpreparer").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -54,6 +52,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		log:                            log,
 		chainTimeService:               parameters.chainTimeService,
 		validatingAccountsProvider:     parameters.validatingAccountsProvider,
 		proposalPreparationsSubmitters: parameters.proposalPreparationsSubmitters,

@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -36,6 +36,7 @@ import (
 
 // Service is an attestation aggregator.
 type Service struct {
+	log                            zerolog.Logger
 	monitor                        metrics.AttestationAggregationMonitor
 	targetAggregatorsPerCommittee  uint64
 	slotsPerEpoch                  uint64
@@ -46,9 +47,6 @@ type Service struct {
 	aggregateAndProofSigner        signer.AggregateAndProofSigner
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new attestation aggregator.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -57,7 +55,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "attestationaggregator").Str("impl", "standard").Logger()
+	log := zerologger.With().Str("service", "attestationaggregator").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -87,6 +85,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		log:                            log,
 		monitor:                        parameters.monitor,
 		targetAggregatorsPerCommittee:  targetAggregatorsPerCommittee,
 		slotsPerEpoch:                  slotsPerEpoch,
@@ -108,11 +107,11 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 
 	duty, ok := data.(*attestationaggregator.Duty)
 	if !ok {
-		log.Error().Msg("Passed invalid data structure")
+		s.log.Error().Msg("Passed invalid data structure")
 		s.monitor.AttestationAggregationCompleted(started, 0, "failed")
 		return
 	}
-	log := log.With().Uint64("slot", uint64(duty.Slot)).Str("attestation_data_root", fmt.Sprintf("%#x", duty.AttestationDataRoot)).Logger()
+	log := s.log.With().Uint64("slot", uint64(duty.Slot)).Str("attestation_data_root", fmt.Sprintf("%#x", duty.AttestationDataRoot)).Logger()
 	log.Trace().Msg("Aggregating")
 
 	// Obtain the aggregate attestation.

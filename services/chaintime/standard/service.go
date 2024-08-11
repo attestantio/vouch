@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -26,13 +26,11 @@ import (
 
 // Service provides chain time services.
 type Service struct {
+	log           zerolog.Logger
 	genesisTime   time.Time
 	slotDuration  time.Duration
 	slotsPerEpoch uint64
 }
-
-// module-wide log.
-var log zerolog.Logger
 
 // New creates a new controller.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
@@ -42,7 +40,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "chaintime").Str("impl", "standard").Logger()
+	log := zerologger.With().Str("service", "chaintime").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -81,6 +79,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	log.Trace().Uint64("slots_per_epoch", slotsPerEpoch).Msg("Obtained slots per epoch")
 
 	s := &Service{
+		log:           log,
 		genesisTime:   genesisTime,
 		slotDuration:  slotDuration,
 		slotsPerEpoch: slotsPerEpoch,

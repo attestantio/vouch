@@ -73,7 +73,7 @@ func (s *Service) submitValidatorRegistrations(ctx context.Context,
 
 	// Only allow a single registration at a time.
 	if !s.activitySem.TryAcquire(1) {
-		log.Trace().Msg("Another validator registration submission in progress; skipping")
+		s.log.Trace().Msg("Another validator registration submission in progress; skipping")
 		return
 	}
 	defer s.activitySem.Release(1)
@@ -87,24 +87,24 @@ func (s *Service) submitValidatorRegistrations(ctx context.Context,
 	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpoch(ctx, epoch+1)
 	if err != nil {
 		monitorValidatorRegistrations(false, time.Since(started))
-		log.Error().Err(err).Msg("Failed to obtain validating accounts")
+		s.log.Error().Err(err).Msg("Failed to obtain validating accounts")
 		return
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
 
 	if len(accounts) == 0 {
 		monitorValidatorRegistrations(false, time.Since(started))
-		log.Debug().Msg("No validating accounts; not submiting validator registrations")
+		s.log.Debug().Msg("No validating accounts; not submiting validator registrations")
 		return
 	}
 	if s.executionConfig == nil {
 		monitorValidatorRegistrations(false, time.Since(started))
-		log.Debug().Msg("No execution config; not submiting validator registrations")
+		s.log.Debug().Msg("No execution config; not submiting validator registrations")
 		return
 	}
 
 	if err := s.submitValidatorRegistrationsForAccounts(ctx, accounts); err != nil {
-		log.Error().Err(err).Msg("Failed to submit validator registrations")
+		s.log.Error().Err(err).Msg("Failed to submit validator registrations")
 	}
 
 	monitorValidatorRegistrations(true, time.Since(started))
@@ -134,13 +134,13 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 	s.controlledValidators = controlledValidators
 	s.controlledValidatorsMu.Unlock()
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(relayRegistrations)
 		if err == nil {
 			e.RawJSON("registrations", data).Msg("Generated registrations")
 		}
 	}
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(consensusRegistrations)
 		if err == nil {
 			e.RawJSON("registrations", data).Msg("Generated consensus registrations")
@@ -170,7 +170,7 @@ func (s *Service) generateValidatorRegistrationsForAccount(ctx context.Context,
 		return errors.Wrap(err, "No proposer configuration; cannot submit validator registrations")
 	}
 	if proposerConfig.FeeRecipient.IsZero() {
-		log.Error().Stringer("validator", pubkey).Msg("Received 0 execution address for validator registration; using fallback")
+		s.log.Error().Stringer("validator", pubkey).Msg("Received 0 execution address for validator registration; using fallback")
 		proposerConfig.FeeRecipient = s.fallbackFeeRecipient
 	}
 
@@ -178,10 +178,10 @@ func (s *Service) generateValidatorRegistrationsForAccount(ctx context.Context,
 		relayRegistration, consensusRegistration, err := s.generateValidatorRegistrationForRelay(ctx, account, pubkey, relay)
 		if err != nil {
 			// Recognise the error but continue, to submit as many validator registrations as possible.
-			log.Error().Str("relay", relay.Address).Err(err).Msg("Failed to generate registration; validator will not be registered with MEV relay")
+			s.log.Error().Str("relay", relay.Address).Err(err).Msg("Failed to generate registration; validator will not be registered with MEV relay")
 			continue
 		}
-		if e := log.Trace(); e.Enabled() {
+		if e := s.log.Trace(); e.Enabled() {
 			data, err := json.Marshal(relayRegistration)
 			if err == nil {
 				e.Str("pubkey", fmt.Sprintf("%#x", pubkey)).Str("relay", relay.Address).RawJSON("registration", data).Msg("Registration")
@@ -221,18 +221,18 @@ func (s *Service) submitRelayRegistrations(ctx context.Context,
 
 			client, err := util.FetchBuilderClient(ctx, builder, monitor, s.releaseVersion)
 			if err != nil {
-				log.Error().Err(err).Str("builder", builder).Msg("Failed to fetch builder client")
+				s.log.Error().Err(err).Str("builder", builder).Msg("Failed to fetch builder client")
 				return
 			}
 			submitter, isSubmitter := client.(builderclient.ValidatorRegistrationsSubmitter)
 			if !isSubmitter {
-				log.Error().Str("builder", builder).Msg("Builder client does not accept validator registrations")
+				s.log.Error().Str("builder", builder).Msg("Builder client does not accept validator registrations")
 				return
 			}
 			if err := submitter.SubmitValidatorRegistrations(ctx, &builderapi.SubmitValidatorRegistrationsOpts{
 				Registrations: providerRegistrations,
 			}); err != nil {
-				log.Error().Err(err).Str("builder", builder).Msg("Failed to submit validator registrations")
+				s.log.Error().Err(err).Str("builder", builder).Msg("Failed to submit validator registrations")
 				return
 			}
 		}(ctx, builder, providerRegistrations, s.monitor)
@@ -258,9 +258,9 @@ func (s *Service) submitConsensusRegistrations(ctx context.Context,
 				))
 				defer span.End()
 
-				log.Trace().Str("client", submitter.(eth2client.Service).Address()).Msg("Submitting secondary validator registrations")
+				s.log.Trace().Str("client", submitter.(eth2client.Service).Address()).Msg("Submitting secondary validator registrations")
 				if err := submitter.SubmitValidatorRegistrations(ctx, registrations); err != nil {
-					log.Error().Err(err).Str("client", submitter.(eth2client.Service).Address()).Msg("Failed to submit secondary validator registrations")
+					s.log.Error().Err(err).Str("client", submitter.(eth2client.Service).Address()).Msg("Failed to submit secondary validator registrations")
 					return
 				}
 			}(ctx, submitter, consensusRegistrations)
@@ -305,7 +305,7 @@ func (s *Service) generateValidatorRegistrationForRelay(ctx context.Context,
 	if exists && bytes.Equal(latestRoot[:], registrationRoot[:]) {
 		monitorRegistrationsGeneration("cache")
 	} else {
-		log.Trace().Msg("Signing a new or updated validator registration")
+		s.log.Trace().Msg("Signing a new or updated validator registration")
 		sig, err := s.validatorRegistrationSigner.SignValidatorRegistration(ctx, account, &builderapi.VersionedValidatorRegistration{
 			Version: builderspec.BuilderVersionV1,
 			V1:      registration,

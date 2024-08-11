@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -33,7 +33,7 @@ func (s *Service) HandleHeadEvent(event *apiv1.Event) {
 	ctx := context.Background()
 
 	data := event.Data.(*apiv1.HeadEvent)
-	log := log.With().Uint64("slot", uint64(data.Slot)).Logger()
+	log := s.log.With().Uint64("slot", uint64(data.Slot)).Logger()
 	log.Trace().Msg("Received head event")
 
 	// An attestation in a block could be up to 1 epoch old.  We keep an
@@ -74,12 +74,12 @@ func (s *Service) updateBlockVotes(_ context.Context,
 
 	slot, err := block.Slot()
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to obtain proposed block's slot")
+		s.log.Error().Err(err).Msg("Failed to obtain proposed block's slot")
 		return
 	}
 	attestations, err := block.Attestations()
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to obtain proposed block's attestations")
+		s.log.Error().Err(err).Msg("Failed to obtain proposed block's attestations")
 		return
 	}
 
@@ -103,13 +103,13 @@ func (s *Service) updateBlockVotes(_ context.Context,
 
 	parentRoot, err := block.ParentRoot()
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to obtain proposed block's parent root")
+		s.log.Error().Err(err).Msg("Failed to obtain proposed block's parent root")
 		return
 	}
 
 	root, err := block.Root()
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to obtain proposed block's root")
+		s.log.Error().Err(err).Msg("Failed to obtain proposed block's root")
 		return
 	}
 
@@ -130,5 +130,5 @@ func (s *Service) updateBlockVotes(_ context.Context,
 	}
 	s.priorBlocksVotesMu.Unlock()
 
-	log.Trace().Uint64("slot", uint64(slot)).Str("root", fmt.Sprintf("%#x", root[:])).Msg("Set votes for slot")
+	s.log.Trace().Uint64("slot", uint64(slot)).Str("root", fmt.Sprintf("%#x", root[:])).Msg("Set votes for slot")
 }

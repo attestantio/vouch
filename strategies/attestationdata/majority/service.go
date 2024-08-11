@@ -1,4 +1,4 @@
-// Copyright © 2023 Attestant Limited.
+// Copyright © 2023, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -28,6 +28,7 @@ import (
 
 // Service is the provider for attestation data.
 type Service struct {
+	log                      zerolog.Logger
 	clientMonitor            metrics.ClientMonitor
 	processConcurrency       int64
 	attestationDataProviders map[string]eth2client.AttestationDataProvider
@@ -37,9 +38,6 @@ type Service struct {
 	threshold                uint64
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new attestation data strategy.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -48,12 +46,13 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("strategy", "attestationdata").Str("impl", "majority").Logger()
+	log := zerologger.With().Str("strategy", "attestationdata").Str("impl", "majority").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
 
 	s := &Service{
+		log:                      log,
 		timeout:                  parameters.timeout,
 		clientMonitor:            parameters.clientMonitor,
 		processConcurrency:       parameters.processConcurrency,

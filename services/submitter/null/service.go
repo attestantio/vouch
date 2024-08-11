@@ -1,4 +1,4 @@
-// Copyright © 2020, 2023 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -27,33 +27,34 @@ import (
 )
 
 // Service is the submitter for signed items.
-type Service struct{}
-
-// module-wide log.
-var log zerolog.Logger
+type Service struct {
+	log zerolog.Logger
+}
 
 // New creates a new submitter.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
 	parameters := parseAndCheckParameters(params...)
 
 	// Set logging.
-	log = zerologger.With().Str("service", "submitter").Str("impl", "null").Logger()
+	log := zerologger.With().Str("service", "submitter").Str("impl", "null").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
 
-	s := &Service{}
+	s := &Service{
+		log: log,
+	}
 
 	return s, nil
 }
 
 // SubmitProposal submits a proposal.
-func (*Service) SubmitProposal(_ context.Context, proposal *api.VersionedSignedProposal) error {
+func (s *Service) SubmitProposal(_ context.Context, proposal *api.VersionedSignedProposal) error {
 	if proposal == nil {
 		return errors.New("no proposal supplied")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(proposal)
 		if err == nil {
 			e.Str("block", string(data)).Msg("Not submitting proposal")
@@ -64,12 +65,12 @@ func (*Service) SubmitProposal(_ context.Context, proposal *api.VersionedSignedP
 }
 
 // SubmitAttestations submits multiple attestations.
-func (*Service) SubmitAttestations(_ context.Context, attestations []*phase0.Attestation) error {
+func (s *Service) SubmitAttestations(_ context.Context, attestations []*phase0.Attestation) error {
 	if len(attestations) == 0 {
 		return errors.New("no attestations supplied")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(attestations)
 		if err == nil {
 			e.Str("attestations", string(data)).Msg("Not submitting attestations")
@@ -80,12 +81,12 @@ func (*Service) SubmitAttestations(_ context.Context, attestations []*phase0.Att
 }
 
 // SubmitBeaconCommitteeSubscriptions submits a batch of beacon committee subscriptions.
-func (*Service) SubmitBeaconCommitteeSubscriptions(_ context.Context, subscriptions []*apiv1.BeaconCommitteeSubscription) error {
+func (s *Service) SubmitBeaconCommitteeSubscriptions(_ context.Context, subscriptions []*apiv1.BeaconCommitteeSubscription) error {
 	if subscriptions == nil {
 		return errors.New("no subscriptions supplied")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		// Summary counts.
 		aggregating := 0
 		for i := range subscriptions {
@@ -104,12 +105,12 @@ func (*Service) SubmitBeaconCommitteeSubscriptions(_ context.Context, subscripti
 }
 
 // SubmitAggregateAttestations submits aggregate attestations.
-func (*Service) SubmitAggregateAttestations(_ context.Context, aggregates []*phase0.SignedAggregateAndProof) error {
+func (s *Service) SubmitAggregateAttestations(_ context.Context, aggregates []*phase0.SignedAggregateAndProof) error {
 	if len(aggregates) == 0 {
 		return errors.New("no aggregate attestations supplied")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(aggregates)
 		if err == nil {
 			e.Str("attestation", string(data)).Msg("Not submitting aggregate attestations")
@@ -120,12 +121,12 @@ func (*Service) SubmitAggregateAttestations(_ context.Context, aggregates []*pha
 }
 
 // SubmitProposalPreparations submits proposal preparations.
-func (*Service) SubmitProposalPreparations(_ context.Context, preparations []*apiv1.ProposalPreparation) error {
+func (s *Service) SubmitProposalPreparations(_ context.Context, preparations []*apiv1.ProposalPreparation) error {
 	if len(preparations) == 0 {
 		return errors.New("no preparations supplied")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(preparations)
 		if err == nil {
 			e.Str("preparations", string(data)).Msg("Not submitting proposal preparations")
@@ -136,12 +137,12 @@ func (*Service) SubmitProposalPreparations(_ context.Context, preparations []*ap
 }
 
 // SubmitSyncCommitteeMessages submits sync committee messages.
-func (*Service) SubmitSyncCommitteeMessages(_ context.Context, messages []*altair.SyncCommitteeMessage) error {
+func (s *Service) SubmitSyncCommitteeMessages(_ context.Context, messages []*altair.SyncCommitteeMessage) error {
 	if len(messages) == 0 {
 		return errors.New("no sync committee messages supplied")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(messages)
 		if err == nil {
 			e.Str("messages", string(data)).Msg("Not submitting sync committee messages")
@@ -152,12 +153,12 @@ func (*Service) SubmitSyncCommitteeMessages(_ context.Context, messages []*altai
 }
 
 // SubmitSyncCommitteeSubscriptions submits a batch of sync committee subscriptions.
-func (*Service) SubmitSyncCommitteeSubscriptions(_ context.Context, subscriptions []*apiv1.SyncCommitteeSubscription) error {
+func (s *Service) SubmitSyncCommitteeSubscriptions(_ context.Context, subscriptions []*apiv1.SyncCommitteeSubscription) error {
 	if len(subscriptions) == 0 {
 		return errors.New("no sync committee subscriptions supplied")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(subscriptions)
 		if err == nil {
 			e.Str("subscriptions", string(data)).Msg("Not submitting sync committee subscriptions")
@@ -168,12 +169,12 @@ func (*Service) SubmitSyncCommitteeSubscriptions(_ context.Context, subscription
 }
 
 // SubmitSyncCommitteeContributions submits sync committee contributions.
-func (*Service) SubmitSyncCommitteeContributions(_ context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
+func (s *Service) SubmitSyncCommitteeContributions(_ context.Context, contributionAndProofs []*altair.SignedContributionAndProof) error {
 	if len(contributionAndProofs) == 0 {
 		return errors.New("no sync committee contribution and proofs supplied")
 	}
 
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(contributionAndProofs)
 		if err == nil {
 			e.Str("contribution_and_proofs", string(data)).Msg("Not submitting sync committee contribution and proofs")

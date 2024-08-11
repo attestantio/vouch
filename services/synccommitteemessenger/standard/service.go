@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2021, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -46,6 +46,7 @@ const (
 
 // Service is a sync committee messenger.
 type Service struct {
+	log                               zerolog.Logger
 	monitor                           metrics.SyncCommitteeMessageMonitor
 	processConcurrency                int64
 	slotsPerEpoch                     uint64
@@ -63,9 +64,6 @@ type Service struct {
 	slotDataRecordsMu                 sync.Mutex
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new sync committee messenger.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -74,7 +72,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "synccommitteemessenger").Str("impl", "standard").Logger()
+	log := zerologger.With().Str("service", "synccommitteemessenger").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -106,6 +104,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		log:                               log,
 		monitor:                           parameters.monitor,
 		processConcurrency:                parameters.processConcurrency,
 		slotsPerEpoch:                     slotsPerEpoch,
@@ -180,7 +179,7 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 		return nil, errors.Wrap(err, "failed to obtain beacon block root")
 	}
 	beaconBlockRoot := beaconBlockRootResponse.Data
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block root")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block root")
 	s.syncCommitteeAggregator.SetBeaconBlockRoot(duty.Slot(), *beaconBlockRoot)
 
 	// Sign in parallel.
@@ -200,15 +199,19 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 			defer wg.Done()
 			account := duty.Account(validatorIndices[i])
 			if account == nil {
-				log.Debug().Msg("Account nil; likely exited validator still in sync committee")
+				s.log.Debug().Msg("Account nil; likely exited validator still in sync committee")
 				return
 			}
 			sig, err := s.contribute(ctx, account, s.chainTimeService.SlotToEpoch(duty.Slot()), *beaconBlockRoot)
 			if err != nil {
-				log.Error().Err(err).Msg("Failed to sign sync committee message")
+				s.log.Error().Err(err).Msg("Failed to sign sync committee message")
 				return
 			}
-			log.Trace().Uint64("slot", uint64(duty.Slot())).Uint64("validator_index", uint64(validatorIndices[i])).Str("signature", fmt.Sprintf("%#x", sig)).Msg("Signed sync committee message")
+			s.log.Trace().
+				Uint64("slot", uint64(duty.Slot())).
+				Uint64("validator_index", uint64(validatorIndices[i])).
+				Stringer("signature", sig).
+				Msg("Signed sync committee message")
 
 			msg := &altair.SyncCommitteeMessage{
 				Slot:            duty.Slot(),
@@ -224,18 +227,22 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 	wg.Wait()
 
 	if err := s.syncCommitteeMessagesSubmitter.SubmitSyncCommitteeMessages(ctx, msgs); err != nil {
-		log.Trace().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to submit sync committee messages")
+		s.log.Trace().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to submit sync committee messages")
 		s.monitor.SyncCommitteeMessagesCompleted(started, duty.Slot(), len(msgs), "failed")
 		return nil, errors.Wrap(err, "failed to submit sync committee messages")
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted sync committee messages")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted sync committee messages")
 	s.monitor.SyncCommitteeMessagesCompleted(started, duty.Slot(), len(msgs), "succeeded")
 
 	return msgs, nil
 }
 
 // UpdateSyncCommitteeDataRecord updates the internal map of slot to slot data used for the sync committee message.
-func (s *Service) UpdateSyncCommitteeDataRecord(slot phase0.Slot, root phase0.Root, validatorToCommitteeIndex map[phase0.ValidatorIndex][]phase0.CommitteeIndex) {
+func (s *Service) UpdateSyncCommitteeDataRecord(
+	slot phase0.Slot,
+	root phase0.Root,
+	validatorToCommitteeIndex map[phase0.ValidatorIndex][]phase0.CommitteeIndex,
+) {
 	s.slotDataRecordsMu.Lock()
 	s.slotDataRecords[slot] = synccommitteemessenger.SlotData{Root: root, ValidatorToCommitteeIndex: validatorToCommitteeIndex}
 	s.slotDataRecordsMu.Unlock()
@@ -281,7 +288,7 @@ func (s *Service) contribute(ctx context.Context,
 
 func (s *Service) isAggregator(ctx context.Context, account e2wtypes.Account, slot phase0.Slot, subcommitteeIndex uint64) (bool, phase0.BLSSignature, error) {
 	if account == nil {
-		log.Debug().Msg("Account nil; likely exited validator still in sync committee")
+		s.log.Debug().Msg("Account nil; likely exited validator still in sync committee")
 		return false, phase0.BLSSignature{}, nil
 	}
 

@@ -46,10 +46,10 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 		proposalPreparationCompleted(started, epoch, "failed")
 		return errors.Wrap(err, "failed to obtain validating accounts")
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
 
 	if len(accounts) == 0 {
-		log.Trace().Msg("No validating accounts; not preparing")
+		s.log.Trace().Msg("No validating accounts; not preparing")
 		return nil
 	}
 
@@ -66,12 +66,12 @@ func (s *Service) UpdatePreparations(ctx context.Context) error {
 		proposerConfig, err := s.executionConfigProvider.ProposerConfig(ctx, account, pubkey)
 		if err != nil {
 			// Error but keep going, as we want to provide as many preparations as possible.
-			log.Error().Str("pubkey", fmt.Sprintf("%#x", pubkey)).Err(err).Msg("Error obtaining propopser configuration")
+			s.log.Error().Str("pubkey", fmt.Sprintf("%#x", pubkey)).Err(err).Msg("Error obtaining propopser configuration")
 			continue
 		}
 		if proposerConfig == nil {
 			// Error but keep going, as we want to provide as many preparations as possible.
-			log.Error().Str("pubkey", fmt.Sprintf("%#x", pubkey)).Msg("Obtained nil propopser configuration")
+			s.log.Error().Str("pubkey", fmt.Sprintf("%#x", pubkey)).Msg("Obtained nil propopser configuration")
 			continue
 		}
 		proposalPreparations = append(proposalPreparations, &apiv1.ProposalPreparation{
@@ -100,11 +100,11 @@ func (s *Service) updateProposalPreparations(ctx context.Context,
 		if err := proposalPreparationsSubmitter.SubmitProposalPreparations(ctx, proposalPreparations); err != nil {
 			if errors.Is(err, eth2client.ErrNotActive) {
 				// If the client isn't ready we don't count it as a failure.
-				log.Debug().Str("client", proposalPreparationsSubmitter.(eth2client.Service).Address()).Msg("Client is no active; cannot update proposal preparations")
+				s.log.Debug().Str("client", proposalPreparationsSubmitter.(eth2client.Service).Address()).Msg("Client is no active; cannot update proposal preparations")
 				continue
 			}
 			failed++
-			log.Error().Str("client", proposalPreparationsSubmitter.(eth2client.Service).Address()).Err(err).Msg("Failed to update proposal preparations")
+			s.log.Error().Str("client", proposalPreparationsSubmitter.(eth2client.Service).Address()).Err(err).Msg("Failed to update proposal preparations")
 			// Do not exit here; we want to attempt all proposal preparations.
 		}
 	}
@@ -112,7 +112,7 @@ func (s *Service) updateProposalPreparations(ctx context.Context,
 	if failed > 0 {
 		proposalPreparationCompleted(started, epoch, "failed")
 	} else {
-		log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted proposal preparations")
+		s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted proposal preparations")
 		proposalPreparationCompleted(started, epoch, "succeeded")
 	}
 }

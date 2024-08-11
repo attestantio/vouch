@@ -53,7 +53,7 @@ func (s *Service) Proposal(ctx context.Context,
 	defer span.End()
 
 	started := time.Now()
-	log := util.LogWithID(ctx, log, "strategy_id").With().Uint64("slot", uint64(opts.Slot)).Logger()
+	log := util.LogWithID(ctx, s.log, "strategy_id").With().Uint64("slot", uint64(opts.Slot)).Logger()
 
 	// We have two timeouts: a soft timeout and a hard timeout.
 	// At the soft timeout, we return if we have any responses so far.
@@ -239,7 +239,7 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 		return
 	}
 	proposal := proposalResponse.Data
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
 
 	if proposal.Version != spec.DataVersionPhase0 &&
 		proposal.Version != spec.DataVersionAltair {

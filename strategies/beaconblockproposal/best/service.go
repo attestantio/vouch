@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -32,6 +32,7 @@ import (
 
 // Service is the provider for beacon block proposals.
 type Service struct {
+	log                       zerolog.Logger
 	clientMonitor             metrics.ClientMonitor
 	processConcurrency        int64
 	chainTime                 chaintime.Service
@@ -62,9 +63,6 @@ type priorBlockVotes struct {
 	votes map[phase0.Slot]map[phase0.CommitteeIndex]bitfield.Bitlist
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new beacon block proposal strategy.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -73,7 +71,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("strategy", "beaconblockproposal").Str("impl", "best").Logger()
+	log := zerologger.With().Str("strategy", "beaconblockproposal").Str("impl", "best").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -154,6 +152,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		log:                       log,
 		processConcurrency:        parameters.processConcurrency,
 		chainTime:                 parameters.chainTime,
 		proposalProviders:         parameters.proposalProviders,

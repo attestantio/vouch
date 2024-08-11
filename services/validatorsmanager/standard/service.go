@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -27,6 +27,7 @@ import (
 
 // Service is the manager for validators.
 type Service struct {
+	log                zerolog.Logger
 	monitor            metrics.ValidatorsManagerMonitor
 	clientMonitor      metrics.ClientMonitor
 	validatorsProvider eth2client.ValidatorsProvider
@@ -38,9 +39,6 @@ type Service struct {
 	validatorPubKeyToIndex map[phase0.BLSPubKey]phase0.ValidatorIndex
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new validator provider.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -49,12 +47,13 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "validatorsmanager").Str("impl", "standard").Logger()
+	log := zerologger.With().Str("service", "validatorsmanager").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
 
 	s := &Service{
+		log:                    log,
 		monitor:                parameters.monitor,
 		clientMonitor:          parameters.clientMonitor,
 		farFutureEpoch:         parameters.farFutureEpoch,

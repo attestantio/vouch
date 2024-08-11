@@ -51,7 +51,7 @@ func (s *Service) HandleHeadEvent(event *apiv1.Event) {
 	}
 
 	data := event.Data.(*apiv1.HeadEvent)
-	log.Trace().Uint64("slot", uint64(data.Slot)).Msg("Received head event")
+	s.log.Trace().Uint64("slot", uint64(data.Slot)).Msg("Received head event")
 
 	if data.Slot != s.chainTimeService.CurrentSlot() {
 		return
@@ -67,7 +67,7 @@ func (s *Service) HandleHeadEvent(event *apiv1.Event) {
 	if data.Slot == s.chainTimeService.CurrentSlot()-1 && s.maxProposalDelay > 0 {
 		proposalJobName := fmt.Sprintf("Beacon block proposal for slot %d", s.chainTimeService.CurrentSlot())
 		if s.scheduler.JobExists(ctx, proposalJobName) {
-			log.Trace().Uint64("slot", uint64(data.Slot)).Msg("Kicking off proposal for slot now that parent block for last slot has arrived")
+			s.log.Trace().Uint64("slot", uint64(data.Slot)).Msg("Kicking off proposal for slot now that parent block for last slot has arrived")
 			s.scheduler.RunJobIfExists(ctx, proposalJobName)
 		}
 	}
@@ -104,7 +104,7 @@ func (s *Service) checkEventForReorg(ctx context.Context,
 	// Check to see if there is a reorganisation that requires re-fetching duties.
 	if s.lastBlockEpoch != 0 {
 		if epoch > s.lastBlockEpoch {
-			log.Trace().
+			s.log.Trace().
 				Uint64("slot", uint64(slot)).
 				Str("old_previous_dependent_root", fmt.Sprintf("%#x", s.previousDutyDependentRoot)).
 				Str("new_previous_dependent_root", fmt.Sprintf("%#x", previousDutyDependentRoot)).
@@ -115,7 +115,7 @@ func (s *Service) checkEventForReorg(ctx context.Context,
 			// the old current root.
 			if !bytes.Equal(s.previousDutyDependentRoot[:], zeroRoot[:]) &&
 				!bytes.Equal(s.currentDutyDependentRoot[:], previousDutyDependentRoot[:]) {
-				log.Debug().
+				s.log.Debug().
 					Uint64("slot", uint64(slot)).
 					Str("old_current_dependent_root", fmt.Sprintf("%#x", s.currentDutyDependentRoot[:])).
 					Str("new_previous_dependent_root", fmt.Sprintf("%#x", previousDutyDependentRoot[:])).
@@ -126,7 +126,7 @@ func (s *Service) checkEventForReorg(ctx context.Context,
 			// Existing epoch.  Ensure that the roots are the same.
 			if !bytes.Equal(s.previousDutyDependentRoot[:], zeroRoot[:]) &&
 				!bytes.Equal(s.previousDutyDependentRoot[:], previousDutyDependentRoot[:]) {
-				log.Debug().
+				s.log.Debug().
 					Uint64("slot", uint64(slot)).
 					Str("old_dependent_root", fmt.Sprintf("%#x", s.previousDutyDependentRoot[:])).
 					Str("new_dependent_root", fmt.Sprintf("%#x", previousDutyDependentRoot[:])).
@@ -136,7 +136,7 @@ func (s *Service) checkEventForReorg(ctx context.Context,
 
 			if !bytes.Equal(s.currentDutyDependentRoot[:], zeroRoot[:]) &&
 				!bytes.Equal(s.currentDutyDependentRoot[:], currentDutyDependentRoot[:]) {
-				log.Debug().
+				s.log.Debug().
 					Uint64("slot", uint64(slot)).
 					Str("old_dependent_root", fmt.Sprintf("%#x", s.currentDutyDependentRoot[:])).
 					Str("new_dependent_root", fmt.Sprintf("%#x", currentDutyDependentRoot[:])).
@@ -167,7 +167,7 @@ func (s *Service) fastTrackJobs(ctx context.Context,
 	if s.fastTrackAttestations {
 		jobName := fmt.Sprintf("Attestations for slot %d", slot)
 		if s.scheduler.JobExists(ctx, jobName) {
-			log.Trace().Msg("Kicking off attestations for slot early due to receiving relevant block")
+			s.log.Trace().Msg("Kicking off attestations for slot early due to receiving relevant block")
 			s.scheduler.RunJobIfExists(ctx, jobName)
 		}
 	}
@@ -175,7 +175,7 @@ func (s *Service) fastTrackJobs(ctx context.Context,
 	if s.fastTrackSyncCommittees {
 		jobName := fmt.Sprintf("Sync committee messages for slot %d", slot)
 		if s.scheduler.JobExists(ctx, jobName) {
-			log.Trace().Msg("Kicking off sync committee contributions for slot early due to receiving relevant block")
+			s.log.Trace().Msg("Kicking off sync committee contributions for slot early due to receiving relevant block")
 			s.scheduler.RunJobIfExists(ctx, jobName)
 		}
 	}
@@ -220,13 +220,13 @@ func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch phase
 
 	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, epoch)
 	if err != nil {
-		log.Error().Err(err).Uint64("epoch", uint64(epoch)).Msg("Failed to obtain active validators for epoch")
+		s.log.Error().Err(err).Uint64("epoch", uint64(epoch)).Msg("Failed to obtain active validators for epoch")
 		return
 	}
 
 	// Expect at least one validator.
 	if len(validatorIndices) == 0 {
-		log.Warn().Msg("No active validators; not validating")
+		s.log.Warn().Msg("No active validators; not validating")
 		return
 	}
 
@@ -241,7 +241,7 @@ func (s *Service) refreshAttesterDutiesForEpoch(ctx context.Context, epoch phase
 
 	// If the epoch duties are yet to be scheduled then we don't have anything to do.
 	if s.scheduler.JobExists(ctx, fmt.Sprintf("Prepare for epoch %d", epoch)) {
-		log.Trace().Msg("Refresh not necessary as epoch not yet prepared")
+		s.log.Trace().Msg("Refresh not necessary as epoch not yet prepared")
 		return
 	}
 
@@ -255,13 +255,13 @@ func (s *Service) refreshAttesterDutiesForEpoch(ctx context.Context, epoch phase
 
 	accounts, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, epoch)
 	if err != nil {
-		log.Error().Err(err).Uint64("epoch", uint64(epoch)).Msg("Failed to obtain active validators for epoch")
+		s.log.Error().Err(err).Uint64("epoch", uint64(epoch)).Msg("Failed to obtain active validators for epoch")
 		return
 	}
 
 	// Expect at least one validator.
 	if len(validatorIndices) == 0 {
-		log.Warn().Msg("No active validators; not validating")
+		s.log.Warn().Msg("No active validators; not validating")
 		return
 	}
 
@@ -302,27 +302,27 @@ func (s *Service) refreshSyncCommitteeDutiesForEpochPeriod(ctx context.Context, 
 	for slot := firstSlot; slot <= lastSlot; slot++ {
 		prepareJobName := fmt.Sprintf("Prepare sync committee messages for slot %d", slot)
 		if err := s.scheduler.CancelJob(ctx, prepareJobName); err != nil {
-			log.Debug().Str("job_name", prepareJobName).Err(err).Msg("Failed to cancel prepare sync committee message job")
+			s.log.Debug().Str("job_name", prepareJobName).Err(err).Msg("Failed to cancel prepare sync committee message job")
 		}
 		messageJobName := fmt.Sprintf("Sync committee messages for slot %d", slot)
 		if err := s.scheduler.CancelJob(ctx, messageJobName); err != nil {
-			log.Debug().Str("job_name", messageJobName).Err(err).Msg("Failed to cancel sync committee message job")
+			s.log.Debug().Str("job_name", messageJobName).Err(err).Msg("Failed to cancel sync committee message job")
 		}
 		aggregateJobName := fmt.Sprintf("Sync committee aggregation for slot %d", slot)
 		if err := s.scheduler.CancelJob(ctx, aggregateJobName); err != nil {
-			log.Debug().Str("job_name", aggregateJobName).Err(err).Msg("Failed to cancel sync committee aggregate job")
+			s.log.Debug().Str("job_name", aggregateJobName).Err(err).Msg("Failed to cancel sync committee aggregate job")
 		}
 	}
 
 	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, firstEpoch)
 	if err != nil {
-		log.Error().Err(err).Uint64("epoch", uint64(firstEpoch)).Msg("Failed to obtain active validators for epoch")
+		s.log.Error().Err(err).Uint64("epoch", uint64(firstEpoch)).Msg("Failed to obtain active validators for epoch")
 		return
 	}
 
 	// Expect at least one validator.
 	if len(validatorIndices) == 0 {
-		log.Warn().Msg("No active validators; not validating")
+		s.log.Warn().Msg("No active validators; not validating")
 		return
 	}
 
@@ -336,7 +336,7 @@ func (s *Service) subscribeToBeaconCommittees(ctx context.Context,
 ) {
 	subscriptionInfo, err := s.beaconCommitteeSubscriber.Subscribe(ctx, epoch, accounts)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to subscribe to beacon committees")
+		s.log.Warn().Err(err).Msg("Failed to subscribe to beacon committees")
 		return
 	}
 	s.subscriptionInfosMutex.Lock()
@@ -348,7 +348,7 @@ func (s *Service) subscribeToBeaconCommittees(ctx context.Context,
 func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 	headEvent, ok := data.(*apiv1.HeadEvent)
 	if !ok {
-		log.Error().Msg("Passed invalid data")
+		s.log.Error().Msg("Passed invalid data")
 		return
 	}
 	_, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "VerifySyncCommitteeMessages")
@@ -361,7 +361,7 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 	currentSlot := headEvent.Slot
 
 	// Logging with the current slot as that is when this code is executed.
-	log := log.With().
+	log := s.log.With().
 		Uint64("current_slot", uint64(currentSlot)).
 		Uint64("previous_slot", uint64(previousSlot)).
 		Stringer("block_root", headEvent.Block).

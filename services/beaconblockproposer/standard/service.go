@@ -37,6 +37,7 @@ import (
 
 // Service is a beacon block proposer.
 type Service struct {
+	log                        zerolog.Logger
 	chainTime                  chaintime.Service
 	blockAuctioneer            blockauctioneer.BlockAuctioneer
 	proposalProvider           eth2client.ProposalProvider
@@ -51,9 +52,6 @@ type Service struct {
 	builderBoostFactor         uint64
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new beacon block proposer.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -62,7 +60,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "beaconblockproposer").Str("impl", "standard").Logger()
+	log := zerologger.With().Str("service", "beaconblockproposer").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -72,6 +70,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		log:                        log,
 		chainTime:                  parameters.chainTime,
 		blockAuctioneer:            parameters.blockAuctioneer,
 		proposalProvider:           parameters.proposalProvider,
@@ -105,7 +104,7 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 	}
 	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))
 
-	log := log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
+	log := s.log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Preparing")
 
 	dutyEpoch := s.chainTime.SlotToEpoch(duty.Slot())

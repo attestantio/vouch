@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -28,6 +28,7 @@ import (
 
 // Service is an beacon committee subscriber.
 type Service struct {
+	log                    zerolog.Logger
 	monitor                metrics.BeaconCommitteeSubscriptionMonitor
 	chainTimeService       chaintime.Service
 	processConcurrency     int64
@@ -35,9 +36,6 @@ type Service struct {
 	attestationAggregator  attestationaggregator.Service
 	submitter              submitter.BeaconCommitteeSubscriptionsSubmitter
 }
-
-// module-wide log.
-var log zerolog.Logger
 
 // New creates a new beacon committee subscriber.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
@@ -47,12 +45,13 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "beaconcommitteesubscriber").Str("impl", "standard").Logger()
+	log := zerologger.With().Str("service", "beaconcommitteesubscriber").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
 
 	s := &Service{
+		log:                    log,
 		processConcurrency:     parameters.processConcurrency,
 		monitor:                parameters.monitor,
 		chainTimeService:       parameters.chainTimeService,
