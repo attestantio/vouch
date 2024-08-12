@@ -22,7 +22,7 @@ import (
 
 // scoreBeaconBlockPropsal generates a score for a beacon block.
 // The score is the reward expected by proposing the block.
-func (*Service) scoreBeaconBlockProposal(_ context.Context,
+func (s *Service) scoreBeaconBlockProposal(_ context.Context,
 	name string,
 	blockProposal *api.VersionedProposal,
 ) float64 {
@@ -32,7 +32,7 @@ func (*Service) scoreBeaconBlockProposal(_ context.Context,
 
 	score, _ := new(big.Int).Add(blockProposal.ConsensusValue, blockProposal.ExecutionValue).Float64()
 
-	log.Trace().
+	s.log.Trace().
 		Str("name", name).
 		Stringer("consensus_value", blockProposal.ConsensusValue).
 		Stringer("execution_value", blockProposal.ExecutionValue).

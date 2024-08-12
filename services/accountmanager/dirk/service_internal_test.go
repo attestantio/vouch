@@ -136,10 +136,9 @@ func TestAccountPathsToVerificationRegexes(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			capture := logger.NewLogCapture()
-			// Need to set up the service to set the module-wide logging.
-			_, err := setupService(context.Background(), t, []string{"localhost:123456"}, []string{"wallet1"})
+			s, err := setupService(context.Background(), t, []string{"localhost:123456"}, []string{"wallet1"})
 			require.NoError(t, err)
-			regexes := accountPathsToVerificationRegexes(test.paths)
+			regexes := s.accountPathsToVerificationRegexes(test.paths)
 			require.Equal(t, len(test.regexes), len(regexes))
 			for i := range test.regexes {
 				require.Equal(t, test.regexes[i], regexes["wallet1"][i])

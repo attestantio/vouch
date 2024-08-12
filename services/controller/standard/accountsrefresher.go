@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -25,7 +25,7 @@ import (
 func (s *Service) startAccountsRefresher(ctx context.Context) error {
 	runtimeFunc := func(_ context.Context, _ interface{}) (time.Time, error) {
 		if s.activeValidators == 0 {
-			log.Trace().Msg("No active validators; refreshing accounts next slot")
+			s.log.Trace().Msg("No active validators; refreshing accounts next slot")
 			return time.Now().Add(s.slotDuration), nil
 		}
 
@@ -58,16 +58,16 @@ func (s *Service) refreshAccounts(ctx context.Context, _ interface{}) {
 	started := time.Now()
 	s.accountsRefresher.Refresh(ctx)
 
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Refreshed accounts")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Refreshed accounts")
 
 	// Update active validators count.
 	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to obtain active validators on account refresh")
+		s.log.Error().Err(err).Msg("Failed to obtain active validators on account refresh")
 		return
 	}
 	if len(validatorIndices) != s.activeValidators {
-		log.Info().Int("old_validators", s.activeValidators).Int("new_validators", len(validatorIndices)).Msg("Change in number of active validators")
+		s.log.Info().Int("old_validators", s.activeValidators).Int("new_validators", len(validatorIndices)).Msg("Change in number of active validators")
 		s.activeValidators = len(validatorIndices)
 	}
 }

@@ -55,7 +55,7 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context,
 	defer span.End()
 
 	started := time.Now()
-	log := util.LogWithID(ctx, log, "strategy_id")
+	log := util.LogWithID(ctx, s.log, "strategy_id")
 
 	// We have two timeouts: a soft timeout and a hard timeout.
 	// At the soft timeout, we return if we have any responses so far.
@@ -214,7 +214,7 @@ func (s *Service) syncCommitteeContribution(ctx context.Context,
 		return
 	}
 	contribution := contributionResponse.Data
-	log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained sync committee contribution")
+	s.log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained sync committee contribution")
 	if contribution == nil {
 		errCh <- &syncCommitteeContributionError{
 			provider: name,

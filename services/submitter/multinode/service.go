@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -26,6 +26,7 @@ import (
 
 // Service is the provider for a submitter.
 type Service struct {
+	log                                   zerolog.Logger
 	clientMonitor                         metrics.ClientMonitor
 	timeout                               time.Duration
 	processConcurrency                    int64
@@ -39,9 +40,6 @@ type Service struct {
 	syncCommitteeContributionsSubmitters  map[string]eth2client.SyncCommitteeContributionsSubmitter
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new multinode submitter.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -50,12 +48,13 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("strategy", "submitter").Str("impl", "multinode").Logger()
+	log := zerologger.With().Str("strategy", "submitter").Str("impl", "multinode").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
 
 	s := &Service{
+		log:                                   log,
 		clientMonitor:                         parameters.clientMonitor,
 		timeout:                               parameters.timeout,
 		processConcurrency:                    parameters.processConcurrency,

@@ -23,7 +23,7 @@ import (
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
 	"github.com/attestantio/vouch/services/blockrelay/standard"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
-	prometheusmetrics "github.com/attestantio/vouch/services/metrics/prometheus"
+	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	mockscheduler "github.com/attestantio/vouch/services/scheduler/mock"
 	mocksigner "github.com/attestantio/vouch/services/signer/mock"
 	"github.com/attestantio/vouch/testing/logger"
@@ -52,11 +52,7 @@ func TestService(t *testing.T) {
 	mockValidatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
 	mockAccountsProvider := mockaccountmanager.NewAccountsProvider()
 
-	prometheusMetrics, err := prometheusmetrics.New(ctx,
-		prometheusmetrics.WithAddress(":12345"),
-		prometheusmetrics.WithChainTime(chainTime),
-	)
-	require.NoError(t, err)
+	monitor := nullmetrics.New(ctx)
 
 	majordomoSvc, err := standardmajordomo.New(ctx)
 	require.NoError(t, err)
@@ -106,7 +102,7 @@ func TestService(t *testing.T) {
 			name: "MajordomoMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(nil),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -127,7 +123,7 @@ func TestService(t *testing.T) {
 			name: "SchedulerMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(nil),
 				standard.WithListenAddress(listenAddress),
@@ -148,7 +144,7 @@ func TestService(t *testing.T) {
 			name: "ListenAddressMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(""),
@@ -169,7 +165,7 @@ func TestService(t *testing.T) {
 			name: "ListenAddressMalformed",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress("abc"),
@@ -190,7 +186,7 @@ func TestService(t *testing.T) {
 			name: "ChainTimeMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -211,7 +207,7 @@ func TestService(t *testing.T) {
 			name: "FallbackFeeRecipientZero",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -232,7 +228,7 @@ func TestService(t *testing.T) {
 			name: "FallbackGasLimitZero",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -253,7 +249,7 @@ func TestService(t *testing.T) {
 			name: "AccountsProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -273,7 +269,7 @@ func TestService(t *testing.T) {
 			name: "ValidatorsProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -294,7 +290,7 @@ func TestService(t *testing.T) {
 			name: "ValidatingAccountsProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -315,7 +311,7 @@ func TestService(t *testing.T) {
 			name: "ValidatorRegistrationSignerMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -336,7 +332,7 @@ func TestService(t *testing.T) {
 			name: "ReleaseVersionMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -357,7 +353,7 @@ func TestService(t *testing.T) {
 			name: "BuilderBidProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -378,7 +374,7 @@ func TestService(t *testing.T) {
 			name: "Good",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(prometheusMetrics),
+				standard.WithMonitor(monitor),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),

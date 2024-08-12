@@ -51,7 +51,7 @@ func (s *Service) Subscribe(ctx context.Context,
 	}
 
 	started := time.Now()
-	log := log.With().Uint64("epoch", uint64(epoch)).Logger()
+	log := s.log.With().Uint64("epoch", uint64(epoch)).Logger()
 	log.Trace().Msg("Subscribing")
 
 	validatorIndices := make([]phase0.ValidatorIndex, 0, len(accounts))
@@ -184,7 +184,7 @@ func (s *Service) calculateSubscriptionInfoForDutyValidator(ctx context.Context,
 	account e2wtypes.Account,
 ) {
 	if err := sem.Acquire(ctx, 1); err != nil {
-		log.Error().Err(err).Msg("Failed to obtain semaphore")
+		s.log.Error().Err(err).Msg("Failed to obtain semaphore")
 		return
 	}
 	defer sem.Release(1)
@@ -203,7 +203,7 @@ func (s *Service) calculateSubscriptionInfoForDutyValidator(ctx context.Context,
 			duty.Slot(),
 			duty.CommitteeSize(duty.CommitteeIndices()[i]))
 	if err != nil {
-		log.Error().
+		s.log.Error().
 			Uint64("slot", uint64(duty.Slot())).
 			Uint64("validator_index", uint64(duty.ValidatorIndices()[i])).
 			Err(err).

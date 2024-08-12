@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2021, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -57,18 +57,18 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 	lastSlot := s.chainTimeService.FirstSlotOfEpoch(lastEpoch+1) - 2
 
 	started := time.Now()
-	log.Trace().Uint64("period", period).Uint64("first_epoch", uint64(firstEpoch)).Uint64("last_epoch", uint64(lastEpoch)).Msg("Scheduling sync committee messages")
+	s.log.Trace().Uint64("period", period).Uint64("first_epoch", uint64(firstEpoch)).Uint64("last_epoch", uint64(lastEpoch)).Msg("Scheduling sync committee messages")
 
 	dutiesResponse, err := s.syncCommitteeDutiesProvider.SyncCommitteeDuties(ctx, &api.SyncCommitteeDutiesOpts{
 		Epoch:   firstEpoch,
 		Indices: validatorIndices,
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to fetch sync committee message duties")
+		s.log.Error().Err(err).Msg("Failed to fetch sync committee message duties")
 		return
 	}
 	duties := dutiesResponse.Data
-	log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(duties)).Msg("Fetched sync committee message duties")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Int("duties", len(duties)).Msg("Fetched sync committee message duties")
 	if len(duties) == 0 {
 		// No duties; nothing to do.
 		return
@@ -83,12 +83,12 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 	// Obtain the accounts for the validator indices.
 	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, firstEpoch, validatorIndices)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to obtain validating accounts for epoch")
+		s.log.Error().Err(err).Msg("Failed to obtain validating accounts for epoch")
 		return
 	}
 
 	// Now we have the messages we can subscribe to the relevant subnets.
-	log.Trace().
+	s.log.Trace().
 		Uint64("first_slot", uint64(firstSlot)).
 		Uint64("last_slot", uint64(lastSlot)).
 		Msg("Setting sync committee duties for period")
@@ -101,7 +101,7 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 			for _, validatorIndex := range duty.ValidatorIndices() {
 				account, exists := accounts[validatorIndex]
 				if !exists {
-					log.Error().Uint64("validator_index", uint64(validatorIndex)).Msg("No validating account; cannot continue")
+					s.log.Error().Uint64("validator_index", uint64(validatorIndex)).Msg("No validating account; cannot continue")
 					// Continue regardless of error, to attempt to schedule as many valid jobs as possible.
 				} else {
 					duty.SetAccount(validatorIndex, account)
@@ -117,28 +117,28 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 				s.prepareMessageSyncCommittee,
 				duty,
 			); err != nil {
-				log.Error().Err(err).Msg("Failed to schedule prepare sync committee messages")
+				s.log.Error().Err(err).Msg("Failed to schedule prepare sync committee messages")
 				return
 			}
 		}(synccommitteemessenger.NewDuty(slot, messageIndices), accounts)
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Scheduled sync committee messages")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Scheduled sync committee messages")
 
 	if err := s.syncCommitteesSubscriber.Subscribe(ctx, lastEpoch+1, duties); err != nil {
-		log.Error().Err(err).Msg("Failed to submit sync committee subscribers")
+		s.log.Error().Err(err).Msg("Failed to submit sync committee subscribers")
 		return
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted sync committee subscribers")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted sync committee subscribers")
 }
 
 func (s *Service) prepareMessageSyncCommittee(ctx context.Context, data interface{}) {
 	started := time.Now()
 	duty, ok := data.(*synccommitteemessenger.Duty)
 	if !ok {
-		log.Error().Msg("Passed invalid data")
+		s.log.Error().Msg("Passed invalid data")
 		return
 	}
-	log := log.With().Uint64("slot", uint64(s.chainTimeService.CurrentSlot())).Logger()
+	log := s.log.With().Uint64("slot", uint64(s.chainTimeService.CurrentSlot())).Logger()
 
 	if err := s.syncCommitteeMessenger.Prepare(ctx, duty); err != nil {
 		log.Error().Uint64("sync_committee_slot", uint64(duty.Slot())).Err(err).Msg("Failed to prepare sync committee message")
@@ -165,10 +165,10 @@ func (s *Service) messageSyncCommittee(ctx context.Context, data interface{}) {
 	started := time.Now()
 	duty, ok := data.(*synccommitteemessenger.Duty)
 	if !ok {
-		log.Error().Msg("Passed invalid data")
+		s.log.Error().Msg("Passed invalid data")
 		return
 	}
-	log := log.With().Uint64("slot", uint64(s.chainTimeService.CurrentSlot())).Logger()
+	log := s.log.With().Uint64("slot", uint64(s.chainTimeService.CurrentSlot())).Logger()
 
 	_, err := s.syncCommitteeMessenger.Message(ctx, duty)
 	if err != nil {

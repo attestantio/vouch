@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,6 +16,7 @@ package multinode
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -38,21 +39,25 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 		return errors.New("no subscriptions supplied")
 	}
 
-	var err error
 	sem := semaphore.NewWeighted(s.processConcurrency)
+	submissionCompleted := &atomic.Bool{}
 	w := sync.NewCond(&sync.Mutex{})
 	w.L.Lock()
 	for name, submitter := range s.beaconCommitteeSubscriptionSubmitters {
-		go s.submitBeaconCommitteeSubscriptions(ctx, sem, w, name, subscriptions, submitter)
+		go s.submitBeaconCommitteeSubscriptions(ctx, sem, w, submissionCompleted, name, subscriptions, submitter)
 	}
 	// Also set a timeout condition, in case no submitters return.
 	go func(s *Service, w *sync.Cond) {
 		time.Sleep(s.timeout)
-		err = errors.New("no successful submissions before timeout")
 		w.Signal()
 	}(s, w)
 	w.Wait()
 	w.L.Unlock()
+
+	var err error
+	if !submissionCompleted.Load() {
+		err = errors.New("no successful submissions before timeout")
+	}
 
 	return err
 }
@@ -62,11 +67,12 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 func (s *Service) submitBeaconCommitteeSubscriptions(ctx context.Context,
 	sem *semaphore.Weighted,
 	w *sync.Cond,
+	submissionCompleted *atomic.Bool,
 	name string,
 	subscriptions []*api.BeaconCommitteeSubscription,
 	submitter eth2client.BeaconCommitteeSubscriptionsSubmitter,
 ) {
-	log := log.With().Str("beacon_node_address", name).Int("subscriptions", len(subscriptions)).Logger()
+	log := s.log.With().Str("beacon_node_address", name).Int("subscriptions", len(subscriptions)).Logger()
 	if err := sem.Acquire(ctx, 1); err != nil {
 		log.Error().Err(err).Msg("Failed to acquire semaphore")
 		return
@@ -83,6 +89,7 @@ func (s *Service) submitBeaconCommitteeSubscriptions(ctx context.Context,
 		return
 	}
 
+	submissionCompleted.Store(true)
 	w.Signal()
 	log.Trace().Msg("Submitted beacon committee subscriptions")
 }

@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -24,11 +24,9 @@ import (
 
 // Service is a graffiti provider service.
 type Service struct {
+	log      zerolog.Logger
 	graffiti []byte
 }
-
-// module-wide log.
-var log zerolog.Logger
 
 // New creates a new graffiti provider service.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
@@ -38,12 +36,13 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "beaconblockproposer").Str("impl", "standard").Logger()
+	log := zerologger.With().Str("service", "beaconblockproposer").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
 
 	s := &Service{
+		log:      log,
 		graffiti: parameters.graffiti,
 	}
 

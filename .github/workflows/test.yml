@@ -14,3 +14,5 @@ jobs:
           go-version: '^1.21'
       - uses: actions/checkout@v4
       - uses: n8maninger/action-golang-test@v1
+        with:
+          args: "-race;-timeout=30m"

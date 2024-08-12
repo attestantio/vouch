@@ -39,7 +39,7 @@ func (s *Service) BuilderBid(ctx context.Context,
 	))
 	defer span.End()
 
-	log := log.With().Uint64("slot", uint64(slot)).Stringer("parent_hash", parentHash).Stringer("pubkey", pubkey).Logger()
+	log := s.log.With().Uint64("slot", uint64(slot)).Stringer("parent_hash", parentHash).Stringer("pubkey", pubkey).Logger()
 	log.Trace().Msg("Builder bid called")
 
 	builderBid, exists := s.cachedBid(ctx, slot, parentHash, pubkey)
@@ -104,7 +104,7 @@ func (s *Service) immediateBuilderBid(ctx context.Context,
 	defer span.End()
 	started := time.Now()
 
-	log.Trace().Uint64("slot", uint64(slot)).Stringer("pubkey", pubkey).Msg("Obtaining immediate builder bid for validator")
+	s.log.Trace().Uint64("slot", uint64(slot)).Stringer("pubkey", pubkey).Msg("Obtaining immediate builder bid for validator")
 
 	results, err := s.auctionBlock(ctx, slot, parentHash, pubkey, nil)
 	if err != nil || results == nil || results.WinningParticipation == nil {
@@ -132,13 +132,13 @@ func (s *Service) cachedBid(_ context.Context,
 	slotBuilderBids, exists := s.builderBidsCache[key]
 	if !exists {
 		s.builderBidsCacheMu.RUnlock()
-		log.Debug().Str("key", key).Msg("Builder bid not known (slot)")
+		s.log.Debug().Str("key", key).Msg("Builder bid not known (slot)")
 		return nil, false
 	}
 	builderBid, exists := slotBuilderBids[subkey]
 	s.builderBidsCacheMu.RUnlock()
 	if !exists {
-		log.Debug().Str("subkey", subkey).Msg("Builder bid not known (subkey)")
+		s.log.Debug().Str("subkey", subkey).Msg("Builder bid not known (subkey)")
 		return nil, false
 	}
 

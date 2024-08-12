@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -51,7 +51,7 @@ func (s *Service) AggregateAttestation(ctx context.Context,
 	defer span.End()
 
 	started := time.Now()
-	log := util.LogWithID(ctx, log, "strategy_id")
+	log := util.LogWithID(ctx, s.log, "strategy_id")
 
 	// We have two timeouts: a soft timeout and a hard timeout.
 	// At the soft timeout, we return if we have any responses so far.
@@ -214,7 +214,7 @@ func (s *Service) aggregateAttestation(ctx context.Context,
 		return
 	}
 	aggregateAttestation := aggregateAttestationResp.Data
-	log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained aggregate attestation")
+	s.log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained aggregate attestation")
 	if aggregateAttestation == nil {
 		errCh <- &aggregateAttestationError{
 			provider: name,

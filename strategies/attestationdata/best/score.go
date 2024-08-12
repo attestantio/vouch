@@ -36,13 +36,13 @@ func (s *Service) scoreAttestationData(ctx context.Context,
 	// Increase score based on the nearness of the head slot.
 	slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, attestationData.BeaconBlockRoot)
 	if err != nil {
-		log.Warn().Str("root", fmt.Sprintf("%#x", attestationData.BeaconBlockRoot)).Err(err).Msg("Failed to obtain slot for block root")
+		s.log.Warn().Str("root", fmt.Sprintf("%#x", attestationData.BeaconBlockRoot)).Err(err).Msg("Failed to obtain slot for block root")
 		slot = 0
 	} else {
 		score += float64(1) / float64(1+attestationData.Slot-slot)
 	}
 
-	log.Trace().
+	s.log.Trace().
 		Str("provider", name).
 		Uint64("attestation_slot", uint64(attestationData.Slot)).
 		Uint64("head_slot", uint64(slot)).

@@ -42,6 +42,7 @@ import (
 
 // Service is the manager for wallet accounts.
 type Service struct {
+	log                  zerolog.Logger
 	mutex                sync.RWMutex
 	monitor              metrics.AccountManagerMonitor
 	processConcurrency   int64
@@ -56,9 +57,6 @@ type Service struct {
 	currentEpochProvider chaintime.Service
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new wallet account manager.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -67,7 +65,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "accountmanager").Str("impl", "wallet").Logger()
+	log := zerologger.With().Str("service", "accountmanager").Str("impl", "wallet").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -107,6 +105,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		log:                  log,
 		monitor:              parameters.monitor,
 		processConcurrency:   parameters.processConcurrency,
 		stores:               stores,
@@ -136,7 +135,7 @@ func (s *Service) Refresh(ctx context.Context) {
 
 	s.refreshAccounts(ctx)
 	if err := s.refreshValidators(ctx); err != nil {
-		log.Error().Err(err).Msg("Failed to refresh validators")
+		s.log.Error().Err(err).Msg("Failed to refresh validators")
 	}
 }
 
@@ -153,21 +152,21 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 		// Try each store in turn.
 		found := false
 		for _, store := range s.stores {
-			log.Trace().Str("store", store.Name()).Str("wallet", pathBits[0]).Msg("Checking for wallet in store")
+			s.log.Trace().Str("store", store.Name()).Str("wallet", pathBits[0]).Msg("Checking for wallet in store")
 			wallet, err := e2wallet.OpenWallet(pathBits[0], e2wallet.WithStore(store))
 			if err == nil {
-				log.Trace().Str("store", store.Name()).Str("wallet", pathBits[0]).Msg("Found wallet in store")
+				s.log.Trace().Str("store", store.Name()).Str("wallet", pathBits[0]).Msg("Found wallet in store")
 				wallets[wallet.Name()] = wallet
 				found = true
 				break
 			}
-			log.Trace().Str("store", store.Name()).Str("wallet", pathBits[0]).Err(err).Msg("Failed to find wallet in store")
+			s.log.Trace().Str("store", store.Name()).Str("wallet", pathBits[0]).Err(err).Msg("Failed to find wallet in store")
 		}
 		if !found {
-			log.Warn().Str("wallet", pathBits[0]).Msg("Failed to find wallet in any store")
+			s.log.Warn().Str("wallet", pathBits[0]).Msg("Failed to find wallet in any store")
 		}
 	}
-	if e := log.Trace(); e.Enabled() {
+	if e := s.log.Trace(); e.Enabled() {
 		walletNames := make([]string, 0, len(wallets))
 		for walletName := range wallets {
 			walletNames = append(walletNames, walletName)
@@ -175,13 +174,13 @@ func (s *Service) refreshAccounts(ctx context.Context) {
 		}
 	}
 
-	verificationRegexes := accountPathsToVerificationRegexes(s.accountPaths)
+	verificationRegexes := s.accountPathsToVerificationRegexes(s.accountPaths)
 	// Fetch accounts for each wallet.
 	accounts := make(map[phase0.BLSPubKey]e2wtypes.Account)
 	for _, wallet := range wallets {
 		s.fetchAccountsForWallet(ctx, wallet, accounts, verificationRegexes)
 	}
-	log.Trace().Int("accounts", len(accounts)).Msg("Obtained accounts")
+	s.log.Trace().Int("accounts", len(accounts)).Msg("Obtained accounts")
 
 	s.mutex.Lock()
 	s.accounts = accounts
@@ -236,7 +235,7 @@ func (s *Service) ValidatingAccountsForEpoch(ctx context.Context, epoch phase0.E
 		stateCount[state]++
 		if state == apiv1.ValidatorStateActiveOngoing || state == apiv1.ValidatorStateActiveExiting {
 			account := s.accounts[validator.PublicKey]
-			log.Trace().
+			s.log.Trace().
 				Str("name", account.Name()).
 				Str("public_key", fmt.Sprintf("%x", account.PublicKey().Marshal())).
 				Uint64("index", uint64(index)).
@@ -289,10 +288,10 @@ func (s *Service) ValidatingAccountsForEpochByIndex(ctx context.Context, epoch p
 }
 
 // accountPathsToVerificationRegexes turns account paths in to regexes to allow verification.
-func accountPathsToVerificationRegexes(paths []string) []*regexp.Regexp {
+func (s *Service) accountPathsToVerificationRegexes(paths []string) []*regexp.Regexp {
 	regexes := make([]*regexp.Regexp, 0, len(paths))
 	for _, path := range paths {
-		log := log.With().Str("path", path).Logger()
+		log := s.log.With().Str("path", path).Logger()
 		parts := strings.Split(path, "/")
 		if len(parts) == 0 || parts[0] == "" {
 			log.Debug().Msg("Invalid path")
@@ -332,7 +331,7 @@ func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wa
 		go func(ctx context.Context, sem *semaphore.Weighted, wg *sync.WaitGroup, wallet e2wtypes.Wallet, account e2wtypes.Account, accounts map[phase0.BLSPubKey]e2wtypes.Account, mu *sync.Mutex) {
 			defer wg.Done()
 			if err := sem.Acquire(ctx, 1); err != nil {
-				log.Error().Err(err).Msg("Failed to acquire semaphore")
+				s.log.Error().Err(err).Msg("Failed to acquire semaphore")
 				return
 			}
 			defer sem.Release(1)
@@ -346,7 +345,7 @@ func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wa
 				}
 			}
 			if !verified {
-				log.Debug().Str("account", name).Msg("Received unwanted account from server; ignoring")
+				s.log.Debug().Str("account", name).Msg("Received unwanted account from server; ignoring")
 				return
 			}
 
@@ -361,10 +360,10 @@ func (s *Service) fetchAccountsForWallet(ctx context.Context, wallet e2wtypes.Wa
 				}
 			}
 			if !unlocked {
-				log.Warn().Str("account", name).Msg("Failed to unlock account with any passphrase")
+				s.log.Warn().Str("account", name).Msg("Failed to unlock account with any passphrase")
 				return
 			}
-			log.Trace().Str("account", name).Msg("Obtained and unlocked account")
+			s.log.Trace().Str("account", name).Msg("Obtained and unlocked account")
 
 			// Set up account as unknown to beacon chain.
 			mu.Lock()

@@ -55,7 +55,7 @@ func (s *Service) UnblindBlock(ctx context.Context,
 	default:
 		return nil, fmt.Errorf("unsupported block version %v", block.Version)
 	}
-	log.Trace().Msg("Unblind block called")
+	s.log.Trace().Msg("Unblind block called")
 
 	unblinders, err := s.unblindersForProposal(ctx, proposal)
 	if err != nil {
@@ -112,13 +112,13 @@ func (s *Service) unblindersForProposal(ctx context.Context,
 		builderClient, err := util.FetchBuilderClient(ctx, relay.Address, s.monitor, s.releaseVersion)
 		if err != nil {
 			// Error but continue.
-			log.Error().Err(err).Msg("Failed to obtain builder client for unblinding")
+			s.log.Error().Err(err).Msg("Failed to obtain builder client for unblinding")
 			continue
 		}
 		provider, isProvider := builderClient.(builderclient.UnblindedProposalProvider)
 		if !isProvider {
 			// Error but continue.
-			log.Error().Err(err).Msg("Builder client does not supply unblinding proposals")
+			s.log.Error().Err(err).Msg("Builder client does not supply unblinding proposals")
 			continue
 		}
 		providers = append(providers, provider)
@@ -127,7 +127,7 @@ func (s *Service) unblindersForProposal(ctx context.Context,
 	return providers, nil
 }
 
-func (*Service) unblindProposal(ctx context.Context,
+func (s *Service) unblindProposal(ctx context.Context,
 	proposal *api.VersionedSignedProposal,
 	providers []builderclient.UnblindedProposalProvider,
 ) error {
@@ -139,7 +139,7 @@ func (*Service) unblindProposal(ctx context.Context,
 	respCh := make(chan *api.VersionedSignedProposal, 1)
 	for _, provider := range providers {
 		go func(ctx context.Context, provider builderclient.UnblindedProposalProvider, ch chan *api.VersionedSignedProposal) {
-			log := log.With().Str("provider", provider.Address()).Logger()
+			log := s.log.With().Str("provider", provider.Address()).Logger()
 			log.Trace().Msg("Unblinding block with provider")
 
 			// As we cannot fall back we move to a retry system.
@@ -192,10 +192,10 @@ func (*Service) unblindProposal(ctx context.Context,
 
 	select {
 	case <-ctx.Done():
-		log.Warn().Msg("Failed to obtain unblinded block")
+		s.log.Warn().Msg("Failed to obtain unblinded block")
 		return errors.New("failed to obtain unblinded block")
 	case signedProposal := <-respCh:
-		if e := log.Trace(); e.Enabled() {
+		if e := s.log.Trace(); e.Enabled() {
 			data, err := json.Marshal(signedProposal)
 			if err == nil {
 				e.RawJSON("signed_block", data).Msg("Recomposed block to submit")

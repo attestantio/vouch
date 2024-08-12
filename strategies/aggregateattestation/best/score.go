@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,7 +21,7 @@ import (
 
 // scoreAggregateAttestation generates a score for an aggregate attestation.
 // The score is relative to the completeness of the aggregate.
-func (*Service) scoreAggregateAttestation(_ context.Context,
+func (s *Service) scoreAggregateAttestation(_ context.Context,
 	name string,
 	aggregate *phase0.Attestation,
 ) float64 {
@@ -38,7 +38,7 @@ func (*Service) scoreAggregateAttestation(_ context.Context,
 	}
 	score := float64(included) / float64(total)
 
-	log.Trace().
+	s.log.Trace().
 		Str("provider", name).
 		Uint64("attestation_slot", uint64(aggregate.Data.Slot)).
 		Float64("score", score).

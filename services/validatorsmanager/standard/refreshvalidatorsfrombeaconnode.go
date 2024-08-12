@@ -1,4 +1,4 @@
-// Copyright © 2020, 2023 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -44,11 +44,11 @@ func (s *Service) RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys [
 		return errors.Wrap(err, "failed to obtain validators")
 	}
 	validators := validatorsResponse.Data
-	log.Trace().Dur("elapsed", time.Since(started)).Int("received", len(validators)).Msg("Received validators from beacon node")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Int("received", len(validators)).Msg("Received validators from beacon node")
 
 	// If we have no validators at this point we leave early rather than possibly replace existing information.
 	if len(validators) == 0 {
-		log.Trace().Msg("No validators received; not replacing existing validators")
+		s.log.Trace().Msg("No validators received; not replacing existing validators")
 		return nil
 	}
 
@@ -60,7 +60,7 @@ func (s *Service) RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys [
 		validatorsByPubKey[validator.Validator.PublicKey] = validator.Validator
 		validatorPubKeyToIndex[validator.Validator.PublicKey] = validator.Index
 	}
-	log.Trace().
+	s.log.Trace().
 		Int("validators_by_index", len(validatorsByIndex)).
 		Int("validators_by_pubkey", len(validatorsByPubKey)).
 		Int("validator_pubkey_to_index", len(validatorPubKeyToIndex)).

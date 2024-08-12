@@ -29,13 +29,11 @@ import (
 
 // Service is a graffiti provider service.
 type Service struct {
+	log              zerolog.Logger
 	location         string
 	fallbackLocation string
 	majordomo        majordomo.Service
 }
-
-// module-wide log.
-var log zerolog.Logger
 
 // New creates a new graffiti provider service.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
@@ -45,12 +43,13 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "graffitiprovider").Str("impl", "dynamic").Logger()
+	log := zerologger.With().Str("service", "graffitiprovider").Str("impl", "dynamic").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
 
 	s := &Service{
+		log:              log,
 		location:         parameters.location,
 		majordomo:        parameters.majordomo,
 		fallbackLocation: parameters.fallbackLocation,
@@ -67,26 +66,26 @@ func (s *Service) Graffiti(ctx context.Context, slot phase0.Slot, validatorIndex
 	// Replace location parameters with values.
 	location := strings.ReplaceAll(s.location, "{{SLOT}}", fmt.Sprintf("%d", slot))
 	location = strings.ReplaceAll(location, "{{VALIDATORINDEX}}", fmt.Sprintf("%d", validatorIndex))
-	log.Trace().Str("location", location).Msg("Resolved graffiti location")
+	s.log.Trace().Str("location", location).Msg("Resolved graffiti location")
 
 	// Fetch data from location, using fallback if required.
 	data, err := s.majordomo.Fetch(ctx, location)
 	if err != nil && s.fallbackLocation != "" {
 		if !errors.Is(err, majordomo.ErrNotFound) {
-			log.Debug().Err(err).Uint64("slot", uint64(slot)).Msg("Failed to obtain graffiti from primary location; using fallback")
+			s.log.Debug().Err(err).Uint64("slot", uint64(slot)).Msg("Failed to obtain graffiti from primary location; using fallback")
 		}
 		data, err = s.majordomo.Fetch(ctx, s.fallbackLocation)
 	}
 	//	if err != nil && errors.Is(err, majordomo.ErrNotFound) {
-	//		log.Trace().Uint64("slot", uint64(slot)).Msg("No graffiti obtained for proposer; using fallback")
+	//		s.log.Trace().Uint64("slot", uint64(slot)).Msg("No graffiti obtained for proposer; using fallback")
 	//		data, err = s.majordomo.Fetch(ctx, s.fallbackLocation)
 	//	}
 	if err != nil {
 		if errors.Is(err, majordomo.ErrNotFound) {
-			log.Debug().Uint64("slot", uint64(slot)).Msg("No graffiti obtained for proposer")
+			s.log.Debug().Uint64("slot", uint64(slot)).Msg("No graffiti obtained for proposer")
 			return []byte{}, nil
 		}
-		log.Warn().Err(err).Msg("Failed to obtain graffiti")
+		s.log.Warn().Err(err).Msg("Failed to obtain graffiti")
 		return nil, err
 	}
 
@@ -98,7 +97,7 @@ func (s *Service) Graffiti(ctx context.Context, slot phase0.Slot, validatorIndex
 		"\n")
 	graffitiEntries := len(graffitiLines)
 	if graffitiEntries == 0 {
-		log.Debug().Msg("No graffiti available")
+		s.log.Debug().Msg("No graffiti available")
 		return []byte{}, nil
 	}
 
@@ -111,6 +110,6 @@ func (s *Service) Graffiti(ctx context.Context, slot phase0.Slot, validatorIndex
 	graffiti = strings.ReplaceAll(graffiti, "{{SLOT}}", fmt.Sprintf("%d", slot))
 	graffiti = strings.ReplaceAll(graffiti, "{{VALIDATORINDEX}}", fmt.Sprintf("%d", validatorIndex))
 
-	log.Trace().Str("graffiti", graffiti).Msg("Resolved graffiti")
+	s.log.Trace().Str("graffiti", graffiti).Msg("Resolved graffiti")
 	return []byte(graffiti), nil
 }

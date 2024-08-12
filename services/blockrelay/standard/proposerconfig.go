@@ -32,7 +32,7 @@ func (s *Service) ProposerConfig(ctx context.Context,
 	s.executionConfigMu.RLock()
 	defer s.executionConfigMu.RUnlock()
 	if s.executionConfig == nil {
-		log.Warn().Msg("No execution configuration available; using fallback information")
+		s.log.Warn().Msg("No execution configuration available; using fallback information")
 		return &beaconblockproposer.ProposerConfig{
 			FeeRecipient: s.fallbackFeeRecipient,
 			Relays:       make([]*beaconblockproposer.RelayConfig, 0),

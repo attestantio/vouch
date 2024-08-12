@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2021, 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -35,6 +35,7 @@ import (
 
 // Service is a sync committee aggregator.
 type Service struct {
+	log                                  zerolog.Logger
 	monitor                              metrics.SyncCommitteeAggregationMonitor
 	slotsPerEpoch                        uint64
 	syncCommitteeSize                    uint64
@@ -49,9 +50,6 @@ type Service struct {
 	beaconBlockRootsMu                   sync.Mutex
 }
 
-// module-wide log.
-var log zerolog.Logger
-
 // New creates a new sync committee aggregator.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -60,7 +58,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log = zerologger.With().Str("service", "synccommitteeaggregator").Str("impl", "standard").Logger()
+	log := zerologger.With().Str("service", "synccommitteeaggregator").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -108,6 +106,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
+		log:                                  log,
 		monitor:                              parameters.monitor,
 		slotsPerEpoch:                        slotsPerEpoch,
 		syncCommitteeSize:                    syncCommitteeSize,
@@ -140,10 +139,10 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 
 	duty, ok := data.(*synccommitteeaggregator.Duty)
 	if !ok {
-		log.Error().Msg("Passed invalid data structure")
+		s.log.Error().Msg("Passed invalid data structure")
 		return
 	}
-	log := log.With().Uint64("slot", uint64(duty.Slot)).Int("validators", len(duty.ValidatorIndices)).Logger()
+	log := s.log.With().Uint64("slot", uint64(duty.Slot)).Int("validators", len(duty.ValidatorIndices)).Logger()
 	log.Trace().Msg("Aggregating")
 
 	var beaconBlockRoot *phase0.Root

@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2021 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -69,15 +69,15 @@ func TestJob(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
 	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(20*time.Millisecond), runFunc, nil))
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	time.Sleep(time.Duration(50) * time.Millisecond)
-	assert.Equal(t, 1, run)
+	assert.Equal(t, uint32(1), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 0)
 }
 
@@ -87,9 +87,9 @@ func TestJobExists(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
 	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(10*time.Second), runFunc, nil))
@@ -108,18 +108,18 @@ func TestCancelJob(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
 	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(100*time.Millisecond), runFunc, nil))
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 1)
 	require.NoError(t, s.CancelJob(ctx, "Test job"))
 	require.Len(t, s.ListJobs(ctx), 0)
 	time.Sleep(time.Duration(110) * time.Millisecond)
-	assert.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 }
 
 func TestCancelUnknownJob(t *testing.T) {
@@ -137,20 +137,20 @@ func TestCancelJobs(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
 	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job 1", time.Now().Add(100*time.Millisecond), runFunc, nil))
 	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job 2", time.Now().Add(100*time.Millisecond), runFunc, nil))
 	require.NoError(t, s.ScheduleJob(ctx, "Test", "No cancel job", time.Now().Add(100*time.Millisecond), runFunc, nil))
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 3)
 	s.CancelJobs(ctx, "Test job")
 	require.Len(t, s.ListJobs(ctx), 1)
 	time.Sleep(time.Duration(110) * time.Millisecond)
-	assert.Equal(t, 1, run)
+	require.Equal(t, uint32(1), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 0)
 }
 
@@ -160,18 +160,18 @@ func TestCancelJobIfExists(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
 	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(100*time.Millisecond), runFunc, nil))
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 1)
 	s.CancelJobIfExists(ctx, "Test job")
 	require.Len(t, s.ListJobs(ctx), 0)
 	time.Sleep(time.Duration(110) * time.Millisecond)
-	assert.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 
 	s.CancelJobIfExists(ctx, "Unknown job")
 }
@@ -182,18 +182,18 @@ func TestCancelParentContext(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
 	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(100*time.Millisecond), runFunc, nil))
 	require.Len(t, s.ListJobs(ctx), 1)
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	cancel()
 	time.Sleep(time.Duration(110) * time.Millisecond)
 	require.Len(t, s.ListJobs(ctx), 0)
-	assert.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 }
 
 func TestRunJob(t *testing.T) {
@@ -202,17 +202,17 @@ func TestRunJob(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
 	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(time.Second), runFunc, nil))
 	require.Len(t, s.ListJobs(ctx), 1)
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	require.NoError(t, s.RunJob(ctx, "Test job"))
 	time.Sleep(time.Duration(100) * time.Millisecond)
-	assert.Equal(t, 1, run)
+	require.Equal(t, uint32(1), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 0)
 }
 
@@ -222,18 +222,18 @@ func TestRunJobIfExists(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
 	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(time.Second), runFunc, nil))
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	s.RunJobIfExists(ctx, "Unknown job")
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	s.RunJobIfExists(ctx, "Test job")
 	time.Sleep(time.Duration(100) * time.Millisecond)
-	assert.Equal(t, 1, run)
+	require.Equal(t, uint32(1), atomic.LoadUint32(&run))
 }
 
 func TestRunUnknownJob(t *testing.T) {
@@ -251,25 +251,25 @@ func TestPeriodicJob(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
 	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test periodic job", runtimeFunc, nil, runFunc, nil))
 	require.Len(t, s.ListJobs(ctx), 1)
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	time.Sleep(time.Duration(110) * time.Millisecond)
-	assert.Equal(t, 1, run)
+	require.Equal(t, uint32(1), atomic.LoadUint32(&run))
 	time.Sleep(time.Duration(110) * time.Millisecond)
-	assert.Equal(t, 2, run)
+	require.Equal(t, uint32(2), atomic.LoadUint32(&run))
 	require.NoError(t, s.RunJob(ctx, "Test periodic job"))
 	time.Sleep(time.Duration(10) * time.Millisecond)
-	assert.Equal(t, 3, run)
+	require.Equal(t, uint32(3), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 1)
 
 	require.NoError(t, s.CancelJob(ctx, "Test periodic job"))
@@ -282,21 +282,21 @@ func TestCancelPeriodicJob(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
 	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test periodic job", runtimeFunc, nil, runFunc, nil))
 	require.Len(t, s.ListJobs(ctx), 1)
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	require.NoError(t, s.CancelJob(ctx, "Test periodic job"))
 	time.Sleep(time.Duration(110) * time.Millisecond)
-	assert.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 0)
 }
 
@@ -306,21 +306,21 @@ func TestCancelPeriodicParentContext(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
 	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test job", runtimeFunc, nil, runFunc, nil))
 	require.Len(t, s.ListJobs(ctx), 1)
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	cancel()
 	time.Sleep(time.Duration(110) * time.Millisecond)
-	assert.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 0)
 }
 
@@ -330,12 +330,12 @@ func TestLimitedPeriodicJob(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		if run == 3 {
 			return time.Now(), scheduler.ErrNoMoreInstances
 		}
@@ -344,9 +344,9 @@ func TestLimitedPeriodicJob(t *testing.T) {
 
 	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test job", runtimeFunc, nil, runFunc, nil))
 	require.Len(t, s.ListJobs(ctx), 1)
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	time.Sleep(time.Duration(50) * time.Millisecond)
-	assert.Equal(t, 3, run)
+	require.Equal(t, uint32(3), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 0)
 }
 
@@ -356,12 +356,12 @@ func TestBadPeriodicJob(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		if run == 3 {
 			return time.Now(), errors.New("Bad")
 		}
@@ -370,9 +370,9 @@ func TestBadPeriodicJob(t *testing.T) {
 
 	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test job", runtimeFunc, nil, runFunc, nil))
 	require.Len(t, s.ListJobs(ctx), 1)
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	time.Sleep(time.Duration(50) * time.Millisecond)
-	assert.Equal(t, 3, run)
+	require.Equal(t, uint32(3), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 0)
 }
 
@@ -382,12 +382,12 @@ func TestDuplicateJobName(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
@@ -413,12 +413,12 @@ func TestBadJobs(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
@@ -442,11 +442,11 @@ func TestManyJobs(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(ctx context.Context, data interface{}) {
+	runFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runTime := time.Now().Add(500 * time.Millisecond)
+	runTime := time.Now().Add(200 * time.Millisecond)
 
 	jobs := 2048
 	for i := 0; i < jobs; i++ {
@@ -464,9 +464,9 @@ func TestManyJobs(t *testing.T) {
 	}
 
 	// Sleep to let the others run normally.
-	time.Sleep(time.Second)
+	time.Sleep(400 * time.Millisecond)
 
-	require.Equal(t, uint32(jobs), run)
+	require.Equal(t, uint32(jobs), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 0)
 }
 
@@ -476,9 +476,9 @@ func TestListJobs(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
-		run++
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
+		atomic.AddUint32(&run, 1)
 	}
 
 	jobs := s.ListJobs(ctx)
@@ -512,13 +512,13 @@ func TestLongRunningPeriodicJob(t *testing.T) {
 
 	// Job takes 100 ms.
 	run := uint32(0)
-	jobFunc := func(ctx context.Context, data interface{}) {
+	jobFunc := func(_ context.Context, _ any) {
 		time.Sleep(100 * time.Millisecond)
 		atomic.AddUint32(&run, 1)
 	}
 
 	// Job runs every 50 ms.
-	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(50 * time.Millisecond), nil
 	}
 
@@ -528,7 +528,7 @@ func TestLongRunningPeriodicJob(t *testing.T) {
 
 	// Sleep for 400 ms.  Expect two runs (50+100+50+100+50).
 	time.Sleep(400 * time.Millisecond)
-	assert.Equal(t, uint32(2), run)
+	require.Equal(t, uint32(2), atomic.LoadUint32(&run))
 
 	require.Len(t, s.ListJobs(ctx), 1)
 	require.NoError(t, s.CancelJob(ctx, "Test long running periodic job"))
@@ -543,7 +543,7 @@ func TestOverlappingJobs(t *testing.T) {
 
 	// Job takes 200ms.
 	run := uint32(0)
-	jobFunc := func(ctx context.Context, data interface{}) {
+	jobFunc := func(_ context.Context, _ any) {
 		time.Sleep(200 * time.Millisecond)
 		atomic.AddUint32(&run, 1)
 	}
@@ -557,7 +557,7 @@ func TestOverlappingJobs(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Ensure both jobs have completed.
-	require.Equal(t, uint32(2), run)
+	require.Equal(t, uint32(2), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 0)
 }
 
@@ -569,7 +569,7 @@ func TestMulti(t *testing.T) {
 
 	// Create a job for the future.
 	run := uint32(0)
-	jobFunc := func(ctx context.Context, data interface{}) {
+	jobFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
 	}
 	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(10*time.Second), jobFunc, nil))
@@ -578,7 +578,7 @@ func TestMulti(t *testing.T) {
 	// Create a number of runners that will try to start the job simultaneously.
 	var runWG sync.WaitGroup
 	var setupWG sync.WaitGroup
-	starter := make(chan interface{})
+	starter := make(chan any)
 	for i := 0; i < 32; i++ {
 		setupWG.Add(1)
 		runWG.Add(1)
@@ -599,7 +599,7 @@ func TestMulti(t *testing.T) {
 	runWG.Wait()
 
 	// Ensure the job has only completed once.
-	require.Equal(t, uint32(1), run)
+	require.Equal(t, uint32(1), atomic.LoadUint32(&run))
 	require.Len(t, s.ListJobs(ctx), 0)
 }
 
@@ -609,13 +609,13 @@ func TestCancelWhilstRunning(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
-	run := 0
-	runFunc := func(ctx context.Context, data interface{}) {
+	run := uint32(0)
+	runFunc := func(_ context.Context, _ any) {
 		time.Sleep(50 * time.Millisecond)
-		run++
+		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(ctx context.Context, data interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
 		return time.Now().Add(50 * time.Millisecond), nil
 	}
 
@@ -623,16 +623,16 @@ func TestCancelWhilstRunning(t *testing.T) {
 	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test periodic job", runtimeFunc, nil, runFunc, nil))
 	require.Len(t, s.ListJobs(ctx), 1)
 	require.Contains(t, s.ListJobs(ctx), "Test periodic job")
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	time.Sleep(time.Duration(60) * time.Millisecond)
-	require.Equal(t, 0, run)
+	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	// Cancel occurs during first run.
 	require.NoError(t, s.CancelJob(ctx, "Test periodic job"))
 	require.Len(t, s.ListJobs(ctx), 0)
 	// Wait for first run to finish.
 	time.Sleep(time.Duration(60) * time.Millisecond)
-	assert.Equal(t, 1, run)
+	require.Equal(t, uint32(1), atomic.LoadUint32(&run))
 	// Ensure second run never happens.
 	time.Sleep(time.Duration(120) * time.Millisecond)
-	assert.Equal(t, 1, run)
+	require.Equal(t, uint32(1), atomic.LoadUint32(&run))
 }

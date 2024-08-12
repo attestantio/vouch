@@ -59,14 +59,14 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpoch(ctx, epoch+1)
 	if err != nil {
 		monitorExecutionConfig(time.Since(started), false)
-		log.Error().Err(err).Msg("Failed to obtain validating accounts; falling back")
+		s.log.Error().Err(err).Msg("Failed to obtain validating accounts; falling back")
 		return
 	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
 
 	if len(accounts) == 0 {
 		monitorExecutionConfig(time.Since(started), false)
-		log.Debug().Msg("No validating accounts; not fetching execution config")
+		s.log.Debug().Msg("No validating accounts; not fetching execution config")
 		return
 	}
 
@@ -82,19 +82,19 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 	s.executionConfigMu.RUnlock()
 
 	if s.configURL == "" {
-		log.Trace().Msg("No config URL; using default configuration with fallback")
+		s.log.Trace().Msg("No config URL; using default configuration with fallback")
 	} else {
 		succeeded := true
 		// Obtain the execution configuration, handling errors appropriately.
 		executionConfig, err = s.obtainExecutionConfig(ctx, pubkeys)
 		if err != nil {
 			succeeded = false
-			log.Error().Str("config_url", s.configURL).Err(err).Msg("Failed to obtain execution configuration")
+			s.log.Error().Str("config_url", s.configURL).Err(err).Msg("Failed to obtain execution configuration")
 			// Restore current execution configuration.
 			executionConfig = s.executionConfig
 		} else if executionConfig == nil {
 			succeeded = false
-			log.Error().Str("config_url", s.configURL).Msg("Obtained nil execution configuration")
+			s.log.Error().Str("config_url", s.configURL).Msg("Obtained nil execution configuration")
 			// Restore current execution configuration.
 			executionConfig = s.executionConfig
 		}
@@ -105,7 +105,7 @@ func (s *Service) fetchExecutionConfig(ctx context.Context,
 	s.executionConfig = executionConfig
 	s.executionConfigMu.Unlock()
 
-	log.Trace().Msg("Obtained configuration")
+	s.log.Trace().Msg("Obtained configuration")
 }
 
 func (s *Service) obtainExecutionConfig(ctx context.Context,
@@ -114,7 +114,7 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 	blockrelay.ExecutionConfigurator,
 	error,
 ) {
-	log.Trace().Msg("Obtaining execution configuration")
+	s.log.Trace().Msg("Obtaining execution configuration")
 
 	var res []byte
 	var err error
@@ -125,7 +125,7 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 		// We are fetching from a dynamic source, need to provide additional parameters.
 		if len(pubkeys) == 0 {
 			// No results, but no error.
-			log.Trace().Msg("no public keys supplied; cannot fetch execution configuation")
+			s.log.Trace().Msg("no public keys supplied; cannot fetch execution configuation")
 			return nil, nil
 		}
 
@@ -164,7 +164,7 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to obtain execution configuration")
 	}
 
-	log.Trace().RawJSON("res", bytes.ReplaceAll(res, []byte("\n"), []byte(""))).Msg("Received response")
+	s.log.Trace().RawJSON("res", bytes.ReplaceAll(res, []byte("\n"), []byte(""))).Msg("Received response")
 
 	executionConfig, err := blockrelay.UnmarshalJSON(res)
 	if err != nil {
