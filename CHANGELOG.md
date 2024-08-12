@@ -1,4 +1,6 @@
 dev:
+
+1.9.0-alpha.8:
   - update internal active validators count when Dirk not available at start
   - warn when graffiti is not as expected, rather than refuse to use the proposal
   - provide fallback location for dynamic graffiti
@@ -28,6 +30,15 @@ dev:
   - reduce time spent verifying account names
   - ensure that attestations complete on Vouch's first ever epoch
   - allow Vouch to start with some consensus nodes unavailable
+
+1.8.2:
+  - update go-eth2-client dependency (compatibility with lodestar 1.20.0)
+  - use proposer V3 APIs
+  - do not error if proposal graffiti has been altered
+
+1.8.1:
+  - ensure proposer-config-check command operates correctly
+  - avoid crash by suitably locking a controller read/write map
 
 1.8.0:
   - support Deneb
