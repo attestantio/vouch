@@ -122,47 +122,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, err
 	}
 
-	// Handling altair if we have the service and spec to do so.
-	handlingAltair := parameters.syncCommitteeAggregator != nil && epochsPerSyncCommitteePeriod != 0
-	// Fetch the altair fork epoch from the fork schedule.
-	var altairForkEpoch phase0.Epoch
-	if handlingAltair {
-		altairForkEpoch, err = fetchAltairForkEpoch(ctx, parameters.specProvider)
-		if err != nil {
-			// Not handling altair after all.
-			handlingAltair = false
-		} else {
-			log.Trace().Uint64("epoch", uint64(altairForkEpoch)).Msg("Obtained Altair fork epoch")
-		}
-	}
-	if !handlingAltair {
-		log.Debug().Msg("Not handling Altair")
-	}
-
-	// Handling bellatrix if we can obtain its fork epoch.
-	handlingBellatrix := true
-	// Fetch the bellatrix fork epoch from the fork schedule.
-	var bellatrixForkEpoch phase0.Epoch
-	bellatrixForkEpoch, err = fetchBellatrixForkEpoch(ctx, parameters.specProvider)
-	if err != nil {
-		// Not handling bellatrix after all.
-		handlingBellatrix = false
-		bellatrixForkEpoch = 0xffffffffffffffff
-	} else {
-		log.Trace().Uint64("epoch", uint64(bellatrixForkEpoch)).Msg("Obtained Bellatrix fork epoch")
-	}
-	if !handlingBellatrix {
-		log.Debug().Msg("Not handling Bellatrix")
-	}
-
-	// Fetch the Capella fork epoch from the fork schedule.
-	var capellaForkEpoch phase0.Epoch
-	capellaForkEpoch, err = fetchCapellaForkEpoch(ctx, parameters.specProvider)
-	if err != nil {
-		capellaForkEpoch = 0xffffffffffffffff
-	} else {
-		log.Trace().Uint64("epoch", uint64(capellaForkEpoch)).Msg("Obtained Capella fork epoch")
-	}
+	handlingAltair, altairForkEpoch := altairDetails(ctx, log, parameters.specProvider, parameters.syncCommitteeAggregator, epochsPerSyncCommitteePeriod)
+	handlingBellatrix, bellatrixForkEpoch := bellatrixDetails(ctx, log, parameters.specProvider)
+	capellaForkEpoch := capellaDetails(ctx, log, parameters.specProvider)
 
 	s := &Service{
 		log:                           log,
@@ -233,18 +195,28 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log.Info().Int("old_validators", s.activeValidators).Int("new_validators", len(validatorIndices)).Msg("Change in number of active validators")
 		s.activeValidators = len(validatorIndices)
 	}
+	syncCommitteeValidatorIndices, err := s.syncCommitteeIndicesForEpoch(ctx, epoch)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain sync committee eligible validator indices for the current epoch")
+	}
+
 	nextEpochAccounts, nextEpochValidatorIndices, err := s.accountsAndIndicesForEpoch(ctx, epoch+1)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain active validator indices for the next epoch")
 	}
+	syncCommitteeNextEpochValidatorIndices, err := s.syncCommitteeIndicesForEpoch(ctx, epoch+1)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain sync committee eligible validator indices for the next epoch")
+	}
+
 	go s.scheduleProposals(ctx, epoch, validatorIndices, !s.waitedForGenesis)
 	go s.scheduleAttestations(ctx, epoch, validatorIndices, !s.waitedForGenesis)
 	if handlingAltair {
 		thisSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch) / s.epochsPerSyncCommitteePeriod)
-		go s.scheduleSyncCommitteeMessages(ctx, thisSyncCommitteePeriodStartEpoch, validatorIndices, true /* notCurrentSlot */)
+		go s.scheduleSyncCommitteeMessages(ctx, thisSyncCommitteePeriodStartEpoch, syncCommitteeValidatorIndices, true /* notCurrentSlot */)
 		nextSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch)/s.epochsPerSyncCommitteePeriod + 1)
 		if uint64(nextSyncCommitteePeriodStartEpoch-epoch) <= syncCommitteePreparationEpochs {
-			go s.scheduleSyncCommitteeMessages(ctx, nextSyncCommitteePeriodStartEpoch, validatorIndices, true /* notCurrentSlot */)
+			go s.scheduleSyncCommitteeMessages(ctx, nextSyncCommitteePeriodStartEpoch, syncCommitteeNextEpochValidatorIndices, true /* notCurrentSlot */)
 		}
 	}
 	go s.scheduleAttestations(ctx, epoch+1, nextEpochValidatorIndices, true /* notCurrentSlot */)
@@ -364,7 +336,14 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 
 		// Update the _next_ period if we close to an EPOCHS_PER_SYNC_COMMITTEE_PERIOD boundary.
 		if uint64(currentEpoch)%s.epochsPerSyncCommitteePeriod == s.epochsPerSyncCommitteePeriod-syncCommitteePreparationEpochs {
-			go s.scheduleSyncCommitteeMessages(ctx, currentEpoch+phase0.Epoch(syncCommitteePreparationEpochs), validatorIndices, false /* notCurrentSlot */)
+			syncCommitteeValidatorIndices, err := s.syncCommitteeIndicesForEpoch(ctx, currentEpoch)
+			// If we error getting accounts we log and carry on.
+			if err != nil {
+				s.log.Error().Err(err).Uint64("epoch", uint64(currentEpoch)).Msg("Failed to obtain sync committee eligible validators for epoch")
+				cancel()
+			} else {
+				go s.scheduleSyncCommitteeMessages(ctx, currentEpoch+phase0.Epoch(syncCommitteePreparationEpochs), syncCommitteeValidatorIndices, false /* notCurrentSlot */)
+			}
 		}
 	}
 
@@ -439,6 +418,26 @@ func (s *Service) accountsAndIndicesForEpoch(ctx context.Context,
 	}
 
 	return accounts, validatorIndices, nil
+}
+
+// syncCommitteeIndicesForEpoch obtains the sync committee eligible validator indices for the specified epoch.
+func (s *Service) syncCommitteeIndicesForEpoch(ctx context.Context,
+	epoch phase0.Epoch,
+) (
+	[]phase0.ValidatorIndex,
+	error,
+) {
+	accounts, err := s.validatingAccountsProvider.SyncCommitteeAccountsForEpoch(ctx, epoch)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain sync committee eligible accounts")
+	}
+
+	validatorIndices := make([]phase0.ValidatorIndex, 0, len(accounts))
+	for index := range accounts {
+		validatorIndices = append(validatorIndices, index)
+	}
+
+	return validatorIndices, nil
 }
 
 func fetchAltairForkEpoch(ctx context.Context,
@@ -526,7 +525,7 @@ func (s *Service) handleAltairForkEpoch(ctx context.Context) {
 	}
 
 	go func() {
-		_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, s.altairForkEpoch)
+		validatorIndices, err := s.syncCommitteeIndicesForEpoch(ctx, s.altairForkEpoch)
 		if err != nil {
 			s.log.Error().Err(err).Msg("Failed to obtain active validator indices for the Altair fork epoch")
 			return
@@ -537,7 +536,7 @@ func (s *Service) handleAltairForkEpoch(ctx context.Context) {
 	go func() {
 		nextPeriodEpoch := phase0.Epoch((uint64(s.altairForkEpoch)/s.epochsPerSyncCommitteePeriod + 1) * s.epochsPerSyncCommitteePeriod)
 		if uint64(nextPeriodEpoch-s.altairForkEpoch) <= syncCommitteePreparationEpochs {
-			_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, nextPeriodEpoch)
+			validatorIndices, err := s.syncCommitteeIndicesForEpoch(ctx, nextPeriodEpoch)
 			if err != nil {
 				s.log.Error().Err(err).Msg("Failed to obtain active validator indices for the period following the Altair fork epoch")
 				return
@@ -611,4 +610,55 @@ func obtainSpecValues(ctx context.Context,
 	}
 
 	return slotDuration, slotsPerEpoch, epochsPerSyncCommitteePeriod, nil
+}
+
+func capellaDetails(ctx context.Context, log zerolog.Logger, specProvider eth2client.SpecProvider) phase0.Epoch {
+	// Fetch the Capella fork epoch from the fork schedule.
+	var capellaForkEpoch phase0.Epoch
+	capellaForkEpoch, err := fetchCapellaForkEpoch(ctx, specProvider)
+	if err != nil {
+		capellaForkEpoch = 0xffffffffffffffff
+	} else {
+		log.Trace().Uint64("epoch", uint64(capellaForkEpoch)).Msg("Obtained Capella fork epoch")
+	}
+	return capellaForkEpoch
+}
+
+func bellatrixDetails(ctx context.Context, log zerolog.Logger, specProvider eth2client.SpecProvider) (bool, phase0.Epoch) {
+	// Handling bellatrix if we can obtain its fork epoch.
+	handlingBellatrix := true
+	// Fetch the bellatrix fork epoch from the fork schedule.
+	var bellatrixForkEpoch phase0.Epoch
+	bellatrixForkEpoch, err := fetchBellatrixForkEpoch(ctx, specProvider)
+	if err != nil {
+		// Not handling bellatrix after all.
+		handlingBellatrix = false
+		bellatrixForkEpoch = 0xffffffffffffffff
+	} else {
+		log.Trace().Uint64("epoch", uint64(bellatrixForkEpoch)).Msg("Obtained Bellatrix fork epoch")
+	}
+	if !handlingBellatrix {
+		log.Debug().Msg("Not handling Bellatrix")
+	}
+	return handlingBellatrix, bellatrixForkEpoch
+}
+
+func altairDetails(ctx context.Context, log zerolog.Logger, specProvider eth2client.SpecProvider, syncCommitteeAggregator synccommitteeaggregator.Service, epochsPerSyncCommitteePeriod uint64) (bool, phase0.Epoch) {
+	// Handling altair if we have the service and spec to do so.
+	handlingAltair := syncCommitteeAggregator != nil && epochsPerSyncCommitteePeriod != 0
+	// Fetch the altair fork epoch from the fork schedule.
+	var altairForkEpoch phase0.Epoch
+	if handlingAltair {
+		altairForkEpoch, err := fetchAltairForkEpoch(ctx, specProvider)
+		if err != nil {
+			// Not handling altair after all.
+			handlingAltair = false
+		} else {
+			log.Trace().Uint64("epoch", uint64(altairForkEpoch)).Msg("Obtained Altair fork epoch")
+		}
+	}
+	if !handlingAltair {
+		log.Debug().Msg("Not handling Altair")
+	}
+	return handlingAltair, altairForkEpoch
 }

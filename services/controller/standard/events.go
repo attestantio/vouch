@@ -184,10 +184,10 @@ func (s *Service) fastTrackJobs(ctx context.Context,
 // handlePreviousDependentRootChanged handles the situation where the previous
 // dependent root changed.
 func (s *Service) handlePreviousDependentRootChanged(ctx context.Context) {
-	// Refreshes run in parallel.
+	// NOT running task in goroutine as there is only one task and this function is always called in a goroutine.
 
 	// We need to refresh the attester duties for this epoch.
-	go s.refreshAttesterDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
+	s.refreshAttesterDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
 }
 
 // handleCurrentDependentRootChanged handles the situation where the current
@@ -314,15 +314,15 @@ func (s *Service) refreshSyncCommitteeDutiesForEpochPeriod(ctx context.Context, 
 		}
 	}
 
-	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, firstEpoch)
+	validatorIndices, err := s.syncCommitteeIndicesForEpoch(ctx, firstEpoch)
 	if err != nil {
-		s.log.Error().Err(err).Uint64("epoch", uint64(firstEpoch)).Msg("Failed to obtain active validators for epoch")
+		s.log.Error().Err(err).Uint64("epoch", uint64(firstEpoch)).Msg("Failed to obtain sync committee eligible validators for epoch")
 		return
 	}
 
 	// Expect at least one validator.
 	if len(validatorIndices) == 0 {
-		s.log.Warn().Msg("No active validators; not validating")
+		s.log.Warn().Msg("No eligible sync committee validators for epoch; not scheduling sync committee messages")
 		return
 	}
 

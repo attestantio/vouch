@@ -82,6 +82,7 @@ import (
 	bestattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/best"
 	firstattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/first"
 	majorityattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/majority"
+	firstbeaconblockheaderstrategy "github.com/attestantio/vouch/strategies/beaconblockheader/first"
 	bestbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	firstbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/first"
 	firstbeaconblockrootstrategy "github.com/attestantio/vouch/strategies/beaconblockroot/first"
@@ -89,6 +90,7 @@ import (
 	"github.com/attestantio/vouch/strategies/builderbid"
 	bestbuilderbidstrategy "github.com/attestantio/vouch/strategies/builderbid/best"
 	deadlinebuilderbidstrategy "github.com/attestantio/vouch/strategies/builderbid/deadline"
+	firstsignedbeaconblockstrategy "github.com/attestantio/vouch/strategies/signedbeaconblock/first"
 	bestsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/best"
 	firstsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/first"
 	"github.com/attestantio/vouch/util"
@@ -108,7 +110,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.9.0-alpha.9-dev"
+var ReleaseVersion = "1.9.0-alpha.8-dev"
 
 func main() {
 	exitCode := main2()
@@ -316,28 +318,9 @@ func startServices(ctx context.Context,
 	}
 
 	// Some beacon nodes do not respond pre-genesis, so we must wait for genesis before proceeding.
-	genesisTime := chainTime.GenesisTime()
-	now := time.Now()
-	waitedForGenesis := false
-	if now.Before(genesisTime) {
-		waitedForGenesis = true
-		// Wait for genesis (or signal, or context cancel).
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-		log.Info().Str("genesis", fmt.Sprintf("%v", genesisTime)).Msg("Waiting for genesis")
-		ctx, cancel := context.WithDeadline(ctx, genesisTime)
-		defer cancel()
-		select {
-		case <-sigCh:
-			return nil, nil, errors.New("signal received")
-		case <-ctx.Done():
-			switch ctx.Err() {
-			case context.DeadlineExceeded:
-				log.Info().Msg("Genesis time")
-			case context.Canceled:
-				return nil, nil, errors.New("context cancelled")
-			}
-		}
+	waitedForGenesis, err := waitForGenesis(ctx, chainTime)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to wait for genesis block")
 	}
 
 	altairCapable, bellatrixCapable, _, err := consensusClientCapabilities(ctx, eth2Client)
@@ -345,7 +328,12 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	scheduler, cacheSvc, signerSvc, accountManager, err := startSharedServices(ctx, eth2Client, majordomo, chainTime, monitor)
+	signedBeaconBlockProvider, beaconBlockHeaderProvider, err := startProviderServices(ctx, monitor, eth2Client)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	schedulerSvc, cacheSvc, signerSvc, accountManager, err := startSharedServices(ctx, eth2Client, majordomo, chainTime, monitor, beaconBlockHeaderProvider, signedBeaconBlockProvider)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -355,12 +343,12 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to select submitter")
 	}
 
-	blockRelay, err := startBlockRelay(ctx, majordomo, monitor, eth2Client, scheduler, chainTime, accountManager, signerSvc)
+	blockRelay, err := startBlockRelay(ctx, majordomo, monitor, eth2Client, schedulerSvc, chainTime, accountManager, signerSvc)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	beaconBlockProposer, attester, attestationAggregator, beaconCommitteeSubscriber, err := startSigningServices(ctx, majordomo, monitor, eth2Client, chainTime, cacheSvc, signerSvc, blockRelay, accountManager, submitter)
+	beaconBlockProposer, attesterSvc, attestationAggregator, beaconCommitteeSubscriber, err := startSigningServices(ctx, majordomo, monitor, eth2Client, chainTime, cacheSvc, signerSvc, blockRelay, accountManager, submitter)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -376,36 +364,32 @@ func startServices(ctx context.Context,
 	}
 
 	// We need to submit proposal preparations to all nodes that are acting as beacon block proposers.
-	nodeAddresses := util.BeaconNodeAddressesForProposing()
-	proposalPreparationsSubmitters := make([]eth2client.ProposalPreparationsSubmitter, 0, len(nodeAddresses))
-	for _, address := range nodeAddresses {
-		client, err := fetchClient(ctx, monitor, address)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for proposal preparation submitter", address))
-		}
-		proposalPreparationsSubmitters = append(proposalPreparationsSubmitters, client.(eth2client.ProposalPreparationsSubmitter))
+	proposalPreparer, err := initProposalPreparer(ctx, monitor, chainTime, bellatrixCapable, accountManager, blockRelay)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	var proposalPreparer proposalpreparer.Service
-	if bellatrixCapable {
-		log.Trace().Msg("Starting proposals preparer")
-		proposalPreparer, err = standardproposalpreparer.New(ctx,
-			standardproposalpreparer.WithLogLevel(util.LogLevel("proposalspreparor")),
-			standardproposalpreparer.WithMonitor(monitor),
-			standardproposalpreparer.WithChainTimeService(chainTime),
-			standardproposalpreparer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-			standardproposalpreparer.WithProposalPreparationsSubmitters(proposalPreparationsSubmitters),
-			standardproposalpreparer.WithExecutionConfigProvider(blockRelay.(blockrelay.ExecutionConfigProvider)),
-		)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to start proposal preparer service")
-		}
+	controller, err := initController(ctx, monitor, chainTime, eth2Client,
+		schedulerSvc, attesterSvc, cacheSvc,
+		waitedForGenesis, accountManager, beaconBlockProposer, signedBeaconBlockProvider, proposalPreparer, attestationAggregator, beaconCommitteeSubscriber,
+		syncCommitteeMessenger, syncCommitteeAggregator, syncCommitteeSubscriber)
+	if err != nil {
+		return nil, nil, err
 	}
 
+	return chainTime, controller, nil
+}
+
+func initController(ctx context.Context, monitor metrics.Service, chainTime chaintime.Service, eth2Client eth2client.Service,
+	schedulerSvc scheduler.Service, attesterSvc attester.Service, cacheSvc cache.Service,
+	waitedForGenesis bool, accountManager accountmanager.Service, beaconBlockProposer beaconblockproposer.Service, signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider,
+	proposalPreparer proposalpreparer.Service, attestationAggregator attestationaggregator.Service, beaconCommitteeSubscriber beaconcommitteesubscriber.Service,
+	syncCommitteeMessenger synccommitteemessenger.Service, syncCommitteeAggregator synccommitteeaggregator.Service, syncCommitteeSubscriber synccommitteesubscriber.Service,
+) (*standardcontroller.Service, error) {
 	// The events provider for the controller should only use beacon nodes that are used for attestation data.
 	eventsConsensusClient, err := fetchMultiClient(ctx, monitor, "events", util.BeaconNodeAddressesForAttesting())
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to fetch multiclient for controller")
+		return nil, errors.Wrap(err, "failed to fetch multiclient for controller")
 	}
 
 	log.Trace().Msg("Starting controller")
@@ -419,14 +403,14 @@ func startServices(ctx context.Context,
 		standardcontroller.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),
 		standardcontroller.WithSyncCommitteeDutiesProvider(eth2Client.(eth2client.SyncCommitteeDutiesProvider)),
 		standardcontroller.WithEventsProvider(eventsConsensusClient.(eth2client.EventsProvider)),
-		standardcontroller.WithScheduler(scheduler),
+		standardcontroller.WithScheduler(schedulerSvc),
 		standardcontroller.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
-		standardcontroller.WithAttester(attester),
+		standardcontroller.WithAttester(attesterSvc),
 		standardcontroller.WithSyncCommitteeMessenger(syncCommitteeMessenger),
 		standardcontroller.WithSyncCommitteeAggregator(syncCommitteeAggregator),
 		standardcontroller.WithBeaconBlockProposer(beaconBlockProposer),
 		standardcontroller.WithBeaconBlockHeadersProvider(eth2Client.(eth2client.BeaconBlockHeadersProvider)),
-		standardcontroller.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
+		standardcontroller.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 		standardcontroller.WithProposalsPreparer(proposalPreparer),
 		standardcontroller.WithAttestationAggregator(attestationAggregator),
 		standardcontroller.WithBeaconCommitteeSubscriber(beaconCommitteeSubscriber),
@@ -444,10 +428,82 @@ func startServices(ctx context.Context,
 		standardcontroller.WithFastTrackGrace(viper.GetDuration("controller.fast-track.grace")),
 	)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start controller service")
+		return nil, errors.Wrap(err, "failed to start controller service")
+	}
+	return controller, nil
+}
+
+func initProposalPreparer(ctx context.Context, monitor metrics.Service, chainTime chaintime.Service, bellatrixCapable bool, accountManager accountmanager.Service, blockRelay blockrelay.Service) (proposalpreparer.Service, error) {
+	// We need to submit proposal preparations to all nodes that are acting as beacon block proposers.
+	nodeAddresses := util.BeaconNodeAddressesForProposing()
+	proposalPreparationsSubmitters := make([]eth2client.ProposalPreparationsSubmitter, 0, len(nodeAddresses))
+	for _, address := range nodeAddresses {
+		client, err := fetchClient(ctx, monitor, address)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for proposal preparation submitter", address))
+		}
+		proposalPreparationsSubmitters = append(proposalPreparationsSubmitters, client.(eth2client.ProposalPreparationsSubmitter))
 	}
 
-	return chainTime, controller, nil
+	if bellatrixCapable {
+		log.Trace().Msg("Starting proposals preparer")
+		proposalPreparer, err := standardproposalpreparer.New(ctx,
+			standardproposalpreparer.WithLogLevel(util.LogLevel("proposalspreparor")),
+			standardproposalpreparer.WithMonitor(monitor),
+			standardproposalpreparer.WithChainTimeService(chainTime),
+			standardproposalpreparer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
+			standardproposalpreparer.WithProposalPreparationsSubmitters(proposalPreparationsSubmitters),
+			standardproposalpreparer.WithExecutionConfigProvider(blockRelay.(blockrelay.ExecutionConfigProvider)),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start proposal preparer service")
+		}
+		return proposalPreparer, nil
+	}
+	var proposalPreparer proposalpreparer.Service
+	return proposalPreparer, nil
+}
+
+func waitForGenesis(ctx context.Context, chainTime chaintime.Service) (bool, error) {
+	genesisTime := chainTime.GenesisTime()
+	now := time.Now()
+	waitedForGenesis := false
+	if now.Before(genesisTime) {
+		waitedForGenesis = true
+		// Wait for genesis (or signal, or context cancel).
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+		log.Info().Str("genesis", fmt.Sprintf("%v", genesisTime)).Msg("Waiting for genesis")
+		ctx, cancel := context.WithDeadline(ctx, genesisTime)
+		defer cancel()
+		select {
+		case <-sigCh:
+			return false, errors.New("signal received")
+		case <-ctx.Done():
+			switch ctx.Err() {
+			case context.DeadlineExceeded:
+				log.Info().Msg("Genesis time")
+			case context.Canceled:
+				return false, errors.New("context cancelled")
+			}
+		}
+	}
+	return waitedForGenesis, nil
+}
+
+func startProviderServices(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (eth2client.SignedBeaconBlockProvider, eth2client.BeaconBlockHeadersProvider, error) {
+	// The signed beacon block provider from the configured strategy to define how we get signed beacon blocks.
+	signedBeaconBlockProvider, err := selectSignedBeaconBlockProvider(ctx, monitor, eth2Client)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to fetch signed beacon block provider for controller")
+	}
+
+	// The block header provider from the configured strategy to define how we get block headers.
+	beaconBlockHeaderProvider, err := selectBeaconHeaderProvider(ctx, monitor, eth2Client)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to fetch beacon block header provider for controller")
+	}
+	return signedBeaconBlockProvider, beaconBlockHeaderProvider, nil
 }
 
 func startBasicServices(ctx context.Context,
@@ -498,6 +554,8 @@ func startSharedServices(ctx context.Context,
 	majordomo majordomo.Service,
 	chainTime chaintime.Service,
 	monitor metrics.Service,
+	beaconBlockHeaderProvider eth2client.BeaconBlockHeadersProvider,
+	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider,
 ) (
 	scheduler.Service,
 	cache.Service,
@@ -512,7 +570,7 @@ func startSharedServices(ctx context.Context,
 	}
 
 	log.Trace().Msg("Starting cache")
-	cacheSvc, err := startCache(ctx, monitor, chainTime, scheduler, eth2Client)
+	cacheSvc, err := startCache(ctx, monitor, chainTime, scheduler, eth2Client, beaconBlockHeaderProvider, signedBeaconBlockProvider)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to start cache")
 	}
@@ -905,6 +963,8 @@ func startCache(ctx context.Context,
 	chainTime chaintime.Service,
 	scheduler scheduler.Service,
 	consensusClient eth2client.Service,
+	beaconBlockHeaderProvider eth2client.BeaconBlockHeadersProvider,
+	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider,
 ) (cache.Service, error) {
 	log.Trace().Msg("Starting cache")
 	cache, err := standardcache.New(ctx,
@@ -913,8 +973,8 @@ func startCache(ctx context.Context,
 		standardcache.WithScheduler(scheduler),
 		standardcache.WithChainTime(chainTime),
 		standardcache.WithEventsProvider(consensusClient.(eth2client.EventsProvider)),
-		standardcache.WithSignedBeaconBlockProvider(consensusClient.(eth2client.SignedBeaconBlockProvider)),
-		standardcache.WithBeaconBlockHeadersProvider(consensusClient.(eth2client.BeaconBlockHeadersProvider)),
+		standardcache.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
+		standardcache.WithBeaconBlockHeadersProvider(beaconBlockHeaderProvider),
 	)
 	if err != nil {
 		return nil, err
@@ -1407,85 +1467,85 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 	return submitter, nil
 }
 
+func genericAddressToClientMapper[T any](ctx context.Context, monitor metrics.Service, path, description string) (map[string]T, error) {
+	addressToClientMap := make(map[string]T)
+	for _, address := range util.BeaconNodeAddresses(path) {
+		client, err := fetchClient(ctx, monitor, address)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for %s", address, description))
+		}
+		clientCast, ok := client.(T)
+		if !ok {
+			return nil, fmt.Errorf("failed to cast client %s for %s", address, description)
+		}
+		addressToClientMap[address] = clientCast
+	}
+	return addressToClientMap, nil
+}
+
 func startMultinodeSubmitter(ctx context.Context,
 	monitor metrics.Service,
 ) (
 	submitter.Service,
 	error,
 ) {
-	aggregateAttestationSubmitters := make(map[string]eth2client.AggregateAttestationsSubmitter)
-	for _, address := range util.BeaconNodeAddresses("submitter.aggregateattestation.multinode") {
-		client, err := fetchClient(ctx, monitor, address)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for aggregate attestation submitter strategy", address))
-		}
-		aggregateAttestationSubmitters[address] = client.(eth2client.AggregateAttestationsSubmitter)
+	aggregateAttestationSubmitters, err := genericAddressToClientMapper[eth2client.AggregateAttestationsSubmitter](ctx, monitor,
+		"submitter.aggregateattestation.multinode",
+		"aggregate attestation submitter strategy")
+	if err != nil {
+		return nil, err
 	}
 
-	attestationsSubmitters := make(map[string]eth2client.AttestationsSubmitter)
-	for _, address := range util.BeaconNodeAddresses("submitter.attestation.multinode") {
-		client, err := fetchClient(ctx, monitor, address)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for attestation submitter strategy", address))
-		}
-		attestationsSubmitters[address] = client.(eth2client.AttestationsSubmitter)
+	attestationsSubmitters, err := genericAddressToClientMapper[eth2client.AttestationsSubmitter](ctx, monitor,
+		"submitter.attestation.multinode",
+		"attestation submitter strategy")
+	if err != nil {
+		return nil, err
 	}
 
-	proposalSubmitters := make(map[string]eth2client.ProposalSubmitter)
-	for _, address := range util.BeaconNodeAddresses("submitter.proposal.multinode") {
-		client, err := fetchClient(ctx, monitor, address)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for proposal submitter strategy", address))
-		}
-		proposalSubmitters[address] = client.(eth2client.ProposalSubmitter)
+	proposalSubmitters, err := genericAddressToClientMapper[eth2client.ProposalSubmitter](ctx, monitor,
+		"submitter.proposal.multinode",
+		"proposal submitter strategy")
+	if err != nil {
+		return nil, err
 	}
 
-	beaconCommitteeSubscriptionsSubmitters := make(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter)
-	for _, address := range util.BeaconNodeAddresses("submitter.beaconcommitteesubscription.multinode") {
-		client, err := fetchClient(ctx, monitor, address)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon committee subscription submitter strategy", address))
-		}
-		beaconCommitteeSubscriptionsSubmitters[address] = client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)
+	beaconCommitteeSubscriptionsSubmitters, err := genericAddressToClientMapper[eth2client.BeaconCommitteeSubscriptionsSubmitter](ctx, monitor,
+		"submitter.beaconcommitteesubscription.multinode",
+		"beacon committee subscription submitter strategy")
+	if err != nil {
+		return nil, err
 	}
 
-	proposalPreparationSubmitters := make(map[string]eth2client.ProposalPreparationsSubmitter)
-	for _, address := range util.BeaconNodeAddresses("submitter.proposalpreparation.multinode") {
-		client, err := fetchClient(ctx, monitor, address)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for proposal preparation submitter strategy", address))
-		}
-		proposalPreparationSubmitters[address] = client.(eth2client.ProposalPreparationsSubmitter)
+	proposalPreparationSubmitters, err := genericAddressToClientMapper[eth2client.ProposalPreparationsSubmitter](ctx, monitor,
+		"submitter.proposalpreparation.multinode",
+		"proposal preparation submitter strategy")
+	if err != nil {
+		return nil, err
 	}
 
-	syncCommitteeContributionsSubmitters := make(map[string]eth2client.SyncCommitteeContributionsSubmitter)
-	for _, address := range util.BeaconNodeAddresses("submitter.synccommitteecontribution.multinode") {
-		client, err := fetchClient(ctx, monitor, address)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for sync committee contribution submitter strategy", address))
-		}
-		syncCommitteeContributionsSubmitters[address] = client.(eth2client.SyncCommitteeContributionsSubmitter)
+	syncCommitteeContributionsSubmitters, err := genericAddressToClientMapper[eth2client.SyncCommitteeContributionsSubmitter](ctx, monitor,
+		"submitter.synccommitteecontribution.multinode",
+		"sync committee contribution submitter strategy")
+	if err != nil {
+		return nil, err
 	}
 
-	syncCommitteeMessagesSubmitters := make(map[string]eth2client.SyncCommitteeMessagesSubmitter)
-	for _, address := range util.BeaconNodeAddresses("submitter.synccommitteemessage.multinode") {
-		client, err := fetchClient(ctx, monitor, address)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for sync committee message submitter strategy", address))
-		}
-		syncCommitteeMessagesSubmitters[address] = client.(eth2client.SyncCommitteeMessagesSubmitter)
+	syncCommitteeMessagesSubmitters, err := genericAddressToClientMapper[eth2client.SyncCommitteeMessagesSubmitter](ctx, monitor,
+		"submitter.synccommitteemessage.multinode",
+		"sync committee message submitter strategy")
+	if err != nil {
+		return nil, err
 	}
 
-	syncCommitteeSubscriptionsSubmitters := make(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter)
-	for _, address := range util.BeaconNodeAddresses("submitter.synccommitteesubscription.multinode") {
-		client, err := fetchClient(ctx, monitor, address)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for sync committee subscription submitter strategy", address))
-		}
-		syncCommitteeSubscriptionsSubmitters[address] = client.(eth2client.SyncCommitteeSubscriptionsSubmitter)
+	syncCommitteeSubscriptionsSubmitters, err := genericAddressToClientMapper[eth2client.SyncCommitteeSubscriptionsSubmitter](ctx, monitor,
+		"submitter.synccommitteesubscription.multinode",
+		"sync committee subscription submitter strategy")
+	if err != nil {
+		return nil, err
 	}
 
-	submitter, err := multinodesubmitter.New(ctx,
+	submitterService, err := multinodesubmitter.New(ctx,
 		multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 		multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
 		multinodesubmitter.WithLogLevel(util.LogLevel("submitter.multinode")),
@@ -1503,7 +1563,7 @@ func startMultinodeSubmitter(ctx context.Context,
 		return nil, err
 	}
 
-	return submitter, nil
+	return submitterService, nil
 }
 
 // runCommands potentially runs commands.
@@ -1793,4 +1853,94 @@ func obtainBuilderConfigsForPrivilegedBuilders(_ context.Context,
 	}
 
 	return nil
+}
+
+// select the signed beacon block provider based on user input.
+func selectSignedBeaconBlockProvider(ctx context.Context,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+) (
+	eth2client.SignedBeaconBlockProvider,
+	error,
+) {
+	log.Trace().Msg("Selecting signed beacon block strategy")
+
+	var provider eth2client.SignedBeaconBlockProvider
+	var err error
+
+	style := "strategies.signedbeaconblock.style"
+	switch viper.GetString(style) {
+	case "first", "":
+		log.Info().Msg("Starting first signed beacon block strategy")
+		signedBeaconBlockProviders := make(map[string]eth2client.SignedBeaconBlockProvider)
+		path := "strategies.signedbeaconblock.first"
+		for _, address := range util.BeaconNodeAddresses(path) {
+			client, err := fetchClient(ctx, monitor, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for signed beacon block strategy", address))
+			}
+			signedBeaconBlockProviders[address] = client.(eth2client.SignedBeaconBlockProvider)
+		}
+
+		provider, err = firstsignedbeaconblockstrategy.New(ctx,
+			firstsignedbeaconblockstrategy.WithTimeout(util.Timeout(path)),
+			firstsignedbeaconblockstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			firstsignedbeaconblockstrategy.WithLogLevel(util.LogLevel(path)),
+			firstsignedbeaconblockstrategy.WithSignedBeaconBlockProviders(signedBeaconBlockProviders),
+		)
+	default:
+		log.Info().Msg("Starting simple signed block strategy")
+		provider = eth2Client.(eth2client.SignedBeaconBlockProvider)
+	}
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to instantiate signed beacon block strategy")
+	}
+
+	return provider, nil
+}
+
+// select the beacon header provider based on user input.
+func selectBeaconHeaderProvider(ctx context.Context,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+) (
+	eth2client.BeaconBlockHeadersProvider,
+	error,
+) {
+	log.Trace().Msg("Selecting beacon header strategy")
+
+	var provider eth2client.BeaconBlockHeadersProvider
+	var err error
+
+	style := "strategies.beaconblockheader.style"
+	switch viper.GetString(style) {
+	case "first", "":
+		log.Info().Msg("Starting first beach block header strategy")
+		beaconBlockHeaderProviders := make(map[string]eth2client.BeaconBlockHeadersProvider)
+		path := "strategies.beaconblockheader.first"
+		for _, address := range util.BeaconNodeAddresses(path) {
+			client, err := fetchClient(ctx, monitor, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block header strategy", address))
+			}
+			beaconBlockHeaderProviders[address] = client.(eth2client.BeaconBlockHeadersProvider)
+		}
+
+		provider, err = firstbeaconblockheaderstrategy.New(ctx,
+			firstbeaconblockheaderstrategy.WithTimeout(util.Timeout(path)),
+			firstbeaconblockheaderstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			firstbeaconblockheaderstrategy.WithLogLevel(util.LogLevel(path)),
+			firstbeaconblockheaderstrategy.WithBeaconBlockHeadersProviders(beaconBlockHeaderProviders),
+		)
+	default:
+		log.Info().Msg("Starting simple beacon block header strategy")
+		provider = eth2Client.(eth2client.BeaconBlockHeadersProvider)
+	}
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to instantiate beacon header strategy")
+	}
+
+	return provider, nil
 }
