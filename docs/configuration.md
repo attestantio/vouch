@@ -69,7 +69,8 @@ controller:
     # for the duties' slot.  Otherwise it will wait until 4 seconds into the slot before attesting.
     attestations: true
     # If sync-committees is true then Vouch will generate sync committee messages as soon as it receives notification that
-    # the head block has been updated for the duties' slot.  Otherwise it will wait until 4 seconds into the slot before attesting.
+    # the head block has been updated for the duties' slot.  Otherwise it will wait until 4 seconds into the slot before
+    # generating sync committee messages.
     sync-committees: true
     # grace is the delay between receiving the notification of the head block and starting the fast track process.  This allows
     # the rest of the network to settle if we saw the head block early.
@@ -319,7 +320,7 @@ This can be configured using the environment variables `VOUCH_<MODULE>_LOG_LEVEL
 Advanced options can change the performance of Vouch to be severely detrimental to its operation.  It is strongly recommended that these options are not changed unless the user understands completely what they do and their possible performance impact.
 
 ### controller.max-attestation-delay
-This is a duration parameter, that defaults to `4s`.  It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty,
+This is a duration parameter, that defaults to `4s`.  It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
 
 ### controller.attestation-aggregation-delay
 This is a duration parameter, that defaults to `8s`.  It defines the time that Vouch will wait from the start of a slot before aggregating existing attestations.
