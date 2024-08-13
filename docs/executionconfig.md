@@ -426,7 +426,7 @@ In general, the answer is to ensure that the most specific rules are provided fi
 }
 ```
 
-This configuration will return `0x2222…2222` as the fee recipient for account "Wallet 1/Account 2".
+This configuration will return `0x2222…2222` as the fee recipient for account "Wallet 1/Account 2", and `0x1111…1111` for all other accounts in "Wallet 1".
 
 ## Testing
 Proposing blocks is a relatively rare event, and as such it is useful for users to be able to understand the execution configuration of a specific proposer before it proposes.  Vouch provides a specific command that can be run to obtain the fully specified proposer configuration for a given public key:
