@@ -66,16 +66,16 @@ graffiti:
 controller:
   fast-track: 
     # If attestations is true then Vouch will attest as soon as it receives notification that the head block has been updated
-    # for the duties' slot.
+    # for the duties' slot.  Otherwise it will wait until 4 seconds into the slot before attesting.
     attestations: true
     # If sync-committees is true then Vouch will generate sync committee messages as soon as it receives notification that
-    # the head block has been updated for the duties' slot.
+    # the head block has been updated for the duties' slot.  Otherwise it will wait until 4 seconds into the slot before attesting.
     sync-committees: true
     # grace is the delay between receiving the notification of the head block and starting the fast track process.  This allows
     # the rest of the network to settle if we saw the head block early.
     grace: '200ms'
   # This flag enables verification of sync committee messages included in SyncAggregate. Exposes information via metrics and logs, 
-  # defaults to false as this requires some extra processing to get the required metrics.
+  # defaults to false as this requires some extra processing to calculate the required metrics.
   verify-sync-committee-inclusion: false
 
 # beaconblockproposer provides control of the beacon block proposal process.
@@ -102,11 +102,11 @@ submitter:
   attestation:
     # beacon-node-addresses are the addresses to which to submit attestations.
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
-  beaconblock:
-    # beacon-node-addresses are the addresses to which to submit beacon blocks.
-    beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
   beaconcommitteesubscription:
     # beacon-node-addresses are the addresses to which to submit beacon committee subscriptions.
+    beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
+  proposal:
+    # beacon-node-addresses are the addresses to which to submit beacon block proposals.
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
   proposalpreparation:
     # beacon-node-addresses are the addresses to which to submit beacon proposal preparations.
@@ -205,9 +205,19 @@ strategies:
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
 
 # blockrelay provides information about working with local execution clients and remote relays for block proposals.
-# Configuration information for this section can be found in the execution layer documentation.
 blockrelay:
+  # config is a URL that contains the configuration file for carrying out auctions.  Each validator can have a different
+  # set of relays, a different fee recipient, and a different gas limit if required.  Details about the format of this file
+  # can be found in the "Execution configuration" document.
+  config:
+    url: 'file:///home/vouch/config.json'
+  # fallback-fee-recipient is used for validators that do not have a value provided by the configuration above.
   fallback-fee-recipient: '0x0000000000000000000000000000000000000001'
+  # fallback-gas-limit is used for validators that do not have a value provided by the configuration above.
+  fallback-gas-limit: 30000000
+  # If log-results is true then the results of each block auction will be written to the logs.  Output will include each
+  # participating relay, the bid provided, and if the bid was selected for use by Vouch.
+  log-results: true
   # builder-configs contain specific configurations for different builders, with each builder defined by its public key.
   # The base score for each bid is the value to the proposer, in wei.  The final score is calculated by adding
   # the 'offset' value for the specific builder, and then multiplying it by the 'factor' value.  For example,
@@ -250,11 +260,11 @@ beacon-node-addresses: [ 'localhost:4000', 'localhost:5051' ]
 strategies:
   beacon-node-address: [ 'localhost:5051' ]
   beaconblockproposal:
-    style: best
+    style: 'best'
     beacon-node-addresses: [ 'localhost:4000' ]
 submitter:
-  style: multinode
-  beaconblock:
+  style: 'multinode'
+  proposal:
     multinode:
       beacon-node-addresses: ['localhost:4000', 'localhost:9000']
 ```
@@ -263,7 +273,7 @@ Then the configuration will resolve as follows:
   - `beacon-node-addresses` resolves to `['localhost:4000', 'localhost:5051']` with a direct match
   - `strategies.attestationdata.best.beacon-node-addresses` resolves `['localhost:5051']` at `strategies.beacon-node-addresses`
   - `strategies.beaconblockproposal.best.beacon-node-addresses` resolves `['localhost:4000']` at `strategies.beacon-node-addresses`
-  - `submitter.beaconblock.multinode.beacon-node-addresses` resolves `['localhost:4000', 'localhost:9000']` with a direct match
+  - `submitter.proposal.multinode.beacon-node-addresses` resolves `['localhost:4000', 'localhost:9000']` with a direct match
   - `submitter.attestation.multinode.beacon-node-addresses` resolves `['localhost:4000', 'localhost:5051']` at `beacon-node-addresses`
 
 Hierarchical configuration provides a simple way of setting defaults and overrides, and is available for `beacon-node-addresses`, `log-level`, `timeout` and `process-concurrency` configuration values.
@@ -309,7 +319,7 @@ This can be configured using the environment variables `VOUCH_<MODULE>_LOG_LEVEL
 Advanced options can change the performance of Vouch to be severely detrimental to its operation.  It is strongly recommended that these options are not changed unless the user understands completely what they do and their possible performance impact.
 
 ### controller.max-attestation-delay
-This is a duration parameter, that defaults to `4s`.  It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
+This is a duration parameter, that defaults to `4s`.  It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty,
 
 ### controller.attestation-aggregation-delay
 This is a duration parameter, that defaults to `8s`.  It defines the time that Vouch will wait from the start of a slot before aggregating existing attestations.
