@@ -374,12 +374,17 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 		return
 	}
 
+	var allCommitteeIndices []uint64
 	inScopeValidators := make([]uint64, len(previousSlotData.ValidatorToCommitteeIndex))
 	keyCount := 0
-	for key := range previousSlotData.ValidatorToCommitteeIndex {
-		inScopeValidators[keyCount] = uint64(key)
+	for validatorIndex, committeeIndices := range previousSlotData.ValidatorToCommitteeIndex {
+		inScopeValidators[keyCount] = uint64(validatorIndex)
 		keyCount++
+		for _, committeeIndex := range committeeIndices {
+			allCommitteeIndices = append(allCommitteeIndices, uint64(committeeIndex))
+		}
 	}
+
 	log.Trace().Uints64("validators", inScopeValidators).Msg("Verifying sync committee messages for validators")
 	messengerMonitor.SyncCommitteeCurrentCountSet(len(inScopeValidators))
 
@@ -403,9 +408,12 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 			Msg("Parent root does not equal sync committee root broadcast")
 		messengerMonitor.SyncCommitteeMessagesHeadMismatchInc(len(inScopeValidators))
 
-		log.Debug().Uints64("incorrect", inScopeValidators).
-			Uints64("missing", []uint64{}).
-			Uints64("included", []uint64{}).
+		log.Debug().Uints64("incorrect_validator_indices", inScopeValidators).
+			Uints64("incorrect_committee_indices", allCommitteeIndices).
+			Uints64("missing_validator_indices", []uint64{}).
+			Uints64("missing_committee_indices", []uint64{}).
+			Uints64("included_validator_indices", []uint64{}).
+			Uints64("included_committee_indices", []uint64{}).
 			Msg("Verifying sync committee messages for validators complete")
 		return
 	}
@@ -415,22 +423,25 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 		return
 	}
 
-	// The previousSlotData.ValidatorToCommitteeIndex maps all of our validators to their committee indices for every slot in the epoch.
-	// Assumption here is that for every slot each validator should have contributed to all their committee indices for the whole epoch.
-	var included, missing []uint64
+	var includedValidatorIndices, includedCommitteeIndices, missingValidatorIndices, missingCommitteeIndices []uint64
 	for validatorIndex, committeeIndices := range previousSlotData.ValidatorToCommitteeIndex {
 		for _, committeeIndex := range committeeIndices {
 			if !syncAggregate.SyncCommitteeBits.BitAt(uint64(committeeIndex)) {
 				messengerMonitor.SyncCommitteeSyncAggregateMissingInc()
-				missing = append(missing, uint64(validatorIndex))
+				missingValidatorIndices = append(missingValidatorIndices, uint64(validatorIndex))
+				missingCommitteeIndices = append(missingCommitteeIndices, uint64(committeeIndex))
 				continue
 			}
 			messengerMonitor.SyncCommitteeSyncAggregateFoundInc()
-			included = append(included, uint64(validatorIndex))
+			includedValidatorIndices = append(includedValidatorIndices, uint64(validatorIndex))
+			includedCommitteeIndices = append(includedCommitteeIndices, uint64(committeeIndex))
 		}
 	}
-	log.Debug().Uints64("incorrect", []uint64{}).
-		Uints64("missing", missing).
-		Uints64("included", included).
+	log.Debug().Uints64("incorrect_validator_indices", []uint64{}).
+		Uints64("incorrect_committee_indices", []uint64{}).
+		Uints64("missing_validator_indices", missingValidatorIndices).
+		Uints64("missing_committee_indices", missingCommitteeIndices).
+		Uints64("included_validator_indices", includedValidatorIndices).
+		Uints64("included_committee_indices", includedCommitteeIndices).
 		Msg("Verifying sync committee messages for validators complete")
 }
