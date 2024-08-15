@@ -165,6 +165,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			params: append(params, standard.WithSignedBeaconBlockProvider(primedSignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
+				"Verifying sync committee messages for validators complete",
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {
 				service.PrimeLastReported(previousSlot, synccommitteemessenger.SlotData{Root: root, ValidatorToCommitteeIndex: validatorIndexToCommitteeIndices})
@@ -196,6 +197,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			logEntries: []string{
 				"Received head event",
 				"Parent root does not equal sync committee root broadcast",
+				"Verifying sync committee messages for validators complete",
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {
 				service.PrimeLastReported(previousSlot, synccommitteemessenger.SlotData{Root: mismatchingRoot, ValidatorToCommitteeIndex: validatorIndexToCommitteeIndices})
@@ -230,7 +232,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 			params: append(params, standard.WithSignedBeaconBlockProvider(primedSignedBeaconBlockProvider)),
 			logEntries: []string{
 				"Received head event",
-				"Validator not included in SyncAggregate SyncCommitteeBits",
+				"Verifying sync committee messages for validators complete",
 			},
 			testSpecificPriming: func(service *mocksynccommitteemessenger.Service) {
 				validatorIndexToCommitteeWithExtraValidator := validatorIndexToCommitteeIndices
