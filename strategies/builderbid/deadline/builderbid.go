@@ -307,12 +307,12 @@ func (*Service) setBuilderBid(ctx context.Context,
 	if builderConfig.Offset != nil {
 		score = new(big.Int).Add(score, builderConfig.Offset)
 	}
-	if builderConfig.Boost != nil {
-		boost := new(big.Rat).SetInt64(0)
-		if builderConfig.Boost.Cmp(big.NewInt(0)) > 0 {
-			boost = new(big.Rat).Quo(new(big.Rat).SetInt(builderConfig.Boost), new(big.Rat).SetInt64(100))
+	if builderConfig.Factor != nil {
+		factor := new(big.Rat).SetInt64(0)
+		if builderConfig.Factor.Cmp(big.NewInt(0)) > 0 {
+			factor = new(big.Rat).Quo(new(big.Rat).SetInt(builderConfig.Factor), new(big.Rat).SetInt64(100))
 		}
-		score = new(big.Int).SetInt64(new(big.Rat).Mul(new(big.Rat).SetInt(score), boost).Num().Int64())
+		score = new(big.Int).SetInt64(new(big.Rat).Mul(new(big.Rat).SetInt(score), factor).Num().Int64())
 	}
 
 	participation := &blockauctioneer.Participation{

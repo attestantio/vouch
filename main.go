@@ -1773,7 +1773,7 @@ func obtainBuilderConfigs(ctx context.Context) (map[phase0.BLSPubKey]*blockrelay
 		copy(publicKey[:], tmp)
 
 		category := blockrelay.StandardBuilderCategory
-		var boost *big.Int
+		var factor *big.Int
 		var offset *big.Int
 
 		var success bool
@@ -1781,8 +1781,8 @@ func obtainBuilderConfigs(ctx context.Context) (map[phase0.BLSPubKey]*blockrelay
 			switch {
 			case strings.EqualFold(k, "category"):
 				category = v
-			case strings.EqualFold(k, "boost"):
-				boost, success = new(big.Int).SetString(v, 10)
+			case strings.EqualFold(k, "factor"):
+				factor, success = new(big.Int).SetString(v, 10)
 				if !success {
 					return nil, fmt.Errorf("failed to decode factor %s for builder %s", v, addr)
 				}
@@ -1799,7 +1799,7 @@ func obtainBuilderConfigs(ctx context.Context) (map[phase0.BLSPubKey]*blockrelay
 
 		res[publicKey] = &blockrelay.BuilderConfig{
 			Category: category,
-			Boost:    boost,
+			Factor:   factor,
 			Offset:   offset,
 		}
 	}
@@ -1826,7 +1826,7 @@ func obtainBuilderConfigsForExcludedBuilders(_ context.Context,
 
 		res[publicKey] = &blockrelay.BuilderConfig{
 			Category: "excluded",
-			Boost:    big.NewInt(0),
+			Factor:   big.NewInt(0),
 		}
 	}
 
@@ -1852,7 +1852,7 @@ func obtainBuilderConfigsForPrivilegedBuilders(_ context.Context,
 
 		res[publicKey] = &blockrelay.BuilderConfig{
 			Category: "privileged",
-			Boost:    big.NewInt(1000000000000000000),
+			Factor:   big.NewInt(1000000000000000000),
 		}
 	}
 

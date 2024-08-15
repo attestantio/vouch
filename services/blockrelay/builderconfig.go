@@ -22,8 +22,8 @@ const StandardBuilderCategory = "standard"
 type BuilderConfig struct {
 	// Category is the category applied to the builder.
 	Category string
-	// Boost is a percentage multiplier applied to the proposal score from the builder.
-	Boost *big.Int
+	// Factor is a percentage multiplier applied to the proposal score from the builder.
+	Factor *big.Int
 	// Offset is an offset applied to the proposal score from the builder.
 	Offset *big.Int
 }
