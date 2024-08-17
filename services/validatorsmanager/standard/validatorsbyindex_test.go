@@ -30,8 +30,8 @@ func TestValidatorsByIndex(t *testing.T) {
 	ctx := context.Background()
 	s, err := standard.New(ctx,
 		standard.WithLogLevel(zerolog.Disabled),
-		standard.WithMonitor(nullmetrics.New(context.Background())),
-		standard.WithClientMonitor(nullmetrics.New(context.Background())),
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithClientMonitor(nullmetrics.New()),
 		standard.WithFarFutureEpoch(phase0.Epoch(0xffffffffffffffff)),
 		standard.WithValidatorsProvider(mock.NewValidatorsProvider()),
 	)

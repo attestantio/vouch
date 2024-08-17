@@ -15,11 +15,12 @@ package standard_test
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/synccommitteemessenger"
 	"github.com/attestantio/vouch/testutil"
-	"testing"
-	"time"
 
 	mocketh2client "github.com/attestantio/go-eth2-client/mock"
 	"github.com/attestantio/vouch/mock"
@@ -67,7 +68,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(-1),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
 				standard.WithSpecProvider(specProvider),
@@ -103,7 +104,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(1),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
 				standard.WithSpecProvider(specProvider),
 				standard.WithBeaconBlockRootProvider(mockETH2Client),
@@ -120,7 +121,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(1),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithSpecProvider(specProvider),
 				standard.WithBeaconBlockRootProvider(mockETH2Client),
@@ -137,7 +138,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(1),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
 				standard.WithBeaconBlockRootProvider(mockETH2Client),
@@ -154,7 +155,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(1),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
 				standard.WithSpecProvider(specProvider),
@@ -171,7 +172,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(1),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
 				standard.WithSpecProvider(specProvider),
@@ -188,7 +189,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(1),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
 				standard.WithSpecProvider(specProvider),
@@ -205,7 +206,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(1),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
 				standard.WithSpecProvider(specProvider),
@@ -222,7 +223,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(1),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
 				standard.WithSpecProvider(specProvider),
@@ -239,7 +240,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(1),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
 				standard.WithSpecProvider(specProvider),
@@ -256,7 +257,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(1),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
 				standard.WithSpecProvider(specProvider),
@@ -335,7 +336,7 @@ func TestServiceMessage(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(1),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
 				standard.WithSpecProvider(specProvider),
@@ -394,7 +395,7 @@ func TestServiceRemoveHistoricDataUsedForSlotValidation(t *testing.T) {
 	params := []standard.Parameter{
 		standard.WithLogLevel(zerolog.Disabled),
 		standard.WithProcessConcurrency(1),
-		standard.WithMonitor(nullmetrics.New(ctx)),
+		standard.WithMonitor(nullmetrics.New()),
 		standard.WithChainTimeService(chainTime),
 		standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
 		standard.WithSpecProvider(specProvider),

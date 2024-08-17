@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,7 +15,6 @@
 package null
 
 import (
-	"context"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -25,7 +24,7 @@ import (
 type Service struct{}
 
 // New creates a new null metrics service.
-func New(_ context.Context) *Service {
+func New() *Service {
 	return &Service{}
 }
 

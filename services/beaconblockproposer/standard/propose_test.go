@@ -130,7 +130,7 @@ func TestPropose(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			capture := logger.NewLogCapture()
 			s, err := standard.New(ctx,
-				standard.WithMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),

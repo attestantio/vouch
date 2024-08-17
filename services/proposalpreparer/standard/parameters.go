@@ -14,7 +14,6 @@
 package standard
 
 import (
-	"context"
 	"errors"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -92,7 +91,7 @@ func WithExecutionConfigProvider(provider blockrelay.ExecutionConfigProvider) Pa
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel: zerolog.GlobalLevel(),
-		monitor:  nullmetrics.New(context.Background()),
+		monitor:  nullmetrics.New(),
 	}
 	for _, p := range params {
 		if params != nil {

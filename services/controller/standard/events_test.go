@@ -16,6 +16,9 @@ package standard_test
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -23,8 +26,6 @@ import (
 	"github.com/attestantio/vouch/services/synccommitteemessenger"
 	"github.com/attestantio/vouch/testutil"
 	"github.com/prysmaticlabs/go-bitfield"
-	"testing"
-	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
@@ -87,7 +88,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 
 	params := []standard.Parameter{
 		standard.WithLogLevel(zerolog.TraceLevel),
-		standard.WithMonitor(nullmetrics.New(ctx)),
+		standard.WithMonitor(nullmetrics.New()),
 		standard.WithSpecProvider(specProvider),
 		standard.WithChainTimeService(chainTime),
 		standard.WithProposerDutiesProvider(proposerDutiesProvider),

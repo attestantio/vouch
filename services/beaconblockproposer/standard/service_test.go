@@ -81,7 +81,7 @@ func TestService(t *testing.T) {
 			name: "ProposalDataProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
 				standard.WithProposalSubmitter(consensusClient),
@@ -95,7 +95,7 @@ func TestService(t *testing.T) {
 			name: "ChainTimeMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
 				standard.WithProposalSubmitter(consensusClient),
@@ -109,7 +109,7 @@ func TestService(t *testing.T) {
 			name: "ValidatingAccountsProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTime(chainTime),
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithProposalSubmitter(consensusClient),
@@ -123,7 +123,7 @@ func TestService(t *testing.T) {
 			name: "ProposalSubmitterMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
@@ -137,7 +137,7 @@ func TestService(t *testing.T) {
 			name: "RANDAORevealSignerMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
@@ -151,7 +151,7 @@ func TestService(t *testing.T) {
 			name: "BeaconBlockSignerMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
@@ -165,7 +165,7 @@ func TestService(t *testing.T) {
 			name: "BlobSidecarSignerMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
@@ -179,7 +179,7 @@ func TestService(t *testing.T) {
 			name: "GoodWithOptionals",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
@@ -194,7 +194,7 @@ func TestService(t *testing.T) {
 			name: "ExecutionChainHeadProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
@@ -210,7 +210,7 @@ func TestService(t *testing.T) {
 			name: "GoodWithAuctioneer",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),

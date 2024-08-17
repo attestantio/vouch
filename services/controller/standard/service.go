@@ -106,7 +106,7 @@ type Service struct {
 
 // New creates a new controller.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
-	parameters, err := parseAndCheckParameters(params...)
+	parameters, err := parseAndCheckParameters(ctx, params...)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem with parameters")
 	}

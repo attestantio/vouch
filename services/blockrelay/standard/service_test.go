@@ -52,7 +52,7 @@ func TestService(t *testing.T) {
 	mockValidatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
 	mockAccountsProvider := mockaccountmanager.NewAccountsProvider()
 
-	monitor := nullmetrics.New(ctx)
+	monitor := nullmetrics.New()
 
 	majordomoSvc, err := standardmajordomo.New(ctx)
 	require.NoError(t, err)

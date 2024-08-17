@@ -40,8 +40,8 @@ func TestService(t *testing.T) {
 			name: "Good",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
-				standard.WithClientMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
+				standard.WithClientMonitor(nullmetrics.New()),
 				standard.WithFarFutureEpoch(farFutureEpoch),
 				standard.WithValidatorsProvider(validatorsProvider),
 			},

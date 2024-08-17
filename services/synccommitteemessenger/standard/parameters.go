@@ -14,8 +14,6 @@
 package standard
 
 import (
-	"context"
-
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/chaintime"
@@ -142,7 +140,7 @@ func WithSyncCommitteeSubscriptionsSubmitter(submitter submitter.SyncCommitteeSu
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel: zerolog.GlobalLevel(),
-		monitor:  nullmetrics.New(context.Background()),
+		monitor:  nullmetrics.New(),
 	}
 	for _, p := range params {
 		if params != nil {

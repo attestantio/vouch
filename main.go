@@ -110,7 +110,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.9.0-alpha.8-dev"
+var ReleaseVersion = "1.9.0-beta.1-dev"
 
 func main() {
 	exitCode := main2()
@@ -249,6 +249,7 @@ func fetchConfig() error {
 	viper.SetDefault("beaconblockproposer.builder-boost-factor", 91)
 	viper.SetDefault("strategies.builderbid.deadline.deadline", time.Second)
 	viper.SetDefault("strategies.builderbid.deadline.bid-gap", 100*time.Millisecond)
+	viper.SetDefault("submitter.style", "multinode")
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch {
@@ -928,7 +929,7 @@ func startMonitor(ctx context.Context,
 		log.Info().Str("listen_address", viper.GetString("metrics.prometheus.listen-address")).Msg("Started prometheus metrics service")
 	} else {
 		log.Debug().Msg("No metrics service supplied; monitor not starting")
-		monitor = nullmetrics.New(ctx)
+		monitor = nullmetrics.New()
 	}
 	return monitor, nil
 }
@@ -1784,6 +1785,9 @@ func obtainBuilderConfigs(ctx context.Context) (map[phase0.BLSPubKey]*blockrelay
 				factor, success = new(big.Int).SetString(v, 10)
 				if !success {
 					return nil, fmt.Errorf("failed to decode factor %s for builder %s", v, addr)
+				}
+				if factor.Sign() == -1 {
+					return nil, fmt.Errorf("factor %s cannot be negative for builder %s", v, addr)
 				}
 			case strings.EqualFold(k, "offset"):
 				offset, success = new(big.Int).SetString(v, 10)

@@ -15,8 +15,6 @@
 package immediate
 
 import (
-	"context"
-
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
@@ -122,7 +120,7 @@ func WithProposalPreparationsSubmitter(submitter eth2client.ProposalPreparations
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel:      zerolog.GlobalLevel(),
-		clientMonitor: nullmetrics.New(context.Background()),
+		clientMonitor: nullmetrics.New(),
 	}
 	for _, p := range params {
 		if params != nil {

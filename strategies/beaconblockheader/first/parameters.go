@@ -16,7 +16,6 @@
 package first
 
 import (
-	"context"
 	"time"
 
 	consensusclient "github.com/attestantio/go-eth2-client"
@@ -76,7 +75,7 @@ func WithTimeout(timeout time.Duration) Parameter {
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel:      zerolog.GlobalLevel(),
-		clientMonitor: nullmetrics.New(context.Background()),
+		clientMonitor: nullmetrics.New(),
 	}
 	for _, p := range params {
 		if params != nil {

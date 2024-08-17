@@ -24,7 +24,7 @@ import (
 	"github.com/attestantio/vouch/services/cache"
 	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
-	"github.com/attestantio/vouch/services/metrics/null"
+	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -75,7 +75,7 @@ func TestService(t *testing.T) {
 			name: "TimeoutMissing",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
-				best.WithClientMonitor(null.New(context.Background())),
+				best.WithClientMonitor(nullmetrics.New()),
 				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
@@ -94,7 +94,7 @@ func TestService(t *testing.T) {
 			name: "TimeoutZero",
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
-				best.WithClientMonitor(null.New(context.Background())),
+				best.WithClientMonitor(nullmetrics.New()),
 				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
@@ -115,7 +115,7 @@ func TestService(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
-				best.WithClientMonitor(null.New(context.Background())),
+				best.WithClientMonitor(nullmetrics.New()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
@@ -134,7 +134,7 @@ func TestService(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
-				best.WithClientMonitor(null.New(context.Background())),
+				best.WithClientMonitor(nullmetrics.New()),
 				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
@@ -152,7 +152,7 @@ func TestService(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
-				best.WithClientMonitor(null.New(context.Background())),
+				best.WithClientMonitor(nullmetrics.New()),
 				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithProcessConcurrency(1),
@@ -171,7 +171,7 @@ func TestService(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
-				best.WithClientMonitor(null.New(context.Background())),
+				best.WithClientMonitor(nullmetrics.New()),
 				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
@@ -191,7 +191,7 @@ func TestService(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
-				best.WithClientMonitor(null.New(context.Background())),
+				best.WithClientMonitor(nullmetrics.New()),
 				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
@@ -206,7 +206,7 @@ func TestService(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
-				best.WithClientMonitor(null.New(context.Background())),
+				best.WithClientMonitor(nullmetrics.New()),
 				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
@@ -222,7 +222,7 @@ func TestService(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
-				best.WithClientMonitor(null.New(context.Background())),
+				best.WithClientMonitor(nullmetrics.New()),
 				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
@@ -241,7 +241,7 @@ func TestService(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
-				best.WithClientMonitor(null.New(context.Background())),
+				best.WithClientMonitor(nullmetrics.New()),
 				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(mock.NewErroringSpecProvider()),
@@ -261,7 +261,7 @@ func TestService(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
-				best.WithClientMonitor(null.New(context.Background())),
+				best.WithClientMonitor(nullmetrics.New()),
 				best.WithEventsProvider(mock.NewErroringEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
@@ -281,7 +281,7 @@ func TestService(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.Disabled),
 				best.WithTimeout(2 * time.Second),
-				best.WithClientMonitor(null.New(context.Background())),
+				best.WithClientMonitor(nullmetrics.New()),
 				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),

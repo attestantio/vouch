@@ -14,8 +14,6 @@
 package standard
 
 import (
-	"context"
-
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
@@ -81,8 +79,8 @@ func WithDomainProvider(provider eth2client.DomainProvider) Parameter {
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel:      zerolog.GlobalLevel(),
-		monitor:       nullmetrics.New(context.Background()),
-		clientMonitor: nullmetrics.New(context.Background()),
+		monitor:       nullmetrics.New(),
+		clientMonitor: nullmetrics.New(),
 	}
 	for _, p := range params {
 		if params != nil {

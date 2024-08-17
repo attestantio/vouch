@@ -1,4 +1,6 @@
 dev:
+  - tidy up log entries for sync committee summaries
+  - reduce unnecessary log entries from some strategies
 
 1.9.0-alpha.8:
   - update internal active validators count when Dirk not available at start

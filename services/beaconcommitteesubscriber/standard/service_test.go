@@ -55,7 +55,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(0),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithAttesterDutiesProvider(attesterDutiesProvider),
 				standard.WithBeaconCommitteeSubmitter(beaconCommitteesSubmitter),
@@ -81,7 +81,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(2),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithAttesterDutiesProvider(attesterDutiesProvider),
 				standard.WithBeaconCommitteeSubmitter(beaconCommitteesSubmitter),
 				standard.WithAttestationAggregator(attestationAggregator),
@@ -93,7 +93,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(2),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithBeaconCommitteeSubmitter(beaconCommitteesSubmitter),
 				standard.WithAttestationAggregator(attestationAggregator),
@@ -105,7 +105,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(2),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithAttesterDutiesProvider(attesterDutiesProvider),
 				standard.WithAttestationAggregator(attestationAggregator),
@@ -117,7 +117,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(2),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithAttesterDutiesProvider(attesterDutiesProvider),
 				standard.WithBeaconCommitteeSubmitter(beaconCommitteesSubmitter),
@@ -129,7 +129,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithProcessConcurrency(2),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithAttesterDutiesProvider(attesterDutiesProvider),
 				standard.WithBeaconCommitteeSubmitter(beaconCommitteesSubmitter),
