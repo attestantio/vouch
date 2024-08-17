@@ -48,7 +48,7 @@ import (
 type Service struct {
 	log                  zerolog.Logger
 	mutex                sync.RWMutex
-	monitor              metrics.AccountManagerMonitor
+	monitor              metrics.Service
 	clientMonitor        metrics.ClientMonitor
 	timeout              time.Duration
 	processConcurrency   int64
@@ -76,6 +76,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	log := zerologger.With().Str("service", "accountmanager").Str("impl", "dirk").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
+	}
+
+	if err := utils.RegisterMetrics(ctx, parameters.monitor); err != nil {
+		return nil, errors.New("failed to register metrics")
 	}
 
 	credentials, err := credentialsFromCerts(ctx, parameters.clientCert, parameters.clientKey, parameters.caCert)
@@ -230,7 +234,7 @@ func (s *Service) openWallet(ctx context.Context, name string) (e2wtypes.Wallet,
 	if !exists {
 		wallet, err = dirk.Open(ctx,
 			dirk.WithLogLevel(s.log.GetLevel()),
-			dirk.WithMonitor(s.monitor.(metrics.Service)),
+			dirk.WithMonitor(s.monitor),
 			dirk.WithName(name),
 			dirk.WithCredentials(s.credentials),
 			dirk.WithEndpoints(s.endpoints),
@@ -355,7 +359,7 @@ func (s *Service) accountsForEpochWithFilter(ctx context.Context, epoch phase0.E
 	if epoch == s.currentEpochProvider.CurrentEpoch() {
 		stateCount[api.ValidatorStateUnknown] += uint64(len(pubKeys) - len(validators))
 		for state, count := range stateCount {
-			s.monitor.Accounts(strings.ToLower(state.String()), count)
+			utils.MonitorAccounts(strings.ToLower(state.String()), count)
 		}
 	}
 

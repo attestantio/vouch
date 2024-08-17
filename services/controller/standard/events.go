@@ -22,7 +22,6 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/metrics"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -60,7 +59,7 @@ func (s *Service) HandleHeadEvent(event *apiv1.Event) {
 	s.lastBlockRoot = data.Block
 	epoch := s.chainTimeService.SlotToEpoch(data.Slot)
 
-	s.monitor.BlockDelay(uint(uint64(data.Slot)%s.slotsPerEpoch), time.Since(s.chainTimeService.StartOfSlot(data.Slot)))
+	monitorBlockDelay(uint(uint64(data.Slot)%s.slotsPerEpoch), time.Since(s.chainTimeService.StartOfSlot(data.Slot)))
 
 	// If this block is for the prior slot and we may have a proposal waiting then kick
 	// off any proposal for this slot.
@@ -354,8 +353,6 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 	_, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "VerifySyncCommitteeMessages")
 	defer span.End()
 
-	messengerMonitor := s.monitor.(metrics.SyncCommitteeVerificationMonitor)
-
 	// We verify against the previous slot as that is when the sync committee will have reported.
 	previousSlot := headEvent.Slot - 1
 	currentSlot := headEvent.Slot
@@ -386,14 +383,14 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 	}
 
 	log.Trace().Uints64("validators", inScopeValidators).Msg("Verifying sync committee messages for validators")
-	messengerMonitor.SyncCommitteeCurrentCountSet(len(inScopeValidators))
+	monitorSyncCommitteeCurrentCountSet(len(inScopeValidators))
 
 	blockResponse, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, &api.SignedBeaconBlockOpts{
 		Block: headEvent.Block.String(),
 	})
 	if err != nil {
 		log.Debug().Err(err).Msg("Failed to retrieve head block for sync committee verification")
-		messengerMonitor.SyncCommitteeGetHeadBlockFailedInc()
+		monitorSyncCommitteeGetHeadBlockFailedInc()
 		return
 	}
 	parentRoot, err := blockResponse.Data.ParentRoot()
@@ -406,7 +403,7 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 		previousSlotRoot := previousSlotData.Root.String()
 		log.Trace().Str("head_parent_root", parentRootString).Str("broadcast_root", previousSlotRoot).
 			Msg("Parent root does not equal sync committee root broadcast")
-		messengerMonitor.SyncCommitteeMessagesHeadMismatchInc(len(inScopeValidators))
+		monitorSyncCommitteeMessagesHeadMismatchInc(len(inScopeValidators))
 
 		log.Debug().Uints64("incorrect_validator_indices", inScopeValidators).
 			Uints64("incorrect_committee_indices", allCommitteeIndices).
@@ -427,12 +424,12 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 	for validatorIndex, committeeIndices := range previousSlotData.ValidatorToCommitteeIndex {
 		for _, committeeIndex := range committeeIndices {
 			if !syncAggregate.SyncCommitteeBits.BitAt(uint64(committeeIndex)) {
-				messengerMonitor.SyncCommitteeSyncAggregateMissingInc()
+				monitorSyncCommitteeSyncAggregateMissingInc()
 				missingValidatorIndices = append(missingValidatorIndices, uint64(validatorIndex))
 				missingCommitteeIndices = append(missingCommitteeIndices, uint64(committeeIndex))
 				continue
 			}
-			messengerMonitor.SyncCommitteeSyncAggregateFoundInc()
+			monitorSyncCommitteeSyncAggregateFoundInc()
 			includedValidatorIndices = append(includedValidatorIndices, uint64(validatorIndex))
 			includedCommitteeIndices = append(includedCommitteeIndices, uint64(committeeIndex))
 		}

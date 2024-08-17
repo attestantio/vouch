@@ -33,7 +33,7 @@ import (
 // Service is a beacon block attester.
 type Service struct {
 	log                        zerolog.Logger
-	monitor                    metrics.AttestationMonitor
+	monitor                    metrics.Service
 	processConcurrency         int64
 	slotsPerEpoch              uint64
 	chainTimeService           chaintime.Service
@@ -56,6 +56,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	log := zerologger.With().Str("service", "attester").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
+	}
+
+	if err := registerMetrics(ctx, parameters.monitor); err != nil {
+		return nil, errors.New("failed to register metrics")
 	}
 
 	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})

@@ -25,6 +25,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
@@ -37,7 +38,7 @@ import (
 // Service is an attestation aggregator.
 type Service struct {
 	log                            zerolog.Logger
-	monitor                        metrics.AttestationAggregationMonitor
+	monitor                        metrics.Service
 	targetAggregatorsPerCommittee  uint64
 	slotsPerEpoch                  uint64
 	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
@@ -45,6 +46,7 @@ type Service struct {
 	aggregateAttestationsSubmitter submitter.AggregateAttestationsSubmitter
 	slotSelectionSigner            signer.SlotSelectionSigner
 	aggregateAndProofSigner        signer.AggregateAndProofSigner
+	chainTimeService               chaintime.Service
 }
 
 // New creates a new attestation aggregator.
@@ -58,6 +60,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	log := zerologger.With().Str("service", "attestationaggregator").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
+	}
+
+	if err := registerMetrics(ctx, parameters.monitor); err != nil {
+		return nil, errors.New("failed to register metrics")
 	}
 
 	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})
@@ -94,6 +100,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		aggregateAttestationsSubmitter: parameters.aggregateAttestationsSubmitter,
 		slotSelectionSigner:            parameters.slotSelectionSigner,
 		aggregateAndProofSigner:        parameters.aggregateAndProofSigner,
+		chainTimeService:               parameters.chainTimeService,
 	}
 
 	return s, nil
@@ -108,7 +115,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	duty, ok := data.(*attestationaggregator.Duty)
 	if !ok {
 		s.log.Error().Msg("Passed invalid data structure")
-		s.monitor.AttestationAggregationCompleted(started, 0, "failed")
+		monitorAttestationAggregationCompleted(started, 0, "failed", s.chainTimeService)
 		return
 	}
 	log := s.log.With().Uint64("slot", uint64(duty.Slot)).Str("attestation_data_root", fmt.Sprintf("%#x", duty.AttestationDataRoot)).Logger()
@@ -121,7 +128,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain aggregate attestation")
-		s.monitor.AttestationAggregationCompleted(started, duty.Slot, "failed")
+		monitorAttestationAggregationCompleted(started, duty.Slot, "failed", s.chainTimeService)
 		return
 	}
 	aggregateAttestation := aggregateAttestationResponse.Data
@@ -133,12 +140,12 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []phase0.ValidatorIndex{duty.ValidatorIndex})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain proposing validator account")
-		s.monitor.AttestationAggregationCompleted(started, duty.Slot, "failed")
+		monitorAttestationAggregationCompleted(started, duty.Slot, "failed", s.chainTimeService)
 		return
 	}
 	if len(accounts) != 1 {
 		log.Error().Err(err).Msg("Unknown proposing validator account")
-		s.monitor.AttestationAggregationCompleted(started, duty.Slot, "failed")
+		monitorAttestationAggregationCompleted(started, duty.Slot, "failed", s.chainTimeService)
 		return
 	}
 	account := accounts[duty.ValidatorIndex]
@@ -157,7 +164,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	sig, err := s.aggregateAndProofSigner.SignAggregateAndProof(ctx, account, duty.Slot, phase0.Root(aggregateAndProofRoot))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign aggregate and proof")
-		s.monitor.AttestationAggregationCompleted(started, duty.Slot, "failed")
+		monitorAttestationAggregationCompleted(started, duty.Slot, "failed", s.chainTimeService)
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed aggregate attestation")
@@ -171,15 +178,15 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	}
 	if err := s.aggregateAttestationsSubmitter.SubmitAggregateAttestations(ctx, signedAggregateAndProofs); err != nil {
 		log.Error().Err(err).Msg("Failed to submit aggregate and proof")
-		s.monitor.AttestationAggregationCompleted(started, duty.Slot, "failed")
+		monitorAttestationAggregationCompleted(started, duty.Slot, "failed", s.chainTimeService)
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted aggregate attestation")
 
 	frac := float64(aggregateAndProof.Aggregate.AggregationBits.Count()) /
 		float64(aggregateAndProof.Aggregate.AggregationBits.Len())
-	s.monitor.AttestationAggregationCoverage(frac)
-	s.monitor.AttestationAggregationCompleted(started, duty.Slot, "succeeded")
+	monitorAttestationAggregationCoverage(frac)
+	monitorAttestationAggregationCompleted(started, duty.Slot, "succeeded", s.chainTimeService)
 }
 
 // IsAggregator reports if we are an attestation aggregator for a given validator/committee/slot combination.

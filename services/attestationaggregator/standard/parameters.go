@@ -16,6 +16,7 @@ package standard
 import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
@@ -25,13 +26,14 @@ import (
 
 type parameters struct {
 	logLevel                       zerolog.Level
-	monitor                        metrics.AttestationAggregationMonitor
+	monitor                        metrics.Service
 	specProvider                   eth2client.SpecProvider
 	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
 	aggregateAttestationProvider   eth2client.AggregateAttestationProvider
 	aggregateAttestationsSubmitter submitter.AggregateAttestationsSubmitter
 	slotSelectionSigner            signer.SlotSelectionSigner
 	aggregateAndProofSigner        signer.AggregateAndProofSigner
+	chainTimeService               chaintime.Service
 }
 
 // Parameter is the interface for service parameters.
@@ -60,7 +62,7 @@ func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 }
 
 // WithMonitor sets the monitor for this module.
-func WithMonitor(monitor metrics.AttestationAggregationMonitor) Parameter {
+func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})
@@ -98,6 +100,13 @@ func WithSlotSelectionSigner(signer signer.SlotSelectionSigner) Parameter {
 func WithAggregateAndProofSigner(signer signer.AggregateAndProofSigner) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.aggregateAndProofSigner = signer
+	})
+}
+
+// WithChainTimeService sets the chain time service.
+func WithChainTimeService(service chaintime.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.chainTimeService = service
 	})
 }
 

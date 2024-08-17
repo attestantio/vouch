@@ -29,7 +29,7 @@ import (
 // Service is an beacon committee subscriber.
 type Service struct {
 	log                    zerolog.Logger
-	monitor                metrics.BeaconCommitteeSubscriptionMonitor
+	monitor                metrics.Service
 	chainTimeService       chaintime.Service
 	processConcurrency     int64
 	attesterDutiesProvider eth2client.AttesterDutiesProvider
@@ -38,7 +38,7 @@ type Service struct {
 }
 
 // New creates a new beacon committee subscriber.
-func New(_ context.Context, params ...Parameter) (*Service, error) {
+func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem with parameters")
@@ -48,6 +48,10 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	log := zerologger.With().Str("service", "beaconcommitteesubscriber").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
+	}
+
+	if err := registerMetrics(ctx, parameters.monitor); err != nil {
+		return nil, errors.New("failed to register metrics")
 	}
 
 	s := &Service{

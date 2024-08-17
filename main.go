@@ -396,7 +396,7 @@ func initController(ctx context.Context, monitor metrics.Service, chainTime chai
 	log.Trace().Msg("Starting controller")
 	controller, err := standardcontroller.New(ctx,
 		standardcontroller.WithLogLevel(util.LogLevel("controller")),
-		standardcontroller.WithMonitor(monitor.(metrics.ControllerMonitor)),
+		standardcontroller.WithMonitor(monitor),
 		standardcontroller.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardcontroller.WithChainTimeService(chainTime),
 		standardcontroller.WithWaitedForGenesis(waitedForGenesis),
@@ -654,7 +654,7 @@ func startAltairServices(ctx context.Context,
 	log.Trace().Msg("Starting sync committee subscriber service")
 	syncCommitteeSubscriber, err := standardsynccommitteesubscriber.New(ctx,
 		standardsynccommitteesubscriber.WithLogLevel(util.LogLevel("synccommiteesubscriber")),
-		standardsynccommitteesubscriber.WithMonitor(monitor.(metrics.SyncCommitteeSubscriptionMonitor)),
+		standardsynccommitteesubscriber.WithMonitor(monitor),
 		standardsynccommitteesubscriber.WithSyncCommitteeSubmitter(submitterStrategy.(submitter.SyncCommitteeSubscriptionsSubmitter)),
 	)
 	if err != nil {
@@ -676,7 +676,7 @@ func startAltairServices(ctx context.Context,
 	log.Trace().Msg("Starting sync committee aggregator")
 	syncCommitteeAggregator, err := standardsynccommitteeaggregator.New(ctx,
 		standardsynccommitteeaggregator.WithLogLevel(util.LogLevel("synccommitteeaggregator")),
-		standardsynccommitteeaggregator.WithMonitor(monitor.(metrics.SyncCommitteeAggregationMonitor)),
+		standardsynccommitteeaggregator.WithMonitor(monitor),
 		standardsynccommitteeaggregator.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardsynccommitteeaggregator.WithBeaconBlockRootProvider(beaconBlockRootProvider),
 		standardsynccommitteeaggregator.WithContributionAndProofSigner(signerSvc.(signer.ContributionAndProofSigner)),
@@ -692,7 +692,7 @@ func startAltairServices(ctx context.Context,
 	syncCommitteeMessenger, err := standardsynccommitteemessenger.New(ctx,
 		standardsynccommitteemessenger.WithLogLevel(util.LogLevel("synccommitteemessenger")),
 		standardsynccommitteemessenger.WithProcessConcurrency(viper.GetInt64("process-concurrency")),
-		standardsynccommitteemessenger.WithMonitor(monitor.(metrics.SyncCommitteeMessageMonitor)),
+		standardsynccommitteemessenger.WithMonitor(monitor),
 		standardsynccommitteemessenger.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardsynccommitteemessenger.WithChainTimeService(chainTime),
 		standardsynccommitteemessenger.WithSyncCommitteeAggregator(syncCommitteeAggregator),
@@ -734,7 +734,7 @@ func startSigningServices(ctx context.Context,
 
 	beaconBlockProposer, err := standardbeaconblockproposer.New(ctx,
 		standardbeaconblockproposer.WithLogLevel(util.LogLevel("beaconblockproposer")),
-		standardbeaconblockproposer.WithChainTime(chainTime),
+		standardbeaconblockproposer.WithChainTimeService(chainTime),
 		standardbeaconblockproposer.WithProposalDataProvider(proposalProvider),
 		standardbeaconblockproposer.WithBlockAuctioneer(blockRelay.(blockauctioneer.BlockAuctioneer)),
 		standardbeaconblockproposer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
@@ -760,7 +760,7 @@ func startSigningServices(ctx context.Context,
 		standardattester.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardattester.WithAttestationDataProvider(attestationDataProvider),
 		standardattester.WithAttestationsSubmitter(submitterStrategy.(submitter.AttestationsSubmitter)),
-		standardattester.WithMonitor(monitor.(metrics.AttestationMonitor)),
+		standardattester.WithMonitor(monitor),
 		standardattester.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardattester.WithBeaconAttestationsSigner(signerSvc.(signer.BeaconAttestationsSigner)),
 	)
@@ -773,11 +773,12 @@ func startSigningServices(ctx context.Context,
 		standardattestationaggregator.WithLogLevel(util.LogLevel("attestationaggregator")),
 		standardattestationaggregator.WithAggregateAttestationProvider(aggregateAttestationProvider),
 		standardattestationaggregator.WithAggregateAttestationsSubmitter(submitterStrategy.(submitter.AggregateAttestationsSubmitter)),
-		standardattestationaggregator.WithMonitor(monitor.(metrics.AttestationAggregationMonitor)),
+		standardattestationaggregator.WithMonitor(monitor),
 		standardattestationaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardattestationaggregator.WithSlotSelectionSigner(signerSvc.(signer.SlotSelectionSigner)),
 		standardattestationaggregator.WithAggregateAndProofSigner(signerSvc.(signer.AggregateAndProofSigner)),
 		standardattestationaggregator.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
+		standardattestationaggregator.WithChainTimeService(chainTime),
 	)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to start beacon attestation aggregator service")
@@ -787,7 +788,7 @@ func startSigningServices(ctx context.Context,
 	beaconCommitteeSubscriber, err := standardbeaconcommitteesubscriber.New(ctx,
 		standardbeaconcommitteesubscriber.WithLogLevel(util.LogLevel("beaconcommiteesubscriber")),
 		standardbeaconcommitteesubscriber.WithProcessConcurrency(util.ProcessConcurrency("beaconcommitteesubscriber")),
-		standardbeaconcommitteesubscriber.WithMonitor(monitor.(metrics.BeaconCommitteeSubscriptionMonitor)),
+		standardbeaconcommitteesubscriber.WithMonitor(monitor),
 		standardbeaconcommitteesubscriber.WithChainTimeService(chainTime),
 		standardbeaconcommitteesubscriber.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),
 		standardbeaconcommitteesubscriber.WithAttestationAggregator(attestationAggregator),
@@ -943,13 +944,13 @@ func selectScheduler(ctx context.Context, monitor metrics.Service) (scheduler.Se
 		log.Warn().Msg("Basic scheduler is no longer available; defaulting to advanced scheduler.  To avoid this message in future please change your scheduler type to 'advanced'")
 		scheduler, err = advancedscheduler.New(ctx,
 			advancedscheduler.WithLogLevel(util.LogLevel("scheduler.advanced")),
-			advancedscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
+			advancedscheduler.WithMonitor(monitor),
 		)
 	default:
 		log.Info().Msg("Starting advanced scheduler")
 		scheduler, err = advancedscheduler.New(ctx,
 			advancedscheduler.WithLogLevel(util.LogLevel("scheduler.advanced")),
-			advancedscheduler.WithMonitor(monitor.(metrics.SchedulerMonitor)),
+			advancedscheduler.WithMonitor(monitor),
 		)
 	}
 	if err != nil {
@@ -1064,7 +1065,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 		}
 		accountManager, err = dirkaccountmanager.New(ctx,
 			dirkaccountmanager.WithLogLevel(util.LogLevel("accountmanager.dirk")),
-			dirkaccountmanager.WithMonitor(monitor.(metrics.AccountManagerMonitor)),
+			dirkaccountmanager.WithMonitor(monitor),
 			dirkaccountmanager.WithTimeout(util.Timeout("accountmanager.dirk")),
 			dirkaccountmanager.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			dirkaccountmanager.WithProcessConcurrency(util.ProcessConcurrency("accountmanager.dirk")),
@@ -1101,7 +1102,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 		}
 		accountManager, err = walletaccountmanager.New(ctx,
 			walletaccountmanager.WithLogLevel(util.LogLevel("accountmanager.wallet")),
-			walletaccountmanager.WithMonitor(monitor.(metrics.AccountManagerMonitor)),
+			walletaccountmanager.WithMonitor(monitor),
 			walletaccountmanager.WithProcessConcurrency(util.ProcessConcurrency("accountmanager.wallet")),
 			walletaccountmanager.WithValidatorsManager(validatorsManager),
 			walletaccountmanager.WithAccountPaths(viper.GetStringSlice("accountmanager.wallet.accounts")),

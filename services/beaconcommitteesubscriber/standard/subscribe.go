@@ -63,7 +63,7 @@ func (s *Service) Subscribe(ctx context.Context,
 		Indices: validatorIndices,
 	})
 	if err != nil {
-		s.monitor.BeaconCommitteeSubscriptionCompleted(started, "failed")
+		monitorBeaconCommitteeSubscriptionCompleted(started, "failed")
 		return nil, errors.Wrap(err, "failed to obtain attester duties")
 	}
 	attesterDuties := attesterDutiesResponse.Data
@@ -71,7 +71,7 @@ func (s *Service) Subscribe(ctx context.Context,
 
 	duties, err := attester.MergeDuties(ctx, attesterDuties)
 	if err != nil {
-		s.monitor.BeaconCommitteeSubscriptionCompleted(started, "failed")
+		monitorBeaconCommitteeSubscriptionCompleted(started, "failed")
 		return nil, errors.Wrap(err, "failed to merge attester duties")
 	}
 
@@ -89,8 +89,8 @@ func (s *Service) Subscribe(ctx context.Context,
 			}
 		}
 	}
-	s.monitor.BeaconCommitteeSubscribers(subscriptions)
-	s.monitor.BeaconCommitteeAggregators(aggregators)
+	monitorBeaconCommitteeSubscribers(subscriptions)
+	monitorBeaconCommitteeAggregators(aggregators)
 
 	// Submit the subscription information.
 	go func(currentSlot phase0.Slot) {
@@ -113,11 +113,11 @@ func (s *Service) Subscribe(ctx context.Context,
 		}
 		if err := s.submitter.SubmitBeaconCommitteeSubscriptions(ctx, subscriptions); err != nil {
 			log.Error().Err(err).Msg("Failed to submit beacon committees")
-			s.monitor.BeaconCommitteeSubscriptionCompleted(started, "failed")
+			monitorBeaconCommitteeSubscriptionCompleted(started, "failed")
 			return
 		}
 		log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted subscription request")
-		s.monitor.BeaconCommitteeSubscriptionCompleted(started, "succeeded")
+		monitorBeaconCommitteeSubscriptionCompleted(started, "succeeded")
 	}(s.chainTimeService.CurrentSlot())
 
 	// Return the subscription info so the calling function knows the subnets to which we are subscribing.

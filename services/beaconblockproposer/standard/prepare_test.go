@@ -80,7 +80,7 @@ func TestPrepare(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(consensusClient),
-				standard.WithChainTime(chainTime),
+				standard.WithChainTimeService(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
 				standard.WithProposalSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),

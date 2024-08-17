@@ -16,6 +16,7 @@ package standard
 import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
@@ -25,13 +26,14 @@ import (
 
 type parameters struct {
 	logLevel                            zerolog.Level
-	monitor                             metrics.SyncCommitteeAggregationMonitor
+	monitor                             metrics.Service
 	specProvider                        eth2client.SpecProvider
 	beaconBlockRootProvider             eth2client.BeaconBlockRootProvider
 	contributionAndProofSigner          signer.ContributionAndProofSigner
 	validatingAccountsProvider          accountmanager.ValidatingAccountsProvider
 	syncCommitteeContributionProvider   eth2client.SyncCommitteeContributionProvider
 	syncCommitteeContributionsSubmitter submitter.SyncCommitteeContributionsSubmitter
+	chainTimeService                    chaintime.Service
 }
 
 // Parameter is the interface for service parameters.
@@ -53,7 +55,7 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 }
 
 // WithMonitor sets the monitor for this module.
-func WithMonitor(monitor metrics.SyncCommitteeAggregationMonitor) Parameter {
+func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})
@@ -98,6 +100,13 @@ func WithSyncCommitteeContributionProvider(provider eth2client.SyncCommitteeCont
 func WithSyncCommitteeContributionsSubmitter(submitter submitter.SyncCommitteeContributionsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.syncCommitteeContributionsSubmitter = submitter
+	})
+}
+
+// WithChainTimeService sets the chain time service.
+func WithChainTimeService(service chaintime.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.chainTimeService = service
 	})
 }
 

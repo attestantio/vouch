@@ -27,7 +27,7 @@ import (
 type parameters struct {
 	logLevel                   zerolog.Level
 	processConcurrency         int64
-	monitor                    metrics.AttestationMonitor
+	monitor                    metrics.Service
 	chainTimeService           chaintime.Service
 	specProvider               eth2client.SpecProvider
 	attestationDataProvider    eth2client.AttestationDataProvider
@@ -90,7 +90,7 @@ func WithAttestationsSubmitter(submitter submitter.AttestationsSubmitter) Parame
 }
 
 // WithMonitor sets the monitor for this module.
-func WithMonitor(monitor metrics.AttestationMonitor) Parameter {
+func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})

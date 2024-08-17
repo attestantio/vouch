@@ -50,7 +50,7 @@ var syncCommitteePreparationEpochs = uint64(5)
 // creation and attestation aggregation.
 type Service struct {
 	log                           zerolog.Logger
-	monitor                       metrics.ControllerMonitor
+	monitor                       metrics.Service
 	slotDuration                  time.Duration
 	slotsPerEpoch                 uint64
 	epochsPerSyncCommitteePeriod  uint64
@@ -117,6 +117,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
+	if err := registerMetrics(ctx, parameters.monitor); err != nil {
+		return nil, errors.New("failed to register metrics")
+	}
 	slotDuration, slotsPerEpoch, epochsPerSyncCommitteePeriod, err := obtainSpecValues(ctx, parameters.specProvider)
 	if err != nil {
 		return nil, err
@@ -304,7 +307,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	}
 	epochTickerData.latestEpochRan = int64(currentEpoch)
 	epochTickerData.mutex.Unlock()
-	s.monitor.NewEpoch()
+	monitorNewEpoch()
 
 	// We wait for the beacon node to update, but keep ourselves busy in the meantime.
 	waitCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)

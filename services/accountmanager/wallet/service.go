@@ -45,7 +45,7 @@ import (
 type Service struct {
 	log                  zerolog.Logger
 	mutex                sync.RWMutex
-	monitor              metrics.AccountManagerMonitor
+	monitor              metrics.Service
 	processConcurrency   int64
 	stores               []e2wtypes.Store
 	accountPaths         []string
@@ -69,6 +69,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	log := zerologger.With().Str("service", "accountmanager").Str("impl", "wallet").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
+	}
+
+	if err := utils.RegisterMetrics(ctx, parameters.monitor); err != nil {
+		return nil, errors.New("failed to register metrics")
 	}
 
 	// Warn about lack of slashing protection
@@ -265,7 +269,7 @@ func (s *Service) accountsForEpochWithFilter(ctx context.Context, epoch phase0.E
 	if epoch == s.currentEpochProvider.CurrentEpoch() {
 		stateCount[apiv1.ValidatorStateUnknown] += uint64(len(s.accounts) - len(validators))
 		for state, count := range stateCount {
-			s.monitor.Accounts(strings.ToLower(state.String()), count)
+			utils.MonitorAccounts(strings.ToLower(state.String()), count)
 		}
 	}
 

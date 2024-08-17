@@ -39,7 +39,7 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 
 	duty, ok := data.(*attester.Duty)
 	if !ok {
-		s.monitor.AttestationsCompleted(started, 0, len(duty.ValidatorIndices()), "failed")
+		monitorAttestationsCompleted(started, 0, len(duty.ValidatorIndices()), "failed", s.chainTimeService)
 		return nil, errors.New("passed invalid data structure")
 	}
 	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))
@@ -49,19 +49,19 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 	// Fetch the attestation data.
 	attestationData, err := s.obtainAttestationData(ctx, duty)
 	if err != nil {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
+		monitorAttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed", s.chainTimeService)
 		return nil, err
 	}
 
 	if err := s.validateAttestationData(ctx, duty, attestationData); err != nil {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
+		monitorAttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed", s.chainTimeService)
 		return nil, err
 	}
 
 	// Fetch the validating accounts.
 	validatingAccounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, phase0.Epoch(uint64(duty.Slot())/s.slotsPerEpoch), validatorIndices)
 	if err != nil {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
+		monitorAttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed", s.chainTimeService)
 		return nil, errors.Wrap(err, "failed to obtain attesting validator accounts")
 	}
 	s.log.Trace().Dur("elapsed", time.Since(started)).Int("validating_accounts", len(validatingAccounts)).Msg("Obtained validating accounts")
@@ -98,15 +98,15 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 		started,
 	)
 	if err != nil {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed")
+		monitorAttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed", s.chainTimeService)
 		return nil, err
 	}
 
 	if len(attestations) < len(validatorIndices) {
 		s.log.Error().Stringer("duty", duty).Int("total_attestations", len(validatorIndices)).Int("failed_attestations", len(validatorIndices)-len(attestations)).Msg("Some attestations failed")
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(validatorIndices)-len(attestations), "failed")
+		monitorAttestationsCompleted(started, duty.Slot(), len(validatorIndices)-len(attestations), "failed", s.chainTimeService)
 	} else {
-		s.monitor.AttestationsCompleted(started, duty.Slot(), len(attestations), "succeeded")
+		monitorAttestationsCompleted(started, duty.Slot(), len(attestations), "succeeded", s.chainTimeService)
 	}
 
 	s.housekeepAttestedMap(ctx, duty)
