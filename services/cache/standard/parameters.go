@@ -14,8 +14,6 @@
 package standard
 
 import (
-	"context"
-
 	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
@@ -99,7 +97,7 @@ func WithChainTime(chainTime chaintime.Service) Parameter {
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel: zerolog.GlobalLevel(),
-		monitor:  nullmetrics.New(context.Background()),
+		monitor:  nullmetrics.New(),
 	}
 	for _, p := range params {
 		if params != nil {

@@ -16,7 +16,6 @@
 package best
 
 import (
-	"context"
 	"runtime"
 	"time"
 
@@ -85,7 +84,7 @@ func WithTimeout(timeout time.Duration) Parameter {
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel:           zerolog.GlobalLevel(),
-		clientMonitor:      nullmetrics.New(context.Background()),
+		clientMonitor:      nullmetrics.New(),
 		processConcurrency: int64(runtime.GOMAXPROCS(-1)),
 	}
 	for _, p := range params {

@@ -117,7 +117,7 @@ func TestService(t *testing.T) {
 			name: "SpecProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
 				standard.WithAttesterDutiesProvider(attesterDutiesProvider),
@@ -150,7 +150,7 @@ func TestService(t *testing.T) {
 			name: "SpecProviderErrors",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(mock.NewErroringSpecProvider()),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -184,7 +184,7 @@ func TestService(t *testing.T) {
 			name: "ChainTimeServiceMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
 				standard.WithAttesterDutiesProvider(attesterDutiesProvider),
@@ -217,7 +217,7 @@ func TestService(t *testing.T) {
 			name: "ProposerDutiesProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithAttesterDutiesProvider(attesterDutiesProvider),
@@ -250,7 +250,7 @@ func TestService(t *testing.T) {
 			name: "AttesterDutiesProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -283,7 +283,7 @@ func TestService(t *testing.T) {
 			name: "EventsProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -317,7 +317,7 @@ func TestService(t *testing.T) {
 			name: "ValidatingAccountsProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -350,7 +350,7 @@ func TestService(t *testing.T) {
 			name: "ProposalsPreparerMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -383,7 +383,7 @@ func TestService(t *testing.T) {
 			name: "SchedulerMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -416,7 +416,7 @@ func TestService(t *testing.T) {
 			name: "AttesterMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -448,7 +448,7 @@ func TestService(t *testing.T) {
 			name: "BeaconBlockProposerMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -482,7 +482,7 @@ func TestService(t *testing.T) {
 			name: "BeaconCommitteeSubscriberMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -515,7 +515,7 @@ func TestService(t *testing.T) {
 			name: "AttestationAggregatorMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -548,7 +548,7 @@ func TestService(t *testing.T) {
 			name: "AccountsRefresherMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -581,7 +581,7 @@ func TestService(t *testing.T) {
 			name: "BlockToSlotSetterMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -614,7 +614,7 @@ func TestService(t *testing.T) {
 			name: "BeaconBlockHeadersProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -647,7 +647,7 @@ func TestService(t *testing.T) {
 			name: "SignedBeaconBlockProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -680,7 +680,7 @@ func TestService(t *testing.T) {
 			name: "Good",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
@@ -714,7 +714,7 @@ func TestService(t *testing.T) {
 			name: "GoodDefaultDelays",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithChainTimeService(chainTime),
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),

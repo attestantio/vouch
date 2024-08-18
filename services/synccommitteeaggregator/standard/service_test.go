@@ -64,7 +64,7 @@ func TestService(t *testing.T) {
 			name: "SpecProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithBeaconBlockRootProvider(mockETH2Client),
 				standard.WithContributionAndProofSigner(mockSigner),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
@@ -77,7 +77,7 @@ func TestService(t *testing.T) {
 			name: "BeaconBlockRootProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithContributionAndProofSigner(mockSigner),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
@@ -90,7 +90,7 @@ func TestService(t *testing.T) {
 			name: "ContributionAndProofSignerMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithBeaconBlockRootProvider(mockETH2Client),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
@@ -103,7 +103,7 @@ func TestService(t *testing.T) {
 			name: "ValidatingAccountsProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithBeaconBlockRootProvider(mockETH2Client),
 				standard.WithContributionAndProofSigner(mockSigner),
@@ -116,7 +116,7 @@ func TestService(t *testing.T) {
 			name: "SyncCommitteeContributionProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithBeaconBlockRootProvider(mockETH2Client),
 				standard.WithContributionAndProofSigner(mockSigner),
@@ -129,7 +129,7 @@ func TestService(t *testing.T) {
 			name: "SyncCommitteeContributionsSubmitterMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithBeaconBlockRootProvider(mockETH2Client),
 				standard.WithContributionAndProofSigner(mockSigner),
@@ -142,7 +142,7 @@ func TestService(t *testing.T) {
 			name: "Good",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithBeaconBlockRootProvider(mockETH2Client),
 				standard.WithContributionAndProofSigner(mockSigner),

@@ -307,7 +307,7 @@ func WithFastTrackGrace(grace time.Duration) Parameter {
 }
 
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
-func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
+func parseAndCheckParameters(ctx context.Context, params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel: zerolog.GlobalLevel(),
 	}
@@ -366,7 +366,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.blockToSlotSetter == nil {
 		return nil, errors.New("no block to slot setter specified")
 	}
-	specResponse, err := parameters.specProvider.Spec(context.Background(), &api.SpecOpts{})
+	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain spec")
 	}

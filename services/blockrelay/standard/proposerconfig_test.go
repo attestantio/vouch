@@ -111,7 +111,7 @@ func TestProposerConfig(t *testing.T) {
 			name: "Fallback",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -130,7 +130,7 @@ func TestProposerConfig(t *testing.T) {
 		{
 			name: "File",
 			params: []standard.Parameter{
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),
@@ -155,7 +155,7 @@ func TestProposerConfig(t *testing.T) {
 		{
 			name: "BadFile",
 			params: []standard.Parameter{
-				standard.WithMonitor(nullmetrics.New(ctx)),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithMajordomo(majordomoSvc),
 				standard.WithScheduler(mockScheduler),
 				standard.WithListenAddress(listenAddress),

@@ -130,7 +130,6 @@ linters:
   # Disable specific linter
   # https://golangci-lint.run/usage/linters/#disabled-by-default
   disable:
-    - contextcheck
     - cyclop
     - depguard
     - dupl
@@ -149,7 +148,6 @@ linters:
     - inamedparam
     - lll
     - mnd
-    - musttag
     - nestif
     - nilnil
     - nlreturn

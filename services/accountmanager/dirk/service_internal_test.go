@@ -184,8 +184,8 @@ func setupService(ctx context.Context, t *testing.T, endpoints []string, account
 
 	return New(ctx,
 		WithLogLevel(zerolog.TraceLevel),
-		WithMonitor(nullmetrics.New(context.Background())),
-		WithClientMonitor(nullmetrics.New(context.Background())),
+		WithMonitor(nullmetrics.New()),
+		WithClientMonitor(nullmetrics.New()),
 		WithProcessConcurrency(1),
 		WithEndpoints(endpoints),
 		WithAccountPaths(accountPaths),

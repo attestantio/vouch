@@ -40,7 +40,7 @@ func TestService(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	monitor := nullmetrics.New(ctx)
+	monitor := nullmetrics.New()
 	signedBeaconBlockProvider := mock.NewSignedBeaconBlockProvider()
 	beaconBlockHeadersProvider := mock.NewBeaconBlockHeadersProvider()
 	eventsProvider := mock.NewEventsProvider()

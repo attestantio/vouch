@@ -78,7 +78,7 @@ func TestPrepare(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			s, err := standard.New(ctx,
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),

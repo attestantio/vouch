@@ -16,7 +16,6 @@
 package best
 
 import (
-	"context"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -134,7 +133,7 @@ func WithExecutionPayloadFactor(factor float64) Parameter {
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel:      zerolog.GlobalLevel(),
-		clientMonitor: nullmetrics.New(context.Background()),
+		clientMonitor: nullmetrics.New(),
 	}
 	for _, p := range params {
 		if params != nil {

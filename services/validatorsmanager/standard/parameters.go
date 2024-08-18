@@ -14,8 +14,6 @@
 package standard
 
 import (
-	"context"
-
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics"
@@ -82,8 +80,8 @@ func WithFarFutureEpoch(farFutureEpoch phase0.Epoch) Parameter {
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel:      zerolog.GlobalLevel(),
-		monitor:       nullmetrics.New(context.Background()),
-		clientMonitor: nullmetrics.New(context.Background()),
+		monitor:       nullmetrics.New(),
+		clientMonitor: nullmetrics.New(),
 	}
 	for _, p := range params {
 		if params != nil {

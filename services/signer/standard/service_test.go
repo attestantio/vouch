@@ -40,7 +40,7 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(nil),
-				standard.WithClientMonitor(nullmetrics.New(context.Background())),
+				standard.WithClientMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithDomainProvider(domainProvider),
 			},
@@ -50,7 +50,7 @@ func TestService(t *testing.T) {
 			name: "ClientMonitorMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
 				standard.WithClientMonitor(nil),
 				standard.WithSpecProvider(specProvider),
 				standard.WithDomainProvider(domainProvider),
@@ -61,8 +61,8 @@ func TestService(t *testing.T) {
 			name: "SpecProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
-				standard.WithClientMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
+				standard.WithClientMonitor(nullmetrics.New()),
 				standard.WithDomainProvider(domainProvider),
 			},
 			err: "problem with parameters: no spec provider specified",
@@ -71,8 +71,8 @@ func TestService(t *testing.T) {
 			name: "SpecProviderErrors",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
-				standard.WithClientMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
+				standard.WithClientMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(mock.NewErroringSpecProvider()),
 				standard.WithDomainProvider(domainProvider),
 			},
@@ -82,8 +82,8 @@ func TestService(t *testing.T) {
 			name: "Good",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New(context.Background())),
-				standard.WithClientMonitor(nullmetrics.New(context.Background())),
+				standard.WithMonitor(nullmetrics.New()),
+				standard.WithClientMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithDomainProvider(domainProvider),
 			},
