@@ -142,6 +142,8 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.syncCommitteeContributionsSubmitter == nil {
 		return nil, errors.New("no sync committee contributions submitter specified")
 	}
-
+	if parameters.chainTime == nil {
+		return nil, errors.New("no chain time service specified")
+	}
 	return &parameters, nil
 }
