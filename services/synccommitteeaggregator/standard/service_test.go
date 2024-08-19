@@ -15,7 +15,9 @@ package standard_test
 
 import (
 	"context"
+	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	"testing"
+	"time"
 
 	mocketh2client "github.com/attestantio/go-eth2-client/mock"
 	"github.com/attestantio/vouch/mock"
@@ -40,6 +42,12 @@ func TestService(t *testing.T) {
 	mockETH2Client, err := mocketh2client.New(ctx)
 	require.NoError(t, err)
 	mockValidatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
+	genesisProvider := mock.NewGenesisProvider(time.Now())
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(genesisProvider),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
 
 	tests := []struct {
 		name     string
@@ -57,6 +65,7 @@ func TestService(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithSyncCommitteeContributionProvider(mockETH2Client),
 				standard.WithSyncCommitteeContributionsSubmitter(nullSubmitter),
+				standard.WithChainTime(chainTime),
 			},
 			err: "problem with parameters: no monitor specified",
 		},
@@ -70,6 +79,7 @@ func TestService(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithSyncCommitteeContributionProvider(mockETH2Client),
 				standard.WithSyncCommitteeContributionsSubmitter(nullSubmitter),
+				standard.WithChainTime(chainTime),
 			},
 			err: "problem with parameters: no spec provider specified",
 		},
@@ -83,6 +93,7 @@ func TestService(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithSyncCommitteeContributionProvider(mockETH2Client),
 				standard.WithSyncCommitteeContributionsSubmitter(nullSubmitter),
+				standard.WithChainTime(chainTime),
 			},
 			err: "problem with parameters: no beacon block root provider specified",
 		},
@@ -96,6 +107,7 @@ func TestService(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithSyncCommitteeContributionProvider(mockETH2Client),
 				standard.WithSyncCommitteeContributionsSubmitter(nullSubmitter),
+				standard.WithChainTime(chainTime),
 			},
 			err: "problem with parameters: no contribution and proof signer specified",
 		},
@@ -109,6 +121,7 @@ func TestService(t *testing.T) {
 				standard.WithContributionAndProofSigner(mockSigner),
 				standard.WithSyncCommitteeContributionProvider(mockETH2Client),
 				standard.WithSyncCommitteeContributionsSubmitter(nullSubmitter),
+				standard.WithChainTime(chainTime),
 			},
 			err: "problem with parameters: no validating accounts provider specified",
 		},
@@ -122,6 +135,7 @@ func TestService(t *testing.T) {
 				standard.WithContributionAndProofSigner(mockSigner),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithSyncCommitteeContributionsSubmitter(nullSubmitter),
+				standard.WithChainTime(chainTime),
 			},
 			err: "problem with parameters: no sync committee contribution provider specified",
 		},
@@ -135,6 +149,7 @@ func TestService(t *testing.T) {
 				standard.WithContributionAndProofSigner(mockSigner),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithSyncCommitteeContributionProvider(mockETH2Client),
+				standard.WithChainTime(chainTime),
 			},
 			err: "problem with parameters: no sync committee contributions submitter specified",
 		},
@@ -149,6 +164,7 @@ func TestService(t *testing.T) {
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithSyncCommitteeContributionProvider(mockETH2Client),
 				standard.WithSyncCommitteeContributionsSubmitter(nullSubmitter),
+				standard.WithChainTime(chainTime),
 			},
 		},
 	}
