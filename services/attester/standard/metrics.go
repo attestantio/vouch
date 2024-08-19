@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -124,7 +123,7 @@ func registerPrometheusMetrics(_ context.Context) error {
 	return nil
 }
 
-func monitorAttestationsCompleted(started time.Time, slot phase0.Slot, count int, result string, chainTime chaintime.Service) {
+func monitorAttestationsCompleted(started time.Time, slot phase0.Slot, count int, result string, startOfSlot *time.Time) {
 	if attestationProcessTimer == nil || attestationMarkTimer == nil || attestationProcessLatestSlot == nil ||
 		attestationProcessRequests == nil {
 		return
@@ -136,8 +135,8 @@ func monitorAttestationsCompleted(started time.Time, slot phase0.Slot, count int
 		for range count {
 			attestationProcessTimer.Observe(duration)
 		}
-		if chainTime != nil {
-			attestationMarkTimer.Observe(time.Since(chainTime.StartOfSlot(slot)).Seconds())
+		if startOfSlot != nil {
+			attestationMarkTimer.Observe(time.Since(*startOfSlot).Seconds())
 		}
 		attestationProcessLatestSlot.Set(float64(slot))
 	}

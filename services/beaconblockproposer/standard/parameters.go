@@ -63,8 +63,8 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 	})
 }
 
-// WithChainTimeService sets the chaintime service.
-func WithChainTimeService(service chaintime.Service) Parameter {
+// WithChainTime sets the chaintime service.
+func WithChainTime(service chaintime.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.chainTime = service
 	})

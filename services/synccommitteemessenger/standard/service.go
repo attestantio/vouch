@@ -136,7 +136,12 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 
 	duty, ok := data.(*synccommitteemessenger.Duty)
 	if !ok {
-		monitorSyncCommitteeMessagesCompleted(started, 0, len(duty.ValidatorIndices()), "failed", s.chainTimeService)
+		var startOfSlot *time.Time
+		if s.chainTimeService != nil {
+			t := s.chainTimeService.StartOfSlot(0)
+			startOfSlot = &t
+		}
+		monitorSyncCommitteeMessagesCompleted(started, 0, len(duty.ValidatorIndices()), "failed", startOfSlot)
 		return errors.New("passed invalid data structure")
 	}
 
@@ -170,8 +175,19 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 
 	duty, ok := data.(*synccommitteemessenger.Duty)
 	if !ok {
-		monitorSyncCommitteeMessagesCompleted(started, 0, len(duty.ValidatorIndices()), "failed", s.chainTimeService)
+		var startOfSlot *time.Time
+		if s.chainTimeService != nil {
+			t := s.chainTimeService.StartOfSlot(0)
+			startOfSlot = &t
+		}
+		monitorSyncCommitteeMessagesCompleted(started, 0, len(duty.ValidatorIndices()), "failed", startOfSlot)
 		return nil, errors.New("passed invalid data structure")
+	}
+
+	var startOfSlot *time.Time
+	if s.chainTimeService != nil {
+		t := s.chainTimeService.StartOfSlot(duty.Slot())
+		startOfSlot = &t
 	}
 
 	// Fetch the beacon block root.
@@ -179,7 +195,7 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 		Block: "head",
 	})
 	if err != nil {
-		monitorSyncCommitteeMessagesCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed", s.chainTimeService)
+		monitorSyncCommitteeMessagesCompleted(started, duty.Slot(), len(duty.ValidatorIndices()), "failed", startOfSlot)
 		return nil, errors.Wrap(err, "failed to obtain beacon block root")
 	}
 	beaconBlockRoot := beaconBlockRootResponse.Data
@@ -232,11 +248,11 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 
 	if err := s.syncCommitteeMessagesSubmitter.SubmitSyncCommitteeMessages(ctx, msgs); err != nil {
 		s.log.Trace().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to submit sync committee messages")
-		monitorSyncCommitteeMessagesCompleted(started, duty.Slot(), len(msgs), "failed", s.chainTimeService)
+		monitorSyncCommitteeMessagesCompleted(started, duty.Slot(), len(msgs), "failed", startOfSlot)
 		return nil, errors.Wrap(err, "failed to submit sync committee messages")
 	}
 	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted sync committee messages")
-	monitorSyncCommitteeMessagesCompleted(started, duty.Slot(), len(msgs), "succeeded", s.chainTimeService)
+	monitorSyncCommitteeMessagesCompleted(started, duty.Slot(), len(msgs), "succeeded", startOfSlot)
 
 	return msgs, nil
 }

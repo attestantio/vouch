@@ -33,7 +33,7 @@ type parameters struct {
 	aggregateAttestationsSubmitter submitter.AggregateAttestationsSubmitter
 	slotSelectionSigner            signer.SlotSelectionSigner
 	aggregateAndProofSigner        signer.AggregateAndProofSigner
-	chainTimeService               chaintime.Service
+	chainTime                      chaintime.Service
 }
 
 // Parameter is the interface for service parameters.
@@ -103,10 +103,10 @@ func WithAggregateAndProofSigner(signer signer.AggregateAndProofSigner) Paramete
 	})
 }
 
-// WithChainTimeService sets the chain time service.
-func WithChainTimeService(service chaintime.Service) Parameter {
+// WithChainTime sets the chain time service.
+func WithChainTime(service chaintime.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.chainTimeService = service
+		p.chainTime = service
 	})
 }
 
@@ -135,6 +135,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.aggregateAttestationsSubmitter == nil {
 		return nil, errors.New("no aggregate attestations submitter specified")
+	}
+	if parameters.chainTime == nil {
+		return nil, errors.New("no chain time service specified")
 	}
 	if parameters.slotSelectionSigner == nil {
 		return nil, errors.New("no slot selection signer specified")

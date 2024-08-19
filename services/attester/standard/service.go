@@ -36,7 +36,7 @@ type Service struct {
 	monitor                    metrics.Service
 	processConcurrency         int64
 	slotsPerEpoch              uint64
-	chainTimeService           chaintime.Service
+	chainTime                  chaintime.Service
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	attestationDataProvider    eth2client.AttestationDataProvider
 	attestationsSubmitter      submitter.AttestationsSubmitter
@@ -82,7 +82,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		monitor:                    parameters.monitor,
 		processConcurrency:         parameters.processConcurrency,
 		slotsPerEpoch:              slotsPerEpoch,
-		chainTimeService:           parameters.chainTimeService,
+		chainTime:                  parameters.chainTime,
 		validatingAccountsProvider: parameters.validatingAccountsProvider,
 		attestationDataProvider:    parameters.attestationDataProvider,
 		attestationsSubmitter:      parameters.attestationsSubmitter,

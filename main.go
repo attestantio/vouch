@@ -683,6 +683,7 @@ func startAltairServices(ctx context.Context,
 		standardsynccommitteeaggregator.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardsynccommitteeaggregator.WithSyncCommitteeContributionProvider(syncCommitteeContributionProvider),
 		standardsynccommitteeaggregator.WithSyncCommitteeContributionsSubmitter(submitterStrategy.(submitter.SyncCommitteeContributionsSubmitter)),
+		standardsynccommitteeaggregator.WithChainTime(chainTime),
 	)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "failed to start sync committee aggregator service")
@@ -734,7 +735,7 @@ func startSigningServices(ctx context.Context,
 
 	beaconBlockProposer, err := standardbeaconblockproposer.New(ctx,
 		standardbeaconblockproposer.WithLogLevel(util.LogLevel("beaconblockproposer")),
-		standardbeaconblockproposer.WithChainTimeService(chainTime),
+		standardbeaconblockproposer.WithChainTime(chainTime),
 		standardbeaconblockproposer.WithProposalDataProvider(proposalProvider),
 		standardbeaconblockproposer.WithBlockAuctioneer(blockRelay.(blockauctioneer.BlockAuctioneer)),
 		standardbeaconblockproposer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
@@ -756,7 +757,7 @@ func startSigningServices(ctx context.Context,
 	attester, err := standardattester.New(ctx,
 		standardattester.WithLogLevel(util.LogLevel("attester")),
 		standardattester.WithProcessConcurrency(util.ProcessConcurrency("attester")),
-		standardattester.WithChainTimeService(chainTime),
+		standardattester.WithChainTime(chainTime),
 		standardattester.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardattester.WithAttestationDataProvider(attestationDataProvider),
 		standardattester.WithAttestationsSubmitter(submitterStrategy.(submitter.AttestationsSubmitter)),
@@ -778,7 +779,7 @@ func startSigningServices(ctx context.Context,
 		standardattestationaggregator.WithSlotSelectionSigner(signerSvc.(signer.SlotSelectionSigner)),
 		standardattestationaggregator.WithAggregateAndProofSigner(signerSvc.(signer.AggregateAndProofSigner)),
 		standardattestationaggregator.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
-		standardattestationaggregator.WithChainTimeService(chainTime),
+		standardattestationaggregator.WithChainTime(chainTime),
 	)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to start beacon attestation aggregator service")

@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -124,7 +123,7 @@ func registerPrometheusMetrics(_ context.Context) error {
 	return nil
 }
 
-func monitorSyncCommitteeMessagesCompleted(started time.Time, slot phase0.Slot, count int, result string, chainTime chaintime.Service) {
+func monitorSyncCommitteeMessagesCompleted(started time.Time, slot phase0.Slot, count int, result string, startOfSlot *time.Time) {
 	if syncCommitteeMessageProcessTimer == nil || syncCommitteeMessageMarkTimer == nil || syncCommitteeMessageProcessLatestSlot == nil || syncCommitteeMessageProcessRequests == nil {
 		return
 	}
@@ -134,8 +133,8 @@ func monitorSyncCommitteeMessagesCompleted(started time.Time, slot phase0.Slot, 
 		for range count {
 			syncCommitteeMessageProcessTimer.Observe(duration)
 		}
-		if chainTime != nil {
-			syncCommitteeMessageMarkTimer.Observe(time.Since(chainTime.StartOfSlot(slot)).Seconds())
+		if startOfSlot != nil {
+			syncCommitteeMessageMarkTimer.Observe(time.Since(*startOfSlot).Seconds())
 		}
 		syncCommitteeMessageProcessLatestSlot.Set(float64(slot))
 	}

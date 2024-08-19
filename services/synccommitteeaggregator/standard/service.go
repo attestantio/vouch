@@ -49,7 +49,7 @@ type Service struct {
 	syncCommitteeContributionsSubmitter  eth2client.SyncCommitteeContributionsSubmitter
 	beaconBlockRoots                     map[phase0.Slot]phase0.Root
 	beaconBlockRootsMu                   sync.Mutex
-	chainTimeService                     chaintime.Service
+	chainTime                            chaintime.Service
 }
 
 // New creates a new sync committee aggregator.
@@ -124,7 +124,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeContributionProvider:    parameters.syncCommitteeContributionProvider,
 		syncCommitteeContributionsSubmitter:  parameters.syncCommitteeContributionsSubmitter,
 		beaconBlockRoots:                     map[phase0.Slot]phase0.Root{},
-		chainTimeService:                     parameters.chainTimeService,
+		chainTime:                            parameters.chainTime,
 	}
 
 	return s, nil
@@ -154,6 +154,12 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 
 	var beaconBlockRoot *phase0.Root
 
+	var startOfSlot *time.Time
+	if s.chainTime != nil {
+		t := s.chainTime.StartOfSlot(duty.Slot)
+		startOfSlot = &t
+	}
+
 	s.beaconBlockRootsMu.Lock()
 	if tmp, exists := s.beaconBlockRoots[duty.Slot]; exists {
 		beaconBlockRoot = &tmp
@@ -168,7 +174,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 		})
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to obtain beacon block root")
-			monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed", s.chainTimeService)
+			monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed", startOfSlot)
 			return
 		}
 		beaconBlockRoot = beaconBlockRootResponse.Data
@@ -186,7 +192,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 			})
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain sync committee contribution")
-				monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed", s.chainTimeService)
+				monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed", startOfSlot)
 				return
 			}
 			contribution := contributionResponse.Data
@@ -198,13 +204,13 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 			account, exists := duty.Accounts[validatorIndex]
 			if !exists {
 				log.Debug().Msg("Account nil; likely exited validator still in sync committee")
-				monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "exited", s.chainTimeService)
+				monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "exited", startOfSlot)
 				return
 			}
 			sig, err := s.contributionAndProofSigner.SignContributionAndProof(ctx, account, contributionAndProof)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain signature of contribution and proof")
-				monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed", s.chainTimeService)
+				monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed", startOfSlot)
 				return
 			}
 
@@ -219,7 +225,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 
 	if err := s.syncCommitteeContributionsSubmitter.SubmitSyncCommitteeContributions(ctx, signedContributionAndProofs); err != nil {
 		log.Warn().Err(err).Msg("Failed to submit signed contribution and proofs")
-		monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(signedContributionAndProofs), "failed", s.chainTimeService)
+		monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(signedContributionAndProofs), "failed", startOfSlot)
 		return
 	}
 
@@ -229,5 +235,5 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 			float64(signedContributionAndProofs[i].Message.Contribution.AggregationBits.Len())
 		monitorSyncCommitteeAggregationCoverage(frac)
 	}
-	monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(signedContributionAndProofs), "succeeded", s.chainTimeService)
+	monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(signedContributionAndProofs), "succeeded", startOfSlot)
 }

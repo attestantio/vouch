@@ -33,7 +33,7 @@ type parameters struct {
 	validatingAccountsProvider          accountmanager.ValidatingAccountsProvider
 	syncCommitteeContributionProvider   eth2client.SyncCommitteeContributionProvider
 	syncCommitteeContributionsSubmitter submitter.SyncCommitteeContributionsSubmitter
-	chainTimeService                    chaintime.Service
+	chainTime                           chaintime.Service
 }
 
 // Parameter is the interface for service parameters.
@@ -103,10 +103,10 @@ func WithSyncCommitteeContributionsSubmitter(submitter submitter.SyncCommitteeCo
 	})
 }
 
-// WithChainTimeService sets the chain time service.
-func WithChainTimeService(service chaintime.Service) Parameter {
+// WithChainTime sets the chain time service.
+func WithChainTime(service chaintime.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.chainTimeService = service
+		p.chainTime = service
 	})
 }
 

@@ -72,7 +72,7 @@ func NoTestService(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(prometheusMetrics),
 				standard.WithProcessConcurrency(1),
-				standard.WithChainTimeService(chainTime),
+				standard.WithChainTime(chainTime),
 				standard.WithSpecProvider(specProvider),
 				standard.WithAttestationDataProvider(attestationDataProvider),
 				standard.WithAttestationsSubmitter(attestationsSubmitter),
