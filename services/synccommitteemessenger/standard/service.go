@@ -136,12 +136,9 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 
 	duty, ok := data.(*synccommitteemessenger.Duty)
 	if !ok {
-		var startOfSlot *time.Time
-		if s.chainTimeService != nil {
-			t := s.chainTimeService.StartOfSlot(0)
-			startOfSlot = &t
-		}
-		monitorSyncCommitteeMessagesCompleted(started, 0, len(duty.ValidatorIndices()), "failed", startOfSlot)
+		// No duty so using 0 values for monitoring.
+		startOfSlot := s.chainTimeService.StartOfSlot(0)
+		monitorSyncCommitteeMessagesCompleted(started, 0, 0, "failed", startOfSlot)
 		return errors.New("passed invalid data structure")
 	}
 
@@ -175,20 +172,11 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 
 	duty, ok := data.(*synccommitteemessenger.Duty)
 	if !ok {
-		var startOfSlot *time.Time
-		if s.chainTimeService != nil {
-			t := s.chainTimeService.StartOfSlot(0)
-			startOfSlot = &t
-		}
-		monitorSyncCommitteeMessagesCompleted(started, 0, len(duty.ValidatorIndices()), "failed", startOfSlot)
+		startOfSlot := s.chainTimeService.StartOfSlot(0)
+		monitorSyncCommitteeMessagesCompleted(started, 0, 0, "failed", startOfSlot)
 		return nil, errors.New("passed invalid data structure")
 	}
-
-	var startOfSlot *time.Time
-	if s.chainTimeService != nil {
-		t := s.chainTimeService.StartOfSlot(duty.Slot())
-		startOfSlot = &t
-	}
+	startOfSlot := s.chainTimeService.StartOfSlot(duty.Slot())
 
 	// Fetch the beacon block root.
 	beaconBlockRootResponse, err := s.beaconBlockRootProvider.BeaconBlockRoot(ctx, &api.BeaconBlockRootOpts{

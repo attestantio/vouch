@@ -39,12 +39,9 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 
 	duty, ok := data.(*attester.Duty)
 	if !ok {
-		var startOfSlot *time.Time
-		if s.chainTime != nil {
-			t := s.chainTime.StartOfSlot(0)
-			startOfSlot = &t
-		}
-		monitorAttestationsCompleted(started, 0, len(duty.ValidatorIndices()), "failed", startOfSlot)
+		// No duty so using 0 values for monitoring.
+		startOfSlot := s.chainTime.StartOfSlot(0)
+		monitorAttestationsCompleted(started, 0, 0, "failed", startOfSlot)
 		return nil, errors.New("passed invalid data structure")
 	}
 	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))
@@ -52,11 +49,7 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 	validatorIndices := s.fetchValidatorIndices(ctx, duty)
 
 	// Fetch the attestation data.
-	var startOfSlot *time.Time
-	if s.chainTime != nil {
-		t := s.chainTime.StartOfSlot(duty.Slot())
-		startOfSlot = &t
-	}
+	startOfSlot := s.chainTime.StartOfSlot(duty.Slot())
 	attestationData, err := s.obtainAttestationData(ctx, duty)
 	if err != nil {
 		monitorAttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed", startOfSlot)

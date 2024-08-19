@@ -140,7 +140,7 @@ func registerPrometheusMetrics(_ context.Context) error {
 	return nil
 }
 
-func monitorAttestationAggregationCompleted(started time.Time, slot phase0.Slot, result string, startOfSlot *time.Time) {
+func monitorAttestationAggregationCompleted(started time.Time, slot phase0.Slot, result string, startOfSlot time.Time) {
 	if attestationAggregationProcessTimer == nil || attestationAggregationMarkTimer == nil ||
 		attestationAggregationProcessLatestSlot == nil || attestationAggregationProcessRequests == nil {
 		return
@@ -148,9 +148,7 @@ func monitorAttestationAggregationCompleted(started time.Time, slot phase0.Slot,
 	// Only log times for successful completions.
 	if result == "succeeded" {
 		attestationAggregationProcessTimer.Observe(time.Since(started).Seconds())
-		if startOfSlot != nil {
-			attestationAggregationMarkTimer.Observe(time.Since(*startOfSlot).Seconds())
-		}
+		attestationAggregationMarkTimer.Observe(time.Since(startOfSlot).Seconds())
 		attestationAggregationProcessLatestSlot.Set(float64(slot))
 	}
 	attestationAggregationProcessRequests.WithLabelValues(result).Inc()

@@ -154,12 +154,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 
 	var beaconBlockRoot *phase0.Root
 
-	var startOfSlot *time.Time
-	if s.chainTime != nil {
-		t := s.chainTime.StartOfSlot(duty.Slot)
-		startOfSlot = &t
-	}
-
+	startOfSlot := s.chainTime.StartOfSlot(duty.Slot)
 	s.beaconBlockRootsMu.Lock()
 	if tmp, exists := s.beaconBlockRoots[duty.Slot]; exists {
 		beaconBlockRoot = &tmp

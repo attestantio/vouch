@@ -123,7 +123,7 @@ func registerPrometheusMetrics(_ context.Context) error {
 	return nil
 }
 
-func monitorAttestationsCompleted(started time.Time, slot phase0.Slot, count int, result string, startOfSlot *time.Time) {
+func monitorAttestationsCompleted(started time.Time, slot phase0.Slot, count int, result string, startOfSlot time.Time) {
 	if attestationProcessTimer == nil || attestationMarkTimer == nil || attestationProcessLatestSlot == nil ||
 		attestationProcessRequests == nil {
 		return
@@ -135,9 +135,7 @@ func monitorAttestationsCompleted(started time.Time, slot phase0.Slot, count int
 		for range count {
 			attestationProcessTimer.Observe(duration)
 		}
-		if startOfSlot != nil {
-			attestationMarkTimer.Observe(time.Since(*startOfSlot).Seconds())
-		}
+		attestationMarkTimer.Observe(time.Since(startOfSlot).Seconds())
 		attestationProcessLatestSlot.Set(float64(slot))
 	}
 	attestationProcessRequests.WithLabelValues(result).Add(float64(count))

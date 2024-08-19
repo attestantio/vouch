@@ -123,7 +123,7 @@ func registerPrometheusMetrics(_ context.Context) error {
 	return nil
 }
 
-func monitorSyncCommitteeMessagesCompleted(started time.Time, slot phase0.Slot, count int, result string, startOfSlot *time.Time) {
+func monitorSyncCommitteeMessagesCompleted(started time.Time, slot phase0.Slot, count int, result string, startOfSlot time.Time) {
 	if syncCommitteeMessageProcessTimer == nil || syncCommitteeMessageMarkTimer == nil || syncCommitteeMessageProcessLatestSlot == nil || syncCommitteeMessageProcessRequests == nil {
 		return
 	}
@@ -133,9 +133,7 @@ func monitorSyncCommitteeMessagesCompleted(started time.Time, slot phase0.Slot, 
 		for range count {
 			syncCommitteeMessageProcessTimer.Observe(duration)
 		}
-		if startOfSlot != nil {
-			syncCommitteeMessageMarkTimer.Observe(time.Since(*startOfSlot).Seconds())
-		}
+		syncCommitteeMessageMarkTimer.Observe(time.Since(startOfSlot).Seconds())
 		syncCommitteeMessageProcessLatestSlot.Set(float64(slot))
 	}
 	syncCommitteeMessageProcessRequests.WithLabelValues(result).Add(float64(count))

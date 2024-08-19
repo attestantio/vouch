@@ -115,11 +115,8 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	duty, ok := data.(*attestationaggregator.Duty)
 	if !ok {
 		s.log.Error().Msg("Passed invalid data structure")
-		var startOfSlot *time.Time
-		if s.chainTime != nil {
-			t := s.chainTime.StartOfSlot(0)
-			startOfSlot = &t
-		}
+		// No duty so using 0 values for monitoring.
+		startOfSlot := s.chainTime.StartOfSlot(0)
 		monitorAttestationAggregationCompleted(started, 0, "failed", startOfSlot)
 		return
 	}
@@ -131,11 +128,8 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 		Slot:                duty.Slot,
 		AttestationDataRoot: duty.AttestationDataRoot,
 	})
-	var startOfSlot *time.Time
-	if s.chainTime != nil {
-		t := s.chainTime.StartOfSlot(duty.Slot)
-		startOfSlot = &t
-	}
+
+	startOfSlot := s.chainTime.StartOfSlot(duty.Slot)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain aggregate attestation")
 		monitorAttestationAggregationCompleted(started, duty.Slot, "failed", startOfSlot)

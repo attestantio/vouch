@@ -140,7 +140,7 @@ func registerPrometheusMetrics(_ context.Context) error {
 	return nil
 }
 
-func monitorSyncCommitteeAggregationsCompleted(started time.Time, slot phase0.Slot, count int, result string, startOfSlot *time.Time) {
+func monitorSyncCommitteeAggregationsCompleted(started time.Time, slot phase0.Slot, count int, result string, startOfSlot time.Time) {
 	if syncCommitteeAggregationProcessTimer == nil || syncCommitteeAggregationMarkTimer == nil || syncCommitteeAggregationProcessLatestSlot == nil {
 		return
 	}
@@ -150,9 +150,7 @@ func monitorSyncCommitteeAggregationsCompleted(started time.Time, slot phase0.Sl
 		for range count {
 			syncCommitteeAggregationProcessTimer.Observe(duration)
 		}
-		if startOfSlot != nil {
-			syncCommitteeAggregationMarkTimer.Observe(time.Since(*startOfSlot).Seconds())
-		}
+		syncCommitteeAggregationMarkTimer.Observe(time.Since(startOfSlot).Seconds())
 		syncCommitteeAggregationProcessLatestSlot.Set(float64(slot))
 	}
 	syncCommitteeAggregationProcessRequests.WithLabelValues(result).Add(float64(count))
