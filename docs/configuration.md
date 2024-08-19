@@ -222,7 +222,7 @@ blockrelay:
   # builder-configs contain specific configurations for different builders, with each builder defined by its public key.
   # The base score for each bid is the value to the proposer, in wei.  The final score is calculated by adding
   # the 'offset' value for the specific builder, and then multiplying by the percentage of 'factor' value. For example,
-  # if the base value is 1000, the offset is 10 and the factor is 110 then the final score is ((1000+10)/100)*110 = 1100.  If the
+  # if the base value is 1000, the offset is 10 and the factor is 110 then the final score is ((1000+10)/110)*100 = 1100.  If the
   # offset is not configured it defaults to 0; if the factor is not configured it defaults to 100.  The category is used
   # for differentiation of bids in metrics.
   builder-configs:

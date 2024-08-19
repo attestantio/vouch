@@ -308,12 +308,7 @@ func (*Service) setBuilderBid(ctx context.Context,
 		score = new(big.Int).Add(score, builderConfig.Offset)
 	}
 	if builderConfig.Factor != nil {
-		if builderConfig.Factor.Cmp(big.NewInt(0)) > 0 {
-			score = new(big.Int).Div(score, new(big.Int).SetUint64(100))
-			score = new(big.Int).Mul(score, builderConfig.Factor)
-		} else {
-			score = new(big.Int).Mul(score, new(big.Int).SetUint64(0))
-		}
+		score = new(big.Int).Div(new(big.Int).Mul(score, builderConfig.Factor), big.NewInt(100))
 	}
 
 	participation := &blockauctioneer.Participation{
