@@ -48,6 +48,7 @@ func TestService(t *testing.T) {
 		standardchaintime.WithGenesisProvider(genesisProvider),
 		standardchaintime.WithSpecProvider(specProvider),
 	)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name     string
