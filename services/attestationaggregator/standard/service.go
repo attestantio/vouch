@@ -116,8 +116,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	if !ok {
 		s.log.Error().Msg("Passed invalid data structure")
 		// No duty so using 0 values for monitoring.
-		startOfSlot := s.chainTime.StartOfSlot(0)
-		monitorAttestationAggregationCompleted(started, 0, "failed", startOfSlot)
+		monitorAttestationAggregationCompleted(started, 0, "failed", time.Time{})
 		return
 	}
 	log := s.log.With().Uint64("slot", uint64(duty.Slot)).Str("attestation_data_root", fmt.Sprintf("%#x", duty.AttestationDataRoot)).Logger()

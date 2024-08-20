@@ -40,8 +40,7 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 	duty, ok := data.(*attester.Duty)
 	if !ok {
 		// No duty so using 0 values for monitoring.
-		startOfSlot := s.chainTime.StartOfSlot(0)
-		monitorAttestationsCompleted(started, 0, 0, "failed", startOfSlot)
+		monitorAttestationsCompleted(started, 0, 0, "failed", time.Time{})
 		return nil, errors.New("passed invalid data structure")
 	}
 	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))

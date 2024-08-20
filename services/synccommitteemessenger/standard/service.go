@@ -137,8 +137,7 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 	duty, ok := data.(*synccommitteemessenger.Duty)
 	if !ok {
 		// No duty so using 0 values for monitoring.
-		startOfSlot := s.chainTimeService.StartOfSlot(0)
-		monitorSyncCommitteeMessagesCompleted(started, 0, 0, "failed", startOfSlot)
+		monitorSyncCommitteeMessagesCompleted(started, 0, 0, "failed", time.Time{})
 		return errors.New("passed invalid data structure")
 	}
 
@@ -172,8 +171,7 @@ func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.Sync
 
 	duty, ok := data.(*synccommitteemessenger.Duty)
 	if !ok {
-		startOfSlot := s.chainTimeService.StartOfSlot(0)
-		monitorSyncCommitteeMessagesCompleted(started, 0, 0, "failed", startOfSlot)
+		monitorSyncCommitteeMessagesCompleted(started, 0, 0, "failed", time.Time{})
 		return nil, errors.New("passed invalid data structure")
 	}
 	startOfSlot := s.chainTimeService.StartOfSlot(duty.Slot())
