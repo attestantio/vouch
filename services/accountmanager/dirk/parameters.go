@@ -27,7 +27,7 @@ import (
 
 type parameters struct {
 	logLevel               zerolog.Level
-	monitor                metrics.AccountManagerMonitor
+	monitor                metrics.Service
 	timeout                time.Duration
 	clientMonitor          metrics.ClientMonitor
 	processConcurrency     int64
@@ -61,7 +61,7 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 }
 
 // WithMonitor sets the monitor for the module.
-func WithMonitor(monitor metrics.AccountManagerMonitor) Parameter {
+func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})

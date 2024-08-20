@@ -24,6 +24,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/synccommitteeaggregator"
@@ -36,7 +37,7 @@ import (
 // Service is a sync committee aggregator.
 type Service struct {
 	log                                  zerolog.Logger
-	monitor                              metrics.SyncCommitteeAggregationMonitor
+	monitor                              metrics.Service
 	slotsPerEpoch                        uint64
 	syncCommitteeSize                    uint64
 	syncCommitteeSubnetCount             uint64
@@ -48,6 +49,7 @@ type Service struct {
 	syncCommitteeContributionsSubmitter  eth2client.SyncCommitteeContributionsSubmitter
 	beaconBlockRoots                     map[phase0.Slot]phase0.Root
 	beaconBlockRootsMu                   sync.Mutex
+	chainTime                            chaintime.Service
 }
 
 // New creates a new sync committee aggregator.
@@ -61,6 +63,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	log := zerologger.With().Str("service", "synccommitteeaggregator").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
+	}
+
+	if err := registerMetrics(ctx, parameters.monitor); err != nil {
+		return nil, errors.New("failed to register metrics")
 	}
 
 	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})
@@ -118,6 +124,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeContributionProvider:    parameters.syncCommitteeContributionProvider,
 		syncCommitteeContributionsSubmitter:  parameters.syncCommitteeContributionsSubmitter,
 		beaconBlockRoots:                     map[phase0.Slot]phase0.Root{},
+		chainTime:                            parameters.chainTime,
 	}
 
 	return s, nil
@@ -147,6 +154,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 
 	var beaconBlockRoot *phase0.Root
 
+	startOfSlot := s.chainTime.StartOfSlot(duty.Slot)
 	s.beaconBlockRootsMu.Lock()
 	if tmp, exists := s.beaconBlockRoots[duty.Slot]; exists {
 		beaconBlockRoot = &tmp
@@ -161,7 +169,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 		})
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to obtain beacon block root")
-			s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed")
+			monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed", startOfSlot)
 			return
 		}
 		beaconBlockRoot = beaconBlockRootResponse.Data
@@ -179,7 +187,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 			})
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain sync committee contribution")
-				s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed")
+				monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed", startOfSlot)
 				return
 			}
 			contribution := contributionResponse.Data
@@ -191,13 +199,13 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 			account, exists := duty.Accounts[validatorIndex]
 			if !exists {
 				log.Debug().Msg("Account nil; likely exited validator still in sync committee")
-				s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "exited")
+				monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "exited", startOfSlot)
 				return
 			}
 			sig, err := s.contributionAndProofSigner.SignContributionAndProof(ctx, account, contributionAndProof)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain signature of contribution and proof")
-				s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed")
+				monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed", startOfSlot)
 				return
 			}
 
@@ -212,7 +220,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 
 	if err := s.syncCommitteeContributionsSubmitter.SubmitSyncCommitteeContributions(ctx, signedContributionAndProofs); err != nil {
 		log.Warn().Err(err).Msg("Failed to submit signed contribution and proofs")
-		s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(signedContributionAndProofs), "failed")
+		monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(signedContributionAndProofs), "failed", startOfSlot)
 		return
 	}
 
@@ -220,7 +228,7 @@ func (s *Service) Aggregate(ctx context.Context, data interface{}) {
 	for i := range signedContributionAndProofs {
 		frac := float64(signedContributionAndProofs[i].Message.Contribution.AggregationBits.Count()) /
 			float64(signedContributionAndProofs[i].Message.Contribution.AggregationBits.Len())
-		s.monitor.SyncCommitteeAggregationCoverage(frac)
+		monitorSyncCommitteeAggregationCoverage(frac)
 	}
-	s.monitor.SyncCommitteeAggregationsCompleted(started, duty.Slot, len(signedContributionAndProofs), "succeeded")
+	monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(signedContributionAndProofs), "succeeded", startOfSlot)
 }

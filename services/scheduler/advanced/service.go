@@ -43,13 +43,13 @@ type job struct {
 // of high concurrent load.
 type Service struct {
 	log       zerolog.Logger
-	monitor   metrics.SchedulerMonitor
+	monitor   metrics.Service
 	jobs      map[string]*job
 	jobsMutex deadlock.RWMutex
 }
 
 // New creates a new scheduling service.
-func New(_ context.Context, params ...Parameter) (*Service, error) {
+func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem with parameters")
@@ -59,6 +59,10 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	log := zerologger.With().Str("service", "scheduler").Str("impl", "advanced").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
+	}
+
+	if err := registerMetrics(ctx, parameters.monitor); err != nil {
+		return nil, errors.New("failed to register metrics")
 	}
 
 	return &Service{
@@ -97,7 +101,7 @@ func (s *Service) ScheduleJob(ctx context.Context,
 	}
 	s.jobs[name] = job
 	s.jobsMutex.Unlock()
-	s.monitor.JobScheduled(class)
+	monitorJobScheduled(class)
 
 	s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Scheduled job")
 	go func() {
@@ -108,18 +112,18 @@ func (s *Service) ScheduleJob(ctx context.Context,
 			delete(s.jobs, name)
 			s.jobsMutex.Unlock()
 			finaliseJob(job)
-			s.monitor.JobCancelled(class)
+			monitorJobCancelled(class)
 		case <-job.cancelCh:
 			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Cancel triggered; job not running")
 			// If we receive this signal the job has already been deleted from the jobs list so no need to
 			// do so again here.
 			finaliseJob(job)
-			s.monitor.JobCancelled(class)
+			monitorJobCancelled(class)
 		case <-job.runCh:
 			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Run triggered; job running")
 			// If we receive this signal the job has already been deleted from the jobs list so no need to
 			// do so again here.
-			s.monitor.JobStartedOnSignal(class)
+			monitorJobStartedOnSignal(class)
 			jobFunc(ctx, data)
 			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Job complete")
 			finaliseJob(job)
@@ -135,7 +139,7 @@ func (s *Service) ScheduleJob(ctx context.Context,
 			s.jobsMutex.Unlock()
 			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Timer triggered; job running")
 			job.active.Store(true)
-			s.monitor.JobStartedOnTimer(class)
+			monitorJobStartedOnTimer(class)
 			jobFunc(ctx, data)
 			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Job complete")
 			job.active.Store(false)
@@ -182,7 +186,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context,
 	}
 	s.jobs[name] = job
 	s.jobsMutex.Unlock()
-	s.monitor.JobScheduled(class)
+	monitorJobScheduled(class)
 
 	go func() {
 		for {
@@ -193,7 +197,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context,
 				delete(s.jobs, name)
 				s.jobsMutex.Unlock()
 				finaliseJob(job)
-				s.monitor.JobCancelled(class)
+				monitorJobCancelled(class)
 				return
 			}
 			if err != nil {
@@ -202,7 +206,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context,
 				delete(s.jobs, name)
 				s.jobsMutex.Unlock()
 				finaliseJob(job)
-				s.monitor.JobCancelled(class)
+				monitorJobCancelled(class)
 				return
 			}
 			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Scheduled job")
@@ -213,16 +217,16 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context,
 				delete(s.jobs, name)
 				s.jobsMutex.Unlock()
 				finaliseJob(job)
-				s.monitor.JobCancelled(class)
+				monitorJobCancelled(class)
 				return
 			case <-job.cancelCh:
 				s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Cancel triggered; job not running")
 				finaliseJob(job)
-				s.monitor.JobCancelled(class)
+				monitorJobCancelled(class)
 				return
 			case <-job.runCh:
 				s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Run triggered; job running")
-				s.monitor.JobStartedOnSignal(class)
+				monitorJobStartedOnSignal(class)
 				jobFunc(ctx, jobData)
 				s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Job complete")
 				job.active.Store(false)
@@ -233,7 +237,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context,
 				}
 				job.active.Store(true)
 				s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Timer triggered; job running")
-				s.monitor.JobStartedOnTimer(class)
+				monitorJobStartedOnTimer(class)
 				jobFunc(ctx, jobData)
 				s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Job complete")
 				job.active.Store(false)

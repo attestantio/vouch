@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -11,25 +11,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prometheus
+package utils
 
 import (
+	"context"
 	"errors"
 
+	"github.com/attestantio/vouch/services/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-func (s *Service) setupAccountManagerMetrics() error {
-	s.accountManagerAccounts = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+var accountManagerAccounts *prometheus.GaugeVec
+
+func RegisterMetrics(ctx context.Context, monitor metrics.Service) error {
+	if monitor == nil {
+		// No monitor.
+		return nil
+	}
+	if monitor.Presenter() == "prometheus" {
+		return registerPrometheusMetrics(ctx)
+	}
+	return nil
+}
+
+func registerPrometheusMetrics(_ context.Context) error {
+	accountManagerAccounts = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "vouch",
 		Subsystem: "accountmanager",
 		Name:      "accounts_total",
 		Help:      "The number of accounts managed by Vouch.",
 	}, []string{"state"})
-	if err := prometheus.Register(s.accountManagerAccounts); err != nil {
+	if err := prometheus.Register(accountManagerAccounts); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
-			s.accountManagerAccounts = alreadyRegisteredError.ExistingCollector.(*prometheus.GaugeVec)
+			accountManagerAccounts = alreadyRegisteredError.ExistingCollector.(*prometheus.GaugeVec)
 		} else {
 			return err
 		}
@@ -38,7 +53,10 @@ func (s *Service) setupAccountManagerMetrics() error {
 	return nil
 }
 
-// Accounts sets the number of accounts in a given state.
-func (s *Service) Accounts(state string, count uint64) {
-	s.accountManagerAccounts.WithLabelValues(state).Set(float64(count))
+// MonitorAccounts is used to update the account manager metrics.
+func MonitorAccounts(state string, count uint64) {
+	if accountManagerAccounts == nil {
+		return
+	}
+	accountManagerAccounts.WithLabelValues(state).Set(float64(count))
 }

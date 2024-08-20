@@ -26,7 +26,7 @@ import (
 type parameters struct {
 	logLevel                 zerolog.Level
 	processConcurrency       int64
-	monitor                  metrics.BeaconCommitteeSubscriptionMonitor
+	monitor                  metrics.Service
 	chainTimeService         chaintime.Service
 	attesterDutiesProvider   eth2client.AttesterDutiesProvider
 	beaconCommitteeSubmitter submitter.BeaconCommitteeSubscriptionsSubmitter
@@ -59,7 +59,7 @@ func WithProcessConcurrency(concurrency int64) Parameter {
 }
 
 // WithMonitor sets the monitor for the module.
-func WithMonitor(monitor metrics.BeaconCommitteeSubscriptionMonitor) Parameter {
+func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})

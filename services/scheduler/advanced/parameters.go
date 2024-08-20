@@ -23,7 +23,7 @@ import (
 
 type parameters struct {
 	logLevel zerolog.Level
-	monitor  metrics.SchedulerMonitor
+	monitor  metrics.Service
 }
 
 // Parameter is the interface for service parameters.
@@ -45,7 +45,7 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 }
 
 // WithMonitor sets the monitor for this module.
-func WithMonitor(monitor metrics.SchedulerMonitor) Parameter {
+func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})

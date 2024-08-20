@@ -30,52 +30,6 @@ import (
 type Service struct {
 	chainTime chaintime.Service
 
-	schedulerJobsScheduled *prometheus.CounterVec
-	schedulerJobsCancelled *prometheus.CounterVec
-	schedulerJobsStarted   *prometheus.CounterVec
-
-	epochsProcessed   prometheus.Counter
-	blockReceiptDelay *prometheus.HistogramVec
-
-	attestationProcessTimer      prometheus.Histogram
-	attestationProcessRequests   *prometheus.CounterVec
-	attestationMarkTimer         prometheus.Histogram
-	attestationProcessLatestSlot prometheus.Gauge
-
-	attestationAggregationProcessTimer      prometheus.Histogram
-	attestationAggregationProcessRequests   *prometheus.CounterVec
-	attestationAggregationCoverageRatio     prometheus.Histogram
-	attestationAggregationMarkTimer         prometheus.Histogram
-	attestationAggregationProcessLatestSlot prometheus.Gauge
-
-	syncCommitteeMessageProcessTimer      prometheus.Histogram
-	syncCommitteeMessageProcessRequests   *prometheus.CounterVec
-	syncCommitteeMessageMarkTimer         prometheus.Histogram
-	syncCommitteeMessageProcessLatestSlot prometheus.Gauge
-
-	syncCommitteeVerificationHeadMismatches   *prometheus.CounterVec
-	syncCommitteeVerificationAggregateFound   *prometheus.CounterVec
-	syncCommitteeVerificationAggregateMissing *prometheus.CounterVec
-	syncCommitteeVerificationGetHeadFailures  *prometheus.CounterVec
-	syncCommitteeVerificationCurrentCount     prometheus.Gauge
-
-	syncCommitteeAggregationProcessTimer      prometheus.Histogram
-	syncCommitteeAggregationProcessRequests   *prometheus.CounterVec
-	syncCommitteeAggregationCoverageRatio     prometheus.Histogram
-	syncCommitteeAggregationMarkTimer         prometheus.Histogram
-	syncCommitteeAggregationProcessLatestSlot prometheus.Gauge
-
-	beaconCommitteeSubscriptionProcessTimer    prometheus.Histogram
-	beaconCommitteeSubscriptionProcessRequests *prometheus.CounterVec
-	beaconCommitteeSubscribers                 prometheus.Gauge
-	beaconCommitteeAggregators                 prometheus.Gauge
-
-	syncCommitteeSubscriptionProcessTimer    prometheus.Histogram
-	syncCommitteeSubscriptionProcessRequests *prometheus.CounterVec
-	syncCommitteeSubscribers                 prometheus.Gauge
-
-	accountManagerAccounts *prometheus.GaugeVec
-
 	clientOperationCounter   *prometheus.CounterVec
 	clientOperationTimer     *prometheus.HistogramVec
 	strategyOperationCounter *prometheus.CounterVec
@@ -101,31 +55,6 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	s := &Service{
 		chainTime: parameters.chainTime,
 	}
-
-	if err := s.setupSchedulerMetrics(); err != nil {
-		return nil, errors.Wrap(err, "failed to set up scheduler metrics")
-	}
-	if err := s.setupControllerMetrics(); err != nil {
-		return nil, errors.Wrap(err, "failed to set up controller metrics")
-	}
-	if err := s.setupAttestationMetrics(); err != nil {
-		return nil, errors.Wrap(err, "failed to set up attestation metrics")
-	}
-	if err := s.setupAttestationAggregationMetrics(); err != nil {
-		return nil, errors.Wrap(err, "failed to set up attestation aggregation metrics")
-	}
-	if err := s.setupAllSyncCommitteeMetrics(); err != nil {
-		return nil, err
-	}
-	if err := s.setupBeaconCommitteeSubscriptionMetrics(); err != nil {
-		return nil, errors.Wrap(err, "failed to set up beacon committee subscription metrics")
-	}
-	if err := s.setupSyncCommitteeSubscriptionMetrics(); err != nil {
-		return nil, errors.Wrap(err, "failed to set up sync committee subscription metrics")
-	}
-	if err := s.setupAccountManagerMetrics(); err != nil {
-		return nil, errors.Wrap(err, "failed to set up account manager metrics")
-	}
 	if err := s.setupClientMetrics(); err != nil {
 		return nil, errors.Wrap(err, "failed to set up client metrics")
 	}
@@ -144,19 +73,6 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	return s, nil
-}
-
-func (s *Service) setupAllSyncCommitteeMetrics() error {
-	if err := s.setupSyncCommitteeMessageMetrics(); err != nil {
-		return errors.Wrap(err, "failed to set up sync committee message metrics")
-	}
-	if err := s.setupSyncCommitteeVerificationMetrics(); err != nil {
-		return errors.Wrap(err, "failed to set up sync committee validation metrics")
-	}
-	if err := s.setupSyncCommitteeAggregationMetrics(); err != nil {
-		return errors.Wrap(err, "failed to set up sync committee aggregation metrics")
-	}
-	return nil
 }
 
 // Presenter returns the presenter for the events.

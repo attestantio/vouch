@@ -16,112 +16,12 @@ package metrics
 
 import (
 	"time"
-
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // Service is the generic metrics service.
 type Service interface {
 	// Presenter provides the presenter for this service.
 	Presenter() string
-}
-
-// SchedulerMonitor provides methods to monitor the scheduler service.
-type SchedulerMonitor interface {
-	// JobScheduled is called when a job is scheduled.
-	JobScheduled(class string)
-	// JobCancelled is called when a scheduled job is cancelled.
-	JobCancelled(class string)
-	// JobStartedOnTimer is called when a scheduled job is started due to meeting its time.
-	JobStartedOnTimer(class string)
-	// JobStartedOnSignal is called when a scheduled job is started due to being manually signal.
-	JobStartedOnSignal(class string)
-}
-
-// ControllerMonitor provides methods to monitor the controller service.
-type ControllerMonitor interface {
-	// NewEpoch is called when vouch starts processing a new epoch.
-	NewEpoch()
-	// BlockDelay provides the delay between the start of a slot and vouch receiving its block.
-	BlockDelay(epochSlot uint, delay time.Duration)
-}
-
-// BeaconBlockProposalMonitor provides methods to monitor the block proposal process.
-type BeaconBlockProposalMonitor interface {
-	// BeaconBlockProposalCompleted is called when a block proposal process has completed.
-	BeaconBlockProposalCompleted(started time.Time, slot phase0.Slot, result string)
-
-	// BeaconBlockProposalSource is called to tag the source of a beacon block proposal.
-	BeaconBlockProposalSource(source string)
-}
-
-// AttestationMonitor provides methods to monitor the attestation process.
-type AttestationMonitor interface {
-	// AttestationsCompleted is called when an attestation process has completed.
-	AttestationsCompleted(started time.Time, slot phase0.Slot, count int, result string)
-}
-
-// AttestationAggregationMonitor provides methods to monitor the attestation aggregation process.
-type AttestationAggregationMonitor interface {
-	// AttestationAggregationCompleted is called when an attestation aggregation process has completed.
-	AttestationAggregationCompleted(started time.Time, slot phase0.Slot, result string)
-
-	// AttestationAggregationCoverage measures the attestation ratio of the attestation aggregation.
-	AttestationAggregationCoverage(frac float64)
-}
-
-// SyncCommitteeMessageMonitor provides methods to monitor the sync committee message process.
-type SyncCommitteeMessageMonitor interface {
-	// SyncCommitteeMessagesCompleted is called when a sync committee message process has completed.
-	SyncCommitteeMessagesCompleted(started time.Time, slot phase0.Slot, count int, result string)
-}
-
-// SyncCommitteeAggregationMonitor provides methods to monitor the sync committee aggregation process.
-type SyncCommitteeAggregationMonitor interface {
-	// SyncCommitteeAggregationsCompleted is called when a sync committee aggregation process has completed.
-	SyncCommitteeAggregationsCompleted(started time.Time, slot phase0.Slot, count int, result string)
-
-	// SyncCommitteeAggregationCoverage measures the contribution ratio of the sync committee aggregation.
-	SyncCommitteeAggregationCoverage(frac float64)
-}
-
-// BeaconCommitteeSubscriptionMonitor provides methods to monitor the outcome of beacon committee subscriptions.
-type BeaconCommitteeSubscriptionMonitor interface {
-	// BeaconCommitteeSubscriptionCompleted is called when a beacon committee subscription process has completed.
-	BeaconCommitteeSubscriptionCompleted(started time.Time, result string)
-	// BeaconCommitteeSubscribers sets the number of beacon committees to which our validators are subscribed.
-	BeaconCommitteeSubscribers(subscribers int)
-	// BeaconCommitteeAggregators sets the number of beacon committees for which our validators are aggregating.
-	BeaconCommitteeAggregators(aggregators int)
-}
-
-// SyncCommitteeSubscriptionMonitor provides methods to monitor the outcome of sync committee subscriptions.
-type SyncCommitteeSubscriptionMonitor interface {
-	// SyncCommitteeSubscriptionCompleted is called when a sync committee subscription process has completed.
-	SyncCommitteeSubscriptionCompleted(started time.Time, result string)
-	// SyncCommitteeSubscribers sets the number of sync committees to which our validators are subscribed.
-	SyncCommitteeSubscribers(subscribers int)
-}
-
-// SyncCommitteeVerificationMonitor provides methods to monitor the sync committee verification process.
-type SyncCommitteeVerificationMonitor interface {
-	// SyncCommitteeSyncAggregateFoundInc is called when our sync committee participation was included in the SyncAggregate for the next head.
-	SyncCommitteeSyncAggregateFoundInc()
-	// SyncCommitteeSyncAggregateMissingInc is called when our sync committee participation was not included in the SyncAggregate for the next head.
-	SyncCommitteeSyncAggregateMissingInc()
-	// SyncCommitteeGetHeadBlockFailedInc is called when validation for a sync committee fails due to being unable to retrieve the head block.
-	SyncCommitteeGetHeadBlockFailedInc()
-	// SyncCommitteeMessagesHeadMismatchInc is called when a sync committee message was known to not match the next head block.
-	// The count is the number of Sync Committee assigned validators.
-	SyncCommitteeMessagesHeadMismatchInc(count int)
-	// SyncCommitteeCurrentCountSet is called to set the current number of sync committee assigned validators.
-	SyncCommitteeCurrentCountSet(count int)
-}
-
-// AccountManagerMonitor provides methods to monitor the account manager.
-type AccountManagerMonitor interface {
-	// Accounts sets the number of accounts in a given state.
-	Accounts(state string, count uint64)
 }
 
 // ClientMonitor provides methods to monitor client connections.

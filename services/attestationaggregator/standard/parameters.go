@@ -16,6 +16,7 @@ package standard
 import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
@@ -25,13 +26,14 @@ import (
 
 type parameters struct {
 	logLevel                       zerolog.Level
-	monitor                        metrics.AttestationAggregationMonitor
+	monitor                        metrics.Service
 	specProvider                   eth2client.SpecProvider
 	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
 	aggregateAttestationProvider   eth2client.AggregateAttestationProvider
 	aggregateAttestationsSubmitter submitter.AggregateAttestationsSubmitter
 	slotSelectionSigner            signer.SlotSelectionSigner
 	aggregateAndProofSigner        signer.AggregateAndProofSigner
+	chainTime                      chaintime.Service
 }
 
 // Parameter is the interface for service parameters.
@@ -60,7 +62,7 @@ func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 }
 
 // WithMonitor sets the monitor for this module.
-func WithMonitor(monitor metrics.AttestationAggregationMonitor) Parameter {
+func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})
@@ -101,6 +103,13 @@ func WithAggregateAndProofSigner(signer signer.AggregateAndProofSigner) Paramete
 	})
 }
 
+// WithChainTime sets the chain time service.
+func WithChainTime(service chaintime.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.chainTime = service
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -126,6 +135,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.aggregateAttestationsSubmitter == nil {
 		return nil, errors.New("no aggregate attestations submitter specified")
+	}
+	if parameters.chainTime == nil {
+		return nil, errors.New("no chain time service specified")
 	}
 	if parameters.slotSelectionSigner == nil {
 		return nil, errors.New("no slot selection signer specified")

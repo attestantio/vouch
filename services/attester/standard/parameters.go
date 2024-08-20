@@ -27,8 +27,8 @@ import (
 type parameters struct {
 	logLevel                   zerolog.Level
 	processConcurrency         int64
-	monitor                    metrics.AttestationMonitor
-	chainTimeService           chaintime.Service
+	monitor                    metrics.Service
+	chainTime                  chaintime.Service
 	specProvider               eth2client.SpecProvider
 	attestationDataProvider    eth2client.AttestationDataProvider
 	attestationsSubmitter      submitter.AttestationsSubmitter
@@ -62,9 +62,9 @@ func WithProcessConcurrency(concurrency int64) Parameter {
 }
 
 // WithChainTime sets the chain time service.
-func WithChainTimeService(service chaintime.Service) Parameter {
+func WithChainTime(service chaintime.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.chainTimeService = service
+		p.chainTime = service
 	})
 }
 
@@ -90,7 +90,7 @@ func WithAttestationsSubmitter(submitter submitter.AttestationsSubmitter) Parame
 }
 
 // WithMonitor sets the monitor for this module.
-func WithMonitor(monitor metrics.AttestationMonitor) Parameter {
+func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})
@@ -124,7 +124,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.processConcurrency == 0 {
 		return nil, errors.New("no process concurrency specified")
 	}
-	if parameters.chainTimeService == nil {
+	if parameters.chainTime == nil {
 		return nil, errors.New("no chain time service specified")
 	}
 	if parameters.specProvider == nil {

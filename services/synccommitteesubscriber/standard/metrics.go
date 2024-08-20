@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -11,17 +11,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prometheus
+package standard
 
 import (
+	"context"
 	"errors"
 	"time"
 
+	"github.com/attestantio/vouch/services/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-func (s *Service) setupSyncCommitteeSubscriptionMetrics() error {
-	s.syncCommitteeSubscriptionProcessTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
+var (
+	syncCommitteeSubscriptionProcessTimer    prometheus.Histogram
+	syncCommitteeSubscriptionProcessRequests *prometheus.CounterVec
+	syncCommitteeSubscribers                 prometheus.Gauge
+)
+
+func registerMetrics(ctx context.Context, monitor metrics.Service) error {
+	if monitor == nil {
+		// No monitor.
+		return nil
+	}
+	if monitor.Presenter() == "prometheus" {
+		return registerPrometheusMetrics(ctx)
+	}
+	return nil
+}
+
+func registerPrometheusMetrics(_ context.Context) error {
+	syncCommitteeSubscriptionProcessTimer = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "vouch",
 		Subsystem: "synccommitteesubscription_process",
 		Name:      "duration_seconds",
@@ -31,40 +50,40 @@ func (s *Service) setupSyncCommitteeSubscriptionMetrics() error {
 			1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0,
 		},
 	})
-	if err := prometheus.Register(s.syncCommitteeSubscriptionProcessTimer); err != nil {
+	if err := prometheus.Register(syncCommitteeSubscriptionProcessTimer); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
-			s.syncCommitteeSubscriptionProcessTimer = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
+			syncCommitteeSubscriptionProcessTimer = alreadyRegisteredError.ExistingCollector.(prometheus.Histogram)
 		} else {
 			return err
 		}
 	}
 
-	s.syncCommitteeSubscriptionProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
+	syncCommitteeSubscriptionProcessRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
 		Subsystem: "synccommitteesubscription_process",
 		Name:      "requests_total",
 		Help:      "The number of sync committee subscription processes.",
 	}, []string{"result"})
-	if err := prometheus.Register(s.syncCommitteeSubscriptionProcessRequests); err != nil {
+	if err := prometheus.Register(syncCommitteeSubscriptionProcessRequests); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
-			s.syncCommitteeSubscriptionProcessRequests = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+			syncCommitteeSubscriptionProcessRequests = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
 		} else {
 			return err
 		}
 	}
 
-	s.syncCommitteeSubscribers = prometheus.NewGauge(prometheus.GaugeOpts{
+	syncCommitteeSubscribers = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "vouch",
 		Subsystem: "synccommitteesubscription",
 		Name:      "subscribers_total",
 		Help:      "The number of sync committee subscribed.",
 	})
-	if err := prometheus.Register(s.syncCommitteeSubscribers); err != nil {
+	if err := prometheus.Register(syncCommitteeSubscribers); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
-			s.syncCommitteeSubscribers = alreadyRegisteredError.ExistingCollector.(prometheus.Gauge)
+			syncCommitteeSubscribers = alreadyRegisteredError.ExistingCollector.(prometheus.Gauge)
 		} else {
 			return err
 		}
@@ -73,16 +92,20 @@ func (s *Service) setupSyncCommitteeSubscriptionMetrics() error {
 	return nil
 }
 
-// SyncCommitteeSubscriptionCompleted is called when an sync committee subscription process has completed.
-func (s *Service) SyncCommitteeSubscriptionCompleted(started time.Time, result string) {
+func monitorSyncCommitteeSubscriptionCompleted(started time.Time, result string) {
+	if syncCommitteeSubscriptionProcessTimer == nil || syncCommitteeSubscriptionProcessRequests == nil {
+		return
+	}
 	// Only log times for successful completions.
 	if result == "succeeded" {
-		s.syncCommitteeSubscriptionProcessTimer.Observe(time.Since(started).Seconds())
+		syncCommitteeSubscriptionProcessTimer.Observe(time.Since(started).Seconds())
 	}
-	s.syncCommitteeSubscriptionProcessRequests.WithLabelValues(result).Inc()
+	syncCommitteeSubscriptionProcessRequests.WithLabelValues(result).Inc()
 }
 
-// SyncCommitteeSubscribers sets the number of sync committees to which our validators are subscribed.
-func (s *Service) SyncCommitteeSubscribers(subscribers int) {
-	s.syncCommitteeSubscribers.Set(float64(subscribers))
+func monitorSyncCommitteeSubscribers(subscribers int) {
+	if syncCommitteeSubscribers == nil {
+		return
+	}
+	syncCommitteeSubscribers.Set(float64(subscribers))
 }

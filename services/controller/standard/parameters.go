@@ -38,7 +38,7 @@ import (
 
 type parameters struct {
 	logLevel                      zerolog.Level
-	monitor                       metrics.ControllerMonitor
+	monitor                       metrics.Service
 	specProvider                  eth2client.SpecProvider
 	chainTimeService              chaintime.Service
 	waitedForGenesis              bool
@@ -90,7 +90,7 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 }
 
 // WithMonitor sets the monitor for the module.
-func WithMonitor(monitor metrics.ControllerMonitor) Parameter {
+func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})

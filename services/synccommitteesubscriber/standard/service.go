@@ -30,12 +30,12 @@ import (
 // Service is an beacon committee subscriber.
 type Service struct {
 	log       zerolog.Logger
-	monitor   metrics.SyncCommitteeSubscriptionMonitor
+	monitor   metrics.Service
 	submitter submitter.SyncCommitteeSubscriptionsSubmitter
 }
 
 // New creates a new sync committee subscriber.
-func New(_ context.Context, params ...Parameter) (*Service, error) {
+func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem with parameters")
@@ -45,6 +45,10 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	log := zerologger.With().Str("service", "synccommitteesubscriber").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
+	}
+
+	if err := registerMetrics(ctx, parameters.monitor); err != nil {
+		return nil, errors.New("failed to register metrics")
 	}
 
 	s := &Service{
@@ -77,13 +81,13 @@ func (s *Service) Subscribe(ctx context.Context,
 	log.Trace().Msg("Calculated subscription info")
 
 	if err := s.submitter.SubmitSyncCommitteeSubscriptions(ctx, subscriptions); err != nil {
-		s.monitor.SyncCommitteeSubscriptionCompleted(started, "failed")
+		monitorSyncCommitteeSubscriptionCompleted(started, "failed")
 		return errors.Wrap(err, "failed to subscribe to sync committees")
 	}
 
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted subscription request")
-	s.monitor.SyncCommitteeSubscriptionCompleted(started, "succeeded")
-	s.monitor.SyncCommitteeSubscribers(len(subscriptions))
+	monitorSyncCommitteeSubscriptionCompleted(started, "succeeded")
+	monitorSyncCommitteeSubscribers(len(subscriptions))
 
 	return nil
 }
