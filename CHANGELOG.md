@@ -1,8 +1,17 @@
 dev:
-  - tidy up log entries for sync committee summaries
-  - reduce unnecessary log entries from some strategies
 
-1.9.0-alpha.8:
+1.9.0-beta.1:
+  - reduce time spent verifying account names
+  - ensure that attestations complete on Vouch's first ever epoch
+  - allow Vouch to start with some consensus nodes unavailable
+  - allow Vouch to act as an MEV-boost client for non-Vouch validators
+  - increase proposal performance with new validator REST APIs
+  - add proposal value and blinded status to trace
+  - add beaconblockproposer.builder-boost-factor
+  - add reduced memory mode for memory-constrained systems
+  - reduce memory usage when obtaining Dirk accounts
+  - reduce memory usage when generating beacon committee subscriptions
+  - add "controller.fast-track" flag
   - update internal active validators count when Dirk not available at start
   - warn when graffiti is not as expected, rather than refuse to use the proposal
   - provide fallback location for dynamic graffiti
@@ -15,23 +24,10 @@ dev:
   - add config setting to enable the above metrics
   - alter logic for determining sync committee eligible accounts
   - enable first strategies to be defined for beaconblockheader and signedbeaconblock
-
-1.9.0-alpha.3
-  - add proposal value and blinded status to trace
-  - add beaconblockproposer.builder-boost-factor
-  - add reduced memory mode for memory-constrained systems
-  - reduce memory usage when obtaining Dirk accounts
-  - reduce memory usage when generating beacon committee subscriptions
-  - add "controller.fast-track" flag
-
-1.9.0-alpha.2:
-  - allow Vouch to act as an MEV-boost client for non-Vouch validators
-  - increase proposal performance with new validator REST APIs
-
-1.9.0-alpha.1:
-  - reduce time spent verifying account names
-  - ensure that attestations complete on Vouch's first ever epoch
-  - allow Vouch to start with some consensus nodes unavailable
+  - tidy up log entries for sync committee summaries
+  - reduce unnecessary log entries from some strategies
+  - change builder bid factor to be a percentage rather than a multiplier
+  - refactor metrics to be consistent
 
 1.8.2:
   - update go-eth2-client dependency (compatibility with lodestar 1.20.0)
