@@ -569,8 +569,11 @@ func TestMulti(t *testing.T) {
 
 	// Create a job for the future.
 	run := uint32(0)
+	var finishWG sync.WaitGroup
+	finishWG.Add(1)
 	jobFunc := func(_ context.Context, _ any) {
 		atomic.AddUint32(&run, 1)
+		finishWG.Done()
 	}
 	require.NoError(t, s.ScheduleJob(ctx, "Test", "Test job", time.Now().Add(10*time.Second), jobFunc, nil))
 	require.Len(t, s.ListJobs(ctx), 1)
@@ -595,8 +598,11 @@ func TestMulti(t *testing.T) {
 	// Start the jobs by closing the channel.
 	close(starter)
 
-	// Wait for run to complete
+	// Wait for run to complete.
 	runWG.Wait()
+
+	// Wait for jobFunc to be called.
+	finishWG.Wait()
 
 	// Ensure the job has only completed once.
 	require.Equal(t, uint32(1), atomic.LoadUint32(&run))
