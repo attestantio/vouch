@@ -108,7 +108,7 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 
 		go func(duty *attester.Duty) {
 			jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxAttestationDelay)
-			if err := s.scheduler.ScheduleJobNoData(ctx,
+			if err := s.scheduler.ScheduleJob(ctx,
 				"Attest",
 				fmt.Sprintf("Attestations for slot %d", duty.Slot()),
 				jobTime,
@@ -202,7 +202,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester
 				ValidatorIndex:      info.Duty.ValidatorIndex,
 				SlotSignature:       info.Signature,
 			}
-			if err := s.scheduler.ScheduleJobNoData(ctx,
+			if err := s.scheduler.ScheduleJob(ctx,
 				"Aggregate attestations",
 				fmt.Sprintf("Beacon block attestation aggregation for slot %d committee %d", attestation.Data.Slot, attestation.Data.Index),
 				s.chainTimeService.StartOfSlot(attestation.Data.Slot).Add(s.attestationAggregationDelay),

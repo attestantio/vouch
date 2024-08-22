@@ -58,13 +58,7 @@ type Service interface {
 	// This function returns two cancel funcs.  If the first is triggered the job will not run.  If the second is triggered the job
 	// runs immediately.
 	// Note that if the parent context is cancelled the job wil not run.
-	ScheduleJob(ctx context.Context, class string, name string, runtime time.Time, job JobFunc, data interface{}) error
-
-	// ScheduleJobNoData schedules a one-off job for a given time.
-	// This function returns two cancel funcs.  If the first is triggered the job will not run.  If the second is triggered the job
-	// runs immediately.
-	// Note that if the parent context is cancelled the job wil not run.
-	ScheduleJobNoData(ctx context.Context, class string, name string, runtime time.Time, job JobFuncNoData) error
+	ScheduleJob(ctx context.Context, class string, name string, runtime time.Time, job JobFuncNoData) error
 
 	// SchedulePeriodicJob schedules a job to run in a loop.
 	// The loop starts by calling runtimeFunc, which sets the time for the first run.

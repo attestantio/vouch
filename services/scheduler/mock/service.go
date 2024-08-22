@@ -29,12 +29,7 @@ func New() scheduler.Service {
 }
 
 // ScheduleJob schedules a one-off job for a given time.
-func (*service) ScheduleJob(_ context.Context, _ string, _ string, _ time.Time, _ scheduler.JobFunc, _ interface{}) error {
-	return nil
-}
-
-// ScheduleJobNoData schedules a one-off job for a given time.
-func (*service) ScheduleJobNoData(_ context.Context, _ string, _ string, _ time.Time, _ scheduler.JobFuncNoData) error {
+func (*service) ScheduleJob(_ context.Context, _ string, _ string, _ time.Time, _ scheduler.JobFuncNoData) error {
 	return nil
 }
 

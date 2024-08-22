@@ -91,7 +91,7 @@ func (s *Service) scheduleProposals(ctx context.Context,
 			}
 			// Only bother trying to propose early if the alternative is later.
 			if s.maxProposalDelay > 0 {
-				if err := s.scheduler.ScheduleJobNoData(ctx,
+				if err := s.scheduler.ScheduleJob(ctx,
 					"Propose check",
 					fmt.Sprintf("Early beacon block proposal for slot %d", duty.Slot()),
 					s.chainTimeService.StartOfSlot(duty.Slot()),
@@ -101,7 +101,7 @@ func (s *Service) scheduleProposals(ctx context.Context,
 					s.log.Error().Err(err).Msg("Failed to schedule early beacon block proposal")
 				}
 			}
-			if err := s.scheduler.ScheduleJobNoData(ctx,
+			if err := s.scheduler.ScheduleJob(ctx,
 				"Propose",
 				fmt.Sprintf("Beacon block proposal for slot %d", duty.Slot()),
 				s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxProposalDelay),

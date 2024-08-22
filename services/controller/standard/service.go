@@ -366,7 +366,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	currentSlot := s.chainTimeService.CurrentSlot()
 	slotDuration := s.chainTimeService.StartOfSlot(currentSlot + 1).Sub(s.chainTimeService.StartOfSlot(currentSlot))
 	offset := int(epochDuration.Seconds()/2.0 + slotDuration.Seconds()/2.0)
-	if err := s.scheduler.ScheduleJobNoData(ctx,
+	if err := s.scheduler.ScheduleJob(ctx,
 		"Epoch",
 		fmt.Sprintf("Prepare for epoch %d", currentEpoch+1),
 		s.chainTimeService.StartOfEpoch(currentEpoch).Add(time.Duration(offset)*time.Second),
