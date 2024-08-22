@@ -91,15 +91,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 // Prepare prepares for a beacon block proposal, carrying out activities that
 // can be undertaken before the time the proposal is required.
-func (s *Service) Prepare(ctx context.Context, data interface{}) error {
+func (s *Service) Prepare(ctx context.Context, duty *beaconblockproposer.Duty) error {
 	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "Prepare")
 	defer span.End()
 	started := time.Now()
 
-	duty, ok := data.(*beaconblockproposer.Duty)
-	if !ok {
-		return errors.New("passed invalid data structure")
-	}
 	if duty == nil {
 		return errors.New("passed nil data structure")
 	}

@@ -32,13 +32,13 @@ func New() *Service {
 }
 
 // Prepare prepares in advance of a sync committee message.
-func (*Service) Prepare(_ context.Context, _ interface{}) error {
+func (*Service) Prepare(_ context.Context, _ *synccommitteemessenger.Duty) error {
 	return nil
 }
 
 // Message generates and broadcasts sync committee messages for a slot.
 // It returns a list of messages made.
-func (*Service) Message(_ context.Context, _ interface{}) ([]*altair.SyncCommitteeMessage, error) {
+func (*Service) Message(_ context.Context, _ *synccommitteemessenger.Duty) ([]*altair.SyncCommitteeMessage, error) {
 	return make([]*altair.SyncCommitteeMessage, 0), nil
 }
 

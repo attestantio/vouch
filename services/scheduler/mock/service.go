@@ -33,6 +33,11 @@ func (*service) ScheduleJob(_ context.Context, _ string, _ string, _ time.Time, 
 	return nil
 }
 
+// ScheduleJobNoData schedules a one-off job for a given time.
+func (*service) ScheduleJobNoData(_ context.Context, _ string, _ string, _ time.Time, _ scheduler.JobFuncNoData) error {
+	return nil
+}
+
 // SchedulePeriodicJob schedules a job to run in a loop.
 func (*service) SchedulePeriodicJob(_ context.Context, _ string, _ string, _ scheduler.RuntimeFunc, _ interface{}, _ scheduler.JobFunc, _ interface{}) error {
 	return nil

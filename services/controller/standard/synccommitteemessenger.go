@@ -110,12 +110,11 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 
 			// Schedule for 1.5 slots ahead of time.
 			prepareJobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(-s.slotDuration * 6 / 4)
-			if err := s.scheduler.ScheduleJob(ctx,
+			if err := s.scheduler.ScheduleJobNoData(ctx,
 				"Prepare for sync committee messages",
 				fmt.Sprintf("Prepare sync committee messages for slot %d", duty.Slot()),
 				prepareJobTime,
-				s.prepareMessageSyncCommittee,
-				duty,
+				func(ctx context.Context) { s.prepareMessageSyncCommittee(ctx, duty) },
 			); err != nil {
 				s.log.Error().Err(err).Msg("Failed to schedule prepare sync committee messages")
 				return
@@ -131,13 +130,8 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted sync committee subscribers")
 }
 
-func (s *Service) prepareMessageSyncCommittee(ctx context.Context, data interface{}) {
+func (s *Service) prepareMessageSyncCommittee(ctx context.Context, duty *synccommitteemessenger.Duty) {
 	started := time.Now()
-	duty, ok := data.(*synccommitteemessenger.Duty)
-	if !ok {
-		s.log.Error().Msg("Passed invalid data")
-		return
-	}
 	log := s.log.With().Uint64("slot", uint64(s.chainTimeService.CurrentSlot())).Logger()
 
 	if err := s.syncCommitteeMessenger.Prepare(ctx, duty); err != nil {
@@ -147,12 +141,11 @@ func (s *Service) prepareMessageSyncCommittee(ctx context.Context, data interfac
 
 	// At this point we can schedule the message job.
 	jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxSyncCommitteeMessageDelay)
-	if err := s.scheduler.ScheduleJob(ctx,
+	if err := s.scheduler.ScheduleJobNoData(ctx,
 		"Generate sync committee messages",
 		fmt.Sprintf("Sync committee messages for slot %d", duty.Slot()),
 		jobTime,
-		s.messageSyncCommittee,
-		duty,
+		func(ctx context.Context) { s.messageSyncCommittee(ctx, duty) },
 	); err != nil {
 		log.Error().Err(err).Msg("Failed to schedule sync committee messages")
 		return
@@ -161,13 +154,9 @@ func (s *Service) prepareMessageSyncCommittee(ctx context.Context, data interfac
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Prepared")
 }
 
-func (s *Service) messageSyncCommittee(ctx context.Context, data interface{}) {
+func (s *Service) messageSyncCommittee(ctx context.Context, duty *synccommitteemessenger.Duty) {
 	started := time.Now()
-	duty, ok := data.(*synccommitteemessenger.Duty)
-	if !ok {
-		s.log.Error().Msg("Passed invalid data")
-		return
-	}
+
 	log := s.log.With().Uint64("slot", uint64(s.chainTimeService.CurrentSlot())).Logger()
 
 	_, err := s.syncCommitteeMessenger.Message(ctx, duty)
@@ -193,12 +182,11 @@ func (s *Service) messageSyncCommittee(ctx context.Context, data interface{}) {
 			SelectionProofs:  selectionProofs,
 			Accounts:         duty.Accounts(),
 		}
-		if err := s.scheduler.ScheduleJob(ctx,
+		if err := s.scheduler.ScheduleJobNoData(ctx,
 			"Aggregate sync committee messages",
 			fmt.Sprintf("Sync committee aggregation for slot %d", duty.Slot()),
 			s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.syncCommitteeAggregationDelay),
-			s.syncCommitteeAggregator.Aggregate,
-			aggregatorDuty,
+			func(ctx context.Context) { s.syncCommitteeAggregator.Aggregate(ctx, aggregatorDuty) },
 		); err != nil {
 			log.Error().Err(err).Msg("Failed to schedule sync committee attestation aggregation job")
 		}

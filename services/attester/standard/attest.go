@@ -33,17 +33,11 @@ import (
 
 // Attest carries out attestations for a slot.
 // It returns a map of attestations made, keyed on the validator index.
-func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attestation, error) {
+func (s *Service) Attest(ctx context.Context, duty *attester.Duty) ([]*phase0.Attestation, error) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.attester.standard").Start(ctx, "Attest")
 	defer span.End()
 	started := time.Now()
 
-	duty, ok := data.(*attester.Duty)
-	if !ok {
-		// No duty so using 0 values for monitoring.
-		monitorAttestationsCompleted(started, 0, 0, "failed", time.Time{})
-		return nil, errors.New("passed invalid data structure")
-	}
 	span.SetAttributes(attribute.Int64("slot", util.SlotToInt64(duty.Slot())))
 
 	validatorIndices := s.fetchValidatorIndices(ctx, duty)

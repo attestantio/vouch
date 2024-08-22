@@ -17,6 +17,7 @@ import (
 	"context"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/attester"
 )
 
 // Service is a mock attester.
@@ -28,6 +29,6 @@ func New() *Service {
 }
 
 // Attest carries out attestations for a slot.
-func (*Service) Attest(_ context.Context, _ interface{}) ([]*phase0.Attestation, error) {
+func (*Service) Attest(_ context.Context, _ *attester.Duty) ([]*phase0.Attestation, error) {
 	return make([]*phase0.Attestation, 0), nil
 }

@@ -127,11 +127,11 @@ func (d *Duty) AggregatorSubcommittees(index phase0.ValidatorIndex) map[uint64]p
 // Service is the sync committee messenger service.
 type Service interface {
 	// Prepare prepares in advance of a sync committee message.
-	Prepare(ctx context.Context, data interface{}) error
+	Prepare(ctx context.Context, duty *Duty) error
 
 	// Message generates and broadcasts sync committee messages for a slot.
 	// It returns a list of messages made.
-	Message(ctx context.Context, data interface{}) ([]*altair.SyncCommitteeMessage, error)
+	Message(ctx context.Context, duty *Duty) ([]*altair.SyncCommitteeMessage, error)
 
 	// GetDataUsedForSlot returns slot data recorded for the sync committee message for a given slot.
 	GetDataUsedForSlot(slot phase0.Slot) (SlotData, bool)

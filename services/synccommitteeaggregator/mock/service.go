@@ -17,6 +17,7 @@ import (
 	"context"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/synccommitteeaggregator"
 )
 
 // Service is a mock sync committee aggregator.
@@ -32,5 +33,5 @@ func (*Service) SetBeaconBlockRoot(_ phase0.Slot, _ phase0.Root) {
 }
 
 // Aggregate carries out aggregation for a slot and committee.
-func (*Service) Aggregate(_ context.Context, _ interface{}) {
+func (*Service) Aggregate(_ context.Context, _ *synccommitteeaggregator.Duty) {
 }

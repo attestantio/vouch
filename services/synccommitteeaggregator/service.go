@@ -41,5 +41,5 @@ type Service interface {
 	SetBeaconBlockRoot(slot phase0.Slot, root phase0.Root)
 
 	// Aggregate carries out aggregation for a slot and committee.
-	Aggregate(ctx context.Context, details interface{})
+	Aggregate(ctx context.Context, duty *Duty)
 }

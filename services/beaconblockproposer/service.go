@@ -80,8 +80,8 @@ func (d *Duty) Account() e2wtypes.Account {
 // Service is the beacon block proposer service.
 type Service interface {
 	// Prepare prepares the proposal for a slot.
-	Prepare(ctx context.Context, details interface{}) error
+	Prepare(ctx context.Context, duty *Duty) error
 
 	// Propose carries out the proposal for a slot.
-	Propose(ctx context.Context, details interface{})
+	Propose(ctx context.Context, duty *Duty)
 }

@@ -150,6 +150,83 @@ func (s *Service) ScheduleJob(ctx context.Context,
 	return nil
 }
 
+// ScheduleJobNoData schedules a one-off job for a given time.
+// Note that if the parent context is cancelled the job wil not run.
+func (s *Service) ScheduleJobNoData(ctx context.Context,
+	class string,
+	name string,
+	runtime time.Time,
+	jobFunc scheduler.JobFuncNoData,
+) error {
+	if name == "" {
+		return scheduler.ErrNoJobName
+	}
+	if jobFunc == nil {
+		return scheduler.ErrNoJobFunc
+	}
+
+	s.jobsMutex.Lock()
+	_, exists := s.jobs[name]
+	if exists {
+		s.jobsMutex.Unlock()
+		return scheduler.ErrJobAlreadyExists
+	}
+
+	job := &job{
+		cancelCh: make(chan struct{}, 1),
+		runCh:    make(chan struct{}, 1),
+	}
+	s.jobs[name] = job
+	s.jobsMutex.Unlock()
+	monitorJobScheduled(class)
+
+	s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Scheduled job")
+	go func() {
+		select {
+		case <-ctx.Done():
+			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Parent context done; job not running")
+			s.jobsMutex.Lock()
+			delete(s.jobs, name)
+			s.jobsMutex.Unlock()
+			finaliseJob(job)
+			monitorJobCancelled(class)
+		case <-job.cancelCh:
+			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Cancel triggered; job not running")
+			// If we receive this signal the job has already been deleted from the jobs list so no need to
+			// do so again here.
+			finaliseJob(job)
+			monitorJobCancelled(class)
+		case <-job.runCh:
+			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Run triggered; job running")
+			// If we receive this signal the job has already been deleted from the jobs list so no need to
+			// do so again here.
+			monitorJobStartedOnSignal(class)
+			jobFunc(ctx)
+			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Job complete")
+			finaliseJob(job)
+			job.active.Store(false)
+		case <-time.After(time.Until(runtime)):
+			// It is possible that the job is already active, so check that first before proceeding.
+			if job.active.Load() {
+				s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Already running; job not running")
+				break
+			}
+			s.jobsMutex.Lock()
+			delete(s.jobs, name)
+			s.jobsMutex.Unlock()
+			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Timer triggered; job running")
+			job.active.Store(true)
+			monitorJobStartedOnTimer(class)
+			jobFunc(ctx)
+			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Job complete")
+			job.active.Store(false)
+			finaliseJob(job)
+		}
+	}()
+
+	return nil
+}
+
 // SchedulePeriodicJob schedules a job to run in a loop.
 // The loop starts by calling runtimeFunc, which sets the time for the first run.
 // Once the time as specified by runtimeFunc is met, jobFunc is called.

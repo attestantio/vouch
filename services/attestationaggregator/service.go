@@ -40,5 +40,5 @@ type IsAggregatorProvider interface {
 // Service is the attestation aggregation service.
 type Service interface {
 	// Aggregate carries out aggregation for a slot and committee.
-	Aggregate(ctx context.Context, details interface{})
+	Aggregate(ctx context.Context, details *Duty)
 }

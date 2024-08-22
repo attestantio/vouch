@@ -28,4 +28,4 @@ func New() attestationaggregator.Service {
 }
 
 // Aggregate is a mock.
-func (*service) Aggregate(_ context.Context, _ interface{}) {}
+func (*service) Aggregate(_ context.Context, _ *attestationaggregator.Duty) {}
