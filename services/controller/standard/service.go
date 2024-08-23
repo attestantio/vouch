@@ -371,10 +371,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 		fmt.Sprintf("Prepare for epoch %d", currentEpoch+1),
 		s.chainTimeService.StartOfEpoch(currentEpoch).Add(time.Duration(offset)*time.Second),
 		func(ctx context.Context) {
-			prepData := &prepareForEpochData{
-				epoch: currentEpoch + 1,
-			}
-			s.prepareForEpoch(ctx, prepData)
+			s.prepareForEpoch(ctx, &prepareForEpochData{epoch: currentEpoch + 1})
 		},
 	); err != nil {
 		s.log.Error().Err(err).Uint64("epoch", uint64(currentEpoch)).Msg("Failed to schedule preparation for following epoch")
