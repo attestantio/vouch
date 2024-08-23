@@ -228,7 +228,7 @@ func fetchConfig() error {
 	viper.AutomaticEnv()
 
 	// Defaults.
-	viper.SetDefault("logging.timestamp.format", "2006-01-02T15:04:05.999Z07:00")
+	viper.SetDefault("logging.timestamp.format", "2006-01-02T15:04:05.000Z07:00")
 	viper.SetDefault("process-concurrency", int64(runtime.GOMAXPROCS(-1)))
 	viper.SetDefault("timeout", 2*time.Second)
 	viper.SetDefault("eth2client.timeout", 2*time.Minute)
