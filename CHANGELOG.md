@@ -1,6 +1,7 @@
 dev:
   - change default timestamp in logs to millisecond-precision
   - allow custom timestamp formatting in logs
+  - refactor scheduler and associated interfaces
 
 1.9.0-beta.1:
   - reduce time spent verifying account names
