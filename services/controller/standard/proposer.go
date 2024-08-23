@@ -21,6 +21,7 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	"github.com/attestantio/vouch/util"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 )
@@ -127,7 +128,7 @@ func (s *Service) proposeEarly(ctx context.Context, data interface{}) {
 		s.log.Error().Msg("Invalid duty data for proposal")
 		return
 	}
-	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))
+	span.SetAttributes(attribute.Int64("slot", util.SlotToInt64(duty.Slot())))
 
 	// Start off by fetching the current head.
 	headerResponse, err := s.beaconBlockHeadersProvider.BeaconBlockHeader(ctx, &api.BeaconBlockHeaderOpts{

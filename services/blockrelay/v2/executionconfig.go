@@ -118,9 +118,12 @@ func (e *ExecutionConfig) UnmarshalJSON(input []byte) error {
 		e.GasLimit = &gasLimit
 	}
 	if data.Grace != "" {
-		tmp, err := strconv.ParseUint(data.Grace, 10, 64)
+		tmp, err := strconv.ParseInt(data.Grace, 10, 64)
 		if err != nil {
 			return errors.Wrap(err, "grace invalid")
+		}
+		if tmp < 0 {
+			return errors.New("grace cannot be negative")
 		}
 		grace := time.Duration(tmp) * time.Millisecond
 		e.Grace = &grace

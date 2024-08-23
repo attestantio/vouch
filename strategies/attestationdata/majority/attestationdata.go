@@ -47,7 +47,7 @@ func (s *Service) AttestationData(ctx context.Context,
 	error,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.attestationdata.majority").Start(ctx, "AttestationData", trace.WithAttributes(
-		attribute.Int64("slot", int64(opts.Slot)),
+		attribute.Int64("slot", util.SlotToInt64(opts.Slot)),
 	))
 	defer span.End()
 
@@ -107,7 +107,7 @@ func (s *Service) AttestationData(ctx context.Context,
 	if bestAttestationDataCount == 0 {
 		return nil, errors.New("no attestation data received")
 	}
-	if bestAttestationDataCount < int(s.threshold) {
+	if bestAttestationDataCount < s.threshold {
 		return nil, fmt.Errorf("majority attestation data count of %d lower than threshold %d", bestAttestationDataCount, s.threshold)
 	}
 	slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, bestAttestationData.BeaconBlockRoot)
@@ -117,7 +117,7 @@ func (s *Service) AttestationData(ctx context.Context,
 	log.Trace().
 		Dur("elapsed", time.Since(started)).
 		Stringer("attestation_data", &bestAttestationData).
-		Int("head_distance", int(bestAttestationData.Slot-slot)).
+		Int64("head_distance", util.SlotToInt64(bestAttestationData.Slot)-util.SlotToInt64(slot)).
 		Int("count", bestAttestationDataCount).
 		Msg("Selected majority attestation data")
 	for _, provider := range attestationDataProviders[bestAttestationDataRoot] {

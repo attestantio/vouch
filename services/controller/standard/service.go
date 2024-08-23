@@ -35,6 +35,7 @@ import (
 	"github.com/attestantio/vouch/services/synccommitteeaggregator"
 	"github.com/attestantio/vouch/services/synccommitteemessenger"
 	"github.com/attestantio/vouch/services/synccommitteesubscriber"
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -300,12 +301,12 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 	currentEpoch := s.chainTimeService.CurrentEpoch()
 	s.log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Starting per-epoch job")
 	epochTickerData.mutex.Lock()
-	if epochTickerData.latestEpochRan >= int64(currentEpoch) {
+	if epochTickerData.latestEpochRan >= util.EpochToInt64(currentEpoch) {
 		s.log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Already ran for this epoch; skipping")
 		epochTickerData.mutex.Unlock()
 		return
 	}
-	epochTickerData.latestEpochRan = int64(currentEpoch)
+	epochTickerData.latestEpochRan = util.EpochToInt64(currentEpoch)
 	epochTickerData.mutex.Unlock()
 	monitorNewEpoch()
 

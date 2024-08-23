@@ -1174,7 +1174,7 @@ func selectAttestationDataProvider(ctx context.Context,
 			majorityattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.majority")),
 			majorityattestationdatastrategy.WithChainTime(chainTime),
 			majorityattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
-			majorityattestationdatastrategy.WithThreshold(viper.GetUint64("strategies.attestationdata.majority.threshold")),
+			majorityattestationdatastrategy.WithThreshold(viper.GetInt("strategies.attestationdata.majority.threshold")),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start majority attestation data strategy")

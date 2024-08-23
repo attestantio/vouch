@@ -22,6 +22,7 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/util"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -207,7 +208,7 @@ func (s *Service) handleCurrentDependentRootChanged(ctx context.Context) {
 
 func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "refreshProposerDutiesForEpoch", trace.WithAttributes(
-		attribute.Int64("epoch", int64(epoch)),
+		attribute.Int64("epoch", util.EpochToInt64(epoch)),
 	))
 	defer span.End()
 
@@ -234,7 +235,7 @@ func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch phase
 
 func (s *Service) refreshAttesterDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "refreshAttesterDutiesForEpoch", trace.WithAttributes(
-		attribute.Int64("epoch", int64(epoch)),
+		attribute.Int64("epoch", util.EpochToInt64(epoch)),
 	))
 	defer span.End()
 
@@ -277,7 +278,7 @@ func (s *Service) refreshAttesterDutiesForEpoch(ctx context.Context, epoch phase
 // given sync period.
 func (s *Service) refreshSyncCommitteeDutiesForEpochPeriod(ctx context.Context, epoch phase0.Epoch) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "refreshSyncCommitteeDutiesForEpochPeriod", trace.WithAttributes(
-		attribute.Int64("epoch", int64(epoch)),
+		attribute.Int64("epoch", util.EpochToInt64(epoch)),
 	))
 	defer span.End()
 

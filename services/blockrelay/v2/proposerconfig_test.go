@@ -100,12 +100,12 @@ func TestProposerConfig(t *testing.T) {
 		{
 			name:  "GraceInvalid",
 			input: []byte(`{"proposer":"^Wallet/Account$","fee_recipient":"0x1111111111111111111111111111111111111111","gas_limit":"30000000","grace":"true","min_value":"0.5"}`),
-			err:   "grace invalid: strconv.ParseUint: parsing \"true\": invalid syntax",
+			err:   "grace invalid: strconv.ParseInt: parsing \"true\": invalid syntax",
 		},
 		{
 			name:  "GraceNegative",
 			input: []byte(`{"proposer":"^Wallet/Account$","fee_recipient":"0x1111111111111111111111111111111111111111","gas_limit":"30000000","grace":"-1","min_value":"0.5"}`),
-			err:   "grace invalid: strconv.ParseUint: parsing \"-1\": invalid syntax",
+			err:   "grace cannot be negative",
 		},
 		{
 			name:  "MinValueWrongType",

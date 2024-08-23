@@ -39,7 +39,7 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context,
 	}
 
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.synccommitteecontribution.first").Start(ctx, "SyncCommitteeContribution", trace.WithAttributes(
-		attribute.Int64("slot", int64(opts.Slot)),
+		attribute.Int64("slot", util.SlotToInt64(opts.Slot)),
 	))
 	defer span.End()
 

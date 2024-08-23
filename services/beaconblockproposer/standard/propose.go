@@ -75,7 +75,7 @@ func (s *Service) Propose(ctx context.Context, data interface{}) {
 		monitorBeaconBlockProposalCompleted(started, slot, s.chainTime.StartOfSlot(slot), "failed")
 		return
 	}
-	span.SetAttributes(attribute.Int64("slot", int64(slot)))
+	span.SetAttributes(attribute.Int64("slot", util.SlotToInt64(slot)))
 	log := s.log.With().Uint64("proposing_slot", uint64(slot)).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Proposing")
 

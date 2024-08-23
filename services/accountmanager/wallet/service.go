@@ -225,7 +225,7 @@ func (s *Service) SyncCommitteeAccountsForEpoch(ctx context.Context, epoch phase
 // accountsForEpochWithFilter obtains the accounts for a given epoch with a filter on the state of validators returned.
 func (s *Service) accountsForEpochWithFilter(ctx context.Context, epoch phase0.Epoch, accountType string, filterFunc func(state apiv1.ValidatorState) bool) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, fmt.Sprintf("%sAccountsForEpoch", accountType), trace.WithAttributes(
-		attribute.Int64("epoch", int64(epoch)),
+		attribute.Int64("epoch", util.EpochToInt64(epoch)),
 	))
 	defer span.End()
 
@@ -294,7 +294,7 @@ func (s *Service) SyncCommitteeAccountsForEpochByIndex(ctx context.Context, epoc
 // accountsForEpochByIndexWithFilter obtains the specified accounts for a given epoch with a filter on the state of validators returned.
 func (s *Service) accountsForEpochByIndexWithFilter(ctx context.Context, epoch phase0.Epoch, indices []phase0.ValidatorIndex, accountType string, filterFunc func(state apiv1.ValidatorState) bool) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.wallet").Start(ctx, fmt.Sprintf("%sAccountsForEpochByIndex", accountType), trace.WithAttributes(
-		attribute.Int64("epoch", int64(epoch)),
+		attribute.Int64("epoch", util.EpochToInt64(epoch)),
 	))
 	defer span.End()
 
