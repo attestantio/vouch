@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -31,6 +31,8 @@ func initLogging() error {
 	// We set the global logging level to trace, because if the global log level is higher than the
 	// local log level the local level is ignored.  It is then overridden for each module.
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
+
+	zerolog.TimeFieldFormat = viper.GetString("logging.timestamp.format")
 
 	// Change the output file.
 	if viper.GetString("log-file") != "" {
