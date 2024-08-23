@@ -18,6 +18,12 @@ log-file: /home/me/vouch.log
 # information logged.
 log-level: 'debug'
 
+logging:
+  timestamp:
+    # format defines the format of the timestamp in the log.  This can be any valid Go timestamp formatting string,
+    # or the special values '', 'UNIXMS', 'UNIXMICRO' or 'UNIXNANO' for Unix timestamps of varying precision.
+    format: '2006-01-02T15:04:05.999Z07:00'
+
 # beacon-node-address is the address of the beacon node.  Can be lighthouse, nimbus, prysm or teku.
 # Overridden by beacon-node-addresses if present.
 beacon-node-address: 'localhost:4000'
