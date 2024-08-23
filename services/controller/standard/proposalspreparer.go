@@ -17,6 +17,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -51,7 +52,7 @@ func (s *Service) startProposalsPreparer(ctx context.Context) error {
 // prepareProposals prepares validator information for potential proposals.
 func (s *Service) prepareProposals(ctx context.Context, _ interface{}) {
 	_, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "prepareProposals", trace.WithAttributes(
-		attribute.Int64("epoch", int64(s.chainTimeService.CurrentEpoch())),
+		attribute.Int64("epoch", util.EpochToInt64(s.chainTimeService.CurrentEpoch())),
 	))
 	defer span.End()
 

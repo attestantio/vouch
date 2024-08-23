@@ -23,6 +23,7 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/attester"
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -43,7 +44,7 @@ func (s *Service) Attest(ctx context.Context, data interface{}) ([]*phase0.Attes
 		monitorAttestationsCompleted(started, 0, 0, "failed", time.Time{})
 		return nil, errors.New("passed invalid data structure")
 	}
-	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))
+	span.SetAttributes(attribute.Int64("slot", util.SlotToInt64(duty.Slot())))
 
 	validatorIndices := s.fetchValidatorIndices(ctx, duty)
 

@@ -28,6 +28,7 @@ import (
 	"github.com/attestantio/vouch/services/graffitiprovider"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -102,7 +103,7 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 	if duty == nil {
 		return errors.New("passed nil data structure")
 	}
-	span.SetAttributes(attribute.Int64("slot", int64(duty.Slot())))
+	span.SetAttributes(attribute.Int64("slot", util.SlotToInt64(duty.Slot())))
 
 	log := s.log.With().Uint64("proposing_slot", uint64(duty.Slot())).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Preparing")

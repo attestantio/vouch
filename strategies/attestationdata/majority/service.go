@@ -35,7 +35,7 @@ type Service struct {
 	timeout                  time.Duration
 	chainTime                chaintime.Service
 	blockRootToSlotCache     cache.BlockRootToSlotProvider
-	threshold                uint64
+	threshold                int
 }
 
 // New creates a new attestation data strategy.

@@ -58,9 +58,12 @@ func (b *BuilderConfig) UnmarshalJSON(input []byte) error {
 	b.Enabled = data.Enabled
 
 	if data.Grace != "" {
-		grace, err := strconv.ParseUint(data.Grace, 10, 64)
+		grace, err := strconv.ParseInt(data.Grace, 10, 64)
 		if err != nil {
 			return errors.Wrap(err, "grace invalid")
+		}
+		if grace < 0 {
+			return errors.New("grace cannot be negative")
 		}
 		b.Grace = time.Duration(grace) * time.Millisecond
 	}

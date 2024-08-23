@@ -41,7 +41,7 @@ func (s *Service) Subscribe(ctx context.Context,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 ) (map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription, error) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.beaconcommitteesubscriber.standard").Start(ctx, "Subscribe", trace.WithAttributes(
-		attribute.Int64("epoch", int64(epoch)),
+		attribute.Int64("epoch", util.EpochToInt64(epoch)),
 	))
 	defer span.End()
 

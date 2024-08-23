@@ -91,7 +91,7 @@ func (s *Service) updateProposalPreparations(ctx context.Context,
 	proposalPreparations []*apiv1.ProposalPreparation,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.proposalpreparer.standard").Start(ctx, "updateProposalPreparations", trace.WithAttributes(
-		attribute.Int64("epoch", int64(epoch)),
+		attribute.Int64("epoch", util.EpochToInt64(epoch)),
 	))
 	defer span.End()
 

@@ -20,6 +20,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -67,7 +68,7 @@ func (s *Service) Proposal(ctx context.Context,
 	error,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.first").Start(ctx, "Proposal", trace.WithAttributes(
-		attribute.Int64("slot", int64(opts.Slot)),
+		attribute.Int64("slot", util.SlotToInt64(opts.Slot)),
 	))
 	defer span.End()
 

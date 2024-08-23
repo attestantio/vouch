@@ -36,7 +36,7 @@ type parameters struct {
 	timeout                  time.Duration
 	chainTime                chaintime.Service
 	blockRootToSlotCache     cache.BlockRootToSlotProvider
-	threshold                uint64
+	threshold                int
 }
 
 // Parameter is the interface for service parameters.
@@ -101,7 +101,7 @@ func WithBlockRootToSlotCache(cache cache.BlockRootToSlotProvider) Parameter {
 
 // WithThreshold sets the minimum number of providers who must agree for
 // data to be considered acceptable.
-func WithThreshold(minimumMajority uint64) Parameter {
+func WithThreshold(minimumMajority int) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.threshold = minimumMajority
 	})
@@ -138,8 +138,11 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.blockRootToSlotCache == nil {
 		return nil, errors.New("no block root to slot cache specified")
 	}
-	if parameters.threshold > uint64(len(parameters.attestationDataProviders)) {
-		return nil, errors.New("threshold cannot not be higher than number of data providers")
+	if parameters.threshold < 0 {
+		return nil, errors.New("threshold cannot be negative")
+	}
+	if parameters.threshold > len(parameters.attestationDataProviders) {
+		return nil, errors.New("threshold cannot be higher than number of data providers")
 	}
 
 	return &parameters, nil

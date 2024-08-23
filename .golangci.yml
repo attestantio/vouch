@@ -137,6 +137,7 @@ linters:
     - execinquery
     - exhaustive
     - exhaustruct
+    - exportloopref
     - forcetypeassert
     - funlen
     - gci

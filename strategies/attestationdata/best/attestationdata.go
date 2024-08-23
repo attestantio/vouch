@@ -46,7 +46,7 @@ func (s *Service) AttestationData(ctx context.Context,
 	error,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.attestationdata.best").Start(ctx, "AttestationData", trace.WithAttributes(
-		attribute.Int64("slot", int64(opts.Slot)),
+		attribute.Int64("slot", util.SlotToInt64(opts.Slot)),
 	))
 	defer span.End()
 

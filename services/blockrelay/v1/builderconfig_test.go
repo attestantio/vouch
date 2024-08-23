@@ -55,7 +55,7 @@ func TestBuilderConfig(t *testing.T) {
 		{
 			name:  "GraceInvalid",
 			input: []byte(`{"enabled":true,"grace":"-1","relays":["server1.example.com","server2.example.com"]}`),
-			err:   "grace invalid: strconv.ParseUint: parsing \"-1\": invalid syntax",
+			err:   "grace cannot be negative",
 		},
 		{
 			name:  "RelaysMissing",
