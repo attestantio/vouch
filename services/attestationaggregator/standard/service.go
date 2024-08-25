@@ -107,18 +107,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // Aggregate aggregates the attestations for a given slot/committee combination.
-func (s *Service) Aggregate(ctx context.Context, data interface{}) {
+func (s *Service) Aggregate(ctx context.Context, duty *attestationaggregator.Duty) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.attestationaggregator.standard").Start(ctx, "Aggregate")
 	defer span.End()
 	started := time.Now()
 
-	duty, ok := data.(*attestationaggregator.Duty)
-	if !ok {
-		s.log.Error().Msg("Passed invalid data structure")
-		// No duty so using 0 values for monitoring.
-		monitorAttestationAggregationCompleted(started, 0, "failed", time.Time{})
-		return
-	}
 	log := s.log.With().Uint64("slot", uint64(duty.Slot)).Str("attestation_data_root", fmt.Sprintf("%#x", duty.AttestationDataRoot)).Logger()
 	log.Trace().Msg("Aggregating")
 

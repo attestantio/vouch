@@ -112,8 +112,7 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 				"Attest",
 				fmt.Sprintf("Attestations for slot %d", duty.Slot()),
 				jobTime,
-				s.AttestAndScheduleAggregate,
-				duty,
+				func(ctx context.Context) { s.AttestAndScheduleAggregate(ctx, duty) },
 			); err != nil {
 				// Don't return here; we want to try to set up as many attester jobs as possible.
 				s.log.Error().Err(err).Msg("Failed to schedule attestation")
@@ -124,13 +123,8 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 }
 
 // AttestAndScheduleAggregate attests, then schedules aggregation jobs as required.
-func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface{}) {
+func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester.Duty) {
 	started := time.Now()
-	duty, ok := data.(*attester.Duty)
-	if !ok {
-		s.log.Error().Msg("Passed invalid data")
-		return
-	}
 	log := s.log.With().Uint64("slot", uint64(duty.Slot())).Logger()
 
 	// At the end of this function note that we have carried out the attestation process
@@ -212,8 +206,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, data interface
 				"Aggregate attestations",
 				fmt.Sprintf("Beacon block attestation aggregation for slot %d committee %d", attestation.Data.Slot, attestation.Data.Index),
 				s.chainTimeService.StartOfSlot(attestation.Data.Slot).Add(s.attestationAggregationDelay),
-				s.attestationAggregator.Aggregate,
-				aggregatorDuty,
+				func(ctx context.Context) { s.attestationAggregator.Aggregate(ctx, aggregatorDuty) },
 			); err != nil {
 				// Don't return here; we want to try to set up as many aggregator jobs as possible.
 				log.Error().Err(err).Msg("Failed to schedule beacon block attestation aggregation job")

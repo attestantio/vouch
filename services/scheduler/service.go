@@ -22,6 +22,9 @@ import (
 // JobFunc is the type for jobs.
 type JobFunc func(context.Context, interface{})
 
+// JobFuncNoData is the type for jobs.
+type JobFuncNoData func(context.Context)
+
 // RuntimeFunc is the type of a function that generates the next runtime.
 type RuntimeFunc func(context.Context, interface{}) (time.Time, error)
 
@@ -55,7 +58,7 @@ type Service interface {
 	// This function returns two cancel funcs.  If the first is triggered the job will not run.  If the second is triggered the job
 	// runs immediately.
 	// Note that if the parent context is cancelled the job wil not run.
-	ScheduleJob(ctx context.Context, class string, name string, runtime time.Time, job JobFunc, data interface{}) error
+	ScheduleJob(ctx context.Context, class string, name string, runtime time.Time, job JobFuncNoData) error
 
 	// SchedulePeriodicJob schedules a job to run in a loop.
 	// The loop starts by calling runtimeFunc, which sets the time for the first run.

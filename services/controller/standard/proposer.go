@@ -95,8 +95,7 @@ func (s *Service) scheduleProposals(ctx context.Context,
 					"Propose check",
 					fmt.Sprintf("Early beacon block proposal for slot %d", duty.Slot()),
 					s.chainTimeService.StartOfSlot(duty.Slot()),
-					s.proposeEarly,
-					duty,
+					func(ctx context.Context) { s.proposeEarly(ctx, duty) },
 				); err != nil {
 					// Don't return here; we want to try to set up as many proposer jobs as possible.
 					s.log.Error().Err(err).Msg("Failed to schedule early beacon block proposal")
@@ -106,8 +105,7 @@ func (s *Service) scheduleProposals(ctx context.Context,
 				"Propose",
 				fmt.Sprintf("Beacon block proposal for slot %d", duty.Slot()),
 				s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxProposalDelay),
-				s.beaconBlockProposer.Propose,
-				duty,
+				func(ctx context.Context) { s.beaconBlockProposer.Propose(ctx, duty) },
 			); err != nil {
 				// Don't return here; we want to try to set up as many proposer jobs as possible.
 				s.log.Error().Err(err).Msg("Failed to schedule beacon block proposal")
@@ -119,15 +117,10 @@ func (s *Service) scheduleProposals(ctx context.Context,
 
 // proposeEarly attempts to propose as soon as the slot starts, as long
 // as the head of the chain is up-to-date.
-func (s *Service) proposeEarly(ctx context.Context, data interface{}) {
+func (s *Service) proposeEarly(ctx context.Context, duty *beaconblockproposer.Duty) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "proposeEarly")
 	defer span.End()
 
-	duty, ok := data.(*beaconblockproposer.Duty)
-	if !ok {
-		s.log.Error().Msg("Invalid duty data for proposal")
-		return
-	}
 	span.SetAttributes(attribute.Int64("slot", util.SlotToInt64(duty.Slot())))
 
 	// Start off by fetching the current head.

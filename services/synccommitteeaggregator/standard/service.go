@@ -139,16 +139,11 @@ func (s *Service) SetBeaconBlockRoot(slot phase0.Slot, root phase0.Root) {
 }
 
 // Aggregate aggregates the attestations for a given slot/committee combination.
-func (s *Service) Aggregate(ctx context.Context, data interface{}) {
+func (s *Service) Aggregate(ctx context.Context, duty *synccommitteeaggregator.Duty) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.synccommitteeaggregator.standard").Start(ctx, "Aggregate")
 	defer span.End()
 	started := time.Now()
 
-	duty, ok := data.(*synccommitteeaggregator.Duty)
-	if !ok {
-		s.log.Error().Msg("Passed invalid data structure")
-		return
-	}
 	log := s.log.With().Uint64("slot", uint64(duty.Slot)).Int("validators", len(duty.ValidatorIndices)).Logger()
 	log.Trace().Msg("Aggregating")
 

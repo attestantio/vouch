@@ -370,9 +370,8 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 		"Epoch",
 		fmt.Sprintf("Prepare for epoch %d", currentEpoch+1),
 		s.chainTimeService.StartOfEpoch(currentEpoch).Add(time.Duration(offset)*time.Second),
-		s.prepareForEpoch,
-		&prepareForEpochData{
-			epoch: currentEpoch + 1,
+		func(ctx context.Context) {
+			s.prepareForEpoch(ctx, &prepareForEpochData{epoch: currentEpoch + 1})
 		},
 	); err != nil {
 		s.log.Error().Err(err).Uint64("epoch", uint64(currentEpoch)).Msg("Failed to schedule preparation for following epoch")
@@ -386,11 +385,10 @@ type prepareForEpochData struct {
 	epoch phase0.Epoch
 }
 
-func (s *Service) prepareForEpoch(ctx context.Context, data interface{}) {
-	prepareForEpochData := data.(*prepareForEpochData)
-	accounts, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, prepareForEpochData.epoch)
+func (s *Service) prepareForEpoch(ctx context.Context, preparationData *prepareForEpochData) {
+	accounts, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, preparationData.epoch)
 	if err != nil {
-		s.log.Error().Err(err).Uint64("epoch", uint64(prepareForEpochData.epoch)).Msg("Failed to obtain active validators for epoch")
+		s.log.Error().Err(err).Uint64("epoch", uint64(preparationData.epoch)).Msg("Failed to obtain active validators for epoch")
 		return
 	}
 	// Expect at least one validator.
@@ -399,8 +397,8 @@ func (s *Service) prepareForEpoch(ctx context.Context, data interface{}) {
 		return
 	}
 
-	go s.scheduleAttestations(ctx, prepareForEpochData.epoch, validatorIndices, false /* notCurrentSlot */)
-	go s.subscribeToBeaconCommittees(ctx, prepareForEpochData.epoch, accounts)
+	go s.scheduleAttestations(ctx, preparationData.epoch, validatorIndices, false /* notCurrentSlot */)
+	go s.subscribeToBeaconCommittees(ctx, preparationData.epoch, accounts)
 }
 
 // accountsAndIndicesForEpoch obtains the accounts and validator indices for the specified epoch.

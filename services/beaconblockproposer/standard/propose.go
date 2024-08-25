@@ -58,17 +58,11 @@ type BlindedProposerWithExpectedPayload interface {
 }
 
 // Propose proposes a block.
-func (s *Service) Propose(ctx context.Context, data interface{}) {
+func (s *Service) Propose(ctx context.Context, duty *beaconblockproposer.Duty) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "Propose")
 	defer span.End()
 	started := time.Now()
 
-	duty, ok := data.(*beaconblockproposer.Duty)
-	if !ok {
-		s.log.Error().Msg("Passed invalid data structure")
-		monitorBeaconBlockProposalCompleted(started, 0, s.chainTime.StartOfSlot(0), "failed")
-		return
-	}
 	slot, err := validateDuty(duty)
 	if err != nil {
 		s.log.Error().Err(err).Msg("Invalid duty")

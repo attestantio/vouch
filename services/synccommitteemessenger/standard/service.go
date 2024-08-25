@@ -129,17 +129,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // Prepare prepares in advance of a sync committee message.
-func (s *Service) Prepare(ctx context.Context, data interface{}) error {
+func (s *Service) Prepare(ctx context.Context, duty *synccommitteemessenger.Duty) error {
 	ctx, span := otel.Tracer("attestantio.vouch.services.synccommitteemessenger.standard").Start(ctx, "Prepare")
 	defer span.End()
-	started := time.Now()
-
-	duty, ok := data.(*synccommitteemessenger.Duty)
-	if !ok {
-		// No duty so using 0 values for monitoring.
-		monitorSyncCommitteeMessagesCompleted(started, 0, 0, "failed", time.Time{})
-		return errors.New("passed invalid data structure")
-	}
 
 	// Decide if we are an aggregator.
 	for _, validatorIndex := range duty.ValidatorIndices() {
@@ -164,16 +156,10 @@ func (s *Service) Prepare(ctx context.Context, data interface{}) error {
 
 // Message generates and broadcasts sync committee messages for a slot.
 // It returns a list of messages made.
-func (s *Service) Message(ctx context.Context, data interface{}) ([]*altair.SyncCommitteeMessage, error) {
+func (s *Service) Message(ctx context.Context, duty *synccommitteemessenger.Duty) ([]*altair.SyncCommitteeMessage, error) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.synccommitteemessenger.standard").Start(ctx, "Message")
 	defer span.End()
 	started := time.Now()
-
-	duty, ok := data.(*synccommitteemessenger.Duty)
-	if !ok {
-		monitorSyncCommitteeMessagesCompleted(started, 0, 0, "failed", time.Time{})
-		return nil, errors.New("passed invalid data structure")
-	}
 	startOfSlot := s.chainTimeService.StartOfSlot(duty.Slot())
 
 	// Fetch the beacon block root.

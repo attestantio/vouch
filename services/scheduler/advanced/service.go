@@ -78,8 +78,7 @@ func (s *Service) ScheduleJob(ctx context.Context,
 	class string,
 	name string,
 	runtime time.Time,
-	jobFunc scheduler.JobFunc,
-	data interface{},
+	jobFunc scheduler.JobFuncNoData,
 ) error {
 	if name == "" {
 		return scheduler.ErrNoJobName
@@ -124,7 +123,7 @@ func (s *Service) ScheduleJob(ctx context.Context,
 			// If we receive this signal the job has already been deleted from the jobs list so no need to
 			// do so again here.
 			monitorJobStartedOnSignal(class)
-			jobFunc(ctx, data)
+			jobFunc(ctx)
 			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Job complete")
 			finaliseJob(job)
 			job.active.Store(false)
@@ -140,7 +139,7 @@ func (s *Service) ScheduleJob(ctx context.Context,
 			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Timer triggered; job running")
 			job.active.Store(true)
 			monitorJobStartedOnTimer(class)
-			jobFunc(ctx, data)
+			jobFunc(ctx)
 			s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Job complete")
 			job.active.Store(false)
 			finaliseJob(job)
