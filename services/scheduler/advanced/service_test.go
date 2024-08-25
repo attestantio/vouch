@@ -252,15 +252,15 @@ func TestPeriodicJob(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(_ context.Context, _ any) {
+	runFunc := func(_ context.Context) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test periodic job", runtimeFunc, nil, runFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test periodic job", runtimeFunc, runFunc))
 	require.Len(t, s.ListJobs(ctx), 1)
 	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	time.Sleep(time.Duration(110) * time.Millisecond)
@@ -283,15 +283,15 @@ func TestCancelPeriodicJob(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(_ context.Context, _ any) {
+	runFunc := func(_ context.Context) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test periodic job", runtimeFunc, nil, runFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test periodic job", runtimeFunc, runFunc))
 	require.Len(t, s.ListJobs(ctx), 1)
 	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	require.NoError(t, s.CancelJob(ctx, "Test periodic job"))
@@ -307,15 +307,15 @@ func TestCancelPeriodicParentContext(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(_ context.Context, _ any) {
+	runFunc := func(_ context.Context) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test job", runtimeFunc, nil, runFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test job", runtimeFunc, runFunc))
 	require.Len(t, s.ListJobs(ctx), 1)
 	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	cancel()
@@ -331,18 +331,18 @@ func TestLimitedPeriodicJob(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(_ context.Context, _ any) {
+	runFunc := func(_ context.Context) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context) (time.Time, error) {
 		if run == 3 {
 			return time.Now(), scheduler.ErrNoMoreInstances
 		}
 		return time.Now().Add(10 * time.Millisecond), nil
 	}
 
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test job", runtimeFunc, nil, runFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test job", runtimeFunc, runFunc))
 	require.Len(t, s.ListJobs(ctx), 1)
 	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	time.Sleep(time.Duration(50) * time.Millisecond)
@@ -357,18 +357,18 @@ func TestBadPeriodicJob(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(_ context.Context, _ any) {
+	runFunc := func(_ context.Context) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context) (time.Time, error) {
 		if run == 3 {
 			return time.Now(), errors.New("Bad")
 		}
 		return time.Now().Add(10 * time.Millisecond), nil
 	}
 
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test job", runtimeFunc, nil, runFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test job", runtimeFunc, runFunc))
 	require.Len(t, s.ListJobs(ctx), 1)
 	require.Equal(t, uint32(0), atomic.LoadUint32(&run))
 	time.Sleep(time.Duration(50) * time.Millisecond)
@@ -387,11 +387,7 @@ func TestDuplicateJobName(t *testing.T) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	periodicRunFunc := func(_ context.Context, _ any) {
-		atomic.AddUint32(&run, 1)
-	}
-
-	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
@@ -400,9 +396,9 @@ func TestDuplicateJobName(t *testing.T) {
 	require.EqualError(t, s.ScheduleJob(ctx, "Test", "Test duplicate job", time.Now().Add(time.Second), runFunc), scheduler.ErrJobAlreadyExists.Error())
 	require.Len(t, s.ListJobs(ctx), 1)
 
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test duplicate periodic job", runtimeFunc, nil, periodicRunFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test duplicate periodic job", runtimeFunc, runFunc))
 	require.Len(t, s.ListJobs(ctx), 2)
-	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test", "Test duplicate periodic job", runtimeFunc, nil, periodicRunFunc, nil), scheduler.ErrJobAlreadyExists.Error())
+	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test", "Test duplicate periodic job", runtimeFunc, runFunc), scheduler.ErrJobAlreadyExists.Error())
 	require.Len(t, s.ListJobs(ctx), 2)
 
 	require.NoError(t, s.CancelJob(ctx, "Test duplicate job"))
@@ -422,11 +418,7 @@ func TestBadJobs(t *testing.T) {
 		atomic.AddUint32(&run, 1)
 	}
 
-	periodicRunFunc := func(_ context.Context, _ any) {
-		atomic.AddUint32(&run, 1)
-	}
-
-	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context) (time.Time, error) {
 		return time.Now().Add(100 * time.Millisecond), nil
 	}
 
@@ -435,11 +427,11 @@ func TestBadJobs(t *testing.T) {
 	require.EqualError(t, s.ScheduleJob(ctx, "Test", "Test bad job", time.Now(), nil), scheduler.ErrNoJobFunc.Error())
 	require.Len(t, s.ListJobs(ctx), 0)
 
-	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test", "", runtimeFunc, nil, periodicRunFunc, nil), scheduler.ErrNoJobName.Error())
+	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test", "", runtimeFunc, runFunc), scheduler.ErrNoJobName.Error())
 	require.Len(t, s.ListJobs(ctx), 0)
-	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test", "Test bad period job", nil, nil, periodicRunFunc, nil), scheduler.ErrNoRuntimeFunc.Error())
+	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test", "Test bad period job", nil, runFunc), scheduler.ErrNoRuntimeFunc.Error())
 	require.Len(t, s.ListJobs(ctx), 0)
-	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test", "Test bad period job", runtimeFunc, nil, nil, nil), scheduler.ErrNoJobFunc.Error())
+	require.EqualError(t, s.SchedulePeriodicJob(ctx, "Test", "Test bad period job", runtimeFunc, nil), scheduler.ErrNoJobFunc.Error())
 	require.Len(t, s.ListJobs(ctx), 0)
 }
 
@@ -520,18 +512,18 @@ func TestLongRunningPeriodicJob(t *testing.T) {
 
 	// Job takes 100 ms.
 	run := uint32(0)
-	jobFunc := func(_ context.Context, _ any) {
+	jobFunc := func(_ context.Context) {
 		time.Sleep(100 * time.Millisecond)
 		atomic.AddUint32(&run, 1)
 	}
 
 	// Job runs every 50 ms.
-	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context) (time.Time, error) {
 		return time.Now().Add(50 * time.Millisecond), nil
 	}
 
 	// Schedule the job.
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test long running periodic job", runtimeFunc, nil, jobFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test long running periodic job", runtimeFunc, jobFunc))
 	require.Len(t, s.ListJobs(ctx), 1)
 
 	// Sleep for 400 ms.  Expect two runs (50+100+50+100+50).
@@ -624,17 +616,17 @@ func TestCancelWhilstRunning(t *testing.T) {
 	require.NotNil(t, s)
 
 	run := uint32(0)
-	runFunc := func(_ context.Context, _ any) {
+	runFunc := func(_ context.Context) {
 		time.Sleep(50 * time.Millisecond)
 		atomic.AddUint32(&run, 1)
 	}
 
-	runtimeFunc := func(_ context.Context, _ any) (time.Time, error) {
+	runtimeFunc := func(_ context.Context) (time.Time, error) {
 		return time.Now().Add(50 * time.Millisecond), nil
 	}
 
 	// Job takes 50 ms and runs every 50ms for a total of 100ms per tick.
-	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test periodic job", runtimeFunc, nil, runFunc, nil))
+	require.NoError(t, s.SchedulePeriodicJob(ctx, "Test", "Test periodic job", runtimeFunc, runFunc))
 	require.Len(t, s.ListJobs(ctx), 1)
 	require.Contains(t, s.ListJobs(ctx), "Test periodic job")
 	require.Equal(t, uint32(0), atomic.LoadUint32(&run))

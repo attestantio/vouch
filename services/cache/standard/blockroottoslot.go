@@ -56,7 +56,7 @@ func (s *Service) SetBlockRootToSlot(root phase0.Root, slot phase0.Slot) {
 }
 
 // cleanBlockRootToSlot cleans out old entries in the cache.
-func (s *Service) cleanBlockRootToSlot(_ context.Context, _ interface{}) {
+func (s *Service) cleanBlockRootToSlot(_ context.Context) {
 	// Keep 64 epochs of information around, to cover most scenarios.
 	safetyMargin := phase0.Epoch(64)
 	if s.chainTime.CurrentEpoch() <= safetyMargin {

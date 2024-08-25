@@ -78,7 +78,7 @@ func (s *Service) ScheduleJob(ctx context.Context,
 	class string,
 	name string,
 	runtime time.Time,
-	jobFunc scheduler.JobFuncNoData,
+	jobFunc scheduler.JobFunc,
 ) error {
 	if name == "" {
 		return scheduler.ErrNoJobName
@@ -157,9 +157,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context,
 	class string,
 	name string,
 	runtimeFunc scheduler.RuntimeFunc,
-	runtimeData interface{},
 	jobFunc scheduler.JobFunc,
-	jobData interface{},
 ) error {
 	if name == "" {
 		return scheduler.ErrNoJobName
@@ -189,7 +187,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context,
 
 	go func() {
 		for {
-			runtime, err := runtimeFunc(ctx, runtimeData)
+			runtime, err := runtimeFunc(ctx)
 			if errors.Is(err, scheduler.ErrNoMoreInstances) {
 				s.log.Trace().Str("job", name).Msg("No more instances; period job stopping")
 				s.jobsMutex.Lock()
@@ -226,7 +224,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context,
 			case <-job.runCh:
 				s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Run triggered; job running")
 				monitorJobStartedOnSignal(class)
-				jobFunc(ctx, jobData)
+				jobFunc(ctx)
 				s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Job complete")
 				job.active.Store(false)
 			case <-time.After(time.Until(runtime)):
@@ -237,7 +235,7 @@ func (s *Service) SchedulePeriodicJob(ctx context.Context,
 				job.active.Store(true)
 				s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Timer triggered; job running")
 				monitorJobStartedOnTimer(class)
-				jobFunc(ctx, jobData)
+				jobFunc(ctx)
 				s.log.Trace().Str("job", name).Time("scheduled", runtime).Msg("Job complete")
 				job.active.Store(false)
 			}

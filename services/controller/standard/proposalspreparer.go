@@ -26,7 +26,7 @@ import (
 
 // startProposalsPreparer starts a periodic job to prepare proposal information.
 func (s *Service) startProposalsPreparer(ctx context.Context) error {
-	runtimeFunc := func(_ context.Context, _ interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context) (time.Time, error) {
 		// Schedule for the middle of the slot, three-quarters through the epoch.
 		currentEpoch := s.chainTimeService.CurrentEpoch()
 		epochDuration := s.chainTimeService.StartOfEpoch(currentEpoch + 1).Sub(s.chainTimeService.StartOfEpoch(currentEpoch))
@@ -39,9 +39,7 @@ func (s *Service) startProposalsPreparer(ctx context.Context) error {
 		"Prepare proposals",
 		"Prepare proposals ticker",
 		runtimeFunc,
-		nil,
 		s.prepareProposals,
-		nil,
 	); err != nil {
 		return errors.Wrap(err, "Failed to schedule proposals preparer")
 	}
@@ -50,7 +48,7 @@ func (s *Service) startProposalsPreparer(ctx context.Context) error {
 }
 
 // prepareProposals prepares validator information for potential proposals.
-func (s *Service) prepareProposals(ctx context.Context, _ interface{}) {
+func (s *Service) prepareProposals(ctx context.Context) {
 	_, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "prepareProposals", trace.WithAttributes(
 		attribute.Int64("epoch", util.EpochToInt64(s.chainTimeService.CurrentEpoch())),
 	))

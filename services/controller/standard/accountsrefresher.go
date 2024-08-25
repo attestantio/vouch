@@ -23,7 +23,7 @@ import (
 
 // startAccountsRefresher starts a periodic job that refreshes the accounts known by Vouch.
 func (s *Service) startAccountsRefresher(ctx context.Context) error {
-	runtimeFunc := func(_ context.Context, _ interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context) (time.Time, error) {
 		if s.activeValidators == 0 {
 			s.log.Trace().Msg("No active validators; refreshing accounts next slot")
 			return time.Now().Add(s.slotDuration), nil
@@ -41,9 +41,7 @@ func (s *Service) startAccountsRefresher(ctx context.Context) error {
 		"Refresh accounts",
 		"Account refresh ticker",
 		runtimeFunc,
-		nil,
 		s.refreshAccounts,
-		nil,
 	); err != nil {
 		return errors.Wrap(err, "Failed to schedule accounts refresher")
 	}
@@ -52,7 +50,7 @@ func (s *Service) startAccountsRefresher(ctx context.Context) error {
 }
 
 // refreshAccounts refreshes accounts.
-func (s *Service) refreshAccounts(ctx context.Context, _ interface{}) {
+func (s *Service) refreshAccounts(ctx context.Context) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "refreshAccounts")
 	defer span.End()
 	started := time.Now()
