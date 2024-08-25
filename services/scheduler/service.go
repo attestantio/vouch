@@ -20,13 +20,10 @@ import (
 )
 
 // JobFunc is the type for jobs.
-type JobFunc func(context.Context, interface{})
-
-// JobFuncNoData is the type for jobs.
-type JobFuncNoData func(context.Context)
+type JobFunc func(context.Context)
 
 // RuntimeFunc is the type of a function that generates the next runtime.
-type RuntimeFunc func(context.Context, interface{}) (time.Time, error)
+type RuntimeFunc func(context.Context) (time.Time, error)
 
 // ErrNoMoreInstances is returned by the runtime generator when it has no more instances.
 var ErrNoMoreInstances = errors.New("no more instances")
@@ -58,13 +55,13 @@ type Service interface {
 	// This function returns two cancel funcs.  If the first is triggered the job will not run.  If the second is triggered the job
 	// runs immediately.
 	// Note that if the parent context is cancelled the job wil not run.
-	ScheduleJob(ctx context.Context, class string, name string, runtime time.Time, job JobFuncNoData) error
+	ScheduleJob(ctx context.Context, class string, name string, runtime time.Time, job JobFunc) error
 
 	// SchedulePeriodicJob schedules a job to run in a loop.
 	// The loop starts by calling runtimeFunc, which sets the time for the first run.
 	// Once the time as specified by runtimeFunc is met, jobFunc is called.
 	// Once jobFunc returns, go back to the beginning of the loop.
-	SchedulePeriodicJob(ctx context.Context, class string, name string, runtime RuntimeFunc, runtimeData interface{}, job JobFunc, jobData interface{}) error
+	SchedulePeriodicJob(ctx context.Context, class string, name string, runtime RuntimeFunc, job JobFunc) error
 
 	// CancelJob cancels a known job.
 	// If this is a period job then all future instances are cancelled.

@@ -129,11 +129,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	// Carry out initial fetch of execution configuration.
 	// Need to run this inline, as other modules need this information.
-	s.fetchExecutionConfig(ctx, nil)
+	s.fetchExecutionConfig(ctx)
 	// Carry out initial submission of validator registrations.
 	// Can run this in a separate goroutine to avoid blocking.
 	go func(ctx context.Context) {
-		s.submitValidatorRegistrations(ctx, nil)
+		s.submitValidatorRegistrations(ctx)
 	}(ctx)
 
 	// Periodically fetch the execution configuration.
@@ -141,9 +141,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		"Fetch execution configuration",
 		"Fetch execution configuration",
 		s.fetchExecutionConfigRuntime,
-		nil,
 		s.fetchExecutionConfig,
-		nil,
 	); err != nil {
 		return nil, errors.Wrap(err, "failed to start execution config fetcher")
 	}
@@ -153,9 +151,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		"blockrelay",
 		"Submit validator registrations",
 		s.submitValidatorRegistrationsRuntime,
-		nil,
 		s.submitValidatorRegistrations,
-		nil,
 	); err != nil {
 		return nil, errors.Wrap(err, "failed to start validator registration submitter")
 	}

@@ -231,7 +231,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	// Update proposal preparers.
 	go func() {
-		s.prepareProposals(ctx, nil)
+		s.prepareProposals(ctx)
 	}()
 
 	return s, nil
@@ -272,7 +272,7 @@ type epochTickerData struct {
 
 // startEpochTicker starts a ticker that ticks at the beginning of each epoch.
 func (s *Service) startEpochTicker(ctx context.Context) error {
-	runtimeFunc := func(_ context.Context, _ interface{}) (time.Time, error) {
+	runtimeFunc := func(_ context.Context) (time.Time, error) {
 		// Schedule for the beginning of the next epoch.
 		return s.chainTimeService.StartOfEpoch(s.chainTimeService.CurrentEpoch() + 1), nil
 	}
@@ -284,9 +284,7 @@ func (s *Service) startEpochTicker(ctx context.Context) error {
 		"Epoch",
 		"Epoch ticker",
 		runtimeFunc,
-		data,
-		s.epochTicker,
-		data,
+		func(ctx context.Context) { s.epochTicker(ctx, data) },
 	); err != nil {
 		return errors.Wrap(err, "Failed to schedule epoch ticker")
 	}
@@ -295,19 +293,19 @@ func (s *Service) startEpochTicker(ctx context.Context) error {
 }
 
 // epochTicker sets up the jobs for proposal, attestation and aggregation.
-func (s *Service) epochTicker(ctx context.Context, data interface{}) {
+func (s *Service) epochTicker(ctx context.Context, data *epochTickerData) {
 	// Ensure we don't run for the same epoch twice.
-	epochTickerData := data.(*epochTickerData)
 	currentEpoch := s.chainTimeService.CurrentEpoch()
 	s.log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Starting per-epoch job")
-	epochTickerData.mutex.Lock()
-	if epochTickerData.latestEpochRan >= util.EpochToInt64(currentEpoch) {
+	data.mutex.Lock()
+	if data.latestEpochRan >= util.EpochToInt64(currentEpoch) {
 		s.log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Already ran for this epoch; skipping")
-		epochTickerData.mutex.Unlock()
+		data.mutex.Unlock()
 		return
 	}
-	epochTickerData.latestEpochRan = util.EpochToInt64(currentEpoch)
-	epochTickerData.mutex.Unlock()
+
+	data.latestEpochRan = util.EpochToInt64(currentEpoch)
+	data.mutex.Unlock()
 	monitorNewEpoch()
 
 	// We wait for the beacon node to update, but keep ourselves busy in the meantime.
@@ -378,7 +376,7 @@ func (s *Service) epochTicker(ctx context.Context, data interface{}) {
 		return
 	}
 
-	epochTickerData.atGenesis = false
+	data.atGenesis = false
 }
 
 type prepareForEpochData struct {
@@ -556,7 +554,7 @@ func (s *Service) handleBellatrixForkEpoch(ctx context.Context) {
 
 	go func() {
 		// Send a proposals preparation immediately.
-		s.prepareProposals(ctx, nil)
+		s.prepareProposals(ctx)
 	}()
 }
 

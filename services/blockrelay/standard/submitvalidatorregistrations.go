@@ -41,13 +41,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func (s *Service) submitValidatorRegistrationsRuntime(_ context.Context,
-	_ interface{},
-) (
+func (s *Service) submitValidatorRegistrationsRuntime(_ context.Context) (
 	time.Time,
 	error,
 ) {
-	// Schedule for an abitrary time in the middle 80% of the next epoch, to avoid overloading the relays
+	// Schedule for an arbitrary time in the middle 80% of the next epoch, to avoid overloading the relays
 	// with lots of simultaneous registrations.
 	currentEpoch := s.chainTime.CurrentEpoch()
 	epochDuration := s.chainTime.StartOfEpoch(currentEpoch + 1).Sub(s.chainTime.StartOfEpoch(currentEpoch))
@@ -64,9 +62,7 @@ func (s *Service) SubmitValidatorRegistrations(ctx context.Context,
 }
 
 // submitValidatorRegistrations submits validator registrations.
-func (s *Service) submitValidatorRegistrations(ctx context.Context,
-	_ interface{},
-) {
+func (s *Service) submitValidatorRegistrations(ctx context.Context) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.blockrelay.standard").Start(ctx, "submitValidatorRegistrations")
 	defer span.End()
 	started := time.Now()

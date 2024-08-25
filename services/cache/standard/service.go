@@ -90,13 +90,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if err := parameters.scheduler.SchedulePeriodicJob(ctx,
 		"Cache",
 		"Clean block root to slot cache",
-		func(_ context.Context, _ interface{}) (time.Time, error) {
+		func(_ context.Context) (time.Time, error) {
 			// Run approximately every 15 minutes.
 			return time.Now().Add(15 * time.Minute), nil
 		},
-		nil,
 		s.cleanBlockRootToSlot,
-		nil,
 	); err != nil {
 		log.Error().Err(err).Msg("Failed to schedule periodic clean of block root to slot cache")
 	}

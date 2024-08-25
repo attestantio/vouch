@@ -29,9 +29,7 @@ import (
 )
 
 // fetchExecutionConfigRuntime sets the runtime for the next execution configuration call.
-func (s *Service) fetchExecutionConfigRuntime(_ context.Context,
-	_ interface{},
-) (
+func (s *Service) fetchExecutionConfigRuntime(_ context.Context) (
 	time.Time,
 	error,
 ) {
@@ -45,11 +43,8 @@ func (s *Service) fetchExecutionConfigRuntime(_ context.Context,
 }
 
 // fetchExecutionConfig fetches the execution configuration.
-func (s *Service) fetchExecutionConfig(ctx context.Context,
-	_ interface{},
-) {
+func (s *Service) fetchExecutionConfig(ctx context.Context) {
 	started := time.Now()
-
 	epoch := s.chainTime.CurrentEpoch()
 
 	// Fetch the validating accounts for the next epoch, to ensure that we capture any validators
