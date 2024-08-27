@@ -1,4 +1,6 @@
 dev:
+
+1.9.0-beta.2:
   - change default timestamp in logs to millisecond-precision
   - allow custom timestamp formatting in logs
 
