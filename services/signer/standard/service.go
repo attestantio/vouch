@@ -28,7 +28,7 @@ import (
 
 // Service is the manager for signers.
 type Service struct {
-	monitor                               metrics.SignerMonitor
+	monitor                               metrics.Service
 	slotsPerEpoch                         phase0.Slot
 	beaconProposerDomainType              phase0.DomainType
 	beaconAttesterDomainType              phase0.DomainType

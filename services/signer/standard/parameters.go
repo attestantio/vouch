@@ -23,7 +23,7 @@ import (
 
 type parameters struct {
 	logLevel       zerolog.Level
-	monitor        metrics.SignerMonitor
+	monitor        metrics.Service
 	specProvider   eth2client.SpecProvider
 	domainProvider eth2client.DomainProvider
 }
@@ -47,7 +47,7 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 }
 
 // WithMonitor sets the monitor for the module.
-func WithMonitor(monitor metrics.SignerMonitor) Parameter {
+func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
 	})

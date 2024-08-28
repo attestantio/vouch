@@ -19,9 +19,3 @@ type Service interface {
 	// Presenter provides the presenter for this service.
 	Presenter() string
 }
-
-// ValidatorsManagerMonitor provides methods to monitor the validators manager.
-type ValidatorsManagerMonitor interface{}
-
-// SignerMonitor provides methods to monitor signers.
-type SignerMonitor interface{}

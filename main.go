@@ -1024,7 +1024,7 @@ func startValidatorsManager(ctx context.Context, eth2Client eth2client.Service) 
 func startSigner(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (signer.Service, error) {
 	signer, err := standardsigner.New(ctx,
 		standardsigner.WithLogLevel(util.LogLevel("signer")),
-		standardsigner.WithMonitor(monitor.(metrics.SignerMonitor)),
+		standardsigner.WithMonitor(monitor),
 		standardsigner.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardsigner.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
 	)
