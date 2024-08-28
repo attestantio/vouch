@@ -23,7 +23,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
-	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/rs/zerolog"
@@ -33,7 +32,6 @@ import (
 // Service is the provider for beacon block proposals.
 type Service struct {
 	log                       zerolog.Logger
-	clientMonitor             metrics.ClientMonitor
 	processConcurrency        int64
 	chainTime                 chaintime.Service
 	proposalProviders         map[string]eth2client.ProposalProvider
@@ -159,7 +157,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		signedBeaconBlockProvider: parameters.signedBeaconBlockProvider,
 		timeout:                   parameters.timeout,
 		blockRootToSlotCache:      parameters.blockRootToSlotCache,
-		clientMonitor:             parameters.clientMonitor,
 		slotsPerEpoch:             slotsPerEpoch,
 		timelySourceWeight:        timelySourceWeight,
 		timelyTargetWeight:        timelyTargetWeight,

@@ -21,6 +21,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -61,7 +62,7 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 			log := log.With().Str("provider", name).Str("block_id", opts.Block).Logger()
 
 			response, err := provider.BeaconBlockHeader(ctx, opts)
-			s.clientMonitor.ClientOperation(name, "beacon block header", err == nil, time.Since(started))
+			clientprometheus.MonitorClientOperation(name, "beacon block header", err == nil, time.Since(started))
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					// The context has been canceled, due to another provider getting there first.  This is fine.
@@ -98,7 +99,7 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 		return nil, errors.New("failed to obtain beacon block header before timeout")
 	case resp := <-respCh:
 		cancel()
-		s.clientMonitor.StrategyOperation("first", resp.provider, "beacon block header", time.Since(started))
+		clientprometheus.MonitorStrategyOperation("first", resp.provider, "beacon block header", time.Since(started))
 		return resp.response, nil
 	}
 }

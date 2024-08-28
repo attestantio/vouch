@@ -20,7 +20,6 @@ import (
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
-	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/validatorsmanager/standard"
 	"github.com/attestantio/vouch/testutil"
 	"github.com/rs/zerolog"
@@ -31,8 +30,6 @@ func TestValidatorStateAtEpoch(t *testing.T) {
 	ctx := context.Background()
 	s, err := standard.New(ctx,
 		standard.WithLogLevel(zerolog.Disabled),
-		standard.WithMonitor(nullmetrics.New()),
-		standard.WithClientMonitor(nullmetrics.New()),
 		standard.WithFarFutureEpoch(phase0.Epoch(0xffffffffffffffff)),
 		standard.WithValidatorsProvider(mock.NewValidatorsProvider()),
 	)

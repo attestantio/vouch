@@ -18,23 +18,14 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
 )
 
 // Service is a metrics service exposing metrics via prometheus.
-type Service struct {
-	chainTime chaintime.Service
-
-	clientOperationCounter   *prometheus.CounterVec
-	clientOperationTimer     *prometheus.HistogramVec
-	strategyOperationCounter *prometheus.CounterVec
-	strategyOperationTimer   *prometheus.HistogramVec
-}
+type Service struct{}
 
 // module-wide log.
 var log zerolog.Logger
@@ -52,9 +43,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
-	s := &Service{
-		chainTime: parameters.chainTime,
-	}
+	s := &Service{}
 	if err := s.setupClientMetrics(); err != nil {
 		return nil, errors.Wrap(err, "failed to set up client metrics")
 	}

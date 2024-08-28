@@ -21,6 +21,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -83,7 +84,7 @@ func (s *Service) submitBeaconCommitteeSubscriptions(ctx context.Context,
 	started := time.Now()
 	err := submitter.SubmitBeaconCommitteeSubscriptions(ctx, subscriptions)
 
-	s.clientMonitor.ClientOperation(address, "submit beacon committee subscription", err == nil, time.Since(started))
+	clientprometheus.MonitorClientOperation(address, "submit beacon committee subscription", err == nil, time.Since(started))
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to submit beacon committee subscription")
 		return

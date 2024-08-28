@@ -61,17 +61,6 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: no timeout specified",
 		},
 		{
-			name: "ClientMonitorMissing",
-			params: []majority.Parameter{
-				majority.WithLogLevel(zerolog.Disabled),
-				majority.WithTimeout(2 * time.Second),
-				majority.WithClientMonitor(nil),
-				majority.WithBeaconBlockRootProviders(beaconBlockRootProviders),
-				majority.WithBlockRootToSlotCache(blockToSlotCache),
-			},
-			err: "problem with parameters: no client monitor specified",
-		},
-		{
 			name: "BeaconBlockRootProvidersNil",
 			params: []majority.Parameter{
 				majority.WithLogLevel(zerolog.Disabled),

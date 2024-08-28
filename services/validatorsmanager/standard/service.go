@@ -19,7 +19,6 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -28,8 +27,6 @@ import (
 // Service is the manager for validators.
 type Service struct {
 	log                zerolog.Logger
-	monitor            metrics.ValidatorsManagerMonitor
-	clientMonitor      metrics.ClientMonitor
 	validatorsProvider eth2client.ValidatorsProvider
 	farFutureEpoch     phase0.Epoch
 
@@ -54,8 +51,6 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 
 	s := &Service{
 		log:                    log,
-		monitor:                parameters.monitor,
-		clientMonitor:          parameters.clientMonitor,
 		farFutureEpoch:         parameters.farFutureEpoch,
 		validatorsProvider:     parameters.validatorsProvider,
 		validatorsByIndex:      make(map[phase0.ValidatorIndex]*phase0.Validator),

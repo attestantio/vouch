@@ -22,6 +22,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -202,7 +203,7 @@ func (s *Service) Proposal(ctx context.Context,
 	}
 	log.Trace().Str("provider", bestProvider).Stringer("proposal", bestProposal).Float64("score", bestScore).Dur("elapsed", time.Since(started)).Msg("Selected best proposal")
 	if bestProvider != "" {
-		s.clientMonitor.StrategyOperation("best", bestProvider, "beacon block proposal", time.Since(started))
+		clientprometheus.MonitorStrategyOperation("best", bestProvider, "beacon block proposal", time.Since(started))
 	}
 
 	span.SetAttributes(
@@ -229,7 +230,7 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 	defer span.End()
 
 	proposalResponse, err := provider.Proposal(ctx, opts)
-	s.clientMonitor.ClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
+	clientprometheus.MonitorClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
 	if err != nil {
 		errCh <- &beaconBlockError{
 			provider: name,

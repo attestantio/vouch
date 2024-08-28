@@ -26,7 +26,6 @@ import (
 	"github.com/attestantio/vouch/services/cache"
 	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
-	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/attestantio/vouch/testutil"
 	"github.com/prysmaticlabs/go-bitfield"
@@ -162,7 +161,6 @@ func TestUpdateBlockVotes(t *testing.T) {
 			s, err := New(ctx,
 				WithLogLevel(zerolog.TraceLevel),
 				WithTimeout(2*time.Second),
-				WithClientMonitor(nullmetrics.New()),
 				WithEventsProvider(mock.NewEventsProvider()),
 				WithChainTimeService(chainTime),
 				WithSpecProvider(specProvider),

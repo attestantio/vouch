@@ -20,6 +20,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -182,7 +183,7 @@ func (s *Service) AggregateAttestation(ctx context.Context,
 		Float64("score", bestScore).
 		Msg("Selected best aggregate attestation")
 	if bestProvider != "" {
-		s.clientMonitor.StrategyOperation("best", bestProvider, "aggregate attestation", time.Since(started))
+		clientprometheus.MonitorStrategyOperation("best", bestProvider, "aggregate attestation", time.Since(started))
 	}
 
 	return &api.Response[*phase0.Attestation]{
@@ -205,7 +206,7 @@ func (s *Service) aggregateAttestation(ctx context.Context,
 	defer span.End()
 
 	aggregateAttestationResp, err := provider.AggregateAttestation(ctx, opts)
-	s.clientMonitor.ClientOperation(name, "aggregate attestation", err == nil, time.Since(started))
+	clientprometheus.MonitorClientOperation(name, "aggregate attestation", err == nil, time.Since(started))
 	if err != nil {
 		errCh <- &aggregateAttestationError{
 			provider: name,

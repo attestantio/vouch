@@ -21,6 +21,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -61,7 +62,7 @@ func (s *Service) SignedBeaconBlock(ctx context.Context,
 			log := log.With().Str("provider", name).Str("block_id", opts.Block).Logger()
 
 			response, err := provider.SignedBeaconBlock(ctx, opts)
-			s.clientMonitor.ClientOperation(name, "signed beacon block", err == nil, time.Since(started))
+			clientprometheus.MonitorClientOperation(name, "signed beacon block", err == nil, time.Since(started))
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					// The context has been canceled, due to another provider getting there first.  This is fine.
@@ -98,7 +99,7 @@ func (s *Service) SignedBeaconBlock(ctx context.Context,
 		return nil, errors.New("failed to obtain signed beacon block before timeout")
 	case resp := <-respCh:
 		cancel()
-		s.clientMonitor.StrategyOperation("first", resp.provider, "signed beacon block", time.Since(started))
+		clientprometheus.MonitorStrategyOperation("first", resp.provider, "signed beacon block", time.Since(started))
 		return resp.response, nil
 	}
 }

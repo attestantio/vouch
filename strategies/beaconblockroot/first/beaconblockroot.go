@@ -20,6 +20,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -55,7 +56,7 @@ func (s *Service) BeaconBlockRoot(ctx context.Context,
 			log := log.With().Str("provider", name).Str("block_id", opts.Block).Logger()
 
 			rootResponse, err := provider.BeaconBlockRoot(ctx, opts)
-			s.clientMonitor.ClientOperation(name, "beacon block root", err == nil, time.Since(started))
+			clientprometheus.MonitorClientOperation(name, "beacon block root", err == nil, time.Since(started))
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
 					log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain beacon block root")

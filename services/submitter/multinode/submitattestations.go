@@ -22,6 +22,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -95,7 +96,7 @@ func (s *Service) submitAttestations(ctx context.Context,
 		err = s.handleAttestationsError(ctx, submitter, err)
 	}
 
-	s.clientMonitor.ClientOperation(address, "submit attestations", err == nil, time.Since(started))
+	clientprometheus.MonitorClientOperation(address, "submit attestations", err == nil, time.Since(started))
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to submit attestations")
 		return

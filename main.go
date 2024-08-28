@@ -515,9 +515,8 @@ func startBasicServices(ctx context.Context,
 	metrics.Service,
 	error,
 ) {
-	// Initialise monitor without chainTime service and server for now, so the
-	// client can provide metrics.
-	monitor, err := startMonitor(ctx, nil, false)
+	// Initialise monitor without the server for now, so the client can provide metrics.
+	monitor, err := startMonitor(ctx, false)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "failed to start metrics service")
 	}
@@ -537,8 +536,8 @@ func startBasicServices(ctx context.Context,
 	}
 
 	log.Trace().Msg("Starting metrics service")
-	// Reinitialise monitor with chainTime service and an operational server.
-	monitor, err = startMonitor(ctx, chainTime, true)
+	// Reinitialise monitor with an operational server.
+	monitor, err = startMonitor(ctx, true)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "failed to start metrics service")
 	}
@@ -578,7 +577,7 @@ func startSharedServices(ctx context.Context,
 	}
 
 	log.Trace().Msg("Starting validators manager")
-	validatorsManager, err := startValidatorsManager(ctx, monitor, eth2Client)
+	validatorsManager, err := startValidatorsManager(ctx, eth2Client)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to start validators manager")
 	}
@@ -910,7 +909,6 @@ func initMajordomo(ctx context.Context) (majordomo.Service, error) {
 
 // startMonitor starts the relevant metrics monitor given user input.
 func startMonitor(ctx context.Context,
-	chainTime chaintime.Service,
 	createServer bool,
 ) (
 	metrics.Service,
@@ -923,7 +921,6 @@ func startMonitor(ctx context.Context,
 		monitor, err = prometheusmetrics.New(ctx,
 			prometheusmetrics.WithLogLevel(util.LogLevel("metrics.prometheus")),
 			prometheusmetrics.WithAddress(viper.GetString("metrics.prometheus.listen-address")),
-			prometheusmetrics.WithChainTime(chainTime),
 			prometheusmetrics.WithCreateServer(createServer),
 		)
 		if err != nil {
@@ -1008,15 +1005,13 @@ func startGraffitiProvider(ctx context.Context, majordomo majordomo.Service) (gr
 }
 
 // startValidatorsManager starts the appropriate validators manager given user input.
-func startValidatorsManager(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (validatorsmanager.Service, error) {
+func startValidatorsManager(ctx context.Context, eth2Client eth2client.Service) (validatorsmanager.Service, error) {
 	farFutureEpoch, err := eth2Client.(eth2client.FarFutureEpochProvider).FarFutureEpoch(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain far future epoch")
 	}
 	validatorsManager, err := standardvalidatorsmanager.New(ctx,
 		standardvalidatorsmanager.WithLogLevel(util.LogLevel("validatorsmanager")),
-		standardvalidatorsmanager.WithMonitor(monitor.(metrics.ValidatorsManagerMonitor)),
-		standardvalidatorsmanager.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 		standardvalidatorsmanager.WithValidatorsProvider(eth2Client.(eth2client.ValidatorsProvider)),
 		standardvalidatorsmanager.WithFarFutureEpoch(farFutureEpoch),
 	)
@@ -1145,7 +1140,6 @@ func selectAttestationDataProvider(ctx context.Context,
 			attestationDataProviders[address] = client.(eth2client.AttestationDataProvider)
 		}
 		attestationDataProvider, err = bestattestationdatastrategy.New(ctx,
-			bestattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.best")),
 			bestattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.best")),
 			bestattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
@@ -1167,7 +1161,6 @@ func selectAttestationDataProvider(ctx context.Context,
 			attestationDataProviders[address] = client.(eth2client.AttestationDataProvider)
 		}
 		attestationDataProvider, err = majorityattestationdatastrategy.New(ctx,
-			majorityattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			majorityattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.majority")),
 			majorityattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.majority")),
 			majorityattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
@@ -1190,7 +1183,6 @@ func selectAttestationDataProvider(ctx context.Context,
 			attestationDataProviders[address] = client.(eth2client.AttestationDataProvider)
 		}
 		attestationDataProvider, err = firstattestationdatastrategy.New(ctx,
-			firstattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.first")),
 			firstattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
 			firstattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.first")),
@@ -1228,7 +1220,6 @@ func selectAggregateAttestationProvider(ctx context.Context,
 			aggregateAttestationProviders[address] = client.(eth2client.AggregateAttestationProvider)
 		}
 		aggregateAttestationProvider, err = bestaggregateattestationstrategy.New(ctx,
-			bestaggregateattestationstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestaggregateattestationstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.aggregateattestation.best")),
 			bestaggregateattestationstrategy.WithLogLevel(util.LogLevel("strategies.aggregateattestation.best")),
 			bestaggregateattestationstrategy.WithAggregateAttestationProviders(aggregateAttestationProviders),
@@ -1248,7 +1239,6 @@ func selectAggregateAttestationProvider(ctx context.Context,
 			aggregateAttestationProviders[address] = client.(eth2client.AggregateAttestationProvider)
 		}
 		aggregateAttestationProvider, err = firstaggregateattestationstrategy.New(ctx,
-			firstaggregateattestationstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstaggregateattestationstrategy.WithLogLevel(util.LogLevel("strategies.aggregateattestation.first")),
 			firstaggregateattestationstrategy.WithAggregateAttestationProviders(aggregateAttestationProviders),
 			firstaggregateattestationstrategy.WithTimeout(util.Timeout("strategies.aggregateattestation.first")),
@@ -1285,7 +1275,6 @@ func selectProposalProvider(ctx context.Context,
 			proposalProviders[address] = client.(eth2client.ProposalProvider)
 		}
 		proposalProvider, err = bestbeaconblockproposalstrategy.New(ctx,
-			bestbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestbeaconblockproposalstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.beaconblockproposal.best")),
 			bestbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.best")),
 			bestbeaconblockproposalstrategy.WithEventsProvider(eth2Client.(eth2client.EventsProvider)),
@@ -1311,7 +1300,6 @@ func selectProposalProvider(ctx context.Context,
 			proposalProviders[address] = client.(eth2client.ProposalProvider)
 		}
 		proposalProvider, err = firstbeaconblockproposalstrategy.New(ctx,
-			firstbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.first")),
 			firstbeaconblockproposalstrategy.WithProposalProviders(proposalProviders),
 			firstbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.first")),
@@ -1403,7 +1391,6 @@ func selectBeaconBlockRootProvider(ctx context.Context,
 		}
 
 		beaconBlockRootProvider, err = majoritybeaconblockrootstrategy.New(ctx,
-			majoritybeaconblockrootstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			majoritybeaconblockrootstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.beaconblockroot.majority")),
 			majoritybeaconblockrootstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockroot.majority")),
 			majoritybeaconblockrootstrategy.WithBeaconBlockRootProviders(beaconBlockRootProviders),
@@ -1424,7 +1411,6 @@ func selectBeaconBlockRootProvider(ctx context.Context,
 			beaconBlockRootProviders[address] = client.(eth2client.BeaconBlockRootProvider)
 		}
 		beaconBlockRootProvider, err = firstbeaconblockrootstrategy.New(ctx,
-			firstbeaconblockrootstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstbeaconblockrootstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockroot.first")),
 			firstbeaconblockrootstrategy.WithBeaconBlockRootProviders(beaconBlockRootProviders),
 			firstbeaconblockrootstrategy.WithTimeout(util.Timeout("strategies.beaconblockroot.first")),
@@ -1454,7 +1440,6 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 		log.Info().Msg("Starting standard submitter strategy")
 		submitter, err = immediatesubmitter.New(ctx,
 			immediatesubmitter.WithLogLevel(util.LogLevel("submitter.immediate")),
-			immediatesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			immediatesubmitter.WithProposalSubmitter(eth2Client.(eth2client.ProposalSubmitter)),
 			immediatesubmitter.WithAttestationsSubmitter(eth2Client.(eth2client.AttestationsSubmitter)),
 			immediatesubmitter.WithSyncCommitteeMessagesSubmitter(eth2Client.(eth2client.SyncCommitteeMessagesSubmitter)),
@@ -1550,7 +1535,6 @@ func startMultinodeSubmitter(ctx context.Context,
 	}
 
 	submitterService, err := multinodesubmitter.New(ctx,
-		multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 		multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
 		multinodesubmitter.WithLogLevel(util.LogLevel("submitter.multinode")),
 		multinodesubmitter.WithTimeout(util.Timeout("submitter.multinode")),
@@ -1936,7 +1920,6 @@ func selectBeaconHeaderProvider(ctx context.Context,
 
 		provider, err = firstbeaconblockheaderstrategy.New(ctx,
 			firstbeaconblockheaderstrategy.WithTimeout(util.Timeout(path)),
-			firstbeaconblockheaderstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstbeaconblockheaderstrategy.WithLogLevel(util.LogLevel(path)),
 			firstbeaconblockheaderstrategy.WithBeaconBlockHeadersProviders(beaconBlockHeaderProviders),
 		)

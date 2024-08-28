@@ -50,7 +50,6 @@ func TestCreateAttestations(t *testing.T) {
 	validatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
 	prometheusMetrics, err := prometheusmetrics.New(ctx,
 		prometheusmetrics.WithAddress(":12345"),
-		prometheusmetrics.WithChainTime(chainTime),
 	)
 	require.NoError(t, err)
 
@@ -180,7 +179,6 @@ func TestValidateAttestationData(t *testing.T) {
 	validatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
 	prometheusMetrics, err := prometheusmetrics.New(ctx,
 		prometheusmetrics.WithAddress(":12345"),
-		prometheusmetrics.WithChainTime(chainTime),
 	)
 	require.NoError(t, err)
 
@@ -311,7 +309,6 @@ func TestHousekeepAttestedMap(t *testing.T) {
 	validatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
 	prometheusMetrics, err := prometheusmetrics.New(ctx,
 		prometheusmetrics.WithAddress(":12345"),
-		prometheusmetrics.WithChainTime(chainTime),
 	)
 	require.NoError(t, err)
 
@@ -382,7 +379,6 @@ func TestObtainAttestationData(t *testing.T) {
 	validatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
 	prometheusMetrics, err := prometheusmetrics.New(ctx,
 		prometheusmetrics.WithAddress(":12345"),
-		prometheusmetrics.WithChainTime(chainTime),
 	)
 	require.NoError(t, err)
 
@@ -476,7 +472,6 @@ func TestFetchValidatorIndices(t *testing.T) {
 	validatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
 	prometheusMetrics, err := prometheusmetrics.New(ctx,
 		prometheusmetrics.WithAddress(":12345"),
-		prometheusmetrics.WithChainTime(chainTime),
 	)
 	require.NoError(t, err)
 

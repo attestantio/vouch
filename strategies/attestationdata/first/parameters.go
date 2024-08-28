@@ -19,15 +19,12 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/attestantio/vouch/services/metrics"
-	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 type parameters struct {
 	logLevel                 zerolog.Level
-	clientMonitor            metrics.ClientMonitor
 	attestationDataProviders map[string]eth2client.AttestationDataProvider
 	timeout                  time.Duration
 }
@@ -50,13 +47,6 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 	})
 }
 
-// WithClientMonitor sets the client monitor for the service.
-func WithClientMonitor(monitor metrics.ClientMonitor) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.clientMonitor = monitor
-	})
-}
-
 // WithAttestationDataProviders sets the beacon block proposal providers.
 func WithAttestationDataProviders(providers map[string]eth2client.AttestationDataProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -74,8 +64,7 @@ func WithTimeout(timeout time.Duration) Parameter {
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel:      zerolog.GlobalLevel(),
-		clientMonitor: nullmetrics.New(),
+		logLevel: zerolog.GlobalLevel(),
 	}
 	for _, p := range params {
 		if params != nil {
@@ -85,9 +74,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 
 	if parameters.timeout == 0 {
 		return nil, errors.New("no timeout specified")
-	}
-	if parameters.clientMonitor == nil {
-		return nil, errors.New("no client monitor specified")
 	}
 	if len(parameters.attestationDataProviders) == 0 {
 		return nil, errors.New("no attestation data providers specified")

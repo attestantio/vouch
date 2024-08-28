@@ -20,6 +20,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -59,7 +60,7 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context,
 			log := log.With().Str("provider", name).Uint64("slot", uint64(opts.Slot)).Uint64("subcommittee_index", opts.SubcommitteeIndex).Stringer("beacon_block_root", opts.BeaconBlockRoot).Logger()
 
 			contributionResponse, err := provider.SyncCommitteeContribution(ctx, opts)
-			s.clientMonitor.ClientOperation(name, "sync committee contribution", err == nil, time.Since(started))
+			clientprometheus.MonitorClientOperation(name, "sync committee contribution", err == nil, time.Since(started))
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
 					log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain sync committee contribution")

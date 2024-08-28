@@ -47,7 +47,7 @@ func proposerConfigCheck(ctx context.Context, majordomo majordomo.Service) bool 
 		return true
 	}
 
-	validatorsManager, err := startValidatorsManager(ctx, monitor, consensusClient)
+	validatorsManager, err := startValidatorsManager(ctx, consensusClient)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to start validators manager: %v\n", err)
 		return true

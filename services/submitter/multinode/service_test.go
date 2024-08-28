@@ -58,24 +58,6 @@ func TestService(t *testing.T) {
 		err    string
 	}{
 		{
-			name: "ClientMonitorMissing",
-			params: []multinode.Parameter{
-				multinode.WithLogLevel(zerolog.Disabled),
-				multinode.WithTimeout(2 * time.Second),
-				multinode.WithClientMonitor(nil),
-				multinode.WithProcessConcurrency(2),
-				multinode.WithProposalSubmitters(beaconBlockSubmitters),
-				multinode.WithAttestationsSubmitters(attestationsSubmitters),
-				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
-				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
-				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
-				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
-				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
-				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-			},
-			err: "problem with parameters: no client monitor specified",
-		},
-		{
 			name: "TimeoutZero",
 			params: []multinode.Parameter{
 				multinode.WithLogLevel(zerolog.Disabled),
