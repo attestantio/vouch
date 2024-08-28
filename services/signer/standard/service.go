@@ -29,7 +29,6 @@ import (
 // Service is the manager for signers.
 type Service struct {
 	monitor                               metrics.SignerMonitor
-	clientMonitor                         metrics.ClientMonitor
 	slotsPerEpoch                         phase0.Slot
 	beaconProposerDomainType              phase0.DomainType
 	beaconAttesterDomainType              phase0.DomainType
@@ -128,7 +127,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	s := &Service{
 		monitor:                               parameters.monitor,
-		clientMonitor:                         parameters.clientMonitor,
 		slotsPerEpoch:                         phase0.Slot(slotsPerEpoch),
 		beaconAttesterDomainType:              beaconAttesterDomainType,
 		beaconProposerDomainType:              beaconProposerDomainType,

@@ -1025,7 +1025,6 @@ func startSigner(ctx context.Context, monitor metrics.Service, eth2Client eth2cl
 	signer, err := standardsigner.New(ctx,
 		standardsigner.WithLogLevel(util.LogLevel("signer")),
 		standardsigner.WithMonitor(monitor.(metrics.SignerMonitor)),
-		standardsigner.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 		standardsigner.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardsigner.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
 	)
@@ -1064,7 +1063,6 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 			dirkaccountmanager.WithLogLevel(util.LogLevel("accountmanager.dirk")),
 			dirkaccountmanager.WithMonitor(monitor),
 			dirkaccountmanager.WithTimeout(util.Timeout("accountmanager.dirk")),
-			dirkaccountmanager.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			dirkaccountmanager.WithProcessConcurrency(util.ProcessConcurrency("accountmanager.dirk")),
 			dirkaccountmanager.WithValidatorsManager(validatorsManager),
 			dirkaccountmanager.WithEndpoints(viper.GetStringSlice("accountmanager.dirk.endpoints")),
@@ -1334,7 +1332,6 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 			syncCommitteeContributionProviders[address] = client.(eth2client.SyncCommitteeContributionProvider)
 		}
 		syncCommitteeContributionProvider, err = bestsynccommitteecontributionstrategy.New(ctx,
-			bestsynccommitteecontributionstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			bestsynccommitteecontributionstrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.synccommitteecontribution.best")),
 			bestsynccommitteecontributionstrategy.WithLogLevel(util.LogLevel("strategies.synccommitteecontribution.best")),
 			bestsynccommitteecontributionstrategy.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
@@ -1354,7 +1351,6 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 			syncCommitteeContributionProviders[address] = client.(eth2client.SyncCommitteeContributionProvider)
 		}
 		syncCommitteeContributionProvider, err = firstsynccommitteecontributionstrategy.New(ctx,
-			firstsynccommitteecontributionstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstsynccommitteecontributionstrategy.WithLogLevel(util.LogLevel("strategies.synccommitteecontribution.first")),
 			firstsynccommitteecontributionstrategy.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
 			firstsynccommitteecontributionstrategy.WithTimeout(util.Timeout("strategies.synccommitteecontribution.first")),
@@ -1875,7 +1871,6 @@ func selectSignedBeaconBlockProvider(ctx context.Context,
 
 		provider, err = firstsignedbeaconblockstrategy.New(ctx,
 			firstsignedbeaconblockstrategy.WithTimeout(util.Timeout(path)),
-			firstsignedbeaconblockstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstsignedbeaconblockstrategy.WithLogLevel(util.LogLevel(path)),
 			firstsignedbeaconblockstrategy.WithSignedBeaconBlockProviders(signedBeaconBlockProviders),
 		)

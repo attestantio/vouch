@@ -56,7 +56,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nil),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
 				dirk.WithClientCert([]byte(resources.ClientTest01Crt)),
@@ -70,30 +69,10 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: no monitor specified",
 		},
 		{
-			name: "ClientMonitorNil",
-			params: []dirk.Parameter{
-				dirk.WithLogLevel(zerolog.TraceLevel),
-				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nil),
-				dirk.WithProcessConcurrency(1),
-				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
-				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(resources.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(resources.ClientTest01Key)),
-				dirk.WithCACert([]byte(resources.CACrt)),
-				dirk.WithValidatorsManager(validatorsManager),
-				dirk.WithDomainProvider(domainProvider),
-				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
-				dirk.WithCurrentEpochProvider(chainTime),
-			},
-			err: "problem with parameters: no client monitor specified",
-		},
-		{
 			name: "ProcessConcurrencyZero",
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(0),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
@@ -112,7 +91,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
 				dirk.WithClientCert([]byte(resources.ClientTest01Crt)),
@@ -130,7 +108,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
@@ -149,7 +126,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{""}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
@@ -169,7 +145,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"host:bad"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
@@ -189,7 +164,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"host:0"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
@@ -209,7 +183,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithClientCert([]byte(resources.ClientTest01Crt)),
@@ -227,7 +200,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{}),
@@ -246,7 +218,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
@@ -264,7 +235,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
@@ -282,7 +252,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.Disabled),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
@@ -301,7 +270,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
@@ -319,7 +287,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
@@ -337,7 +304,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
@@ -355,7 +321,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.Disabled),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
@@ -373,7 +338,6 @@ func TestService(t *testing.T) {
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.Disabled),
 				dirk.WithMonitor(nullmetrics.New()),
-				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),

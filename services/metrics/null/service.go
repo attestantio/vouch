@@ -14,10 +14,6 @@
 // Package null is a null metrics logger.
 package null
 
-import (
-	"time"
-)
-
 // Service is a metrics service that drops metrics.
 type Service struct{}
 
@@ -29,12 +25,4 @@ func New() *Service {
 // Presenter provides the presenter for this service.
 func (*Service) Presenter() string {
 	return "null"
-}
-
-// ClientOperation provides a generic monitor for client operations.
-func (*Service) ClientOperation(_ string, _ string, _ bool, _ time.Duration) {
-}
-
-// StrategyOperation provides a generic monitor for strategy operations.
-func (*Service) StrategyOperation(_ string, _ string, _ string, _ time.Duration) {
 }

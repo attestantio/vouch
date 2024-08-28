@@ -14,22 +14,10 @@
 // Package metrics tracks various metrics that measure the performance of vouch.
 package metrics
 
-import (
-	"time"
-)
-
 // Service is the generic metrics service.
 type Service interface {
 	// Presenter provides the presenter for this service.
 	Presenter() string
-}
-
-// ClientMonitor provides methods to monitor client connections.
-type ClientMonitor interface {
-	// ClientOperation provides a generic monitor for client operations.
-	ClientOperation(provider string, name string, succeeded bool, duration time.Duration)
-	// StrategyOperation provides a generic monitor for strategy operations.
-	StrategyOperation(strategy string, provider string, operation string, duration time.Duration)
 }
 
 // ValidatorsManagerMonitor provides methods to monitor the validators manager.

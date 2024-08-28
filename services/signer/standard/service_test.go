@@ -40,29 +40,16 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(nil),
-				standard.WithClientMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithDomainProvider(domainProvider),
 			},
 			err: "problem with parameters: no monitor specified",
 		},
 		{
-			name: "ClientMonitorMissing",
-			params: []standard.Parameter{
-				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New()),
-				standard.WithClientMonitor(nil),
-				standard.WithSpecProvider(specProvider),
-				standard.WithDomainProvider(domainProvider),
-			},
-			err: "problem with parameters: no client monitor specified",
-		},
-		{
 			name: "SpecProviderMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(nullmetrics.New()),
-				standard.WithClientMonitor(nullmetrics.New()),
 				standard.WithDomainProvider(domainProvider),
 			},
 			err: "problem with parameters: no spec provider specified",
@@ -72,7 +59,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(nullmetrics.New()),
-				standard.WithClientMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(mock.NewErroringSpecProvider()),
 				standard.WithDomainProvider(domainProvider),
 			},
@@ -83,7 +69,6 @@ func TestService(t *testing.T) {
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(nullmetrics.New()),
-				standard.WithClientMonitor(nullmetrics.New()),
 				standard.WithSpecProvider(specProvider),
 				standard.WithDomainProvider(domainProvider),
 			},

@@ -49,7 +49,6 @@ type Service struct {
 	log                  zerolog.Logger
 	mutex                sync.RWMutex
 	monitor              metrics.Service
-	clientMonitor        metrics.ClientMonitor
 	timeout              time.Duration
 	processConcurrency   int64
 	endpoints            []*dirk.Endpoint
@@ -119,7 +118,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	s := &Service{
 		log:                  log,
 		monitor:              parameters.monitor,
-		clientMonitor:        parameters.clientMonitor,
 		timeout:              parameters.timeout,
 		processConcurrency:   parameters.processConcurrency,
 		endpoints:            endpoints,
