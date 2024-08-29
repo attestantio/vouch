@@ -240,7 +240,7 @@ func fetchConfig() error {
 	viper.SetDefault("controller.sync-committee-aggregation-delay", 8*time.Second)
 	viper.SetDefault("controller.verify-sync-committee-inclusion", false)
 	viper.SetDefault("controller.fast-track.attestations", true)
-	viper.SetDefault("controller.fast-track.sync-committees", true)
+	viper.SetDefault("controller.fast-track.sync-committees", false)
 	viper.SetDefault("controller.fast-track.grace", 200*time.Millisecond)
 	viper.SetDefault("blockrelay.timeout", 1*time.Second)
 	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")

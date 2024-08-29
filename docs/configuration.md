@@ -77,7 +77,7 @@ controller:
     # If sync-committees is true then Vouch will generate sync committee messages as soon as it receives notification that
     # the head block has been updated for the duties' slot.  Otherwise it will wait until 4 seconds into the slot before
     # generating sync committee messages.
-    sync-committees: true
+    sync-committees: false
     # grace is the delay between receiving the notification of the head block and starting the fast track process.  This allows
     # the rest of the network to settle if we saw the head block early.
     grace: '200ms'
