@@ -110,7 +110,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.9.0-beta.2"
+var ReleaseVersion = "1.9.0-beta.3"
 
 func main() {
 	exitCode := main2()
@@ -241,7 +241,7 @@ func fetchConfig() error {
 	viper.SetDefault("controller.verify-sync-committee-inclusion", false)
 	viper.SetDefault("controller.fast-track.attestations", true)
 	viper.SetDefault("controller.fast-track.sync-committees", true)
-	viper.SetDefault("controller.fast-track.grace", 200*time.Millisecond)
+	viper.SetDefault("controller.fast-track.grace", 500*time.Millisecond)
 	viper.SetDefault("blockrelay.timeout", 1*time.Second)
 	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(30000000))
