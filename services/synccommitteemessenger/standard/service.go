@@ -176,47 +176,44 @@ func (s *Service) Message(ctx context.Context, duty *synccommitteemessenger.Duty
 
 	// Sign in parallel.
 	msgs := make([]*altair.SyncCommitteeMessage, 0, len(duty.ContributionIndices()))
-	var msgsMu sync.Mutex
 	validatorIndices := duty.ValidatorIndices()
 
 	s.UpdateSyncCommitteeDataRecord(duty.Slot(), *beaconBlockRoot, duty.ContributionIndices())
 
-	var wg sync.WaitGroup
-	for i := range validatorIndices {
-		wg.Add(1)
-		go func(ctx context.Context,
-			wg *sync.WaitGroup,
-			i int,
-		) {
-			defer wg.Done()
-			account := duty.Account(validatorIndices[i])
-			if account == nil {
-				s.log.Debug().Msg("Account nil; likely exited validator still in sync committee")
-				return
-			}
-			sig, err := s.contribute(ctx, account, s.chainTimeService.SlotToEpoch(duty.Slot()), *beaconBlockRoot)
-			if err != nil {
-				s.log.Error().Err(err).Msg("Failed to sign sync committee message")
-				return
-			}
-			s.log.Trace().
-				Uint64("slot", uint64(duty.Slot())).
-				Uint64("validator_index", uint64(validatorIndices[i])).
-				Stringer("signature", sig).
-				Msg("Signed sync committee message")
+	accounts := make([]e2wtypes.Account, len(validatorIndices))
 
-			msg := &altair.SyncCommitteeMessage{
-				Slot:            duty.Slot(),
-				BeaconBlockRoot: *beaconBlockRoot,
-				ValidatorIndex:  validatorIndices[i],
-				Signature:       sig,
-			}
-			msgsMu.Lock()
-			msgs = append(msgs, msg)
-			msgsMu.Unlock()
-		}(ctx, &wg, i)
+	for i := range validatorIndices {
+		account := duty.Account(validatorIndices[i])
+		if account == nil {
+			s.log.Debug().Msg("Account nil; likely exited validator still in sync committee")
+			continue
+		}
+		accounts[i] = account
 	}
-	wg.Wait()
+	sigs, err := s.contributions(ctx, accounts, s.chainTimeService.SlotToEpoch(duty.Slot()), *beaconBlockRoot)
+	if err != nil {
+		s.log.Error().Err(err).Msg("Failed to sign sync committee messages")
+		return nil, errors.Wrap(err, "failed to sign sync committee messages")
+	}
+
+	for i := range accounts {
+		if len(sigs) == 0 || len(sigs) < i {
+			return nil, errors.New("too few signatures for accounts")
+		}
+		s.log.Trace().
+			Uint64("slot", uint64(duty.Slot())).
+			Uint64("validator_index", uint64(validatorIndices[i])).
+			Stringer("signature", sigs[i]).
+			Msg("Signed sync committee message")
+
+		msg := &altair.SyncCommitteeMessage{
+			Slot:            duty.Slot(),
+			BeaconBlockRoot: *beaconBlockRoot,
+			ValidatorIndex:  validatorIndices[i],
+			Signature:       sigs[i],
+		}
+		msgs = append(msgs, msg)
+	}
 
 	if err := s.syncCommitteeMessagesSubmitter.SubmitSyncCommitteeMessages(ctx, msgs); err != nil {
 		s.log.Trace().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to submit sync committee messages")
@@ -261,19 +258,19 @@ func (s *Service) RemoveHistoricDataUsedForSlotVerification(currentSlot phase0.S
 	}
 }
 
-func (s *Service) contribute(ctx context.Context,
-	account e2wtypes.Account,
+func (s *Service) contributions(ctx context.Context,
+	accounts []e2wtypes.Account,
 	epoch phase0.Epoch,
 	root phase0.Root,
 ) (
-	phase0.BLSSignature,
+	[]phase0.BLSSignature,
 	error,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.synccommitteemessenger.standard").Start(ctx, "contribute")
 	defer span.End()
-	sig, err := s.syncCommitteeRootSigner.SignSyncCommitteeRoot(ctx, account, epoch, root)
+	sig, err := s.syncCommitteeRootSigner.SignSyncCommitteeRoots(ctx, accounts, epoch, root)
 	if err != nil {
-		return phase0.BLSSignature{}, err
+		return []phase0.BLSSignature{}, err
 	}
 	return sig, err
 }

@@ -431,8 +431,8 @@ github.com/wealdtech/go-eth2-util v1.8.2 h1:gq+JMrnadifyKadUr75wmfP7+usiqMu9t3VV
 github.com/wealdtech/go-eth2-util v1.8.2/go.mod h1:/80GAK0K/3+PqUBZHvaOPd3b1sjHeimxQh1nrJzgaPk=
 github.com/wealdtech/go-eth2-wallet v1.16.0 h1:syD1xDYB7emk4x+6bTYm5VZp9nx5FLab5Fgm09Eq1Kg=
 github.com/wealdtech/go-eth2-wallet v1.16.0/go.mod h1:JFA2P7PpPR8quQ/T6Gsr/4VLj5sQVnyzKgfPA+eqmYE=
-github.com/wealdtech/go-eth2-wallet-dirk v1.4.9 h1:lwIGIRaYuMqa8F/qdNvLyUx8aO8AunECoeyp6MoCT3M=
-github.com/wealdtech/go-eth2-wallet-dirk v1.4.9/go.mod h1:AAMtGzKPvLYZn6YBcDRHKHL6dO2ZHAFeVAW1wAnQI1U=
+github.com/wealdtech/go-eth2-wallet-dirk v1.5.0 h1:T4uRKYr8l1MnSuTHZAuRCXiScCC07wt8XMBCOY5z5XU=
+github.com/wealdtech/go-eth2-wallet-dirk v1.5.0/go.mod h1:vUtapWW1i7/hJJZA1YdR8UBYaEbRrzOeT/g6K8mmWNU=
 github.com/wealdtech/go-eth2-wallet-distributed v1.2.1 h1:+pbG9i9b5TrWd7GDRX8yq4FKA+D7k7aI6uySEvAZ+Kk=
 github.com/wealdtech/go-eth2-wallet-distributed v1.2.1/go.mod h1:jYkDax2VhUNKIct6TVlgxAagvR56/eg7y7J+JFq+gDo=
 github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.4.1 h1:9j7bpwjT9wmwBb54ZkBhTm1uNIlFFcCJXefd/YskZPw=
@@ -449,8 +449,8 @@ github.com/wealdtech/go-eth2-wallet-store-s3 v1.12.0 h1:noknYCbHw2soPhwke1LvC99K
 github.com/wealdtech/go-eth2-wallet-store-s3 v1.12.0/go.mod h1:1lSVxfQynUAd5u46rCeAI8wCl8S44lZsNYYXlxVAvwU=
 github.com/wealdtech/go-eth2-wallet-store-scratch v1.7.2 h1:TwOt7bEHsVe6dKJb7XuUG7m06gaBGPCQlBk24Ql8Mws=
 github.com/wealdtech/go-eth2-wallet-store-scratch v1.7.2/go.mod h1:rtIoB34tqL3kUOK+LsLTAHfynxLR8pGScy0lmQmpbKc=
-github.com/wealdtech/go-eth2-wallet-types/v2 v2.11.0 h1:yX9+FfUXvPDvZ8Q5bhF+64AWrQwh4a3/HpfTx99DnZc=
-github.com/wealdtech/go-eth2-wallet-types/v2 v2.11.0/go.mod h1:UVP9YFcnPiIzHqbmCMW3qrQ3TK5FOqr1fmKqNT9JGr8=
+github.com/wealdtech/go-eth2-wallet-types/v2 v2.12.0 h1:w0OrVImtQfjN7XCqALfgVtcmH8FChaUZjwNGKGzqp0E=
+github.com/wealdtech/go-eth2-wallet-types/v2 v2.12.0/go.mod h1:m8xsnPZLq1vt7bnMveTc4xxVJUv8mBL21iPU4kALYGE=
 github.com/wealdtech/go-indexer v1.1.0 h1:vn4gY7nSYSLe0sXVauJgyHvK4NXiDrLKBYYYKWypahk=
 github.com/wealdtech/go-indexer v1.1.0/go.mod h1:lEFTda1rul1EwWIX3QqXq/KW0tnEEhC41Lup06V7Tlo=
 github.com/wealdtech/go-majordomo v1.1.1 h1:o+vS/akiT7zuufU7H+A6Cp52qbkjzaaMZlgwm/rciDk=
@@ -903,8 +903,8 @@ google.golang.org/genproto v0.0.0-20220617124728-180714bec0ad/go.mod h1:KEWEmljW
 google.golang.org/genproto v0.0.0-20220624142145-8cd45d7dbd1f/go.mod h1:KEWEmljWE5zPzLBa/oHl6DaEt9LmfH6WtH1OHIvleBA=
 google.golang.org/genproto v0.0.0-20220628213854-d9e0b6570c03/go.mod h1:KEWEmljWE5zPzLBa/oHl6DaEt9LmfH6WtH1OHIvleBA=
 google.golang.org/genproto v0.0.0-20220819174105-e9f053255caa/go.mod h1:dbqgFATTzChvnt+ujMdZwITVAJHFtfyN1qUhDqEiIlk=
-google.golang.org/genproto v0.0.0-20240808171019-573a1156607a h1:3JVv3Ujh+kGiajpSqHWnbWPuu0nQqMZ3hASNDDF9974=
-google.golang.org/genproto v0.0.0-20240808171019-573a1156607a/go.mod h1:7uvplUBj4RjHAxIZ//98LzOvrQ04JBkaixRmCMI29hc=
+google.golang.org/genproto v0.0.0-20240730163845-b1a4ccb954bf h1:OqdXDEakZCVtDiZTjcxfwbHPCT11ycCEsTKesBVKvyY=
+google.golang.org/genproto v0.0.0-20240730163845-b1a4ccb954bf/go.mod h1:mCr1K1c8kX+1iSBREvU3Juo11CB+QOEWxbRS01wWl5M=
 google.golang.org/genproto/googleapis/api v0.0.0-20240808171019-573a1156607a h1:KyUe15n7B1YCu+kMmPtlXxgkLQbp+Dw0tCRZf9Sd+CE=
 google.golang.org/genproto/googleapis/api v0.0.0-20240808171019-573a1156607a/go.mod h1:4+X6GvPs+25wZKbQq9qyAXrwIRExv7w0Ea6MgZLZiDM=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20240808171019-573a1156607a h1:EKiZZXueP9/T68B8Nl0GAx9cjbQnCId0yP3qPMgaaHs=

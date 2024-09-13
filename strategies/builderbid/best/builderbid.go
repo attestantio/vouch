@@ -462,7 +462,7 @@ func (s *Service) verifyBidDetails(ctx context.Context,
 		return errors.Wrap(err, "failed to obtain builder bid timestamp")
 	}
 	slotTimestamp := s.chainTime.StartOfSlot(slot)
-	if uint64(slotTimestamp.Unix()) != timestamp {
+	if util.Int64ToUint64(slotTimestamp.Unix()) != timestamp {
 		return fmt.Errorf("provided timestamp %d for slot %d not expected value of %d", timestamp, slot, slotTimestamp.Unix())
 	}
 

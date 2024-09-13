@@ -22,13 +22,13 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/wealdtech/go-eth2-types/v2 v2.8.2
 	github.com/wealdtech/go-eth2-wallet v1.16.0
-	github.com/wealdtech/go-eth2-wallet-dirk v1.4.9
+	github.com/wealdtech/go-eth2-wallet-dirk v1.5.0
 	github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.4.1
 	github.com/wealdtech/go-eth2-wallet-hd/v2 v2.7.0
 	github.com/wealdtech/go-eth2-wallet-nd/v2 v2.5.0
 	github.com/wealdtech/go-eth2-wallet-store-filesystem v1.18.1
 	github.com/wealdtech/go-eth2-wallet-store-scratch v1.7.2
-	github.com/wealdtech/go-eth2-wallet-types/v2 v2.11.0
+	github.com/wealdtech/go-eth2-wallet-types/v2 v2.12.0
 	github.com/wealdtech/go-majordomo v1.1.1
 	go.opentelemetry.io/otel v1.28.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.28.0
@@ -134,7 +134,7 @@ require (
 	golang.org/x/time v0.6.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240716161551-93cc26a95ae9 // indirect
 	google.golang.org/api v0.191.0 // indirect
-	google.golang.org/genproto v0.0.0-20240808171019-573a1156607a // indirect
+	google.golang.org/genproto v0.0.0-20240730163845-b1a4ccb954bf // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240808171019-573a1156607a // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240808171019-573a1156607a // indirect
 	google.golang.org/protobuf v1.34.2 // indirect

@@ -59,7 +59,7 @@ type BeaconAttestationSigner interface {
 
 // BeaconAttestationsSigner provides methods to sign multiple beacon attestations.
 type BeaconAttestationsSigner interface {
-	// SignBeaconAttestation signs multiple beacon attestations.
+	// SignBeaconAttestations signs multiple beacon attestations.
 	SignBeaconAttestations(ctx context.Context,
 		accounts []e2wtypes.Account,
 		slot phase0.Slot,
@@ -132,7 +132,7 @@ type SlotSelectionSigner interface {
 
 // SyncCommitteeRootSigner provides methods to sign a sync committee root.
 type SyncCommitteeRootSigner interface {
-	// SignSyncCommittee returns a root signature.
+	// SignSyncCommitteeRoot returns a root signature.
 	// This signs a beacon block root with the "sync committee" domain.
 	SignSyncCommitteeRoot(ctx context.Context,
 		account e2wtypes.Account,
@@ -140,6 +140,14 @@ type SyncCommitteeRootSigner interface {
 		root phase0.Root,
 	) (
 		phase0.BLSSignature,
+		error,
+	)
+	SignSyncCommitteeRoots(ctx context.Context,
+		accounts []e2wtypes.Account,
+		epoch phase0.Epoch,
+		root phase0.Root,
+	) (
+		[]phase0.BLSSignature,
 		error,
 	)
 }

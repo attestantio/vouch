@@ -307,7 +307,6 @@ func TestServiceMessage(t *testing.T) {
 
 	mockValidatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
 	mockSyncCommitteeAggregator := mocksynccommitteeaggregator.New()
-	mockSigner := mocksigner.New()
 
 	epoch := phase0.Epoch(100)
 	slot := phase0.Slot(epoch * 32)
@@ -316,6 +315,10 @@ func TestServiceMessage(t *testing.T) {
 	for validatorIndex := range validatorIndexToCommitteeIndices {
 		validatorIndices[validatorIndex] = validatorIndex
 	}
+
+	mockSigner := mocksigner.New()
+	mockSigs := make([]phase0.BLSSignature, len(validatorIndexToCommitteeIndices))
+	mockSigner.PrimeSigs(mockSigs)
 
 	duty := synccommitteemessenger.NewDuty(slot, validatorIndexToCommitteeIndices)
 	accounts, err := testutil.CreateTestWalletAndAccounts(validatorIndices, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")

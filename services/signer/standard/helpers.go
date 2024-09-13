@@ -60,3 +60,52 @@ func (*Service) sign(ctx context.Context,
 	copy(signature[:], sig.Marshal())
 	return signature, nil
 }
+
+// signMulti signs the same root for multiple accounts, using protected methods if possible.
+func (*Service) signMulti(ctx context.Context,
+	accounts []e2wtypes.Account,
+	root phase0.Root,
+	domain phase0.Domain,
+) (
+	[]phase0.BLSSignature,
+	error,
+) {
+	if len(accounts) == 0 {
+		return []phase0.BLSSignature{}, errors.New("no accounts; cannot sign")
+	}
+	sigs := make([]phase0.BLSSignature, len(accounts))
+	roots := make([][]byte, len(accounts))
+	for i := range accounts {
+		roots[i] = root[:]
+	}
+
+	if multiSigner, isMultiSigner := accounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
+		var err error
+		signatures, err := multiSigner.SignGenericMulti(ctx, accounts, roots, domain[:])
+		if err != nil {
+			return []phase0.BLSSignature{}, err
+		}
+		for i := range signatures {
+			if signatures[i] != nil {
+				copy(sigs[i][:], signatures[i].Marshal())
+			}
+		}
+	} else {
+		container := phase0.SigningData{
+			ObjectRoot: root,
+			Domain:     domain,
+		}
+		root, err := container.HashTreeRoot()
+		if err != nil {
+			return []phase0.BLSSignature{}, errors.Wrap(err, "failed to generate hash tree root")
+		}
+		for i := range accounts {
+			sig, err := accounts[i].(e2wtypes.AccountSigner).Sign(ctx, root[:])
+			if err != nil {
+				return []phase0.BLSSignature{}, err
+			}
+			copy(sigs[i][:], sig.Marshal())
+		}
+	}
+	return sigs, nil
+}

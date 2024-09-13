@@ -13,17 +13,19 @@
 
 package testutil
 
-import "github.com/attestantio/go-eth2-client/spec/phase0"
+import (
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+)
 
 // CreateValidatorIndexToCommitteeIndicesTestData creates sync committee test data for unit tests.
 // We produce validators with indices 0-9 and each validator is part of committee indices `(validator index * 10) + n`, where n is 0 - 4.
 // This satisfies that each validator can be included multiple times in a committee at different indices, but no 2 validators share the same committee Index.
 func CreateValidatorIndexToCommitteeIndicesTestData() map[phase0.ValidatorIndex][]phase0.CommitteeIndex {
 	validatorToCommitteeIndices := make(map[phase0.ValidatorIndex][]phase0.CommitteeIndex, 10)
-	for validatorIndex := range 10 {
+	for validatorIndex := range uint64(10) {
 		var committeeIndices []phase0.CommitteeIndex
-		for committeeOffset := range 5 {
-			committeeIndex := (validatorIndex * 10) + committeeOffset
+		for committeeOffset := range uint64(5) {
+			committeeIndex := validatorIndex*10 + committeeOffset
 			committeeIndices = append(committeeIndices, phase0.CommitteeIndex(committeeIndex))
 		}
 		validatorToCommitteeIndices[phase0.ValidatorIndex(validatorIndex)] = committeeIndices

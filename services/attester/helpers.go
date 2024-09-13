@@ -19,6 +19,7 @@ import (
 
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/util"
 )
 
 // MergeDuties merges attester duties given by an Ethereum 2 client into vouch's per-slot structure.
@@ -35,7 +36,7 @@ func MergeDuties(ctx context.Context, attesterDuties []*api.AttesterDuty) ([]*Du
 	committeesAtSlots := make(map[phase0.Slot]uint64)
 
 	// Make an educated guess at the capacity for our arrays based on the number of attester duties.
-	arrayCap := uint64(len(attesterDuties) / 32)
+	arrayCap := util.IntToUint64(len(attesterDuties) / 32)
 
 	// Sort the response by slot, then committee index, then validator index.
 	sort.Slice(attesterDuties, func(i int, j int) bool {
