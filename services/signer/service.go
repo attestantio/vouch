@@ -142,6 +142,8 @@ type SyncCommitteeRootSigner interface {
 		phase0.BLSSignature,
 		error,
 	)
+	// SignSyncCommitteeRoots returns root signatures.
+	// This signs a beacon block root with the "sync committee" domain.
 	SignSyncCommitteeRoots(ctx context.Context,
 		accounts []e2wtypes.Account,
 		epoch phase0.Epoch,
