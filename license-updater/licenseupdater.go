@@ -15,6 +15,8 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"io/fs"
 	"log"
 	"os"
@@ -23,7 +25,15 @@ import (
 )
 
 func main() {
-	workingDir := "/Users/chrisberry/workspace/vouch/"
+	pflag.String("working-dir", "", "working directory for files to update")
+	pflag.Parse()
+	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
+		log.Fatalf("failed to bind pflags to viper with: %v", err)
+	}
+	workingDir := viper.GetString("working-dir")
+	if workingDir == "" {
+		log.Fatal("No working directory specified, please specify --working-dir")
+	}
 	licenseString := getLicenseString(workingDir)
 
 	var files []string
@@ -55,11 +65,16 @@ func updateFileWithLicense(filePath, licenseString string) error {
 	newContents := licenseString
 
 	header := true
-	for _, line := range strings.Split(contents, "\n") {
+	finalLine := len(strings.Split(contents, "\n")) - 1
+	for i, line := range strings.Split(contents, "\n") {
 		if !strings.HasPrefix(line, "//") {
 			header = false
 		}
 		if !header {
+			if i == finalLine {
+				newContents += line
+				continue
+			}
 			newContents += line + "\n"
 		}
 	}
