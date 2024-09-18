@@ -21,6 +21,5 @@ func EpochToInt64(epoch phase0.Epoch) int64 {
 		panic("epoch too large to convert to int64")
 	}
 
-	//nolint:gosec
 	return int64(epoch)
 }

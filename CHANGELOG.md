@@ -1,40 +1,31 @@
-dev:
-
-1.9.0-beta.3:
-- fix FromAsCasing warning in Docker image building
-- change controller.fast-track.grace default value from 200ms to 500ms
-
-1.9.0-beta.2:
-  - change default timestamp in logs to millisecond-precision
-  - allow custom timestamp formatting in logs
-
-1.9.0-beta.1:
-  - reduce time spent verifying account names
-  - ensure that attestations complete on Vouch's first ever epoch
+1.9.0:
   - allow Vouch to start with some consensus nodes unavailable
   - allow Vouch to act as an MEV-boost client for non-Vouch validators
+  - reduce memory usage when obtaining Dirk accounts
+  - reduce memory usage when generating beacon committee subscriptions
+  - reduce time spent verifying account names in the common case
+  - add 'deadline' builder bid strategy
   - increase proposal performance with new validator REST APIs
+  - add builder configurations to allow more control over selection of bids
+  - add "controller.fast-track" flag to control when attestation and sync committee processes start
+  - fix FromAsCasing warning in Docker image building
+  - change default timestamp in logs to millisecond-precision
+  - allow custom timestamp formatting in logs
+  - ensure that attestations complete on Vouch's first ever epoch
   - add proposal value and blinded status to trace
   - add beaconblockproposer.builder-boost-factor
   - add reduced memory mode for memory-constrained systems
-  - reduce memory usage when obtaining Dirk accounts
-  - reduce memory usage when generating beacon committee subscriptions
-  - add "controller.fast-track" flag
   - update internal active validators count when Dirk not available at start
   - warn when graffiti is not as expected, rather than refuse to use the proposal
   - provide fallback location for dynamic graffiti
   - relax proposal checks to enable DVT proposals
-  - add individual "controller.fast-track" flags for attestations and sync committees
   - add 'failed' dimension for root to slot lookup metrics
-  - add 'deadline' builder bid strategy
-  - add builder configurations to allow more control over selection of bids
   - add sync committee verification metrics to highlight when we were and were not included in a SyncAggregate
   - add config setting to enable the above metrics
   - alter logic for determining sync committee eligible accounts
   - enable first strategies to be defined for beaconblockheader and signedbeaconblock
   - tidy up log entries for sync committee summaries
   - reduce unnecessary log entries from some strategies
-  - change builder bid factor to be a percentage rather than a multiplier
   - refactor metrics to be consistent
 
 1.8.2:
