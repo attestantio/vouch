@@ -1923,7 +1923,7 @@ func selectBeaconHeaderProvider(ctx context.Context,
 	style := "strategies.beaconblockheader.style"
 	switch viper.GetString(style) {
 	case "first", "":
-		log.Info().Msg("Starting first beach block header strategy")
+		log.Info().Msg("Starting first beacon block header strategy")
 		beaconBlockHeaderProviders := make(map[string]eth2client.BeaconBlockHeadersProvider)
 		path := "strategies.beaconblockheader.first"
 		for _, address := range util.BeaconNodeAddresses(path) {
