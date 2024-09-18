@@ -23,7 +23,7 @@ import (
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/metrics"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -33,7 +33,6 @@ import (
 // Service is the submitter for signed items.
 type Service struct {
 	log                                   zerolog.Logger
-	clientMonitor                         metrics.ClientMonitor
 	attestationsSubmitter                 eth2client.AttestationsSubmitter
 	proposalSubmitter                     eth2client.ProposalSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
@@ -59,7 +58,6 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 
 	s := &Service{
 		log:                                   log,
-		clientMonitor:                         parameters.clientMonitor,
 		attestationsSubmitter:                 parameters.attestationsSubmitter,
 		proposalSubmitter:                     parameters.proposalSubmitter,
 		beaconCommitteeSubscriptionsSubmitter: parameters.beaconCommitteeSubscriptionsSubmitter,
@@ -87,9 +85,9 @@ func (s *Service) SubmitProposal(ctx context.Context, proposal *api.VersionedSig
 		Proposal: proposal,
 	})
 	if service, isService := s.proposalSubmitter.(eth2client.Service); isService {
-		s.clientMonitor.ClientOperation(service.Address(), "submit proposal", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation(service.Address(), "submit proposal", err == nil, time.Since(started))
 	} else {
-		s.clientMonitor.ClientOperation("<unknown>", "submit proposal", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation("<unknown>", "submit proposal", err == nil, time.Since(started))
 	}
 	if err != nil {
 		return errors.Wrap(err, "failed to submit proposal")
@@ -117,9 +115,9 @@ func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0
 	started := time.Now()
 	err := s.attestationsSubmitter.SubmitAttestations(ctx, attestations)
 	if service, isService := s.attestationsSubmitter.(eth2client.Service); isService {
-		s.clientMonitor.ClientOperation(service.Address(), "submit attestations", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation(service.Address(), "submit attestations", err == nil, time.Since(started))
 	} else {
-		s.clientMonitor.ClientOperation("<unknown>", "submit attestations", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation("<unknown>", "submit attestations", err == nil, time.Since(started))
 	}
 	if err != nil {
 		return errors.Wrap(err, "failed to submit attestations")
@@ -147,9 +145,9 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 	started := time.Now()
 	err := s.beaconCommitteeSubscriptionsSubmitter.SubmitBeaconCommitteeSubscriptions(ctx, subscriptions)
 	if service, isService := s.beaconCommitteeSubscriptionsSubmitter.(eth2client.Service); isService {
-		s.clientMonitor.ClientOperation(service.Address(), "submit beacon committee subscription", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation(service.Address(), "submit beacon committee subscription", err == nil, time.Since(started))
 	} else {
-		s.clientMonitor.ClientOperation("<unknown>", "submit beacon committee subscription", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation("<unknown>", "submit beacon committee subscription", err == nil, time.Since(started))
 	}
 	if err != nil {
 		return errors.Wrap(err, "failed to submit beacon committee subscriptions")
@@ -185,9 +183,9 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []
 	started := time.Now()
 	err := s.aggregateAttestationsSubmitter.SubmitAggregateAttestations(ctx, aggregates)
 	if service, isService := s.aggregateAttestationsSubmitter.(eth2client.Service); isService {
-		s.clientMonitor.ClientOperation(service.Address(), "submit aggregate attestation", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation(service.Address(), "submit aggregate attestation", err == nil, time.Since(started))
 	} else {
-		s.clientMonitor.ClientOperation("<unknown>", "submit aggregate attestation", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation("<unknown>", "submit aggregate attestation", err == nil, time.Since(started))
 	}
 	if err != nil {
 		return errors.Wrap(err, "failed to submit aggregate attestation")
@@ -215,9 +213,9 @@ func (s *Service) SubmitProposalPreparations(ctx context.Context, preparations [
 	started := time.Now()
 	err := s.proposalPreparationsSubmitter.SubmitProposalPreparations(ctx, preparations)
 	if service, isService := s.proposalPreparationsSubmitter.(eth2client.Service); isService {
-		s.clientMonitor.ClientOperation(service.Address(), "submit proposal preparations", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation(service.Address(), "submit proposal preparations", err == nil, time.Since(started))
 	} else {
-		s.clientMonitor.ClientOperation("<unknown>", "submit proposal preparations", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation("<unknown>", "submit proposal preparations", err == nil, time.Since(started))
 	}
 	if err != nil {
 		return errors.Wrap(err, "failed to submit proposal preparations")
@@ -245,9 +243,9 @@ func (s *Service) SubmitSyncCommitteeMessages(ctx context.Context, messages []*a
 	started := time.Now()
 	err := s.syncCommitteeMessagesSubmitter.SubmitSyncCommitteeMessages(ctx, messages)
 	if service, isService := s.aggregateAttestationsSubmitter.(eth2client.Service); isService {
-		s.clientMonitor.ClientOperation(service.Address(), "submit sync committee messages", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation(service.Address(), "submit sync committee messages", err == nil, time.Since(started))
 	} else {
-		s.clientMonitor.ClientOperation("<unknown>", "submit sync committee messages", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation("<unknown>", "submit sync committee messages", err == nil, time.Since(started))
 	}
 	if err != nil {
 		return errors.Wrap(err, "failed to submit sync committee messages")
@@ -275,9 +273,9 @@ func (s *Service) SubmitSyncCommitteeSubscriptions(ctx context.Context, subscrip
 	started := time.Now()
 	err := s.syncCommitteeSubscriptionsSubmitter.SubmitSyncCommitteeSubscriptions(ctx, subscriptions)
 	if service, isService := s.syncCommitteeSubscriptionsSubmitter.(eth2client.Service); isService {
-		s.clientMonitor.ClientOperation(service.Address(), "submit sync committee subscription", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation(service.Address(), "submit sync committee subscription", err == nil, time.Since(started))
 	} else {
-		s.clientMonitor.ClientOperation("<unknown>", "submit sync committee subscription", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation("<unknown>", "submit sync committee subscription", err == nil, time.Since(started))
 	}
 	if err != nil {
 		return errors.Wrap(err, "failed to submit sync committee subscriptions")
@@ -305,9 +303,9 @@ func (s *Service) SubmitSyncCommitteeContributions(ctx context.Context, contribu
 	started := time.Now()
 	err := s.syncCommitteeContributionsSubmitter.SubmitSyncCommitteeContributions(ctx, contributionAndProofs)
 	if service, isService := s.syncCommitteeContributionsSubmitter.(eth2client.Service); isService {
-		s.clientMonitor.ClientOperation(service.Address(), "submit sync committee contribution and proofs", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation(service.Address(), "submit sync committee contribution and proofs", err == nil, time.Since(started))
 	} else {
-		s.clientMonitor.ClientOperation("<unknown>", "submit sync committee contribution and proofs", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation("<unknown>", "submit sync committee contribution and proofs", err == nil, time.Since(started))
 	}
 	if err != nil {
 		return errors.Wrap(err, "failed to submit sync committee contribution and proofs")

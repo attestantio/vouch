@@ -15,30 +15,14 @@ package prometheus_test
 
 import (
 	"context"
-	"testing"
-	"time"
-
-	"github.com/attestantio/vouch/mock"
-	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	"github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	"testing"
 )
 
 func TestService(t *testing.T) {
-	ctx := context.Background()
-
-	genesisTime := time.Now()
-	genesisProvider := mock.NewGenesisProvider(genesisTime)
-	specProvider := mock.NewSpecProvider()
-	chainTime, err := standardchaintime.New(ctx,
-		standardchaintime.WithLogLevel(zerolog.Disabled),
-		standardchaintime.WithGenesisProvider(genesisProvider),
-		standardchaintime.WithSpecProvider(specProvider),
-	)
-	require.NoError(t, err)
-
 	tests := []struct {
 		name     string
 		params   []prometheus.Parameter
@@ -49,7 +33,6 @@ func TestService(t *testing.T) {
 			name: "AddressMissing",
 			params: []prometheus.Parameter{
 				prometheus.WithLogLevel(zerolog.Disabled),
-				prometheus.WithChainTime(chainTime),
 			},
 			err: "problem with parameters: no address specified",
 		},

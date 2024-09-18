@@ -19,8 +19,6 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/attestantio/vouch/services/metrics"
-	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -28,7 +26,6 @@ import (
 type parameters struct {
 	logLevel                               zerolog.Level
 	timeout                                time.Duration
-	clientMonitor                          metrics.ClientMonitor
 	processConcurrency                     int64
 	proposalSubmitters                     map[string]eth2client.ProposalSubmitter
 	attestationsSubmitters                 map[string]eth2client.AttestationsSubmitter
@@ -62,13 +59,6 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 func WithTimeout(timeout time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.timeout = timeout
-	})
-}
-
-// WithClientMonitor sets the client monitor.
-func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.clientMonitor = clientMonitor
 	})
 }
 
@@ -138,8 +128,7 @@ func WithSyncCommitteeContributionsSubmitters(submitters map[string]eth2client.S
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel:      zerolog.GlobalLevel(),
-		clientMonitor: nullmetrics.New(),
+		logLevel: zerolog.GlobalLevel(),
 	}
 	for _, p := range params {
 		if params != nil {
@@ -149,9 +138,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 
 	if parameters.timeout == 0 {
 		return nil, errors.New("no timeout specified")
-	}
-	if parameters.clientMonitor == nil {
-		return nil, errors.New("no client monitor specified")
 	}
 	if parameters.processConcurrency == 0 {
 		return nil, errors.New("no process concurrency specified")

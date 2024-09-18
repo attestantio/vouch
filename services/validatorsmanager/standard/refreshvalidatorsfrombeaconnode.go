@@ -20,6 +20,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 )
@@ -36,9 +37,9 @@ func (s *Service) RefreshValidatorsFromBeaconNode(ctx context.Context, pubKeys [
 		PubKeys: pubKeys,
 	})
 	if service, isService := s.validatorsProvider.(eth2client.Service); isService {
-		s.clientMonitor.ClientOperation(service.Address(), "validators", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation(service.Address(), "validators", err == nil, time.Since(started))
 	} else {
-		s.clientMonitor.ClientOperation("<unknown>", "validators", err == nil, time.Since(started))
+		clientprometheus.MonitorClientOperation("<unknown>", "validators", err == nil, time.Since(started))
 	}
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain validators")

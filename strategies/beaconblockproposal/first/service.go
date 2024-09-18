@@ -19,7 +19,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	"github.com/attestantio/vouch/services/metrics"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -32,7 +32,6 @@ import (
 // Service is the provider for beacon block proposals.
 type Service struct {
 	log               zerolog.Logger
-	clientMonitor     metrics.ClientMonitor
 	proposalProviders map[string]eth2client.ProposalProvider
 	timeout           time.Duration
 }
@@ -54,7 +53,6 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		log:               log,
 		proposalProviders: parameters.proposalProviders,
 		timeout:           parameters.timeout,
-		clientMonitor:     parameters.clientMonitor,
 	}
 
 	return s, nil
@@ -83,7 +81,7 @@ func (s *Service) Proposal(ctx context.Context,
 
 			started := time.Now()
 			proposalResponse, err := provider.Proposal(ctx, opts)
-			s.clientMonitor.ClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
+			clientprometheus.MonitorClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
 					log.Warn().Err(err).Msg("Failed to obtain beacon block proposal")

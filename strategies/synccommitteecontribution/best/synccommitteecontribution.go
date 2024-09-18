@@ -20,6 +20,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -182,7 +183,7 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context,
 	}
 	log.Trace().Str("provider", bestProvider).Stringer("sync_committee_contribution", bestSyncCommitteeContribution).Float64("score", bestScore).Msg("Selected best sync committee contribution")
 	if bestProvider != "" {
-		s.clientMonitor.StrategyOperation("best", bestProvider, "sync committee contribution", time.Since(started))
+		clientprometheus.MonitorStrategyOperation("best", bestProvider, "sync committee contribution", time.Since(started))
 	}
 
 	return &api.Response[*altair.SyncCommitteeContribution]{
@@ -205,7 +206,7 @@ func (s *Service) syncCommitteeContribution(ctx context.Context,
 	defer span.End()
 
 	contributionResponse, err := provider.SyncCommitteeContribution(ctx, opts)
-	s.clientMonitor.ClientOperation(name, "sync committee contribution", err == nil, time.Since(started))
+	clientprometheus.MonitorClientOperation(name, "sync committee contribution", err == nil, time.Since(started))
 	if err != nil {
 		errCh <- &syncCommitteeContributionError{
 			provider: name,

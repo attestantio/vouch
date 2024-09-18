@@ -21,6 +21,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -121,7 +122,7 @@ func (s *Service) AttestationData(ctx context.Context,
 		Int("count", bestAttestationDataCount).
 		Msg("Selected majority attestation data")
 	for _, provider := range attestationDataProviders[bestAttestationDataRoot] {
-		s.clientMonitor.StrategyOperation("majority", provider, "attestation data", time.Since(started))
+		clientprometheus.MonitorStrategyOperation("majority", provider, "attestation data", time.Since(started))
 	}
 
 	return &api.Response[*phase0.AttestationData]{
@@ -163,7 +164,7 @@ func (s *Service) attestationData(ctx context.Context,
 	defer span.End()
 
 	attestationDataResp, err := provider.AttestationData(ctx, opts)
-	s.clientMonitor.ClientOperation(providerName, "attestation data", err == nil, time.Since(started))
+	clientprometheus.MonitorClientOperation(providerName, "attestation data", err == nil, time.Since(started))
 	if err != nil {
 		errCh <- &attestationDataError{
 			provider: providerName,

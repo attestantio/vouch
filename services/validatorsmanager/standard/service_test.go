@@ -19,7 +19,6 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
-	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/validatorsmanager/standard"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
@@ -40,8 +39,6 @@ func TestService(t *testing.T) {
 			name: "Good",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
-				standard.WithMonitor(nullmetrics.New()),
-				standard.WithClientMonitor(nullmetrics.New()),
 				standard.WithFarFutureEpoch(farFutureEpoch),
 				standard.WithValidatorsProvider(validatorsProvider),
 			},

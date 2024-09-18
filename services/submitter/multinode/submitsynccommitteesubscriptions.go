@@ -21,6 +21,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -83,7 +84,7 @@ func (s *Service) submitSyncCommitteeSubscriptions(ctx context.Context,
 	started := time.Now()
 	err := submitter.SubmitSyncCommitteeSubscriptions(ctx, subscriptions)
 
-	s.clientMonitor.ClientOperation(address, "submit sync committee subscriptions", err == nil, time.Since(started))
+	clientprometheus.MonitorClientOperation(address, "submit sync committee subscriptions", err == nil, time.Since(started))
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to submit sync committee subscriptions")
 		return

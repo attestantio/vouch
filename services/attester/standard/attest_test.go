@@ -50,7 +50,6 @@ func NoTestService(t *testing.T) {
 	validatingAccountsProvider := mockaccountmanager.NewValidatingAccountsProvider()
 	prometheusMetrics, err := prometheusmetrics.New(ctx,
 		prometheusmetrics.WithAddress(":12345"),
-		prometheusmetrics.WithChainTime(chainTime),
 	)
 	require.NoError(t, err)
 

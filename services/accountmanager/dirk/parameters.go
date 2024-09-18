@@ -29,7 +29,6 @@ type parameters struct {
 	logLevel               zerolog.Level
 	monitor                metrics.Service
 	timeout                time.Duration
-	clientMonitor          metrics.ClientMonitor
 	processConcurrency     int64
 	endpoints              []string
 	accountPaths           []string
@@ -71,13 +70,6 @@ func WithMonitor(monitor metrics.Service) Parameter {
 func WithTimeout(timeout time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.timeout = timeout
-	})
-}
-
-// WithClientMonitor sets the client monitor for the module.
-func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.clientMonitor = clientMonitor
 	})
 }
 
@@ -154,10 +146,9 @@ func WithCurrentEpochProvider(provider chaintime.Service) Parameter {
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel:      zerolog.GlobalLevel(),
-		monitor:       nullmetrics.New(),
-		timeout:       30 * time.Second,
-		clientMonitor: nullmetrics.New(),
+		logLevel: zerolog.GlobalLevel(),
+		monitor:  nullmetrics.New(),
+		timeout:  30 * time.Second,
 	}
 	for _, p := range params {
 		if params != nil {
@@ -167,9 +158,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")
-	}
-	if parameters.clientMonitor == nil {
-		return nil, errors.New("no client monitor specified")
 	}
 	if parameters.timeout == 0 {
 		return nil, errors.New("no timeout specified")

@@ -44,22 +44,6 @@ func TestService(t *testing.T) {
 		err    string
 	}{
 		{
-			name: "ClientMonitorMisssing",
-			params: []immediate.Parameter{
-				immediate.WithLogLevel(zerolog.Disabled),
-				immediate.WithClientMonitor(nil),
-				immediate.WithAttestationsSubmitter(attestationsSubmitter),
-				immediate.WithProposalSubmitter(proposalSubmitter),
-				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
-				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
-				immediate.WithProposalPreparationsSubmitter(proposalPreparationsSubmitter),
-				immediate.WithSyncCommitteeSubscriptionsSubmitter(syncCommitteeSubscriptionsSubmitter),
-				immediate.WithSyncCommitteeMessagesSubmitter(syncCommitteeMessagesSubmitter),
-				immediate.WithSyncCommitteeContributionsSubmitter(syncCommitteeContributionsSubmitter),
-			},
-			err: "problem with parameters: no client monitor specified",
-		},
-		{
 			name: "AttestationsSubmitterMissing",
 			params: []immediate.Parameter{
 				immediate.WithLogLevel(zerolog.Disabled),

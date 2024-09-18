@@ -20,15 +20,12 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/attestantio/vouch/services/metrics"
-	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 type parameters struct {
 	logLevel                      zerolog.Level
-	clientMonitor                 metrics.ClientMonitor
 	processConcurrency            int64
 	aggregateAttestationProviders map[string]eth2client.AggregateAttestationProvider
 	timeout                       time.Duration
@@ -49,13 +46,6 @@ func (f parameterFunc) apply(p *parameters) {
 func WithLogLevel(logLevel zerolog.Level) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.logLevel = logLevel
-	})
-}
-
-// WithClientMonitor sets the client monitor for the service.
-func WithClientMonitor(monitor metrics.ClientMonitor) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.clientMonitor = monitor
 	})
 }
 
@@ -84,7 +74,6 @@ func WithTimeout(timeout time.Duration) Parameter {
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel:           zerolog.GlobalLevel(),
-		clientMonitor:      nullmetrics.New(),
 		processConcurrency: int64(runtime.GOMAXPROCS(-1)),
 	}
 	for _, p := range params {
@@ -95,9 +84,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 
 	if parameters.timeout == 0 {
 		return nil, errors.New("no timeout specified")
-	}
-	if parameters.clientMonitor == nil {
-		return nil, errors.New("no client monitor specified")
 	}
 	if parameters.processConcurrency == 0 {
 		return nil, errors.New("no process concurrency specified")

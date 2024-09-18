@@ -21,6 +21,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	clientprometheus "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -83,7 +84,7 @@ func (s *Service) submitAggregateAttestations(ctx context.Context,
 	started := time.Now()
 	err := submitter.SubmitAggregateAttestations(ctx, aggregates)
 
-	s.clientMonitor.ClientOperation(address, "submit aggregate attestations", err == nil, time.Since(started))
+	clientprometheus.MonitorClientOperation(address, "submit aggregate attestations", err == nil, time.Since(started))
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to submit aggregate attestations")
 		return

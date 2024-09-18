@@ -52,16 +52,7 @@ func TestService(t *testing.T) {
 			},
 			err: "problem with parameters: no timeout specified",
 		},
-		{
-			name: "ClientMonitorMissing",
-			params: []first.Parameter{
-				first.WithLogLevel(zerolog.TraceLevel),
-				first.WithTimeout(2 * time.Second),
-				first.WithClientMonitor(nil),
-				first.WithSyncCommitteeContributionProviders(syncCommitteeContributionProviders),
-			},
-			err: "problem with parameters: no client monitor specified",
-		},
+
 		{
 			name: "SyncCommitteeContributionProvidersNil",
 			params: []first.Parameter{

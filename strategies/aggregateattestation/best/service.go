@@ -18,7 +18,6 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -27,7 +26,6 @@ import (
 // Service is the provider for attestation data.
 type Service struct {
 	log                           zerolog.Logger
-	clientMonitor                 metrics.ClientMonitor
 	processConcurrency            int64
 	aggregateAttestationProviders map[string]eth2client.AggregateAttestationProvider
 	timeout                       time.Duration
@@ -49,7 +47,6 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	s := &Service{
 		log:                           log,
 		timeout:                       parameters.timeout,
-		clientMonitor:                 parameters.clientMonitor,
 		processConcurrency:            parameters.processConcurrency,
 		aggregateAttestationProviders: parameters.aggregateAttestationProviders,
 	}

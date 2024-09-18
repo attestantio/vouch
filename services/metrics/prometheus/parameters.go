@@ -16,14 +16,12 @@ package prometheus
 import (
 	"errors"
 
-	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/rs/zerolog"
 )
 
 type parameters struct {
 	logLevel     zerolog.Level
 	address      string
-	chainTime    chaintime.Service
 	createServer bool
 }
 
@@ -49,13 +47,6 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 func WithAddress(address string) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.address = address
-	})
-}
-
-// WithChainTime sets the chaintime service.
-func WithChainTime(chainTime chaintime.Service) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.chainTime = chainTime
 	})
 }
 
