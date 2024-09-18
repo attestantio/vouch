@@ -103,7 +103,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 			log.Warn().Str("endpoint", endpoint).Msg("Invalid port")
 			continue
 		}
-		//nolint:gosec
 		endpoints = append(endpoints, dirk.NewEndpoint(endpointParts[0], uint32(port)))
 	}
 	if len(endpoints) == 0 {

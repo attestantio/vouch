@@ -95,13 +95,11 @@ func (s *Service) GenesisTime() time.Time {
 
 // StartOfSlot provides the time at which a given slot starts.
 func (s *Service) StartOfSlot(slot phase0.Slot) time.Time {
-	//nolint:gosec
 	return s.genesisTime.Add(time.Duration(slot) * s.slotDuration)
 }
 
 // StartOfEpoch provides the time at which a given epoch starts.
 func (s *Service) StartOfEpoch(epoch phase0.Epoch) time.Time {
-	//nolint:gosec
 	return s.genesisTime.Add(time.Duration(uint64(epoch)*s.slotsPerEpoch) * s.slotDuration)
 }
 

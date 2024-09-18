@@ -21,6 +21,5 @@ func SlotToInt64(slot phase0.Slot) int64 {
 		panic("slot too large to convert to int64")
 	}
 
-	//nolint:gosec
 	return int64(slot)
 }
