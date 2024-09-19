@@ -15,6 +15,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"log"
 	"os"
@@ -35,8 +36,10 @@ func main() {
 	if workingDir == "" {
 		log.Fatal("No working directory specified, please specify --working-dir")
 	}
-	licenseString := getLicenseString(workingDir)
-
+	licenseString, err := getLicenseString(workingDir)
+	if err != nil {
+		log.Fatal(err)
+	}
 	var files []string
 	walkFunc := func(path string, info fs.DirEntry, _ error) error {
 		if !info.IsDir() && strings.HasSuffix(path, ".go") {
@@ -45,7 +48,7 @@ func main() {
 		return nil
 	}
 
-	err := filepath.WalkDir(workingDir, walkFunc)
+	err = filepath.WalkDir(workingDir, walkFunc)
 	if err != nil {
 		log.Fatalf("failed to walk the path with %v", err)
 	}
@@ -86,21 +89,21 @@ func updateFileWithLicense(filePath, licenseString string) error {
 	return nil
 }
 
-func getLicenseString(workingDir string) string {
+func getLicenseString(workingDir string) (string, error) {
 	licenseFilename := ".licenserc.json"
 	file, err := os.ReadFile(filepath.Join(workingDir, licenseFilename))
 	if err != nil {
-		log.Fatalf("failed to read license file from: %s with: %v", licenseFilename, err)
+		return "", fmt.Errorf("failed to read license file from: %s with: %v", licenseFilename, err)
 	}
 
 	jsonParsed := map[string][]string{}
 	err = json.Unmarshal(file, &jsonParsed)
 	if err != nil {
-		log.Fatalf("failed to parse json from: %s with: %v", licenseFilename, err)
+		return "", fmt.Errorf("failed to parse json from: %s with: %v", licenseFilename, err)
 	}
 
 	if len(jsonParsed) != 1 {
-		log.Fatalf("failed to parse json from: %s with: %v", licenseFilename, err)
+		return "", fmt.Errorf("failed to parse json from: %s with: %v", licenseFilename, err)
 	}
 	licenseString := ""
 	for k, v := range jsonParsed {
@@ -110,5 +113,5 @@ func getLicenseString(workingDir string) string {
 			}
 		}
 	}
-	return licenseString
+	return licenseString, nil
 }
