@@ -61,7 +61,6 @@ func (s *Service) SignedBeaconBlock(ctx context.Context,
 			log := log.With().Str("provider", name).Str("block_id", opts.Block).Logger()
 
 			response, err := provider.SignedBeaconBlock(ctx, opts)
-			s.clientMonitor.ClientOperation(name, "signed beacon block", err == nil, time.Since(started))
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					// The context has been canceled, due to another provider getting there first.  This is fine.
@@ -78,10 +77,12 @@ func (s *Service) SignedBeaconBlock(ctx context.Context,
 						return
 					}
 				}
+				s.clientMonitor.ClientOperation(name, "signed beacon block", err == nil, time.Since(started))
 				log.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain signed beacon block")
 
 				return
 			}
+			s.clientMonitor.ClientOperation(name, "signed beacon block", err == nil, time.Since(started))
 			log.Trace().Str("provider", name).Dur("elapsed", time.Since(started)).Msg("Obtained signed beacon block")
 
 			ch <- &signedBeaconBlockResp{
