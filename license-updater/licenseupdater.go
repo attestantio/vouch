@@ -15,13 +15,14 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 func main() {
@@ -37,7 +38,7 @@ func main() {
 	licenseString := getLicenseString(workingDir)
 
 	var files []string
-	walkFunc := func(path string, info fs.DirEntry, err error) error {
+	walkFunc := func(path string, info fs.DirEntry, _ error) error {
 		if !info.IsDir() && strings.HasSuffix(path, ".go") {
 			files = append(files, path)
 		}
@@ -78,7 +79,7 @@ func updateFileWithLicense(filePath, licenseString string) error {
 			newContents += line + "\n"
 		}
 	}
-	err = os.WriteFile(filePath, []byte(newContents), 0644)
+	err = os.WriteFile(filePath, []byte(newContents), 0o600)
 	if err != nil {
 		return err
 	}
