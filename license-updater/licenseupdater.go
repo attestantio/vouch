@@ -93,17 +93,17 @@ func getLicenseString(workingDir string) (string, error) {
 	licenseFilename := ".licenserc.json"
 	file, err := os.ReadFile(filepath.Join(workingDir, licenseFilename))
 	if err != nil {
-		return "", fmt.Errorf("failed to read license file from: %s with: %v", licenseFilename, err)
+		return "", fmt.Errorf("failed to read license file from: %s with: %w", licenseFilename, err)
 	}
 
 	jsonParsed := map[string][]string{}
 	err = json.Unmarshal(file, &jsonParsed)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse json from: %s with: %v", licenseFilename, err)
+		return "", fmt.Errorf("failed to parse json from: %s with: %w", licenseFilename, err)
 	}
 
 	if len(jsonParsed) != 1 {
-		return "", fmt.Errorf("failed to parse json from: %s with: %v", licenseFilename, err)
+		return "", fmt.Errorf("failed to parse json from: %s with: %w", licenseFilename, err)
 	}
 	licenseString := ""
 	for k, v := range jsonParsed {
