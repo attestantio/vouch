@@ -86,7 +86,7 @@ func TestDouble(t *testing.T) {
 func TestMutex(t *testing.T) {
 	totalRuns := 1048576
 	val := 0
-	_, err := util.Scatter(totalRuns, runtime.GOMAXPROCS(0), func(offset int, entries int, mu *sync.RWMutex) (interface{}, error) {
+	_, err := util.Scatter(totalRuns, runtime.GOMAXPROCS(0), func(_ int, entries int, mu *sync.RWMutex) (interface{}, error) {
 		for i := 0; i < entries; i++ {
 			mu.Lock()
 			val++
@@ -101,7 +101,7 @@ func TestMutex(t *testing.T) {
 func TestError(t *testing.T) {
 	totalRuns := 1024
 	val := 0
-	_, err := util.Scatter(totalRuns, runtime.GOMAXPROCS(0), func(offset int, entries int, mu *sync.RWMutex) (interface{}, error) {
+	_, err := util.Scatter(totalRuns, runtime.GOMAXPROCS(0), func(_ int, entries int, mu *sync.RWMutex) (interface{}, error) {
 		for i := 0; i < entries; i++ {
 			mu.Lock()
 			val++
