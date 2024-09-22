@@ -95,12 +95,16 @@ func (*Service) signMulti(ctx context.Context,
 			ObjectRoot: root,
 			Domain:     domain,
 		}
-		root, err := container.HashTreeRoot()
+		hashTreeRoot, err := container.HashTreeRoot()
 		if err != nil {
 			return []phase0.BLSSignature{}, errors.Wrap(err, "failed to generate hash tree root")
 		}
 		for i := range accounts {
-			sig, err := accounts[i].(e2wtypes.AccountSigner).Sign(ctx, root[:])
+			signer, isAccountSigner := accounts[i].(e2wtypes.AccountSigner)
+			if !isAccountSigner {
+				return []phase0.BLSSignature{}, errors.New("unknown signer type; cannot sign")
+			}
+			sig, err := signer.Sign(ctx, hashTreeRoot[:])
 			if err != nil {
 				return []phase0.BLSSignature{}, err
 			}

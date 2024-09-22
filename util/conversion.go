@@ -15,12 +15,10 @@ package util
 
 // Int64ToUint64 converts an int64 to a uint64.
 func Int64ToUint64(val int64) uint64 {
-	//nolint:gosec
 	return uint64(val)
 }
 
 // IntToUint64 converts an int to a uint64.
 func IntToUint64(val int) uint64 {
-	//nolint:gosec
 	return uint64(val)
 }

@@ -63,7 +63,7 @@ func (s *Service) SignSyncCommitteeRoots(ctx context.Context,
 	[]phase0.BLSSignature,
 	error,
 ) {
-	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignSyncCommitteeRoot")
+	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignSyncCommitteeRoots")
 	defer span.End()
 
 	if s.syncCommitteeDomainType == nil {
@@ -83,17 +83,20 @@ func (s *Service) SignSyncCommitteeRoots(ctx context.Context,
 	signingAccounts := make([]e2wtypes.Account, 0, len(accounts))
 	distributedAccountSigMap := make(map[int]int)
 	signingDistributedAccounts := make([]e2wtypes.Account, 0, len(accounts))
-	for i := range accounts {
-		if _, isDistributedAccount := accounts[i].(e2wtypes.DistributedAccount); isDistributedAccount {
-			signingDistributedAccounts = append(signingDistributedAccounts, accounts[i])
+	for i, account := range accounts {
+		if account == nil {
+			continue
+		}
+		if _, isDistributedAccount := account.(e2wtypes.DistributedAccount); isDistributedAccount {
+			signingDistributedAccounts = append(signingDistributedAccounts, account)
 			distributedAccountSigMap[len(signingDistributedAccounts)-1] = i
 		} else {
-			signingAccounts = append(signingAccounts, accounts[i])
+			signingAccounts = append(signingAccounts, account)
 			accountSigMap[len(signingAccounts)-1] = i
 		}
 	}
 
-	// Because this function returns all or none of the signatures we run these in series.  This ensures that we don't
+	// Because this function returns all or none of the signatures we run these in series. This ensures that we don't
 	// end up in a situation where one Vouch instance obtains signatures for individual accounts and the other for distributed accounts,
 	// which would result in neither of them returning the full set of signatures and hence both erroring out.
 	sigs := make([]phase0.BLSSignature, len(accounts))

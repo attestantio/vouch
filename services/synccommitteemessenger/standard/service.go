@@ -180,37 +180,52 @@ func (s *Service) Message(ctx context.Context, duty *synccommitteemessenger.Duty
 
 	s.UpdateSyncCommitteeDataRecord(duty.Slot(), *beaconBlockRoot, duty.ContributionIndices())
 
+	// Create a fixed size array so that we can map each signature to the corresponding account.
 	accounts := make([]e2wtypes.Account, len(validatorIndices))
-
+	countActive := 0
 	for i := range validatorIndices {
 		account := duty.Account(validatorIndices[i])
 		if account == nil {
 			s.log.Debug().Msg("Account nil; likely exited validator still in sync committee")
 			continue
 		}
+		countActive++
 		accounts[i] = account
 	}
+	// Return early if we have no active accounts.
+	if countActive == 0 {
+		return msgs, nil
+	}
+
 	sigs, err := s.contributions(ctx, accounts, s.chainTimeService.SlotToEpoch(duty.Slot()), *beaconBlockRoot)
 	if err != nil {
 		s.log.Error().Err(err).Msg("Failed to sign sync committee messages")
 		return nil, errors.Wrap(err, "failed to sign sync committee messages")
 	}
 
-	for i := range accounts {
-		if len(sigs) == 0 || len(sigs) < i {
-			return nil, errors.New("too few signatures for accounts")
+	for i, account := range accounts {
+		if account == nil {
+			continue
+		}
+		signature := sigs[i]
+		if signature.IsZero() {
+			s.log.Error().
+				Uint64("slot", uint64(duty.Slot())).
+				Uint64("validator_index", uint64(validatorIndices[i])).
+				Msg("Failed to sign sync committee message; received zero signature")
+			return nil, errors.New("failed to sign sync committee message; received zero signature")
 		}
 		s.log.Trace().
 			Uint64("slot", uint64(duty.Slot())).
 			Uint64("validator_index", uint64(validatorIndices[i])).
-			Stringer("signature", sigs[i]).
+			Stringer("signature", signature).
 			Msg("Signed sync committee message")
 
 		msg := &altair.SyncCommitteeMessage{
 			Slot:            duty.Slot(),
 			BeaconBlockRoot: *beaconBlockRoot,
 			ValidatorIndex:  validatorIndices[i],
-			Signature:       sigs[i],
+			Signature:       signature,
 		}
 		msgs = append(msgs, msg)
 	}
@@ -268,11 +283,11 @@ func (s *Service) contributions(ctx context.Context,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.synccommitteemessenger.standard").Start(ctx, "contribute")
 	defer span.End()
-	sig, err := s.syncCommitteeRootSigner.SignSyncCommitteeRoots(ctx, accounts, epoch, root)
+	sigs, err := s.syncCommitteeRootSigner.SignSyncCommitteeRoots(ctx, accounts, epoch, root)
 	if err != nil {
 		return []phase0.BLSSignature{}, err
 	}
-	return sig, err
+	return sigs, err
 }
 
 func (s *Service) isAggregator(ctx context.Context, account e2wtypes.Account, slot phase0.Slot, subcommitteeIndex uint64) (bool, phase0.BLSSignature, error) {

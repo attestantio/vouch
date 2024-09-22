@@ -318,6 +318,13 @@ func TestServiceMessage(t *testing.T) {
 
 	mockSigner := mocksigner.New()
 	mockSigs := make([]phase0.BLSSignature, len(validatorIndexToCommitteeIndices))
+
+	// Ensure we have non-zero signatures.
+	for i := range validatorIndexToCommitteeIndices {
+		sig := mockSigs[i]
+		sig[1] = 0x10
+		mockSigs[i] = sig
+	}
 	mockSigner.PrimeSigs(mockSigs)
 
 	duty := synccommitteemessenger.NewDuty(slot, validatorIndexToCommitteeIndices)
@@ -330,9 +337,8 @@ func TestServiceMessage(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		params   []standard.Parameter
-		logEntry string
+		name   string
+		params []standard.Parameter
 	}{
 		{
 			name: "SetsLastSyncHead",
