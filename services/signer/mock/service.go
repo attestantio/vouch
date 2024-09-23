@@ -23,11 +23,18 @@ import (
 )
 
 // Service is a mock.
-type Service struct{}
+type Service struct {
+	primedBLSSigs []phase0.BLSSignature
+}
 
 // New provides a mock signer.
 func New() *Service {
 	return &Service{}
+}
+
+// PrimeSigs allows us to prime the signatures we want to be returned.
+func (s *Service) PrimeSigs(sigs []phase0.BLSSignature) {
+	s.primedBLSSigs = sigs
 }
 
 // SignAggregateAndProof signs an aggregate attestation for given slot and root.
@@ -137,6 +144,19 @@ func (*Service) SignSyncCommitteeRoot(_ context.Context,
 	error,
 ) {
 	return phase0.BLSSignature{}, nil
+}
+
+// SignSyncCommitteeRoots returns root signatures.
+// This signs a beacon block root with the "sync committee" domain.
+func (s *Service) SignSyncCommitteeRoots(_ context.Context,
+	_ []e2wtypes.Account,
+	_ phase0.Epoch,
+	_ phase0.Root,
+) (
+	[]phase0.BLSSignature,
+	error,
+) {
+	return s.primedBLSSigs, nil
 }
 
 // SignSyncCommitteeSelection returns a sync committee selection signature.

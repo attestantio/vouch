@@ -357,7 +357,7 @@ func (s *Service) accountsForEpochWithFilter(ctx context.Context, epoch phase0.E
 
 	// Update metrics if this is the current epoch.
 	if epoch == s.currentEpochProvider.CurrentEpoch() {
-		stateCount[api.ValidatorStateUnknown] += uint64(len(pubKeys) - len(validators))
+		stateCount[api.ValidatorStateUnknown] += util.IntToUint64(len(pubKeys) - len(validators))
 		for state, count := range stateCount {
 			utils.MonitorAccounts(strings.ToLower(state.String()), count)
 		}

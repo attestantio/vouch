@@ -1,3 +1,6 @@
+dev:
+  - use multisign for sync committees with enabled accounts
+
 1.9.0:
   - allow Vouch to start with some consensus nodes unavailable
   - allow Vouch to act as an MEV-boost client for non-Vouch validators
