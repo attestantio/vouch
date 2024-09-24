@@ -1,5 +1,6 @@
 dev:
-  - use multisign for sync committees with enabled accounts
+  - use multisign for sync committee messages with enabled accounts
+  - use multisign for sync committee selections with enabled accounts
 
 1.9.0:
   - allow Vouch to start with some consensus nodes unavailable

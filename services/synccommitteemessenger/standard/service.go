@@ -133,22 +133,36 @@ func (s *Service) Prepare(ctx context.Context, duty *synccommitteemessenger.Duty
 	ctx, span := otel.Tracer("attestantio.vouch.services.synccommitteemessenger.standard").Start(ctx, "Prepare")
 	defer span.End()
 
-	// Decide if we are an aggregator.
+	var accounts []e2wtypes.Account
+	var subcommittees []uint64
+	var validatorIndices []phase0.ValidatorIndex
+
 	for _, validatorIndex := range duty.ValidatorIndices() {
-		subcommittees := make(map[uint64]bool)
 		for _, contributionIndex := range duty.ContributionIndices()[validatorIndex] {
+			account := duty.Account(validatorIndex)
+			if account == nil {
+				s.log.Debug().Msg("Account nil; likely exited validator still in sync committee")
+				continue
+			}
+			accounts = append(accounts, account)
 			subcommittee := uint64(contributionIndex) / (s.syncCommitteeSize / s.syncCommitteeSubnetCount)
-			subcommittees[subcommittee] = true
+			subcommittees = append(subcommittees, subcommittee)
+			validatorIndices = append(validatorIndices, validatorIndex)
 		}
-		for subcommittee := range subcommittees {
-			isAggregator, sig, err := s.isAggregator(ctx, duty.Account(validatorIndex), duty.Slot(), subcommittee)
-			if err != nil {
-				return errors.Wrap(err, "failed to calculate if this is an aggregator")
-			}
-			if isAggregator {
-				duty.SetAggregatorSubcommittees(validatorIndex, subcommittee, sig)
-			}
-		}
+	}
+
+	if len(accounts) == 0 {
+		s.log.Debug().Msg("No accounts to prepare sync committee duty for")
+		return nil
+	}
+
+	results, err := s.getAggregatorsSignatureData(ctx, accounts, duty.Slot(), validatorIndices, subcommittees)
+	if err != nil {
+		return errors.Wrap(err, "failed to calculate if validators are aggregators")
+	}
+
+	for _, res := range results {
+		duty.SetAggregatorSubcommittees(res.ValidatorIndex, res.Subcommittee, res.Signature)
 	}
 
 	return nil
@@ -290,35 +304,58 @@ func (s *Service) contributions(ctx context.Context,
 	return sigs, err
 }
 
-func (s *Service) isAggregator(ctx context.Context, account e2wtypes.Account, slot phase0.Slot, subcommitteeIndex uint64) (bool, phase0.BLSSignature, error) {
-	if account == nil {
-		s.log.Debug().Msg("Account nil; likely exited validator still in sync committee")
-		return false, phase0.BLSSignature{}, nil
-	}
+type AggregatorSignatureData struct {
+	ValidatorIndex phase0.ValidatorIndex
+	Subcommittee   uint64
+	Signature      phase0.BLSSignature
+}
+
+func (s *Service) getAggregatorsSignatureData(
+	ctx context.Context,
+	accounts []e2wtypes.Account,
+	slot phase0.Slot,
+	validatorIndices []phase0.ValidatorIndex,
+	subcommitteeIndices []uint64,
+) (
+	[]AggregatorSignatureData,
+	error,
+) {
+	aggregatorSignaturesData := make([]AggregatorSignatureData, 0, len(subcommitteeIndices))
 
 	modulo := s.syncCommitteeSize / s.syncCommitteeSubnetCount / s.targetAggregatorsPerSyncCommittee
 	if modulo < 1 {
 		modulo = 1
 	}
 
-	// Sign the slot.
-	signature, err := s.syncCommitteeSelectionSigner.SignSyncCommitteeSelection(ctx, account, slot, subcommitteeIndex)
+	// Sign the slot for all accounts.
+	sigs, err := s.syncCommitteeSelectionSigner.SignSyncCommitteeSelections(ctx, accounts, slot, subcommitteeIndices)
 	if err != nil {
-		return false, phase0.BLSSignature{}, errors.Wrap(err, "failed to sign the slot")
+		return []AggregatorSignatureData{}, errors.Wrap(err, "failed to sign the slot for selections")
 	}
 
-	// Hash the signature.
-	sigHash := sha256.New()
-	n, err := sigHash.Write(signature[:])
-	if err != nil {
-		return false, phase0.BLSSignature{}, errors.Wrap(err, "failed to hash the slot signature")
-	}
-	if n != len(signature) {
-		return false, phase0.BLSSignature{}, errors.New("failed to write all bytes of the slot signature to the hash")
-	}
-	hash := sigHash.Sum(nil)
+	for i, signature := range sigs {
+		// Hash the signature.
+		sigHash := sha256.New()
+		n, err := sigHash.Write(signature[:])
+		if err != nil {
+			return []AggregatorSignatureData{}, errors.Wrap(err, "failed to hash the slot signature")
+		}
+		if n != len(signature) {
+			return []AggregatorSignatureData{}, errors.New("failed to write all bytes of the slot signature to the hash")
+		}
+		hash := sigHash.Sum(nil)
 
-	return binary.LittleEndian.Uint64(hash[:8])%modulo == 0, signature, nil
+		shouldInclude := binary.LittleEndian.Uint64(hash[:8])%modulo == 0
+		if shouldInclude {
+			res := AggregatorSignatureData{
+				ValidatorIndex: validatorIndices[i],
+				Subcommittee:   subcommitteeIndices[i],
+				Signature:      signature,
+			}
+			aggregatorSignaturesData = append(aggregatorSignaturesData, res)
+		}
+	}
+	return aggregatorSignaturesData, nil
 }
 
 func specUint64(spec map[string]interface{}, item string) (uint64, error) {
