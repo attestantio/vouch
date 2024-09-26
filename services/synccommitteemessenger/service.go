@@ -140,6 +140,7 @@ type Service interface {
 	RemoveHistoricDataUsedForSlotVerification(currentSlot phase0.Slot)
 }
 
+// SlotData contains sync committee data for a specific slot.
 type SlotData struct {
 	Root                      phase0.Root
 	ValidatorToCommitteeIndex map[phase0.ValidatorIndex][]phase0.CommitteeIndex

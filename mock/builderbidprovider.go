@@ -22,6 +22,7 @@ import (
 	"github.com/attestantio/vouch/services/blockrelay"
 )
 
+// BuilderBidProvider obtains a builder bid.
 type BuilderBidProvider struct{}
 
 // BuilderBid returns a builder bid.

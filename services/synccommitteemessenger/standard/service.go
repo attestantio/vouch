@@ -304,6 +304,7 @@ func (s *Service) contributions(ctx context.Context,
 	return sigs, err
 }
 
+// AggregatorSignatureData contains validator signature data for a subcommittee.
 type AggregatorSignatureData struct {
 	ValidatorIndex phase0.ValidatorIndex
 	Subcommittee   uint64

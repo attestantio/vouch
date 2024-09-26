@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
+// ValidatorRegistrations handles validator registrations.
 func (s *Service) ValidatorRegistrations(ctx context.Context,
 	registrations []*types.SignedValidatorRegistration,
 ) (
