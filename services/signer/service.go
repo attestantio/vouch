@@ -166,6 +166,16 @@ type SyncCommitteeSelectionSigner interface {
 		phase0.BLSSignature,
 		error,
 	)
+	// SignSyncCommitteeSelections returns multiple sync committee selection signatures.
+	// This signs a slot and subcommittee with the "sync committee selection proof" domain.
+	SignSyncCommitteeSelections(ctx context.Context,
+		account []e2wtypes.Account,
+		slot phase0.Slot,
+		subcommitteeIndex []uint64,
+	) (
+		[]phase0.BLSSignature,
+		error,
+	)
 }
 
 // ContributionAndProofSigner provides methods to sign contribution and proofs.

@@ -172,6 +172,19 @@ func (*Service) SignSyncCommitteeSelection(_ context.Context,
 	return phase0.BLSSignature{}, nil
 }
 
+// SignSyncCommitteeSelections returns multiple sync committee selection signatures.
+// This signs a slot and subcommittee with the "sync committee selection proof" domain.
+func (s *Service) SignSyncCommitteeSelections(_ context.Context,
+	_ []e2wtypes.Account,
+	_ phase0.Slot,
+	_ []uint64,
+) (
+	[]phase0.BLSSignature,
+	error,
+) {
+	return s.primedBLSSigs, nil
+}
+
 // SignValidatorRegistration signs a validator registration.
 func (*Service) SignValidatorRegistration(_ context.Context,
 	_ e2wtypes.Account,

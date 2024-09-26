@@ -61,10 +61,26 @@ func (*Service) sign(ctx context.Context,
 	return signature, nil
 }
 
-// signMulti signs the same root for multiple accounts, using protected methods if possible.
-func (*Service) signMulti(ctx context.Context,
+// signRootMulti signs the same root for multiple accounts, using protected methods if possible.
+func (s *Service) signRootMulti(ctx context.Context,
 	accounts []e2wtypes.Account,
 	root phase0.Root,
+	domain phase0.Domain,
+) (
+	[]phase0.BLSSignature,
+	error,
+) {
+	roots := make([]phase0.Root, len(accounts))
+	for i := range accounts {
+		roots[i] = root
+	}
+	return s.signRootsMulti(ctx, accounts, roots, domain)
+}
+
+// signRootsMulti signs multiple roots for multiple accounts, using protected methods if possible.
+func (*Service) signRootsMulti(ctx context.Context,
+	accounts []e2wtypes.Account,
+	roots []phase0.Root,
 	domain phase0.Domain,
 ) (
 	[]phase0.BLSSignature,
@@ -74,14 +90,14 @@ func (*Service) signMulti(ctx context.Context,
 		return []phase0.BLSSignature{}, errors.New("no accounts; cannot sign")
 	}
 	sigs := make([]phase0.BLSSignature, len(accounts))
-	roots := make([][]byte, len(accounts))
-	for i := range accounts {
-		roots[i] = root[:]
+	data := make([][]byte, len(roots))
+	for i := range roots {
+		data[i] = roots[i][:]
 	}
 
 	if multiSigner, isMultiSigner := accounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
 		var err error
-		signatures, err := multiSigner.SignGenericMulti(ctx, accounts, roots, domain[:])
+		signatures, err := multiSigner.SignGenericMulti(ctx, accounts, data, domain[:])
 		if err != nil {
 			return []phase0.BLSSignature{}, err
 		}
@@ -91,15 +107,15 @@ func (*Service) signMulti(ctx context.Context,
 			}
 		}
 	} else {
-		container := phase0.SigningData{
-			ObjectRoot: root,
-			Domain:     domain,
-		}
-		hashTreeRoot, err := container.HashTreeRoot()
-		if err != nil {
-			return []phase0.BLSSignature{}, errors.Wrap(err, "failed to generate hash tree root")
-		}
 		for i := range accounts {
+			container := phase0.SigningData{
+				ObjectRoot: roots[i],
+				Domain:     domain,
+			}
+			hashTreeRoot, err := container.HashTreeRoot()
+			if err != nil {
+				return []phase0.BLSSignature{}, errors.Wrap(err, "failed to generate hash tree root")
+			}
 			signer, isAccountSigner := accounts[i].(e2wtypes.AccountSigner)
 			if !isAccountSigner {
 				return []phase0.BLSSignature{}, errors.New("unknown signer type; cannot sign")

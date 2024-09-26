@@ -101,7 +101,7 @@ func (s *Service) SignSyncCommitteeRoots(ctx context.Context,
 	// which would result in neither of them returning the full set of signatures and hence both erroring out.
 	sigs := make([]phase0.BLSSignature, len(accounts))
 	if len(signingAccounts) > 0 {
-		signatures, err := s.signMulti(ctx, signingAccounts, root, domain)
+		signatures, err := s.signRootMulti(ctx, signingAccounts, root, domain)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to sign for individual accounts")
 		}
@@ -110,7 +110,7 @@ func (s *Service) SignSyncCommitteeRoots(ctx context.Context,
 		}
 	}
 	if len(signingDistributedAccounts) > 0 {
-		signatures, err := s.signMulti(ctx, signingDistributedAccounts, root, domain)
+		signatures, err := s.signRootMulti(ctx, signingDistributedAccounts, root, domain)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to sign for distributed accounts")
 		}
