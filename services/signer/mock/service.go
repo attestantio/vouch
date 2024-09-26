@@ -133,6 +133,17 @@ func (*Service) SignContributionAndProof(_ context.Context,
 	return phase0.BLSSignature{}, nil
 }
 
+// SignContributionAndProofs signs multiple sync committee contributions for multiple accounts.
+func (*Service) SignContributionAndProofs(_ context.Context,
+	_ []e2wtypes.Account,
+	_ []*altair.ContributionAndProof,
+) (
+	[]phase0.BLSSignature,
+	error,
+) {
+	return []phase0.BLSSignature{}, nil
+}
+
 // SignSyncCommitteeRoot returns a root signature.
 // This signs a beacon block root with the "sync committee" domain.
 func (*Service) SignSyncCommitteeRoot(_ context.Context,

@@ -57,3 +57,46 @@ func (s *Service) SignContributionAndProof(ctx context.Context,
 
 	return sig, nil
 }
+
+// SignContributionAndProofs signs multiple sync committee contributions for multiple accounts.
+func (s *Service) SignContributionAndProofs(ctx context.Context,
+	accounts []e2wtypes.Account,
+	contributionAndProofs []*altair.ContributionAndProof,
+) (
+	[]phase0.BLSSignature,
+	error,
+) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignContributionAndProofs")
+	defer span.End()
+
+	if s.contributionAndProofDomainType == nil {
+		return []phase0.BLSSignature{}, errors.New("no contribution and proof domain type available; cannot sign")
+	}
+
+	if len(accounts) != len(contributionAndProofs) {
+		return []phase0.BLSSignature{}, errors.New("number of accounts and contribution and proofs do not match")
+	}
+
+	// Calculate the domain.
+	epoch := phase0.Epoch(contributionAndProofs[0].Contribution.Slot / s.slotsPerEpoch)
+	domain, err := s.domainProvider.Domain(ctx, *s.contributionAndProofDomainType, epoch)
+	if err != nil {
+		return []phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for contribution and proof")
+	}
+
+	roots := make([]phase0.Root, len(contributionAndProofs))
+	for i := range contributionAndProofs {
+		root, err := contributionAndProofs[i].HashTreeRoot()
+		if err != nil {
+			return []phase0.BLSSignature{}, errors.Wrap(err, "failed to calculate hash tree root")
+		}
+		roots[i] = root
+	}
+
+	sigs, err := s.signRootsByAccountType(ctx, accounts, roots, domain)
+	if err != nil {
+		return []phase0.BLSSignature{}, errors.Wrap(err, "failed to sign contribution and proofs")
+	}
+
+	return sigs, nil
+}
