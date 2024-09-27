@@ -15,7 +15,7 @@ package util
 
 import "runtime/debug"
 
-// CommitHah returns the commit hash of the build, if available.
+// CommitHash returns the commit hash of the build, if available.
 func CommitHash() string {
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {

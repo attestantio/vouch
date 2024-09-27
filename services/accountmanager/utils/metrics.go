@@ -23,6 +23,7 @@ import (
 
 var accountManagerAccounts *prometheus.GaugeVec
 
+// RegisterMetrics registers metrics if appropriate for the monitor type.
 func RegisterMetrics(ctx context.Context, monitor metrics.Service) error {
 	if monitor == nil {
 		// No monitor.
