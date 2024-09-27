@@ -21,6 +21,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
+// BuilderClient is a mock.
 type BuilderClient struct {
 	MockPubkey *phase0.BLSPubKey
 }
@@ -40,7 +41,7 @@ func (m *BuilderClient) Pubkey() *phase0.BLSPubKey {
 	return m.MockPubkey
 }
 
-// BuilderBidProvider obtains a builder bid.
+// BuilderBid obtains a builder bid.
 func (*BuilderClient) BuilderBid(_ context.Context,
 	_ *builderapi.BuilderBidOpts,
 ) (

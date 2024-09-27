@@ -44,6 +44,7 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+// BlindedProposerWithExpectedPayload is the interface for handling blinded proposed beacon blocks.
 type BlindedProposerWithExpectedPayload interface {
 	// BlindedProposalWithExpectedPayload fetches a blinded proposed beacon block for signing.
 	BlindedProposalWithExpectedPayload(context.Context,

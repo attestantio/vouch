@@ -27,6 +27,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// ProposerRelayConfig handles config information for the proposer relay.
 type ProposerRelayConfig struct {
 	Disabled     bool
 	PublicKey    *phase0.BLSPubKey

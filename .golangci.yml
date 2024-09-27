@@ -14,6 +14,14 @@ issues:
   exclude-files:
     - ".*_ssz\\.go$"
 
+  include:
+    - 'EXC0002'
+    - 'EXC0005'
+    - 'EXC0009'
+    - 'EXC0011'
+    - 'EXC0012'
+    - 'EXC0014'
+
 # Options for analysis running.
 run:
   # The default concurrency value is the number of available CPU.

@@ -22,6 +22,7 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
+// ValidatingAccountsProvider is a mock.
 type ValidatingAccountsProvider struct {
 	validatingAccounts map[phase0.ValidatorIndex]e2wtypes.Account
 }
