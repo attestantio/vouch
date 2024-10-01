@@ -55,7 +55,7 @@ func (s *Service) Propose(ctx context.Context, duty *beaconblockproposer.Duty) e
 	if err != nil {
 		monitorBeaconBlockProposalCompleted(started, slot, s.chainTime.StartOfSlot(slot), "failed")
 
-		return errors.Wrap(err, "invalid duty")
+		return err
 	}
 	span.SetAttributes(attribute.Int64("slot", util.SlotToInt64(slot)))
 	log := s.log.With().Uint64("proposing_slot", uint64(slot)).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
