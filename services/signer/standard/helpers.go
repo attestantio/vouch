@@ -61,22 +61,6 @@ func (*Service) sign(ctx context.Context,
 	return signature, nil
 }
 
-// signRootMulti signs the same root for multiple accounts, using protected methods if possible.
-func (s *Service) signRootMulti(ctx context.Context,
-	accounts []e2wtypes.Account,
-	root phase0.Root,
-	domain phase0.Domain,
-) (
-	[]phase0.BLSSignature,
-	error,
-) {
-	roots := make([]phase0.Root, len(accounts))
-	for i := range accounts {
-		roots[i] = root
-	}
-	return s.signRootsMulti(ctx, accounts, roots, domain)
-}
-
 // signRootsMulti signs multiple roots for multiple accounts, using protected methods if possible.
 func (*Service) signRootsMulti(ctx context.Context,
 	accounts []e2wtypes.Account,
@@ -125,6 +109,58 @@ func (*Service) signRootsMulti(ctx context.Context,
 				return []phase0.BLSSignature{}, err
 			}
 			copy(sigs[i][:], sig.Marshal())
+		}
+	}
+	return sigs, nil
+}
+
+// signRootsByAccountType collect roots by account type and multi-sign each type.
+func (s *Service) signRootsByAccountType(ctx context.Context, accounts []e2wtypes.Account, roots []phase0.Root, domain phase0.Domain) ([]phase0.BLSSignature, error) {
+	if len(accounts) != len(roots) {
+		return []phase0.BLSSignature{}, errors.New("number of accounts and roots do not match")
+	}
+	// Need to break the single request in to two: those for accounts and those for distributed accounts.
+	// This is because they operate differently (single shot Vs. threshold signing).
+	// We also keep a map to allow us to reassemble the signatures in the correct order.
+	signingAccountRoots := make([]phase0.Root, 0, len(roots))
+	accountSigMap := make(map[int]int)
+	signingAccounts := make([]e2wtypes.Account, 0, len(accounts))
+	distributedAccountRoots := make([]phase0.Root, 0, len(roots))
+	distributedAccountSigMap := make(map[int]int)
+	signingDistributedAccounts := make([]e2wtypes.Account, 0, len(accounts))
+	for i := range accounts {
+		if _, isDistributedAccount := accounts[i].(e2wtypes.DistributedAccount); isDistributedAccount {
+			signingDistributedAccounts = append(signingDistributedAccounts, accounts[i])
+			distributedAccountSigMap[len(signingDistributedAccounts)-1] = i
+			distributedAccountRoots = append(distributedAccountRoots, roots[i])
+		} else {
+			signingAccounts = append(signingAccounts, accounts[i])
+			accountSigMap[len(signingAccounts)-1] = i
+
+			signingAccountRoots = append(signingAccountRoots, roots[i])
+		}
+	}
+
+	// Because this function returns all or none of the signatures we run these in series.  This ensures that we don't
+	// end up in a situation where one Vouch instance obtains signatures for individual accounts and the other for distributed accounts,
+	// which would result in neither of them returning the full set of signatures and hence both erroring out.
+	sigs := make([]phase0.BLSSignature, len(accounts))
+	if len(signingAccounts) > 0 {
+		signatures, err := s.signRootsMulti(ctx, signingAccounts, signingAccountRoots, domain)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sign for individual accounts")
+		}
+		for i := range signatures {
+			sigs[accountSigMap[i]] = signatures[i]
+		}
+	}
+	if len(signingDistributedAccounts) > 0 {
+		signatures, err := s.signRootsMulti(ctx, signingDistributedAccounts, distributedAccountRoots, domain)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sign for distributed accounts")
+		}
+		for i := range signatures {
+			sigs[distributedAccountSigMap[i]] = signatures[i]
 		}
 	}
 	return sigs, nil

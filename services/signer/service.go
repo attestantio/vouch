@@ -169,9 +169,9 @@ type SyncCommitteeSelectionSigner interface {
 	// SignSyncCommitteeSelections returns multiple sync committee selection signatures.
 	// This signs a slot and subcommittee with the "sync committee selection proof" domain.
 	SignSyncCommitteeSelections(ctx context.Context,
-		account []e2wtypes.Account,
+		accounts []e2wtypes.Account,
 		slot phase0.Slot,
-		subcommitteeIndex []uint64,
+		subcommitteeIndices []uint64,
 	) (
 		[]phase0.BLSSignature,
 		error,
@@ -186,6 +186,14 @@ type ContributionAndProofSigner interface {
 		contributionAndProof *altair.ContributionAndProof,
 	) (
 		phase0.BLSSignature,
+		error,
+	)
+	// SignContributionAndProofs signs multiple sync committee contributions for multiple accounts.
+	SignContributionAndProofs(ctx context.Context,
+		accounts []e2wtypes.Account,
+		contributionAndProofs []*altair.ContributionAndProof,
+	) (
+		[]phase0.BLSSignature,
 		error,
 	)
 }

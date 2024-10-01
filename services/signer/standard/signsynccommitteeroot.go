@@ -76,47 +76,14 @@ func (s *Service) SignSyncCommitteeRoots(ctx context.Context,
 		return []phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for sync committee")
 	}
 
-	// Need to break the single request in to two: those for accounts and those for distributed accounts.
-	// This is because they operate differently (single shot Vs. threshold signing).
-	// We also keep a map to allow us to reassemble the signatures in the correct order.
-	accountSigMap := make(map[int]int)
-	signingAccounts := make([]e2wtypes.Account, 0, len(accounts))
-	distributedAccountSigMap := make(map[int]int)
-	signingDistributedAccounts := make([]e2wtypes.Account, 0, len(accounts))
-	for i, account := range accounts {
-		if account == nil {
-			continue
-		}
-		if _, isDistributedAccount := account.(e2wtypes.DistributedAccount); isDistributedAccount {
-			signingDistributedAccounts = append(signingDistributedAccounts, account)
-			distributedAccountSigMap[len(signingDistributedAccounts)-1] = i
-		} else {
-			signingAccounts = append(signingAccounts, account)
-			accountSigMap[len(signingAccounts)-1] = i
-		}
+	roots := make([]phase0.Root, len(accounts))
+	for i := range accounts {
+		roots[i] = root
 	}
 
-	// Because this function returns all or none of the signatures we run these in series. This ensures that we don't
-	// end up in a situation where one Vouch instance obtains signatures for individual accounts and the other for distributed accounts,
-	// which would result in neither of them returning the full set of signatures and hence both erroring out.
-	sigs := make([]phase0.BLSSignature, len(accounts))
-	if len(signingAccounts) > 0 {
-		signatures, err := s.signRootMulti(ctx, signingAccounts, root, domain)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to sign for individual accounts")
-		}
-		for i := range signatures {
-			sigs[accountSigMap[i]] = signatures[i]
-		}
-	}
-	if len(signingDistributedAccounts) > 0 {
-		signatures, err := s.signRootMulti(ctx, signingDistributedAccounts, root, domain)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to sign for distributed accounts")
-		}
-		for i := range signatures {
-			sigs[distributedAccountSigMap[i]] = signatures[i]
-		}
+	sigs, err := s.signRootsByAccountType(ctx, accounts, roots, domain)
+	if err != nil {
+		return []phase0.BLSSignature{}, errors.Wrap(err, "failed to sign sync committee roots")
 	}
 
 	return sigs, nil

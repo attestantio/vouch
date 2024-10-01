@@ -31,6 +31,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
 )
 
@@ -171,7 +172,8 @@ func (s *Service) Aggregate(ctx context.Context, duty *synccommitteeaggregator.D
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Str("beacon_block_root", fmt.Sprintf("%#x", *beaconBlockRoot)).Msg("Obtained beacon block root")
 
-	signedContributionAndProofs := make([]*altair.SignedContributionAndProof, 0)
+	contributionAndProofs := make([]*altair.ContributionAndProof, 0)
+	accounts := make([]e2wtypes.Account, 0)
 	for _, validatorIndex := range duty.ValidatorIndices {
 		for subcommitteeIndex := range duty.SelectionProofs[validatorIndex] {
 			log.Trace().Uint64("validator_index", uint64(validatorIndex)).Uint64("subcommittee_index", subcommitteeIndex).Str("beacon_block_root", fmt.Sprintf("%#x", *beaconBlockRoot)).Msg("Aggregating")
@@ -191,26 +193,31 @@ func (s *Service) Aggregate(ctx context.Context, duty *synccommitteeaggregator.D
 				Contribution:    contribution,
 				SelectionProof:  duty.SelectionProofs[validatorIndex][subcommitteeIndex],
 			}
+			contributionAndProofs = append(contributionAndProofs, contributionAndProof)
 			account, exists := duty.Accounts[validatorIndex]
 			if !exists {
 				log.Debug().Msg("Account nil; likely exited validator still in sync committee")
 				monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "exited", startOfSlot)
 				return
 			}
-			sig, err := s.contributionAndProofSigner.SignContributionAndProof(ctx, account, contributionAndProof)
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to obtain signature of contribution and proof")
-				monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed", startOfSlot)
-				return
-			}
-
-			signedContributionAndProof := &altair.SignedContributionAndProof{
-				Message:   contributionAndProof,
-				Signature: sig,
-			}
-
-			signedContributionAndProofs = append(signedContributionAndProofs, signedContributionAndProof)
+			accounts = append(accounts, account)
 		}
+	}
+
+	sigs, err := s.contributionAndProofSigner.SignContributionAndProofs(ctx, accounts, contributionAndProofs)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to obtain signatures of contribution and proofs")
+		monitorSyncCommitteeAggregationsCompleted(started, duty.Slot, len(duty.ValidatorIndices), "failed", startOfSlot)
+		return
+	}
+
+	signedContributionAndProofs := make([]*altair.SignedContributionAndProof, 0)
+	for i := range sigs {
+		signedContributionAndProof := &altair.SignedContributionAndProof{
+			Message:   contributionAndProofs[i],
+			Signature: sigs[i],
+		}
+		signedContributionAndProofs = append(signedContributionAndProofs, signedContributionAndProof)
 	}
 
 	if err := s.syncCommitteeContributionsSubmitter.SubmitSyncCommitteeContributions(ctx, signedContributionAndProofs); err != nil {
