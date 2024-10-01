@@ -83,5 +83,5 @@ type Service interface {
 	Prepare(ctx context.Context, duty *Duty) error
 
 	// Propose carries out the proposal for a slot.
-	Propose(ctx context.Context, duty *Duty)
+	Propose(ctx context.Context, duty *Duty) error
 }

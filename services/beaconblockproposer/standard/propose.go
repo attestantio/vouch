@@ -46,16 +46,16 @@ import (
 )
 
 // Propose proposes a block.
-func (s *Service) Propose(ctx context.Context, duty *beaconblockproposer.Duty) {
+func (s *Service) Propose(ctx context.Context, duty *beaconblockproposer.Duty) error {
 	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "Propose")
 	defer span.End()
 	started := time.Now()
 
 	slot, err := validateDuty(duty)
 	if err != nil {
-		s.log.Error().Err(err).Msg("Invalid duty")
 		monitorBeaconBlockProposalCompleted(started, slot, s.chainTime.StartOfSlot(slot), "failed")
-		return
+
+		return errors.Wrap(err, "invalid duty")
 	}
 	span.SetAttributes(attribute.Int64("slot", util.SlotToInt64(slot)))
 	log := s.log.With().Uint64("proposing_slot", uint64(slot)).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
@@ -71,13 +71,15 @@ func (s *Service) Propose(ctx context.Context, duty *beaconblockproposer.Duty) {
 	span.AddEvent("Ready to propose")
 
 	if err := s.proposeBlock(ctx, duty, graffiti); err != nil {
-		log.Error().Err(err).Msg("Failed to propose block")
 		monitorBeaconBlockProposalCompleted(started, slot, s.chainTime.StartOfSlot(slot), "failed")
-		return
+
+		return errors.Wrap(err, "failed to propose block")
 	}
 
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted proposal")
 	monitorBeaconBlockProposalCompleted(started, slot, s.chainTime.StartOfSlot(slot), "succeeded")
+
+	return nil
 }
 
 // validateDuty validates that the information supplied to us in a duty is suitable for proposing.
