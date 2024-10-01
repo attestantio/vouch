@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2024 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -11,27 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mock
+package always
 
 import (
 	"context"
 
-	"github.com/attestantio/vouch/services/beaconblockproposer"
+	"github.com/attestantio/vouch/services/attester"
 )
 
-type service struct{}
-
-// New is a mock.
-func New() beaconblockproposer.Service {
-	return &service{}
-}
-
-// Prepare is a mock.
-func (*service) Prepare(_ context.Context, _ *beaconblockproposer.Duty) error {
-	return nil
-}
-
-// Propose is a mock.
-func (*service) Propose(_ context.Context, _ *beaconblockproposer.Duty) error {
-	return nil
-}
+// OnAttestationFailure flags that an attempt to attest has failed.
+func (*Service) OnAttestationFailure(_ context.Context, _ *attester.Duty) {}

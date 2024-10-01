@@ -99,12 +99,16 @@ func (s *Service) Attest(ctx context.Context, duty *attester.Duty) ([]*phase0.At
 		return nil, err
 	}
 
+	if len(attestations) == 0 {
+		monitorAttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed", startOfSlot)
+		return nil, errors.New("no attestations succeeded")
+	}
+
 	if len(attestations) < len(validatorIndices) {
 		s.log.Error().Stringer("duty", duty).Int("total_attestations", len(validatorIndices)).Int("failed_attestations", len(validatorIndices)-len(attestations)).Msg("Some attestations failed")
 		monitorAttestationsCompleted(started, duty.Slot(), len(validatorIndices)-len(attestations), "failed", startOfSlot)
-	} else {
-		monitorAttestationsCompleted(started, duty.Slot(), len(attestations), "succeeded", startOfSlot)
 	}
+	monitorAttestationsCompleted(started, duty.Slot(), len(attestations), "succeeded", startOfSlot)
 
 	s.housekeepAttestedMap(ctx, duty)
 
