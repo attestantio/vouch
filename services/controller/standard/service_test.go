@@ -30,6 +30,7 @@ import (
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	"github.com/attestantio/vouch/services/controller/standard"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	alwaysmultiinstance "github.com/attestantio/vouch/services/multiinstance/always"
 	mockproposalpreparer "github.com/attestantio/vouch/services/proposalpreparer/mock"
 	mockscheduler "github.com/attestantio/vouch/services/scheduler/mock"
 	mocksynccommitteeaggregator "github.com/attestantio/vouch/services/synccommitteeaggregator/mock"
@@ -74,6 +75,9 @@ func TestService(t *testing.T) {
 	mockBeaconCommitteeSubscriber := mockbeaconcommitteesubscriber.New()
 	mockBlockToSlotSetter := mockcache.New(map[phase0.Root]phase0.Slot{}).(cache.BlockRootToSlotSetter)
 
+	multiInstance, err := alwaysmultiinstance.New(ctx)
+	require.NoError(t, err)
+
 	tests := []struct {
 		name     string
 		params   []standard.Parameter
@@ -110,6 +114,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no monitor specified",
 		},
@@ -143,6 +148,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no spec provider specified",
 		},
@@ -177,6 +183,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: failed to obtain spec: error",
 		},
@@ -210,6 +217,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no chain time service specified",
 		},
@@ -243,6 +251,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no proposer duties provider specified",
 		},
@@ -276,6 +285,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no attester duties provider specified",
 		},
@@ -310,6 +320,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no events provider specified",
 		},
@@ -343,6 +354,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no validating accounts provider specified",
 		},
@@ -376,6 +388,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no proposals preparer specified",
 		},
@@ -409,6 +422,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no scheduler service specified",
 		},
@@ -441,6 +455,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no attester specified",
 		},
@@ -475,6 +490,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no beacon block proposer specified",
 		},
@@ -508,6 +524,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no beacon committee subscriber specified",
 		},
@@ -541,6 +558,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no attestation aggregator specified",
 		},
@@ -574,6 +592,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no accounts refresher specified",
 		},
@@ -607,6 +626,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no block to slot setter specified",
 		},
@@ -640,6 +660,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no beacon block headers provider specified",
 		},
@@ -673,8 +694,44 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 			err: "problem with parameters: no signed beacon block provider specified",
+		},
+		{
+			name: "MultiInstanceMissing",
+			params: []standard.Parameter{
+				standard.WithLogLevel(zerolog.Disabled),
+				standard.WithMonitor(nullmetrics.New()),
+				standard.WithSpecProvider(specProvider),
+				standard.WithChainTimeService(chainTime),
+				standard.WithProposerDutiesProvider(proposerDutiesProvider),
+				standard.WithAttesterDutiesProvider(attesterDutiesProvider),
+				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
+				standard.WithEventsProvider(mockEventsProvider),
+				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithProposalsPreparer(mockProposalsPreparer),
+				standard.WithScheduler(mockScheduler),
+				standard.WithAttester(mockAttester),
+				standard.WithSyncCommitteeMessenger(mockSyncCommitteeMessenger),
+				standard.WithSyncCommitteeAggregator(mockSyncCommitteeAggregator),
+				standard.WithSyncCommitteeSubscriber(mockSyncCommitteeSubscriber),
+				standard.WithBeaconBlockProposer(mockBeaconBlockProposer),
+				standard.WithBeaconCommitteeSubscriber(mockBeaconCommitteeSubscriber),
+				standard.WithAttestationAggregator(mockAttestationAggregator),
+				standard.WithAccountsRefresher(mockAccountsRefresher),
+				standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
+				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
+				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
+				standard.WithMaxAttestationDelay(4 * time.Second),
+				standard.WithMaxProposalDelay(4 * time.Second),
+				standard.WithMaxSyncCommitteeMessageDelay(4 * time.Second),
+				standard.WithMaxSyncCommitteeMessageDelay(4 * time.Second),
+				standard.WithAttestationAggregationDelay(8 * time.Second),
+				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
+				standard.WithVerifySyncCommitteeInclusion(true),
+			},
+			err: "problem with parameters: no multi instance service specified",
 		},
 		{
 			name: "Good",
@@ -708,6 +765,7 @@ func TestService(t *testing.T) {
 				standard.WithAttestationAggregationDelay(8 * time.Second),
 				standard.WithSyncCommitteeAggregationDelay(8 * time.Second),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 		},
 		{
@@ -736,6 +794,7 @@ func TestService(t *testing.T) {
 				standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
 				standard.WithSignedBeaconBlockProvider(mockSignedBeaconBlockProvider),
 				standard.WithVerifySyncCommitteeInclusion(true),
+				standard.WithMultiInstance(multiInstance),
 			},
 		},
 	}

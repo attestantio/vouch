@@ -240,6 +240,18 @@ blockrelay:
       # With a factor of 0 bids from this builder will be ignored.
       factor: 0
 
+# multiinstance allows multiple instances of Vouch to run simultaneously, with the inactive Vouch instances taking over if they
+# fail to see expected attestations or proposals within the given time period.
+multiinstance:
+  # style can be 'static-delay' or 'none'.  'none' means that the instance will carry out its duties regardless.  'static-delay' means
+  # that the instance will wait for an amount of time if inactive before becoming active.
+  style: 'static-delay'
+  static-delay:
+    # attester-delay is the time for inactive Vouch instances to wait to see expected attestations prior to becoming active themselves.
+    attester-delay: '500ms'
+    # proposer-delay is the time for inactive Vouch instances to wait to see expected proposals prior to becoming active themselves.
+    proposer-delay: '2s'
+
 # tracing sends OTLP trace data to the supplied endpoint.
 tracing:
   # Address is the host and port of an OTLP trace receiver.

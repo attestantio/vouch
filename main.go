@@ -60,6 +60,9 @@ import (
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	prometheusmetrics "github.com/attestantio/vouch/services/metrics/prometheus"
+	"github.com/attestantio/vouch/services/multiinstance"
+	alwaysmultiinstance "github.com/attestantio/vouch/services/multiinstance/always"
+	staticdelaymultiinstance "github.com/attestantio/vouch/services/multiinstance/staticdelay"
 	"github.com/attestantio/vouch/services/proposalpreparer"
 	standardproposalpreparer "github.com/attestantio/vouch/services/proposalpreparer/standard"
 	"github.com/attestantio/vouch/services/scheduler"
@@ -251,6 +254,8 @@ func fetchConfig() error {
 	viper.SetDefault("strategies.builderbid.deadline.deadline", time.Second)
 	viper.SetDefault("strategies.builderbid.deadline.bid-gap", 100*time.Millisecond)
 	viper.SetDefault("submitter.style", "multinode")
+	viper.SetDefault("multiinstance.static-delay.attester-delay", 500*time.Millisecond)
+	viper.SetDefault("multiinstance.static-delay.proposer-delay", 2*time.Second)
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch {
@@ -371,10 +376,30 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	controller, err := initController(ctx, monitor, chainTime, eth2Client,
-		schedulerSvc, attesterSvc, cacheSvc,
-		waitedForGenesis, accountManager, beaconBlockProposer, signedBeaconBlockProvider, proposalPreparer, attestationAggregator, beaconCommitteeSubscriber,
-		syncCommitteeMessenger, syncCommitteeAggregator, syncCommitteeSubscriber)
+	multiInstance, err := startMultiInstance(ctx, monitor, eth2Client, chainTime)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	controller, err := initController(ctx,
+		monitor,
+		chainTime,
+		eth2Client,
+		schedulerSvc,
+		attesterSvc,
+		cacheSvc,
+		waitedForGenesis,
+		accountManager,
+		beaconBlockProposer,
+		signedBeaconBlockProvider,
+		proposalPreparer,
+		attestationAggregator,
+		beaconCommitteeSubscriber,
+		syncCommitteeMessenger,
+		syncCommitteeAggregator,
+		syncCommitteeSubscriber,
+		multiInstance,
+	)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -382,12 +407,28 @@ func startServices(ctx context.Context,
 	return chainTime, controller, nil
 }
 
-func initController(ctx context.Context, monitor metrics.Service, chainTime chaintime.Service, eth2Client eth2client.Service,
-	schedulerSvc scheduler.Service, attesterSvc attester.Service, cacheSvc cache.Service,
-	waitedForGenesis bool, accountManager accountmanager.Service, beaconBlockProposer beaconblockproposer.Service, signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider,
-	proposalPreparer proposalpreparer.Service, attestationAggregator attestationaggregator.Service, beaconCommitteeSubscriber beaconcommitteesubscriber.Service,
-	syncCommitteeMessenger synccommitteemessenger.Service, syncCommitteeAggregator synccommitteeaggregator.Service, syncCommitteeSubscriber synccommitteesubscriber.Service,
-) (*standardcontroller.Service, error) {
+func initController(ctx context.Context,
+	monitor metrics.Service,
+	chainTime chaintime.Service,
+	eth2Client eth2client.Service,
+	schedulerSvc scheduler.Service,
+	attesterSvc attester.Service,
+	cacheSvc cache.Service,
+	waitedForGenesis bool,
+	accountManager accountmanager.Service,
+	beaconBlockProposer beaconblockproposer.Service,
+	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider,
+	proposalPreparer proposalpreparer.Service,
+	attestationAggregator attestationaggregator.Service,
+	beaconCommitteeSubscriber beaconcommitteesubscriber.Service,
+	syncCommitteeMessenger synccommitteemessenger.Service,
+	syncCommitteeAggregator synccommitteeaggregator.Service,
+	syncCommitteeSubscriber synccommitteesubscriber.Service,
+	multiInstance multiinstance.Service,
+) (
+	*standardcontroller.Service,
+	error,
+) {
 	// The events provider for the controller should only use beacon nodes that are used for attestation data.
 	eventsConsensusClient, err := fetchMultiClient(ctx, monitor, "events", util.BeaconNodeAddressesForAttesting())
 	if err != nil {
@@ -428,6 +469,7 @@ func initController(ctx context.Context, monitor metrics.Service, chainTime chai
 		standardcontroller.WithFastTrackAttestations(viper.GetBool("controller.fast-track.attestations")),
 		standardcontroller.WithFastTrackSyncCommittees(viper.GetBool("controller.fast-track.sync-committees")),
 		standardcontroller.WithFastTrackGrace(viper.GetDuration("controller.fast-track.grace")),
+		standardcontroller.WithMultiInstance(multiInstance),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start controller service")
@@ -1943,4 +1985,56 @@ func selectBeaconHeaderProvider(ctx context.Context,
 	}
 
 	return provider, nil
+}
+
+func startMultiInstance(ctx context.Context,
+	monitor metrics.Service,
+	consensusClient eth2client.Service,
+	chainTime chaintime.Service,
+) (multiinstance.Service, error) {
+	var service multiinstance.Service
+	var err error
+
+	switch viper.GetString("multiinstance.style") {
+	case "static-delay":
+		log.Info().Msg("Starting static delay multi instance system")
+		beaconBlockHeaderProviders := make(map[string]eth2client.BeaconBlockHeadersProvider)
+		path := "strategies.beaconblockheader.first"
+		for _, address := range util.BeaconNodeAddresses(path) {
+			client, err := fetchClient(ctx, monitor, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block header strategy", address))
+			}
+			beaconBlockHeaderProviders[address] = client.(eth2client.BeaconBlockHeadersProvider)
+		}
+		var beaconBlockHeadersProvider eth2client.BeaconBlockHeadersProvider
+		beaconBlockHeadersProvider, err = firstbeaconblockheaderstrategy.New(ctx,
+			firstbeaconblockheaderstrategy.WithTimeout(util.Timeout(path)),
+			firstbeaconblockheaderstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			firstbeaconblockheaderstrategy.WithLogLevel(util.LogLevel(path)),
+			firstbeaconblockheaderstrategy.WithBeaconBlockHeadersProviders(beaconBlockHeaderProviders),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		service, err = staticdelaymultiinstance.New(ctx,
+			staticdelaymultiinstance.WithLogLevel(util.LogLevel("multiinstance.static-delay")),
+			staticdelaymultiinstance.WithMonitor(monitor),
+			staticdelaymultiinstance.WithAttestationPoolProvider(consensusClient.(eth2client.AttestationPoolProvider)),
+			staticdelaymultiinstance.WithBeaconBlockHeadersProvider(beaconBlockHeadersProvider),
+			staticdelaymultiinstance.WithChainTime(chainTime),
+			staticdelaymultiinstance.WithAttesterDelay(viper.GetDuration("multiinstance.static-delay.attester-delay")),
+			staticdelaymultiinstance.WithProposerDelay(viper.GetDuration("multiinstance.static-delay.proposer-delay")),
+		)
+	default:
+		service, err = alwaysmultiinstance.New(ctx,
+			alwaysmultiinstance.WithLogLevel(util.LogLevel("multiinstance.always")),
+		)
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start multi instance service")
+	}
+
+	return service, nil
 }
