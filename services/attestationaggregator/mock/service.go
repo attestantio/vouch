@@ -16,7 +16,9 @@ package mock
 import (
 	"context"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/attestationaggregator"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // service is a mock.
@@ -29,3 +31,12 @@ func New() attestationaggregator.Service {
 
 // Aggregate is a mock.
 func (*service) Aggregate(_ context.Context, _ *attestationaggregator.Duty) {}
+
+// AggregatorsAndSignatures reports signatures and whether validators are attestation aggregators for a given slot.
+func (*service) AggregatorsAndSignatures(_ context.Context,
+	_ []e2wtypes.Account,
+	_ phase0.Slot,
+	_ []uint64,
+) ([]phase0.BLSSignature, []bool, error) {
+	return nil, nil, nil
+}

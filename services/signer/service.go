@@ -128,6 +128,15 @@ type SlotSelectionSigner interface {
 		phase0.BLSSignature,
 		error,
 	)
+	// SignSlotSelections returns multiple slot selection signatures.
+	// This signs a slot with the "selection proof" domain.
+	SignSlotSelections(ctx context.Context,
+		accounts []e2wtypes.Account,
+		slot phase0.Slot,
+	) (
+		[]phase0.BLSSignature,
+		error,
+	)
 }
 
 // SyncCommitteeRootSigner provides methods to sign a sync committee root.

@@ -35,9 +35,6 @@ func (s *Service) SignSlotSelection(ctx context.Context,
 	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignSlotSelection")
 	defer span.End()
 
-	var messageRoot phase0.Root
-	binary.LittleEndian.PutUint64(messageRoot[:], uint64(slot))
-
 	// Calculate the domain.
 	domain, err := s.domainProvider.Domain(ctx,
 		s.selectionProofDomainType,
@@ -55,4 +52,40 @@ func (s *Service) SignSlotSelection(ctx context.Context,
 	}
 
 	return sig, nil
+}
+
+// SignSlotSelections returns multiple slot selection signatures.
+// This signs a slot with the "selection proof" domain.
+func (s *Service) SignSlotSelections(ctx context.Context,
+	accounts []e2wtypes.Account,
+	slot phase0.Slot,
+) (
+	[]phase0.BLSSignature,
+	error,
+) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignSlotSelections")
+	defer span.End()
+
+	// Calculate the domain.
+	domain, err := s.domainProvider.Domain(ctx,
+		s.selectionProofDomainType,
+		phase0.Epoch(slot/s.slotsPerEpoch))
+	if err != nil {
+		return []phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for slot selection proofs")
+	}
+
+	var slotBytes phase0.Root
+	binary.LittleEndian.PutUint64(slotBytes[:], uint64(slot))
+
+	roots := make([]phase0.Root, len(accounts))
+	for i := range accounts {
+		roots[i] = slotBytes
+	}
+
+	sigs, err := s.signRootsByAccountType(ctx, accounts, roots, domain)
+	if err != nil {
+		return []phase0.BLSSignature{}, errors.Wrap(err, "failed to sign slot selection proofs")
+	}
+
+	return sigs, nil
 }

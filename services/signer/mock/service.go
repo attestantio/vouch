@@ -122,6 +122,18 @@ func (*Service) SignSlotSelection(_ context.Context,
 	return phase0.BLSSignature{}, nil
 }
 
+// SignSlotSelections returns multiple slot selection signatures.
+// This signs a slot with the "selection proof" domain.
+func (*Service) SignSlotSelections(_ context.Context,
+	_ []e2wtypes.Account,
+	_ phase0.Slot,
+) (
+	[]phase0.BLSSignature,
+	error,
+) {
+	return []phase0.BLSSignature{}, nil
+}
+
 // SignContributionAndProof signs a sync committee contribution for given slot and root.
 func (*Service) SignContributionAndProof(_ context.Context,
 	_ e2wtypes.Account,
