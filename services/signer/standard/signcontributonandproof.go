@@ -23,41 +23,6 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
-// SignContributionAndProof signs a sync committee contribution for given slot and root.
-func (s *Service) SignContributionAndProof(ctx context.Context,
-	account e2wtypes.Account,
-	contributionAndProof *altair.ContributionAndProof,
-) (
-	phase0.BLSSignature,
-	error,
-) {
-	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignContributionAndProof")
-	defer span.End()
-
-	if s.contributionAndProofDomainType == nil {
-		return phase0.BLSSignature{}, errors.New("no contribution and proof domain type available; cannot sign")
-	}
-
-	root, err := contributionAndProof.HashTreeRoot()
-	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to calculate hash tree root")
-	}
-
-	// Calculate the domain.
-	epoch := phase0.Epoch(contributionAndProof.Contribution.Slot / s.slotsPerEpoch)
-	domain, err := s.domainProvider.Domain(ctx, *s.contributionAndProofDomainType, epoch)
-	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for contribution and proof")
-	}
-
-	sig, err := s.sign(ctx, account, root, domain)
-	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to sign contribution and proof")
-	}
-
-	return sig, nil
-}
-
 // SignContributionAndProofs signs multiple sync committee contributions for multiple accounts.
 func (s *Service) SignContributionAndProofs(ctx context.Context,
 	accounts []e2wtypes.Account,

@@ -23,37 +23,6 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
-// SignSlotSelection returns a slot selection signature.
-// This signs a slot with the "selection proof" domain.
-func (s *Service) SignSlotSelection(ctx context.Context,
-	account e2wtypes.Account,
-	slot phase0.Slot,
-) (
-	phase0.BLSSignature,
-	error,
-) {
-	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignSlotSelection")
-	defer span.End()
-
-	// Calculate the domain.
-	domain, err := s.domainProvider.Domain(ctx,
-		s.selectionProofDomainType,
-		phase0.Epoch(slot/s.slotsPerEpoch))
-	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for slot selection proof")
-	}
-
-	var slotBytes phase0.Root
-	binary.LittleEndian.PutUint64(slotBytes[:], uint64(slot))
-
-	sig, err := s.sign(ctx, account, slotBytes, domain)
-	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to sign slot selection proof")
-	}
-
-	return sig, nil
-}
-
 // SignSlotSelections returns multiple slot selection signatures.
 // This signs a slot with the "selection proof" domain.
 func (s *Service) SignSlotSelections(ctx context.Context,

@@ -119,15 +119,6 @@ type RANDAORevealSigner interface {
 
 // SlotSelectionSigner provides methods to sign slot selections.
 type SlotSelectionSigner interface {
-	// SignSlotSelection returns a slot selection signature.
-	// This signs a slot with the "selection proof" domain.
-	SignSlotSelection(ctx context.Context,
-		account e2wtypes.Account,
-		slot phase0.Slot,
-	) (
-		phase0.BLSSignature,
-		error,
-	)
 	// SignSlotSelections returns multiple slot selection signatures.
 	// This signs a slot with the "selection proof" domain.
 	SignSlotSelections(ctx context.Context,
@@ -141,16 +132,6 @@ type SlotSelectionSigner interface {
 
 // SyncCommitteeRootSigner provides methods to sign a sync committee root.
 type SyncCommitteeRootSigner interface {
-	// SignSyncCommitteeRoot returns a root signature.
-	// This signs a beacon block root with the "sync committee" domain.
-	SignSyncCommitteeRoot(ctx context.Context,
-		account e2wtypes.Account,
-		epoch phase0.Epoch,
-		root phase0.Root,
-	) (
-		phase0.BLSSignature,
-		error,
-	)
 	// SignSyncCommitteeRoots returns root signatures.
 	// This signs a beacon block root with the "sync committee" domain.
 	SignSyncCommitteeRoots(ctx context.Context,
@@ -165,16 +146,6 @@ type SyncCommitteeRootSigner interface {
 
 // SyncCommitteeSelectionSigner provides methods to sign sync committee selections.
 type SyncCommitteeSelectionSigner interface {
-	// SignSyncCommitteeSelection returns a sync committee selection signature.
-	// This signs a slot and subcommittee with the "sync committee selection proof" domain.
-	SignSyncCommitteeSelection(ctx context.Context,
-		account e2wtypes.Account,
-		slot phase0.Slot,
-		subcommitteeIndex uint64,
-	) (
-		phase0.BLSSignature,
-		error,
-	)
 	// SignSyncCommitteeSelections returns multiple sync committee selection signatures.
 	// This signs a slot and subcommittee with the "sync committee selection proof" domain.
 	SignSyncCommitteeSelections(ctx context.Context,
@@ -189,14 +160,6 @@ type SyncCommitteeSelectionSigner interface {
 
 // ContributionAndProofSigner provides methods to sign contribution and proofs.
 type ContributionAndProofSigner interface {
-	// SignContributionAndProof signs a sync committee contribution for given slot and root.
-	SignContributionAndProof(ctx context.Context,
-		account e2wtypes.Account,
-		contributionAndProof *altair.ContributionAndProof,
-	) (
-		phase0.BLSSignature,
-		error,
-	)
 	// SignContributionAndProofs signs multiple sync committee contributions for multiple accounts.
 	SignContributionAndProofs(ctx context.Context,
 		accounts []e2wtypes.Account,
