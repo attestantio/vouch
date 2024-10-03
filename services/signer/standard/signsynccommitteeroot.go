@@ -22,37 +22,6 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
-// SignSyncCommitteeRoot returns a root signature.
-// This signs a beacon block root with the "sync committee" domain.
-func (s *Service) SignSyncCommitteeRoot(ctx context.Context,
-	account e2wtypes.Account,
-	epoch phase0.Epoch,
-	root phase0.Root,
-) (
-	phase0.BLSSignature,
-	error,
-) {
-	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignSyncCommitteeRoot")
-	defer span.End()
-
-	if s.syncCommitteeDomainType == nil {
-		return phase0.BLSSignature{}, errors.New("no sync committee domain type available; cannot sign")
-	}
-
-	// Calculate the domain.
-	domain, err := s.domainProvider.Domain(ctx, *s.syncCommitteeDomainType, epoch)
-	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for sync committee")
-	}
-
-	sig, err := s.sign(ctx, account, root, domain)
-	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to sign sync committee root")
-	}
-
-	return sig, nil
-}
-
 // SignSyncCommitteeRoots returns root signatures.
 // This signs a beacon block root with the "sync committee" domain.
 func (s *Service) SignSyncCommitteeRoots(ctx context.Context,

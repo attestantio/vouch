@@ -32,6 +32,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
 )
 
@@ -185,48 +186,41 @@ func (s *Service) Aggregate(ctx context.Context, duty *attestationaggregator.Dut
 	monitorAttestationAggregationCompleted(started, duty.Slot, "succeeded", startOfSlot)
 }
 
-// IsAggregator reports if we are an attestation aggregator for a given validator/committee/slot combination.
-func (s *Service) IsAggregator(ctx context.Context,
-	validatorIndex phase0.ValidatorIndex,
+// AggregatorsAndSignatures reports signatures and whether validators are attestation aggregators for a given slot.
+func (s *Service) AggregatorsAndSignatures(ctx context.Context,
+	accounts []e2wtypes.Account,
 	slot phase0.Slot,
-	committeeSize uint64,
-) (bool, phase0.BLSSignature, error) {
-	ctx, span := otel.Tracer("attestantio.vouch.services.attestationaggregator.standard").Start(ctx, "IsAggregator")
+	committeeSizes []uint64,
+) ([]phase0.BLSSignature, []bool, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.attestationaggregator.standard").Start(ctx, "AggregatorsAndSignatures")
 	defer span.End()
 
-	modulo := committeeSize / s.targetAggregatorsPerCommittee
-	if modulo == 0 {
-		// Modulo must be at least 1.
-		modulo = 1
-	}
-
-	// Fetch the validator from the account manager.
-	epoch := phase0.Epoch(uint64(slot) / s.slotsPerEpoch)
-	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []phase0.ValidatorIndex{validatorIndex})
+	// Sign the slots.
+	sigs, err := s.slotSelectionSigner.SignSlotSelections(ctx, accounts, slot)
 	if err != nil {
-		return false, phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain validator")
+		return nil, nil, errors.Wrap(err, "failed to sign the slots")
 	}
-	if len(accounts) == 0 {
-		return false, phase0.BLSSignature{}, fmt.Errorf("validator %d unknown", validatorIndex)
-	}
-	account := accounts[validatorIndex]
+	aggregators := make([]bool, len(sigs))
+	for i, signature := range sigs {
+		// Calculate modulo from the committee lengths.
+		modulo := committeeSizes[i] / s.targetAggregatorsPerCommittee
+		if modulo == 0 {
+			// Modulo must be at least 1.
+			modulo = 1
+		}
 
-	// Sign the slot.
-	signature, err := s.slotSelectionSigner.SignSlotSelection(ctx, account, slot)
-	if err != nil {
-		return false, phase0.BLSSignature{}, errors.Wrap(err, "failed to sign the slot")
-	}
+		// Hash the signature.
+		sigHash := sha256.New()
+		n, err := sigHash.Write(signature[:])
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "failed to hash the slot signature")
+		}
+		if n != len(signature) {
+			return nil, nil, errors.New("failed to write all bytes of the slot signature to the hash")
+		}
+		hash := sigHash.Sum(nil)
 
-	// Hash the signature.
-	sigHash := sha256.New()
-	n, err := sigHash.Write(signature[:])
-	if err != nil {
-		return false, phase0.BLSSignature{}, errors.Wrap(err, "failed to hash the slot signature")
+		aggregators[i] = binary.LittleEndian.Uint64(hash[:8])%modulo == 0
 	}
-	if n != len(signature) {
-		return false, phase0.BLSSignature{}, errors.New("failed to write all bytes of the slot signature to the hash")
-	}
-	hash := sigHash.Sum(nil)
-
-	return binary.LittleEndian.Uint64(hash[:8])%modulo == 0, signature, nil
+	return sigs, aggregators, nil
 }

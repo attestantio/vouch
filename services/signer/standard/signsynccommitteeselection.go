@@ -23,48 +23,6 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
-// SignSyncCommitteeSelection returns a sync committee selection signature.
-// This signs a slot and subcommittee with the "sync committee selection proof" domain.
-func (s *Service) SignSyncCommitteeSelection(ctx context.Context,
-	account e2wtypes.Account,
-	slot phase0.Slot,
-	subcommitteeIndex uint64,
-) (
-	phase0.BLSSignature,
-	error,
-) {
-	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignSyncCommitteeSelection")
-	defer span.End()
-
-	if s.syncCommitteeSelectionProofDomainType == nil {
-		return phase0.BLSSignature{}, errors.New("no sync committee selection proof domain type, cannot sign")
-	}
-
-	// Calculate the domain.
-	domain, err := s.domainProvider.Domain(ctx,
-		*s.syncCommitteeSelectionProofDomainType,
-		phase0.Epoch(slot/s.slotsPerEpoch))
-	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for sync committee selection proof")
-	}
-
-	selectionData := &altair.SyncAggregatorSelectionData{
-		Slot:              slot,
-		SubcommitteeIndex: subcommitteeIndex,
-	}
-	root, err := selectionData.HashTreeRoot()
-	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain hash tree root of sync aggregator selection data")
-	}
-
-	sig, err := s.sign(ctx, account, root, domain)
-	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to sign sync committee selection proof")
-	}
-
-	return sig, nil
-}
-
 // SignSyncCommitteeSelections returns multiple sync committee selection signatures.
 // This signs a slot and subcommittee with the "sync committee selection proof" domain.
 func (s *Service) SignSyncCommitteeSelections(ctx context.Context,

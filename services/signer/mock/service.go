@@ -110,27 +110,16 @@ func (*Service) SignRANDAOReveal(_ context.Context,
 	return phase0.BLSSignature{}, nil
 }
 
-// SignSlotSelection returns a slot selection signature.
+// SignSlotSelections returns multiple slot selection signatures.
 // This signs a slot with the "selection proof" domain.
-func (*Service) SignSlotSelection(_ context.Context,
-	_ e2wtypes.Account,
+func (*Service) SignSlotSelections(_ context.Context,
+	_ []e2wtypes.Account,
 	_ phase0.Slot,
 ) (
-	phase0.BLSSignature,
+	[]phase0.BLSSignature,
 	error,
 ) {
-	return phase0.BLSSignature{}, nil
-}
-
-// SignContributionAndProof signs a sync committee contribution for given slot and root.
-func (*Service) SignContributionAndProof(_ context.Context,
-	_ e2wtypes.Account,
-	_ *altair.ContributionAndProof,
-) (
-	phase0.BLSSignature,
-	error,
-) {
-	return phase0.BLSSignature{}, nil
+	return []phase0.BLSSignature{}, nil
 }
 
 // SignContributionAndProofs signs multiple sync committee contributions for multiple accounts.
@@ -144,19 +133,6 @@ func (*Service) SignContributionAndProofs(_ context.Context,
 	return []phase0.BLSSignature{}, nil
 }
 
-// SignSyncCommitteeRoot returns a root signature.
-// This signs a beacon block root with the "sync committee" domain.
-func (*Service) SignSyncCommitteeRoot(_ context.Context,
-	_ e2wtypes.Account,
-	_ phase0.Epoch,
-	_ phase0.Root,
-) (
-	phase0.BLSSignature,
-	error,
-) {
-	return phase0.BLSSignature{}, nil
-}
-
 // SignSyncCommitteeRoots returns root signatures.
 // This signs a beacon block root with the "sync committee" domain.
 func (s *Service) SignSyncCommitteeRoots(_ context.Context,
@@ -168,19 +144,6 @@ func (s *Service) SignSyncCommitteeRoots(_ context.Context,
 	error,
 ) {
 	return s.primedBLSSigs, nil
-}
-
-// SignSyncCommitteeSelection returns a sync committee selection signature.
-// This signs a slot and subcommittee with the "sync committee selection proof" domain.
-func (*Service) SignSyncCommitteeSelection(_ context.Context,
-	_ e2wtypes.Account,
-	_ phase0.Slot,
-	_ uint64,
-) (
-	phase0.BLSSignature,
-	error,
-) {
-	return phase0.BLSSignature{}, nil
 }
 
 // SignSyncCommitteeSelections returns multiple sync committee selection signatures.

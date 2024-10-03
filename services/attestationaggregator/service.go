@@ -17,6 +17,7 @@ import (
 	"context"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // Duty contains information about an attestation aggregation duty.
@@ -31,14 +32,15 @@ type Duty struct {
 	SlotSignature phase0.BLSSignature
 }
 
-// IsAggregatorProvider provides information about if a validator is an aggregator.
-type IsAggregatorProvider interface {
-	// IsAggregator returns true if the given validator is an aggregator for the given committee at the given slot.
-	IsAggregator(ctx context.Context, validatorIndex phase0.ValidatorIndex, slot phase0.Slot, committeeSize uint64) (bool, phase0.BLSSignature, error)
-}
-
 // Service is the attestation aggregation service.
 type Service interface {
 	// Aggregate carries out aggregation for a slot and committee.
 	Aggregate(ctx context.Context, details *Duty)
+
+	// AggregatorsAndSignatures reports signatures and whether validators are attestation aggregators for a given slot.
+	AggregatorsAndSignatures(ctx context.Context,
+		accounts []e2wtypes.Account,
+		slot phase0.Slot,
+		committeeSizes []uint64,
+	) ([]phase0.BLSSignature, []bool, error)
 }

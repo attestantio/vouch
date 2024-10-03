@@ -23,36 +23,38 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
-// SignSlotSelection returns a slot selection signature.
+// SignSlotSelections returns multiple slot selection signatures.
 // This signs a slot with the "selection proof" domain.
-func (s *Service) SignSlotSelection(ctx context.Context,
-	account e2wtypes.Account,
+func (s *Service) SignSlotSelections(ctx context.Context,
+	accounts []e2wtypes.Account,
 	slot phase0.Slot,
 ) (
-	phase0.BLSSignature,
+	[]phase0.BLSSignature,
 	error,
 ) {
-	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignSlotSelection")
+	ctx, span := otel.Tracer("attestantio.vouch.services.signer.standard").Start(ctx, "SignSlotSelections")
 	defer span.End()
-
-	var messageRoot phase0.Root
-	binary.LittleEndian.PutUint64(messageRoot[:], uint64(slot))
 
 	// Calculate the domain.
 	domain, err := s.domainProvider.Domain(ctx,
 		s.selectionProofDomainType,
 		phase0.Epoch(slot/s.slotsPerEpoch))
 	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for slot selection proof")
+		return []phase0.BLSSignature{}, errors.Wrap(err, "failed to obtain signature domain for slot selection proofs")
 	}
 
 	var slotBytes phase0.Root
 	binary.LittleEndian.PutUint64(slotBytes[:], uint64(slot))
 
-	sig, err := s.sign(ctx, account, slotBytes, domain)
-	if err != nil {
-		return phase0.BLSSignature{}, errors.Wrap(err, "failed to sign slot selection proof")
+	roots := make([]phase0.Root, len(accounts))
+	for i := range accounts {
+		roots[i] = slotBytes
 	}
 
-	return sig, nil
+	sigs, err := s.signRootsByAccountType(ctx, accounts, roots, domain)
+	if err != nil {
+		return []phase0.BLSSignature{}, errors.Wrap(err, "failed to sign slot selection proofs")
+	}
+
+	return sigs, nil
 }
