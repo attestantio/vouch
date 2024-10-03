@@ -202,7 +202,7 @@ func (s *Service) AggregatorsAndSignatures(ctx context.Context,
 	}
 	aggregators := make([]bool, len(sigs))
 	for i, signature := range sigs {
-		// Calculate module from the committee lengths.
+		// Calculate modulo from the committee lengths.
 		modulo := committeeSizes[i] / s.targetAggregatorsPerCommittee
 		if modulo == 0 {
 			// Modulo must be at least 1.
