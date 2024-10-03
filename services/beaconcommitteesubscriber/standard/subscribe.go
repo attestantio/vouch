@@ -171,7 +171,7 @@ func (s *Service) calculateSubscriptionInfoForDuty(ctx context.Context,
 
 	sigs, aggregators, err := s.getSignaturesAndAggregateData(ctx, accounts, duty)
 	if err != nil {
-		validatorIndicesRaw := make([]uint64, 0, len(duty.ValidatorIndices()))
+		validatorIndicesRaw := make([]uint64, len(duty.ValidatorIndices()))
 		for i, validatorIndex := range duty.ValidatorIndices() {
 			validatorIndicesRaw[i] = uint64(validatorIndex)
 		}
