@@ -102,7 +102,7 @@ func (s *Service) setupClientMetrics() error {
 // ClientOperation registers an operation.
 func (s *Service) ClientOperation(provider string, operation string, succeeded bool, duration time.Duration) {
 	address, err := parseAddress(provider)
-	if err != nil && address != nil {
+	if err == nil && address != nil {
 		provider = address.String()
 	}
 	if succeeded {
@@ -116,7 +116,7 @@ func (s *Service) ClientOperation(provider string, operation string, succeeded b
 // StrategyOperation provides a generic monitor for strategy operations.
 func (s *Service) StrategyOperation(strategy string, provider string, operation string, duration time.Duration) {
 	address, err := parseAddress(provider)
-	if err != nil && address != nil {
+	if err == nil && address != nil {
 		provider = address.String()
 	}
 	s.strategyOperationCounter.WithLabelValues(strategy, provider, operation).Add(1)
