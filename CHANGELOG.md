@@ -1,6 +1,9 @@
 dev:
   - use multisign for sync committee messages with enabled accounts
   - use multisign for sync committee selections with enabled accounts
+  - use multisign for contributions and proofs with enabled accounts
+  - use multisign for signing slot selections with enabled accounts
+  - standardise provider address format across client and strategy operations
 
 1.9.0:
   - allow Vouch to start with some consensus nodes unavailable
