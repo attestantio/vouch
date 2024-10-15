@@ -1,5 +1,6 @@
 1.9.1:
   - ensure that secondary validator registrations take place for all accounts
+  - reduce the log level of successful sync committee duties
 
 1.9.0:
   - allow Vouch to start with some consensus nodes unavailable
