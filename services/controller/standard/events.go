@@ -435,11 +435,21 @@ func (s *Service) VerifySyncCommitteeMessages(ctx context.Context, data any) {
 			includedCommitteeIndices = append(includedCommitteeIndices, uint64(committeeIndex))
 		}
 	}
-	log.Debug().Uints64("incorrect_validator_indices", []uint64{}).
-		Uints64("incorrect_committee_indices", []uint64{}).
-		Uints64("missing_validator_indices", missingValidatorIndices).
-		Uints64("missing_committee_indices", missingCommitteeIndices).
-		Uints64("included_validator_indices", includedValidatorIndices).
-		Uints64("included_committee_indices", includedCommitteeIndices).
-		Msg("Verifying sync committee messages for validators complete")
+	if len(missingValidatorIndices) == 0 {
+		log.Trace().Uints64("incorrect_validator_indices", []uint64{}).
+			Uints64("incorrect_committee_indices", []uint64{}).
+			Uints64("missing_validator_indices", missingValidatorIndices).
+			Uints64("missing_committee_indices", missingCommitteeIndices).
+			Uints64("included_validator_indices", includedValidatorIndices).
+			Uints64("included_committee_indices", includedCommitteeIndices).
+			Msg("Verifying sync committee messages for validators complete")
+	} else {
+		log.Debug().Uints64("incorrect_validator_indices", []uint64{}).
+			Uints64("incorrect_committee_indices", []uint64{}).
+			Uints64("missing_validator_indices", missingValidatorIndices).
+			Uints64("missing_committee_indices", missingCommitteeIndices).
+			Uints64("included_validator_indices", includedValidatorIndices).
+			Uints64("included_committee_indices", includedCommitteeIndices).
+			Msg("Verifying sync committee messages for validators complete")
+	}
 }
