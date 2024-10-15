@@ -15,6 +15,10 @@ package prometheus
 
 import (
 	"errors"
+	"fmt"
+	"net/url"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -97,6 +101,10 @@ func (s *Service) setupClientMetrics() error {
 
 // ClientOperation registers an operation.
 func (s *Service) ClientOperation(provider string, operation string, succeeded bool, duration time.Duration) {
+	address, err := parseAddress(provider)
+	if err == nil && address != nil {
+		provider = address.String()
+	}
 	if succeeded {
 		s.clientOperationCounter.WithLabelValues(provider, operation, "succeeded").Add(1)
 		s.clientOperationTimer.WithLabelValues(provider, operation).Observe(duration.Seconds())
@@ -107,6 +115,41 @@ func (s *Service) ClientOperation(provider string, operation string, succeeded b
 
 // StrategyOperation provides a generic monitor for strategy operations.
 func (s *Service) StrategyOperation(strategy string, provider string, operation string, duration time.Duration) {
+	address, err := parseAddress(provider)
+	if err == nil && address != nil {
+		provider = address.String()
+	}
 	s.strategyOperationCounter.WithLabelValues(strategy, provider, operation).Add(1)
 	s.strategyOperationTimer.WithLabelValues(strategy, provider, operation).Observe(duration.Seconds())
+}
+
+func parseAddress(address string) (*url.URL, error) {
+	if !strings.HasPrefix(address, "http") {
+		address = fmt.Sprintf("http://%s", address)
+	}
+	base, err := url.Parse(address)
+	if err != nil {
+		return nil, errors.Join(errors.New("invalid URL"), err)
+	}
+	// Remove any trailing slash from the path.
+	base.Path = strings.TrimSuffix(base.Path, "/")
+
+	// Attempt to mask any sensitive information in the URL, for logging purposes.
+	baseAddress := *base
+	if _, pwExists := baseAddress.User.Password(); pwExists {
+		// Mask the password.
+		user := baseAddress.User.Username()
+		baseAddress.User = url.UserPassword(user, "xxxxx")
+	}
+	if baseAddress.Path != "" {
+		// Mask the path.
+		baseAddress.Path = "xxxxx"
+	}
+	if baseAddress.RawQuery != "" {
+		// Mask all query values.
+		sensitiveRegex := regexp.MustCompile("=([^&]*)(&)?")
+		baseAddress.RawQuery = sensitiveRegex.ReplaceAllString(baseAddress.RawQuery, "=xxxxx$2")
+	}
+
+	return &baseAddress, nil
 }
