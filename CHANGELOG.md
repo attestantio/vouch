@@ -1,3 +1,6 @@
+1.9.1:
+  - ensure that secondary validator registrations take place for all accounts
+
 1.9.0:
   - allow Vouch to start with some consensus nodes unavailable
   - allow Vouch to act as an MEV-boost client for non-Vouch validators

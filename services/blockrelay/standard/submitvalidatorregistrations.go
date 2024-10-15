@@ -120,9 +120,15 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 	consensusRegistrations := make([]*consensusapi.VersionedSignedValidatorRegistration, 0, len(accounts))
 	relayRegistrations := make(map[string][]*builderapi.VersionedSignedValidatorRegistration)
 	for _, account := range accounts {
-		if err := s.generateValidatorRegistrationsForAccount(ctx, account, controlledValidators, consensusRegistrations, relayRegistrations); err != nil {
+		accountConsensusRegistrations, err := s.generateValidatorRegistrationsForAccount(ctx,
+			account,
+			controlledValidators,
+			relayRegistrations,
+		)
+		if err != nil {
 			return err
 		}
+		consensusRegistrations = append(consensusRegistrations, accountConsensusRegistrations...)
 	}
 	span.AddEvent("Generated registrations")
 
@@ -155,20 +161,24 @@ func (s *Service) submitValidatorRegistrationsForAccounts(ctx context.Context,
 func (s *Service) generateValidatorRegistrationsForAccount(ctx context.Context,
 	account e2wtypes.Account,
 	controlledValidators map[phase0.BLSPubKey]struct{},
-	consensusRegistrations []*consensusapi.VersionedSignedValidatorRegistration,
 	relayRegistrations map[string][]*builderapi.VersionedSignedValidatorRegistration,
-) error {
+) (
+	[]*consensusapi.VersionedSignedValidatorRegistration,
+	error,
+) {
 	pubkey := util.ValidatorPubkey(account)
 	controlledValidators[pubkey] = struct{}{}
 
 	proposerConfig, err := s.executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit)
 	if err != nil {
-		return errors.Wrap(err, "No proposer configuration; cannot submit validator registrations")
+		return nil, errors.Wrap(err, "No proposer configuration; cannot submit validator registrations")
 	}
 	if proposerConfig.FeeRecipient.IsZero() {
 		s.log.Error().Stringer("validator", pubkey).Msg("Received 0 execution address for validator registration; using fallback")
 		proposerConfig.FeeRecipient = s.fallbackFeeRecipient
 	}
+
+	consensusRegistrations := make([]*consensusapi.VersionedSignedValidatorRegistration, 0, len(proposerConfig.Relays))
 
 	for index, relay := range proposerConfig.Relays {
 		relayRegistration, consensusRegistration, err := s.generateValidatorRegistrationForRelay(ctx, account, pubkey, relay)
@@ -195,7 +205,7 @@ func (s *Service) generateValidatorRegistrationsForAccount(ctx context.Context,
 		}
 	}
 
-	return nil
+	return consensusRegistrations, nil
 }
 
 func (s *Service) submitRelayRegistrations(ctx context.Context,
