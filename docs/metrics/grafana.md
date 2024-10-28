@@ -78,15 +78,4 @@ In Grafana:
 * Click `Upload dashboard JSON file` and select the json file.
 * Change the dashboard name (if required), select the Prometheus data source and click `Import`.
 
-[//]: # (### Import via JSON)
-
-[//]: # ()
-[//]: # (In Grafana:)
-
-[//]: # ()
-[//]: # (* Navigate to `Dashboards`, click `New` and then `Import`.)
-
-[//]: # (* Click `Upload dashboard JSON file` and select the json file.)
-
-[//]: # (* Set the name, select the Prometheus data source and click `Import`.)
 
