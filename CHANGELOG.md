@@ -1,3 +1,6 @@
+1.9.2:
+  - update go-eth2-wallet-dirk to enable mixed signing thresholds for multisign
+
 1.9.1:
   - ensure that secondary validator registrations take place for all accounts
   - reduce the log level of successful sync committee duties
