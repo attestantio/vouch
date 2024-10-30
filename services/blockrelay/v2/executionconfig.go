@@ -192,7 +192,11 @@ func (e *ExecutionConfig) setInitialRelayOptions(_ context.Context,
 		} else {
 			configRelay.MinValue = *e.MinValue
 		}
-		setRelayConfig(configRelay, baseRelayConfig, config.FeeRecipient, fallbackGasLimit)
+		if e.GasLimit == nil {
+			setRelayConfig(configRelay, baseRelayConfig, config.FeeRecipient, fallbackGasLimit)
+		} else {
+			setRelayConfig(configRelay, baseRelayConfig, config.FeeRecipient, *e.GasLimit)
+		}
 		config.Relays = append(config.Relays, configRelay)
 	}
 }
