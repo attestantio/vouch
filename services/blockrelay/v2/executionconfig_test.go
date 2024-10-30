@@ -673,6 +673,62 @@ func TestConfig(t *testing.T) {
 			},
 		},
 		{
+			name: "ExecutionConfigDefaultGasLimit",
+			executionConfig: &v2.ExecutionConfig{
+				GasLimit:     &gasLimit4,
+				Proposers:    []*v2.ProposerConfig{},
+				FeeRecipient: &feeRecipient3,
+				Relays: map[string]*v2.BaseRelayConfig{
+					"https://relay1.com/": {},
+				},
+			},
+			account:              account1,
+			pubkey:               pubkey1,
+			fallbackFeeRecipient: feeRecipient1,
+			fallbackGasLimit:     gasLimit1,
+			expected: &beaconblockproposer.ProposerConfig{
+				FeeRecipient: feeRecipient3,
+				Relays: []*beaconblockproposer.RelayConfig{
+					{
+						Address:      "https://relay1.com/",
+						FeeRecipient: feeRecipient3,
+						GasLimit:     gasLimit4,
+						Grace:        grace0,
+						MinValue:     minValue0,
+					},
+				},
+			},
+		},
+		{
+			name: "ExecutionConfigDefaultAndRelayGasLimit",
+			executionConfig: &v2.ExecutionConfig{
+				GasLimit:     &gasLimit4,
+				Proposers:    []*v2.ProposerConfig{},
+				FeeRecipient: &feeRecipient3,
+				Relays: map[string]*v2.BaseRelayConfig{
+					"https://relay1.com/": {
+						GasLimit: &gasLimit3,
+					},
+				},
+			},
+			account:              account1,
+			pubkey:               pubkey1,
+			fallbackFeeRecipient: feeRecipient1,
+			fallbackGasLimit:     gasLimit1,
+			expected: &beaconblockproposer.ProposerConfig{
+				FeeRecipient: feeRecipient3,
+				Relays: []*beaconblockproposer.RelayConfig{
+					{
+						Address:      "https://relay1.com/",
+						FeeRecipient: feeRecipient3,
+						GasLimit:     gasLimit3,
+						Grace:        grace0,
+						MinValue:     minValue0,
+					},
+				},
+			},
+		},
+		{
 			name: "InvalidProposerConfig",
 			executionConfig: &v2.ExecutionConfig{
 				Relays: map[string]*v2.BaseRelayConfig{
