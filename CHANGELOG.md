@@ -1,5 +1,6 @@
 1.9.2:
   - update go-eth2-wallet-dirk to enable mixed signing thresholds for multisign
+  - fix issue with execution config gas_limit not being used 
 
 1.9.1:
   - ensure that secondary validator registrations take place for all accounts
