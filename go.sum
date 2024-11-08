@@ -76,8 +76,8 @@ github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAE
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
 github.com/attestantio/go-block-relay v0.4.1 h1:FRXQ6KzeDT2OeHz5F0BG2/GySm0Qoxw5lMVwCDjdD6c=
 github.com/attestantio/go-block-relay v0.4.1/go.mod h1:VZjBs0TJsBq/3BXveIsNhh8c4yr95Vg0Gn7JepaEI94=
-github.com/attestantio/go-builder-client v0.5.0 h1:DxYunaN2U7Q8wRf83FzWwanZ2brds4BJclFLxAk/W6s=
-github.com/attestantio/go-builder-client v0.5.0/go.mod h1:1/ewo8zF6++C6Fldvtq5hjhp9ZAafIK91Vp7XrmUZsE=
+github.com/attestantio/go-builder-client v0.5.1 h1:zFeiWZrKBj43HkpaGchImkAjvarWdFv0gACLkBY0Pbs=
+github.com/attestantio/go-builder-client v0.5.1/go.mod h1:1/ewo8zF6++C6Fldvtq5hjhp9ZAafIK91Vp7XrmUZsE=
 github.com/attestantio/go-eth2-client v0.21.11 h1:0ZYP69O8rJz41055WOf3n1C1NA4jNh2iME/NuTVfgmQ=
 github.com/attestantio/go-eth2-client v0.21.11/go.mod h1:d7ZPNrMX8jLfIgML5u7QZxFo2AukLM+5m08iMaLdqb8=
 github.com/aws/aws-sdk-go v1.44.81/go.mod h1:y4AeaBuwd2Lk+GepC1E9v0qOiTws0MIWAX4oIKwKHZo=
