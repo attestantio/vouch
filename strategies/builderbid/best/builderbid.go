@@ -40,9 +40,6 @@ import (
 // zeroExecutionAddress is used for comparison purposes.
 var zeroExecutionAddress bellatrix.ExecutionAddress
 
-// zeroValue is used for comparison purposes.
-var zeroValue uint256.Int
-
 type builderBidResponse struct {
 	provider builderclient.BuilderBidProvider
 	bid      *builderspec.VersionedSignedBuilderBid
@@ -433,9 +430,6 @@ func (*Service) getBidValue(_ context.Context,
 	value, err := bid.Value()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain bid value")
-	}
-	if zeroValue.Cmp(value) == 0 {
-		return nil, errors.New("bid has 0 value")
 	}
 
 	return value, nil
