@@ -186,7 +186,10 @@ func (s *Service) logParticipation(_ context.Context,
 
 	// Add result to trace.
 	// Has to be a string due to the potential size being >maxint64.
-	span.SetAttributes(attribute.String("value", winningValue.ToBig().String()))
+	span.SetAttributes(
+		attribute.String("value", winningValue.ToBig().String()),
+		attribute.String("score", winningScore.String()),
+	)
 	providerAddresses := make([]string, 0, len(selectedProviders))
 	for k := range selectedProviders {
 		providerAddresses = append(providerAddresses, k)

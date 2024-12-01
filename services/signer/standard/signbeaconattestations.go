@@ -54,7 +54,12 @@ func (s *Service) SignBeaconAttestations(ctx context.Context,
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain signature domain for beacon attestation")
 	}
-	log.Trace().Str("domain_type", fmt.Sprintf("%#x", s.beaconAttesterDomainType)).Uint64("slot", uint64(slot)).Uint64("epoch", uint64(slot/s.slotsPerEpoch)).Str("domain", fmt.Sprintf("%#x", signatureDomain)).Msg("Obtained signature domain")
+	log.Trace().
+		Str("domain_type", fmt.Sprintf("%#x", s.beaconAttesterDomainType)).
+		Uint64("slot", uint64(slot)).
+		Uint64("epoch", uint64(slot/s.slotsPerEpoch)).
+		Str("domain", fmt.Sprintf("%#x", signatureDomain)).
+		Msg("Obtained signature domain")
 
 	// Need to break the single request in to two: those for accounts and those for distributed accounts.
 	// This is because they operate differently (single shot Vs. threshold signing).
@@ -116,7 +121,6 @@ func (s *Service) signBeaconAttestations(ctx context.Context,
 	targetRoot phase0.Root,
 	signatureDomain phase0.Domain,
 ) ([]phase0.BLSSignature, error) {
-	var err error
 	sigs := make([]phase0.BLSSignature, len(accounts))
 
 	if len(accounts) == 0 {
@@ -136,7 +140,7 @@ func (s *Service) signBeaconAttestations(ctx context.Context,
 			signatureDomain[:],
 		)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to multisign beacon attestation")
+			return nil, errors.Wrap(err, "failed to multisign beacon attestations")
 		}
 		for i := range signatures {
 			if signatures[i] != nil {
@@ -144,6 +148,7 @@ func (s *Service) signBeaconAttestations(ctx context.Context,
 			}
 		}
 	} else {
+		var err error
 		for i := range accounts {
 			sigs[i], err = s.SignBeaconAttestation(ctx,
 				accounts[i],
@@ -159,9 +164,6 @@ func (s *Service) signBeaconAttestations(ctx context.Context,
 				return nil, errors.Wrap(err, "failed to sign beacon attestation")
 			}
 		}
-	}
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to sign beacon attestation")
 	}
 
 	return sigs, nil

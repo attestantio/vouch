@@ -99,9 +99,7 @@ func validateDuty(duty *beaconblockproposer.Duty) (phase0.Slot, error) {
 		return 0, errors.New("no duty supplied")
 	}
 
-	zeroSig := phase0.BLSSignature{}
-	randaoReveal := duty.RANDAOReveal()
-	if bytes.Equal(randaoReveal[:], zeroSig[:]) {
+	if duty.RANDAOReveal().IsZero() {
 		return duty.Slot(), errors.New("duty missing RANDAO reveal")
 	}
 
