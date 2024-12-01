@@ -3,6 +3,7 @@ dev:
   - use multisign for sync committee selections with enabled accounts
   - use multisign for contributions and proofs with enabled accounts
   - use multisign for signing slot selections with enabled accounts
+  - log all obtained attestation data if the majority strategy fails to reach threshold
 
 1.9.2:
   - update go-eth2-wallet-dirk to enable mixed signing thresholds for multisign
