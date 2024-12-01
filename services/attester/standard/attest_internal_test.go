@@ -29,6 +29,11 @@ import (
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	e2types "github.com/wealdtech/go-eth2-types/v2"
+	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
+	hd "github.com/wealdtech/go-eth2-wallet-hd/v2"
+	scratch "github.com/wealdtech/go-eth2-wallet-store-scratch"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 func TestCreateAttestations(t *testing.T) {
@@ -81,9 +86,21 @@ func TestCreateAttestations(t *testing.T) {
 	bitlist1 := bitfield.NewBitlist(128)
 	bitlist1.SetBitAt(123, true)
 
+	// Create an account.
+	require.NoError(t, e2types.InitBLS())
+	store := scratch.New()
+	encryptor := keystorev4.New()
+	wallet, err := hd.CreateWallet(ctx, "test wallet", []byte("pass"), store, encryptor, make([]byte, 64))
+	require.NoError(t, err)
+	require.Nil(t, wallet.(e2wtypes.WalletLocker).Unlock(ctx, []byte("pass")))
+	account, err := wallet.(e2wtypes.WalletAccountCreator).CreateAccount(context.Background(), "test account", []byte("pass"))
+	require.NoError(t, err)
+	require.NoError(t, account.(e2wtypes.AccountLocker).Unlock(ctx, []byte("pass")))
+
 	tests := []struct {
 		name                      string
 		duty                      *attester.Duty
+		accounts                  []e2wtypes.Account
 		committeeIndices          []phase0.CommitteeIndex
 		validatorCommitteeIndices []phase0.ValidatorIndex
 		committeeSizes            []uint64
@@ -95,10 +112,14 @@ func TestCreateAttestations(t *testing.T) {
 	}{
 		{
 			name:     "NoAttestations",
+			duty:     duty,
+			accounts: []e2wtypes.Account{account},
 			expected: []*phase0.Attestation{},
 		},
 		{
-			name: "ZeroSig",
+			name:     "ZeroSig",
+			duty:     duty,
+			accounts: []e2wtypes.Account{account},
 			sigs: []phase0.BLSSignature{
 				{},
 			},
@@ -108,6 +129,7 @@ func TestCreateAttestations(t *testing.T) {
 		{
 			name:                      "WithAttestations",
 			duty:                      duty,
+			accounts:                  []e2wtypes.Account{account},
 			committeeIndices:          []phase0.CommitteeIndex{1},
 			validatorCommitteeIndices: []phase0.ValidatorIndex{123},
 			committeeSizes:            []uint64{128},
@@ -152,7 +174,7 @@ func TestCreateAttestations(t *testing.T) {
 	for _, test := range tests {
 		ctx := context.Background()
 		t.Run(test.name, func(t *testing.T) {
-			attestations := s.createAttestations(ctx, test.duty, test.committeeIndices, test.validatorCommitteeIndices, test.committeeSizes, test.data, test.sigs)
+			attestations := s.createAttestations(ctx, test.duty, test.accounts, test.committeeIndices, test.validatorCommitteeIndices, test.committeeSizes, test.data, test.sigs)
 			require.Equal(t, test.expected, attestations)
 			for _, entry := range test.logEntries {
 				capture.AssertHasEntry(t, entry)
