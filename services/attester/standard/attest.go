@@ -14,7 +14,6 @@
 package standard
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -99,12 +98,16 @@ func (s *Service) Attest(ctx context.Context, duty *attester.Duty) ([]*phase0.At
 		return nil, err
 	}
 
+	if len(attestations) == 0 {
+		monitorAttestationsCompleted(started, duty.Slot(), len(validatorIndices), "failed", startOfSlot)
+		return nil, errors.New("no attestations succeeded")
+	}
+
 	if len(attestations) < len(validatorIndices) {
 		s.log.Error().Stringer("duty", duty).Int("total_attestations", len(validatorIndices)).Int("failed_attestations", len(validatorIndices)-len(attestations)).Msg("Some attestations failed")
 		monitorAttestationsCompleted(started, duty.Slot(), len(validatorIndices)-len(attestations), "failed", startOfSlot)
-	} else {
-		monitorAttestationsCompleted(started, duty.Slot(), len(attestations), "succeeded", startOfSlot)
 	}
+	monitorAttestationsCompleted(started, duty.Slot(), len(attestations), "succeeded", startOfSlot)
 
 	s.housekeepAttestedMap(ctx, duty)
 
@@ -138,7 +141,7 @@ func (s *Service) attest(
 	}
 	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed")
 
-	attestations := s.createAttestations(ctx, duty, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
+	attestations := s.createAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
 	if len(attestations) == 0 {
 		s.log.Info().Msg("No signed attestations; not submitting")
 		return attestations, nil
@@ -156,6 +159,7 @@ func (s *Service) attest(
 
 func (s *Service) createAttestations(_ context.Context,
 	duty *attester.Duty,
+	accounts []e2wtypes.Account,
 	committeeIndices []phase0.CommitteeIndex,
 	validatorCommitteeIndices []phase0.ValidatorIndex,
 	committeeSizes []uint64,
@@ -163,11 +167,12 @@ func (s *Service) createAttestations(_ context.Context,
 	sigs []phase0.BLSSignature,
 ) []*phase0.Attestation {
 	// Create the attestations.
-	zeroSig := phase0.BLSSignature{}
 	attestations := make([]*phase0.Attestation, 0, len(sigs))
 	for i := range sigs {
-		if bytes.Equal(sigs[i][:], zeroSig[:]) {
-			s.log.Warn().Msg("No signature for validator; not creating attestation")
+		if sigs[i].IsZero() {
+			s.log.Warn().
+				Str("validator_pubkey", fmt.Sprintf("%#x", accounts[i].PublicKey().Marshal())).
+				Msg("No signature for validator; not creating attestation")
 			continue
 		}
 		aggregationBits := bitfield.NewBitlist(committeeSizes[i])
