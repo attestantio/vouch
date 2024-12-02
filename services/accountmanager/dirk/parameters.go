@@ -44,7 +44,7 @@ type parameters struct {
 
 // Parameter is the interface for service parameters.
 type Parameter interface {
-	apply(*parameters)
+	apply(p *parameters)
 }
 
 type parameterFunc func(*parameters)
