@@ -175,7 +175,6 @@ linters:
     - goconst
     - iface
     - ireturn
-    - inamedparam
     - lll
     - mnd
     - nestif

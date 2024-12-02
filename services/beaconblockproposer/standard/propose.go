@@ -24,7 +24,6 @@ import (
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	builderclient "github.com/attestantio/go-builder-client"
 	builderapi "github.com/attestantio/go-builder-client/api"
-	builderspec "github.com/attestantio/go-builder-client/spec"
 	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1bellatrix "github.com/attestantio/go-eth2-client/api/v1/bellatrix"
@@ -43,20 +42,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/sync/semaphore"
 )
-
-// BlindedProposerWithExpectedPayload is the interface for handling blinded proposed beacon blocks.
-type BlindedProposerWithExpectedPayload interface {
-	// BlindedProposalWithExpectedPayload fetches a blinded proposed beacon block for signing.
-	BlindedProposalWithExpectedPayload(context.Context,
-		phase0.Slot,
-		phase0.BLSSignature,
-		[]byte,
-		*builderspec.VersionedSignedBuilderBid,
-	) (
-		*api.VersionedBlindedProposal,
-		error,
-	)
-}
 
 // Propose proposes a block.
 func (s *Service) Propose(ctx context.Context, duty *beaconblockproposer.Duty) {
