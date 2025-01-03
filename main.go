@@ -762,6 +762,7 @@ func startSigningServices(ctx context.Context,
 		standardattester.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 		standardattester.WithAttestationDataProvider(attestationDataProvider),
 		standardattester.WithAttestationsSubmitter(submitterStrategy.(submitter.AttestationsSubmitter)),
+		standardattester.WithVersionedAttestationsSubmitter(submitterStrategy.(submitter.VersionedAttestationsSubmitter)),
 		standardattester.WithMonitor(monitor),
 		standardattester.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardattester.WithBeaconAttestationsSigner(signerSvc.(signer.BeaconAttestationsSigner)),
@@ -1457,6 +1458,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			immediatesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			immediatesubmitter.WithProposalSubmitter(eth2Client.(eth2client.ProposalSubmitter)),
 			immediatesubmitter.WithAttestationsSubmitter(eth2Client.(eth2client.AttestationsSubmitter)),
+			immediatesubmitter.WithVersionedAttestationsSubmitter(eth2Client.(eth2client.VersionedAttestationsSubmitter)),
 			immediatesubmitter.WithSyncCommitteeMessagesSubmitter(eth2Client.(eth2client.SyncCommitteeMessagesSubmitter)),
 			immediatesubmitter.WithSyncCommitteeContributionsSubmitter(eth2Client.(eth2client.SyncCommitteeContributionsSubmitter)),
 			immediatesubmitter.WithSyncCommitteeSubscriptionsSubmitter(eth2Client.(eth2client.SyncCommitteeSubscriptionsSubmitter)),
@@ -1503,6 +1505,13 @@ func startMultinodeSubmitter(ctx context.Context,
 	attestationsSubmitters, err := genericAddressToClientMapper[eth2client.AttestationsSubmitter](ctx, monitor,
 		"submitter.attestation.multinode",
 		"attestation submitter strategy")
+	if err != nil {
+		return nil, err
+	}
+
+	versionedAttestationsSubmitters, err := genericAddressToClientMapper[eth2client.VersionedAttestationsSubmitter](ctx, monitor,
+		"submitter.versionedattestation.multinode",
+		"versioned attestation submitter strategy")
 	if err != nil {
 		return nil, err
 	}
@@ -1556,6 +1565,7 @@ func startMultinodeSubmitter(ctx context.Context,
 		multinodesubmitter.WithTimeout(util.Timeout("submitter.multinode")),
 		multinodesubmitter.WithProposalSubmitters(proposalSubmitters),
 		multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),
+		multinodesubmitter.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 		multinodesubmitter.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 		multinodesubmitter.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
 		multinodesubmitter.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),

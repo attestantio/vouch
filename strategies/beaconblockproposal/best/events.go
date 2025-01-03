@@ -85,17 +85,26 @@ func (s *Service) updateBlockVotes(_ context.Context,
 
 	votes := make(map[phase0.Slot]map[phase0.CommitteeIndex]bitfield.Bitlist)
 	for _, attestation := range attestations {
-		data := attestation.Data
+		data, err := attestation.Data()
+		if err != nil {
+			s.log.Error().Err(err).Msg("Failed to obtain attestation data")
+			continue
+		}
 		_, exists := votes[data.Slot]
 		if !exists {
 			votes[data.Slot] = make(map[phase0.CommitteeIndex]bitfield.Bitlist)
 		}
+		aggregationBits, err := attestation.AggregationBits()
+		if err != nil {
+			s.log.Error().Err(err).Msg("Failed to obtain attestation aggregation bits")
+			continue
+		}
 		_, exists = votes[data.Slot][data.Index]
 		if !exists {
-			votes[data.Slot][data.Index] = bitfield.NewBitlist(attestation.AggregationBits.Len())
+			votes[data.Slot][data.Index] = bitfield.NewBitlist(aggregationBits.Len())
 		}
-		for i := range attestation.AggregationBits.Len() {
-			if attestation.AggregationBits.BitAt(i) {
+		for i := range aggregationBits.Len() {
+			if aggregationBits.BitAt(i) {
 				votes[data.Slot][data.Index].SetBitAt(i, true)
 			}
 		}

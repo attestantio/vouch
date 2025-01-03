@@ -59,6 +59,9 @@ func TestSubmitAttestationsEmpty(t *testing.T) {
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSyncCommitteeContributionsSubmitter(),
 		}),
+		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
+			"1": mock.NewVersionedAttestationsSubmitter(),
+		}),
 	)
 	require.NoError(t, err)
 
@@ -98,6 +101,9 @@ func TestSubmitAttestations(t *testing.T) {
 		}),
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSyncCommitteeContributionsSubmitter(),
+		}),
+		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
+			"1": mock.NewVersionedAttestationsSubmitter(),
 		}),
 	)
 	require.NoError(t, err)
@@ -156,6 +162,9 @@ func TestSubmitAttestationsErroring(t *testing.T) {
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSyncCommitteeContributionsSubmitter(),
 		}),
+		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
+			"1": mock.NewVersionedAttestationsSubmitter(),
+		}),
 	)
 	require.NoError(t, err)
 
@@ -209,6 +218,9 @@ func TestSubmitAttestationsSleepy(t *testing.T) {
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSyncCommitteeContributionsSubmitter(),
 		}),
+		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
+			"1": mock.NewVersionedAttestationsSubmitter(),
+		}),
 	)
 	require.NoError(t, err)
 
@@ -261,6 +273,9 @@ func TestSubmitAttestationsSleepySuccess(t *testing.T) {
 		}),
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSyncCommitteeContributionsSubmitter(),
+		}),
+		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
+			"1": mock.NewVersionedAttestationsSubmitter(),
 		}),
 	)
 	require.NoError(t, err)

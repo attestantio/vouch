@@ -44,6 +44,7 @@ func TestCreateAttestations(t *testing.T) {
 	specProvider := mock.NewSpecProvider()
 	attestationDataProvider := mock.NewAttestationDataProvider()
 	attestationsSubmitter := mock.NewAttestationsSubmitter()
+	versionedAttestationsSubmitter := mock.NewVersionedAttestationsSubmitter()
 	beaconAttestationsSigner := mocksigner.New()
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithLogLevel(zerolog.Disabled),
@@ -70,6 +71,7 @@ func TestCreateAttestations(t *testing.T) {
 		WithAttestationsSubmitter(attestationsSubmitter),
 		WithValidatingAccountsProvider(validatingAccountsProvider),
 		WithBeaconAttestationsSigner(beaconAttestationsSigner),
+		WithVersionedAttestationsSubmitter(versionedAttestationsSubmitter),
 	)
 	require.NoError(t, err)
 
@@ -191,6 +193,7 @@ func TestValidateAttestationData(t *testing.T) {
 	specProvider := mock.NewSpecProvider()
 	attestationDataProvider := mock.NewAttestationDataProvider()
 	attestationsSubmitter := mock.NewAttestationsSubmitter()
+	versionedAttestationsSubmitter := mock.NewVersionedAttestationsSubmitter()
 	beaconAttestationsSigner := mocksigner.New()
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithLogLevel(zerolog.Disabled),
@@ -217,6 +220,7 @@ func TestValidateAttestationData(t *testing.T) {
 		WithAttestationsSubmitter(attestationsSubmitter),
 		WithValidatingAccountsProvider(validatingAccountsProvider),
 		WithBeaconAttestationsSigner(beaconAttestationsSigner),
+		WithVersionedAttestationsSubmitter(versionedAttestationsSubmitter),
 	)
 	require.NoError(t, err)
 
@@ -322,6 +326,7 @@ func TestHousekeepAttestedMap(t *testing.T) {
 	specProvider := mock.NewSpecProvider()
 	attestationDataProvider := mock.NewAttestationDataProvider()
 	attestationsSubmitter := mock.NewAttestationsSubmitter()
+	versionedAttestationsSubmitter := mock.NewVersionedAttestationsSubmitter()
 	beaconAttestationsSigner := mocksigner.New()
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithLogLevel(zerolog.Disabled),
@@ -347,6 +352,7 @@ func TestHousekeepAttestedMap(t *testing.T) {
 		WithAttestationsSubmitter(attestationsSubmitter),
 		WithValidatingAccountsProvider(validatingAccountsProvider),
 		WithBeaconAttestationsSigner(beaconAttestationsSigner),
+		WithVersionedAttestationsSubmitter(versionedAttestationsSubmitter),
 	)
 	require.NoError(t, err)
 
@@ -393,6 +399,7 @@ func TestObtainAttestationData(t *testing.T) {
 	specProvider := mock.NewSpecProvider()
 	attestationDataProvider := mock.NewAttestationDataProvider()
 	attestationsSubmitter := mock.NewAttestationsSubmitter()
+	versionedAttestationsSubmitter := mock.NewVersionedAttestationsSubmitter()
 	beaconAttestationsSigner := mocksigner.New()
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithLogLevel(zerolog.Disabled),
@@ -436,6 +443,7 @@ func TestObtainAttestationData(t *testing.T) {
 				WithAttestationsSubmitter(attestationsSubmitter),
 				WithValidatingAccountsProvider(validatingAccountsProvider),
 				WithBeaconAttestationsSigner(beaconAttestationsSigner),
+				WithVersionedAttestationsSubmitter(versionedAttestationsSubmitter),
 			},
 			err: "failed to obtain attestation data: mock error",
 		},
@@ -451,6 +459,7 @@ func TestObtainAttestationData(t *testing.T) {
 				WithAttestationsSubmitter(attestationsSubmitter),
 				WithValidatingAccountsProvider(validatingAccountsProvider),
 				WithBeaconAttestationsSigner(beaconAttestationsSigner),
+				WithVersionedAttestationsSubmitter(versionedAttestationsSubmitter),
 			},
 			logEntries: []map[string]any{
 				{
@@ -487,6 +496,7 @@ func TestFetchValidatorIndices(t *testing.T) {
 	specProvider := mock.NewSpecProvider()
 	attestationDataProvider := mock.NewAttestationDataProvider()
 	attestationsSubmitter := mock.NewAttestationsSubmitter()
+	versionedAttestationsSubmitter := mock.NewVersionedAttestationsSubmitter()
 	beaconAttestationsSigner := mocksigner.New()
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithLogLevel(zerolog.Disabled),
@@ -562,6 +572,7 @@ func TestFetchValidatorIndices(t *testing.T) {
 				WithAttestationsSubmitter(attestationsSubmitter),
 				WithValidatingAccountsProvider(validatingAccountsProvider),
 				WithBeaconAttestationsSigner(beaconAttestationsSigner),
+				WithVersionedAttestationsSubmitter(versionedAttestationsSubmitter),
 			)
 			require.NoError(t, err)
 

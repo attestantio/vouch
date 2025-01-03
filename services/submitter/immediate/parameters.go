@@ -27,6 +27,7 @@ type parameters struct {
 	clientMonitor                         metrics.ClientMonitor
 	proposalSubmitter                     eth2client.ProposalSubmitter
 	attestationsSubmitter                 eth2client.AttestationsSubmitter
+	versionedAttestationsSubmitter        eth2client.VersionedAttestationsSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitter         eth2client.ProposalPreparationsSubmitter
@@ -71,6 +72,13 @@ func WithProposalSubmitter(submitter eth2client.ProposalSubmitter) Parameter {
 func WithAttestationsSubmitter(submitter eth2client.AttestationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.attestationsSubmitter = submitter
+	})
+}
+
+// WithVersionedAttestationsSubmitter sets the versioned attestation submitter.
+func WithVersionedAttestationsSubmitter(submitter eth2client.VersionedAttestationsSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.versionedAttestationsSubmitter = submitter
 	})
 }
 

@@ -52,6 +52,8 @@ func (s *Service) UnblindBlock(ctx context.Context,
 		proposal.CapellaBlinded = block.Capella
 	case spec.DataVersionDeneb:
 		proposal.DenebBlinded = block.Deneb
+	case spec.DataVersionElectra:
+		proposal.ElectraBlinded = block.Electra
 	default:
 		return nil, fmt.Errorf("unsupported block version %v", block.Version)
 	}
@@ -155,6 +157,7 @@ func (s *Service) unblindProposal(ctx context.Context,
 						Bellatrix: proposal.BellatrixBlinded,
 						Capella:   proposal.CapellaBlinded,
 						Deneb:     proposal.DenebBlinded,
+						Electra:   proposal.ElectraBlinded,
 					},
 				})
 
@@ -220,6 +223,9 @@ func assignSignedProposal(proposal *api.VersionedSignedProposal, signedProposal 
 	case spec.DataVersionDeneb:
 		proposal.DenebBlinded = nil
 		proposal.Deneb = signedProposal.Deneb
+	case spec.DataVersionElectra:
+		proposal.ElectraBlinded = nil
+		proposal.Electra = signedProposal.Electra
 	default:
 		return fmt.Errorf("unsupported version %v", proposal.Version)
 	}

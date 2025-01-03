@@ -16,6 +16,7 @@ package mock
 import (
 	"context"
 
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/attester"
 )
@@ -31,4 +32,9 @@ func New() *Service {
 // Attest carries out attestations for a slot.
 func (*Service) Attest(_ context.Context, _ *attester.Duty) ([]*phase0.Attestation, error) {
 	return make([]*phase0.Attestation, 0), nil
+}
+
+// AttestVersioned carries out versioned attestations for a slot.
+func (*Service) AttestVersioned(_ context.Context, _ *attester.Duty) ([]*spec.VersionedAttestation, error) {
+	return make([]*spec.VersionedAttestation, 0), nil
 }

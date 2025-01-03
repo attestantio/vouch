@@ -32,17 +32,18 @@ import (
 
 // Service is a beacon block attester.
 type Service struct {
-	log                        zerolog.Logger
-	monitor                    metrics.Service
-	processConcurrency         int64
-	slotsPerEpoch              uint64
-	chainTime                  chaintime.Service
-	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
-	attestationDataProvider    eth2client.AttestationDataProvider
-	attestationsSubmitter      submitter.AttestationsSubmitter
-	beaconAttestationsSigner   signer.BeaconAttestationsSigner
-	attested                   map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}
-	attestedMu                 sync.Mutex
+	log                            zerolog.Logger
+	monitor                        metrics.Service
+	processConcurrency             int64
+	slotsPerEpoch                  uint64
+	chainTime                      chaintime.Service
+	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
+	attestationDataProvider        eth2client.AttestationDataProvider
+	attestationsSubmitter          submitter.AttestationsSubmitter
+	versionedAttestationsSubmitter submitter.VersionedAttestationsSubmitter
+	beaconAttestationsSigner       signer.BeaconAttestationsSigner
+	attested                       map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}
+	attestedMu                     sync.Mutex
 }
 
 // New creates a new beacon block attester.
@@ -78,16 +79,17 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		log:                        log,
-		monitor:                    parameters.monitor,
-		processConcurrency:         parameters.processConcurrency,
-		slotsPerEpoch:              slotsPerEpoch,
-		chainTime:                  parameters.chainTime,
-		validatingAccountsProvider: parameters.validatingAccountsProvider,
-		attestationDataProvider:    parameters.attestationDataProvider,
-		attestationsSubmitter:      parameters.attestationsSubmitter,
-		beaconAttestationsSigner:   parameters.beaconAttestationsSigner,
-		attested:                   make(map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}),
+		log:                            log,
+		monitor:                        parameters.monitor,
+		processConcurrency:             parameters.processConcurrency,
+		slotsPerEpoch:                  slotsPerEpoch,
+		chainTime:                      parameters.chainTime,
+		validatingAccountsProvider:     parameters.validatingAccountsProvider,
+		attestationDataProvider:        parameters.attestationDataProvider,
+		versionedAttestationsSubmitter: parameters.versionedAttestationsSubmitter,
+		attestationsSubmitter:          parameters.attestationsSubmitter,
+		beaconAttestationsSigner:       parameters.beaconAttestationsSigner,
+		attested:                       make(map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}),
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 

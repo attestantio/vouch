@@ -58,6 +58,9 @@ func TestSubmitSyncCommitteeContributionsEmpty(t *testing.T) {
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSyncCommitteeContributionsSubmitter(),
 		}),
+		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
+			"1": mock.NewVersionedAttestationsSubmitter(),
+		}),
 	)
 	require.NoError(t, err)
 
@@ -97,6 +100,9 @@ func TestSubmitSyncCommitteeContributions(t *testing.T) {
 		}),
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSyncCommitteeContributionsSubmitter(),
+		}),
+		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
+			"1": mock.NewVersionedAttestationsSubmitter(),
 		}),
 	)
 	require.NoError(t, err)
@@ -148,6 +154,9 @@ func TestSubmitSyncCommitteeContributionsErroring(t *testing.T) {
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewErroringSyncCommitteeContributionsSubmitter(),
 		}),
+		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
+			"1": mock.NewVersionedAttestationsSubmitter(),
+		}),
 	)
 	require.NoError(t, err)
 
@@ -194,6 +203,9 @@ func TestSubmitSyncCommitteeContributionsSleepy(t *testing.T) {
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSleepySyncCommitteeContributionsSubmitter(200*time.Millisecond, mock.NewSyncCommitteeContributionsSubmitter()),
 		}),
+		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
+			"1": mock.NewVersionedAttestationsSubmitter(),
+		}),
 	)
 	require.NoError(t, err)
 
@@ -239,6 +251,9 @@ func TestSubmitSyncCommitteeContributionsSleepySuccess(t *testing.T) {
 		}),
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSleepySyncCommitteeContributionsSubmitter(100*time.Millisecond, mock.NewSyncCommitteeContributionsSubmitter()),
+		}),
+		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
+			"1": mock.NewVersionedAttestationsSubmitter(),
 		}),
 	)
 	require.NoError(t, err)
