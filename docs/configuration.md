@@ -148,7 +148,6 @@ strategies:
     # style can be 'best', which obtains aggregates from all nodes and selects the best, or 'first', which uses the first returned
     style: 'best'
     # beacon-node-addresses are the addresses from which to receive aggregate attestations.
-    # Note that prysm nodes are not supported at current in this strategy.
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
   # The beaconblockproposal strategy obtains beacon block proposals from multiple beacon nodes.
   beaconblockproposal:
