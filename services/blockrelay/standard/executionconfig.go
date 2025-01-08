@@ -146,6 +146,7 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 		}
 
 		ctx = context.WithValue(ctx, &httpconfidant.HTTPMethod{}, http.MethodPost)
+		ctx = context.WithValue(ctx, &httpconfidant.MIMEType{}, "application/json")
 		pubkeyStrs := make([]string, 0, len(pubkeys))
 		for _, pubkey := range pubkeys {
 			pubkeyStrs = append(pubkeyStrs, pubkey.String())
