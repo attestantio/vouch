@@ -262,6 +262,13 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 		}
 	}
 
+	gasLimit, err := proposalResponse.Data.GasLimit()
+	if err != nil {
+		s.log.Warn().Err(err).Msg("Failed to obtain proposal gas limit")
+	} else {
+		s.log.Trace().Str("provider", name).Uint64("gas_limit", gasLimit).Msg("Proposal gas limit")
+	}
+
 	score := s.scoreBeaconBlockProposal(ctx, name, proposal)
 	span.SetAttributes(attribute.Float64("score", score))
 	respCh <- &beaconBlockResponse{

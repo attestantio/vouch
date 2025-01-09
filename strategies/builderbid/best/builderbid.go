@@ -466,6 +466,8 @@ func (s *Service) verifyBidDetails(ctx context.Context,
 		return fmt.Errorf("provided timestamp %d for slot %d not expected value of %d", timestamp, slot, slotTimestamp.Unix())
 	}
 
+	s.verifyBidBlockGasLimit(ctx, bid, relayConfig)
+
 	verified, err := s.verifyBidSignature(ctx, relayConfig, bid, provider)
 	if err != nil {
 		return err
@@ -476,6 +478,46 @@ func (s *Service) verifyBidDetails(ctx context.Context,
 	}
 
 	return nil
+}
+
+func (s *Service) verifyBidBlockGasLimit(ctx context.Context,
+	bid *builderspec.VersionedSignedBuilderBid,
+	relayConfig *beaconblockproposer.RelayConfig,
+) {
+	log := zerolog.Ctx(ctx)
+
+	bidHeight, err := bid.BlockNumber()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to obtain builder bid height")
+
+		return
+	}
+
+	bidGasLimit, err := bid.BlockGasLimit()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to obtain builder bid block gas limit")
+
+		return
+	}
+
+	previousGasLimit, exists := s.blockGasLimitProvider.BlockGasLimit(ctx, bidHeight-1)
+	if !exists {
+		log.Debug().Msg("Cannot obtain gas limit for prior block; skipping check")
+
+		return
+	}
+
+	expectedGasLimit := util.ExpectedGasLimit(previousGasLimit, relayConfig.GasLimit)
+
+	// See if the bid block gas limit is accurate.
+	if bidGasLimit != expectedGasLimit {
+		log.Warn().Uint64("expected_gas_limit", expectedGasLimit).Uint64("bid_gas_limit", bidGasLimit).Msg("Incorrect block gas limit")
+
+		return
+	}
+	log.Trace().Uint64("bid_gas_limit", bidGasLimit).Msg("Correct block gas limit")
+
+	return
 }
 
 // verifyBidSignature verifies the signature of a bid to ensure it comes from the expected source.

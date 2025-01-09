@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022, 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -25,12 +25,12 @@ import (
 // LogCapture allows testing code to query log output.
 type LogCapture struct {
 	mu      sync.Mutex
-	entries []map[string]interface{}
+	entries []map[string]any
 }
 
 // Write captures an individual log message.
 func (c *LogCapture) Write(p []byte) (int, error) {
-	entry := make(map[string]interface{})
+	entry := make(map[string]any)
 	err := json.Unmarshal(p, &entry)
 	if err != nil {
 		return -1, err
@@ -45,7 +45,7 @@ func (c *LogCapture) Write(p []byte) (int, error) {
 // Logs are created in JSON format and without timestamps.
 func NewLogCapture() *LogCapture {
 	c := &LogCapture{
-		entries: make([]map[string]interface{}, 0),
+		entries: make([]map[string]any, 0),
 	}
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	logger := zerolog.New(c).Level(zerolog.TraceLevel)
@@ -56,7 +56,7 @@ func NewLogCapture() *LogCapture {
 // AssertHasEntry checks if there is a log entry with the given string.
 func (c *LogCapture) AssertHasEntry(t *testing.T, msg string) {
 	t.Helper()
-	if !c.HasLog(map[string]interface{}{
+	if !c.HasLog(map[string]any{
 		"message": msg,
 	}) {
 		t.Logf("missing entry %q in log", msg)
@@ -65,7 +65,7 @@ func (c *LogCapture) AssertHasEntry(t *testing.T, msg string) {
 }
 
 // HasLog returns true if there is a log entry with the matching fields.
-func (c *LogCapture) HasLog(fields map[string]interface{}) bool {
+func (c *LogCapture) HasLog(fields map[string]any) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -88,68 +88,40 @@ func (c *LogCapture) HasLog(fields map[string]interface{}) bool {
 // hasField returns true if the entry has a matching field.
 //
 //nolint:gocyclo
-func (*LogCapture) hasField(entry map[string]interface{}, key string, value interface{}) bool {
+func (*LogCapture) hasField(entry map[string]any, key string, value any) bool {
 	for entryKey, entryValue := range entry {
 		if entryKey != key {
 			continue
 		}
 		switch v := value.(type) {
 		case bool:
-			if entryValue == v {
-				return true
-			}
+			return entryValue == v
 		case string:
-			if entryValue == value.(string) {
-				return true
-			}
+			return entryValue == value.(string)
 		case int:
-			if int(entryValue.(float64)) == v {
-				return true
-			}
+			return int(entryValue.(float64)) == v
 		case int8:
-			if int8(entryValue.(float64)) == v {
-				return true
-			}
+			return int8(entryValue.(float64)) == v
 		case int16:
-			if int16(entryValue.(float64)) == v {
-				return true
-			}
+			return int16(entryValue.(float64)) == v
 		case int32:
-			if int32(entryValue.(float64)) == v {
-				return true
-			}
+			return int32(entryValue.(float64)) == v
 		case int64:
-			if int64(entryValue.(float64)) == v {
-				return true
-			}
+			return int64(entryValue.(float64)) == v
 		case uint:
-			if uint(entryValue.(float64)) == v {
-				return true
-			}
+			return uint(entryValue.(float64)) == v
 		case uint8:
-			if uint8(entryValue.(float64)) == v {
-				return true
-			}
+			return uint8(entryValue.(float64)) == v
 		case uint16:
-			if uint16(entryValue.(float64)) == v {
-				return true
-			}
+			return uint16(entryValue.(float64)) == v
 		case uint32:
-			if uint32(entryValue.(float64)) == v {
-				return true
-			}
+			return uint32(entryValue.(float64)) == v
 		case uint64:
-			if uint64(entryValue.(float64)) == v {
-				return true
-			}
+			return uint64(entryValue.(float64)) == v
 		case float32:
-			if float32(entryValue.(float64)) == v {
-				return true
-			}
+			return float32(entryValue.(float64)) == v
 		case float64:
-			if entryValue.(float64) == v {
-				return true
-			}
+			return entryValue.(float64) == v
 		default:
 			panic("unhandled type")
 		}
@@ -159,6 +131,6 @@ func (*LogCapture) hasField(entry map[string]interface{}, key string, value inte
 }
 
 // Entries returns all captures log entries.
-func (c *LogCapture) Entries() []map[string]interface{} {
+func (c *LogCapture) Entries() []map[string]any {
 	return c.entries
 }

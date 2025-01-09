@@ -23,6 +23,7 @@ import (
 var (
 	blockRootToSlotProcessed *prometheus.CounterVec
 	blockRootToSlotEntries   prometheus.Gauge
+	blockGasLimitEntries     prometheus.Gauge
 )
 
 var executionChainHeadHeight prometheus.Gauge
@@ -63,6 +64,16 @@ func registerPrometheusMetrics(_ context.Context) error {
 		return err
 	}
 
+	blockGasLimitEntries = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: "vouch",
+		Subsystem: "cache",
+		Name:      "blockgaslimit_entries",
+		Help:      "The number of entries in the block gas limit cache.",
+	})
+	if err := prometheus.Register(blockGasLimitEntries); err != nil {
+		return err
+	}
+
 	executionChainHeadHeight = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "vouch",
 		Subsystem: "cache",
@@ -77,6 +88,13 @@ func monitorBlockRootToSlotEntriesUpdated(entries int) {
 		return
 	}
 	blockRootToSlotEntries.Set(float64(entries))
+}
+
+func monitorBlockGasLimitEntriesUpdated(entries int) {
+	if blockGasLimitEntries == nil {
+		return
+	}
+	blockGasLimitEntries.Set(float64(entries))
 }
 
 func monitorBlockRootToSlot(result string) {
