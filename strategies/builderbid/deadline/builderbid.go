@@ -416,8 +416,6 @@ func (s *Service) verifyBidBlockGasLimit(ctx context.Context,
 		return
 	}
 	log.Trace().Uint64("bid_gas_limit", bidGasLimit).Msg("Correct block gas limit")
-
-	return
 }
 
 func (s *Service) logBidResults(span trace.Span,

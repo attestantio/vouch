@@ -86,8 +86,6 @@ func (c *LogCapture) HasLog(fields map[string]any) bool {
 }
 
 // hasField returns true if the entry has a matching field.
-//
-//nolint:gocyclo
 func (*LogCapture) hasField(entry map[string]any, key string, value any) bool {
 	for entryKey, entryValue := range entry {
 		if entryKey != key {
