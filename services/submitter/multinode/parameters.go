@@ -32,7 +32,6 @@ type parameters struct {
 	processConcurrency                     int64
 	proposalSubmitters                     map[string]eth2client.ProposalSubmitter
 	attestationsSubmitters                 map[string]eth2client.AttestationsSubmitter
-	versionedAttestationsSubmitters        map[string]eth2client.VersionedAttestationsSubmitter
 	aggregateAttestationsSubmitters        map[string]eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitters         map[string]eth2client.ProposalPreparationsSubmitter
 	beaconCommitteeSubscriptionsSubmitters map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter
@@ -91,13 +90,6 @@ func WithProposalSubmitters(submitters map[string]eth2client.ProposalSubmitter) 
 func WithAttestationsSubmitters(submitters map[string]eth2client.AttestationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.attestationsSubmitters = submitters
-	})
-}
-
-// WithVersionedAttestationsSubmitters sets the versioned attestation submitters.
-func WithVersionedAttestationsSubmitters(submitters map[string]eth2client.VersionedAttestationsSubmitter) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.versionedAttestationsSubmitters = submitters
 	})
 }
 
@@ -169,9 +161,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if len(parameters.attestationsSubmitters) == 0 {
 		return nil, errors.New("no attestations submitters specified")
-	}
-	if len(parameters.versionedAttestationsSubmitters) == 0 {
-		return nil, errors.New("no versioned attestations submitters specified")
 	}
 	if len(parameters.aggregateAttestationsSubmitters) == 0 {
 		return nil, errors.New("no aggregate attestations submitters specified")

@@ -35,7 +35,6 @@ type Service struct {
 	log                                   zerolog.Logger
 	clientMonitor                         metrics.ClientMonitor
 	attestationsSubmitter                 eth2client.AttestationsSubmitter
-	versionedAttestationsSubmitter        eth2client.VersionedAttestationsSubmitter
 	proposalSubmitter                     eth2client.ProposalSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
@@ -62,7 +61,6 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		log:                                   log,
 		clientMonitor:                         parameters.clientMonitor,
 		attestationsSubmitter:                 parameters.attestationsSubmitter,
-		versionedAttestationsSubmitter:        parameters.versionedAttestationsSubmitter,
 		proposalSubmitter:                     parameters.proposalSubmitter,
 		beaconCommitteeSubscriptionsSubmitter: parameters.beaconCommitteeSubscriptionsSubmitter,
 		aggregateAttestationsSubmitter:        parameters.aggregateAttestationsSubmitter,
@@ -108,16 +106,16 @@ func (s *Service) SubmitProposal(ctx context.Context, proposal *api.VersionedSig
 }
 
 // SubmitAttestations submits multiple attestations.
-func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error {
+func (s *Service) SubmitAttestations(ctx context.Context, opts *api.SubmitAttestationsOpts) error {
 	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitAttestations")
 	defer span.End()
 
-	if len(attestations) == 0 {
+	if len(opts.Attestations) == 0 {
 		return errors.New("no attestations supplied")
 	}
 
 	started := time.Now()
-	err := s.attestationsSubmitter.SubmitAttestations(ctx, attestations)
+	err := s.attestationsSubmitter.SubmitAttestations(ctx, opts)
 	if service, isService := s.attestationsSubmitter.(eth2client.Service); isService {
 		s.clientMonitor.ClientOperation(service.Address(), "submit attestations", err == nil, time.Since(started))
 	} else {
@@ -128,42 +126,9 @@ func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0
 	}
 
 	if e := s.log.Trace(); e.Enabled() {
-		data, err := json.Marshal(attestations)
+		data, err := json.Marshal(opts.Attestations)
 		if err == nil {
 			e.Str("attestations", string(data)).Msg("Submitted attestations")
-		}
-	}
-
-	return nil
-}
-
-// SubmitVersionedAttestations submits a batch of attestations.
-func (s *Service) SubmitVersionedAttestations(ctx context.Context, opts *api.SubmitAttestationsOpts) error {
-	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitVersionedAttestations")
-	defer span.End()
-
-	attestations := opts.Attestations
-	if len(attestations) == 0 {
-		return errors.New("no attestations supplied")
-	}
-
-	started := time.Now()
-	err := s.versionedAttestationsSubmitter.SubmitVersionedAttestations(ctx, &api.SubmitAttestationsOpts{
-		Attestations: attestations,
-	})
-	if service, isService := s.versionedAttestationsSubmitter.(eth2client.Service); isService {
-		s.clientMonitor.ClientOperation(service.Address(), "submit versioned attestations", err == nil, time.Since(started))
-	} else {
-		s.clientMonitor.ClientOperation("<unknown>", "submit versioned attestations", err == nil, time.Since(started))
-	}
-	if err != nil {
-		return errors.Wrap(err, "failed to submit versioned attestations")
-	}
-
-	if e := s.log.Trace(); e.Enabled() {
-		data, err := json.Marshal(attestations)
-		if err == nil {
-			e.Str("attestations", string(data)).Msg("Submitted versioned attestations")
 		}
 	}
 

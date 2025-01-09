@@ -32,7 +32,6 @@ type Service struct {
 	processConcurrency                    int64
 	proposalSubmitters                    map[string]eth2client.ProposalSubmitter
 	attestationsSubmitters                map[string]eth2client.AttestationsSubmitter
-	versionedAttestationsSubmitters       map[string]eth2client.VersionedAttestationsSubmitter
 	aggregateAttestationsSubmitters       map[string]eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitters        map[string]eth2client.ProposalPreparationsSubmitter
 	beaconCommitteeSubscriptionSubmitters map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter
@@ -61,7 +60,6 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		processConcurrency:                    parameters.processConcurrency,
 		proposalSubmitters:                    parameters.proposalSubmitters,
 		attestationsSubmitters:                parameters.attestationsSubmitters,
-		versionedAttestationsSubmitters:       parameters.versionedAttestationsSubmitters,
 		aggregateAttestationsSubmitters:       parameters.aggregateAttestationsSubmitters,
 		proposalPreparationsSubmitters:        parameters.proposalPreparationsSubmitters,
 		beaconCommitteeSubscriptionSubmitters: parameters.beaconCommitteeSubscriptionsSubmitters,

@@ -307,7 +307,7 @@ func NewAttestationsSubmitter() eth2client.AttestationsSubmitter {
 }
 
 // SubmitAttestations is a mock.
-func (*AttestationsSubmitter) SubmitAttestations(_ context.Context, _ []*phase0.Attestation) error {
+func (*AttestationsSubmitter) SubmitAttestations(_ context.Context, _ *api.SubmitAttestationsOpts) error {
 	return nil
 }
 
@@ -320,7 +320,7 @@ func NewErroringAttestationsSubmitter() eth2client.AttestationsSubmitter {
 }
 
 // SubmitAttestations is a mock.
-func (*ErroringAttestationsSubmitter) SubmitAttestations(_ context.Context, _ []*phase0.Attestation) error {
+func (*ErroringAttestationsSubmitter) SubmitAttestations(_ context.Context, _ *api.SubmitAttestationsOpts) error {
 	return errors.New("error")
 }
 
@@ -339,55 +339,9 @@ func NewSleepyAttestationsSubmitter(wait time.Duration, next eth2client.Attestat
 }
 
 // SubmitAttestations is a mock.
-func (m *SleepyAttestationsSubmitter) SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error {
+func (m *SleepyAttestationsSubmitter) SubmitAttestations(ctx context.Context, opts *api.SubmitAttestationsOpts) error {
 	time.Sleep(m.wait)
-	return m.next.SubmitAttestations(ctx, attestations)
-}
-
-// VersionedAttestationsSubmitter is a mock for eth2client.VersionedAttestationsSubmitter.
-type VersionedAttestationsSubmitter struct{}
-
-// NewVersionedAttestationsSubmitter returns a mock attestations submitter.
-func NewVersionedAttestationsSubmitter() eth2client.VersionedAttestationsSubmitter {
-	return &VersionedAttestationsSubmitter{}
-}
-
-// SubmitVersionedAttestations is a mock.
-func (*VersionedAttestationsSubmitter) SubmitVersionedAttestations(_ context.Context, _ *api.SubmitAttestationsOpts) error {
-	return nil
-}
-
-// ErroringVersionedAttestationsSubmitter is a mock for eth2client.VersionedAttestationsSubmitter that returns errors.
-type ErroringVersionedAttestationsSubmitter struct{}
-
-// NewErroringVersionedAttestationsSubmitter returns a mock attestation submitter.
-func NewErroringVersionedAttestationsSubmitter() eth2client.VersionedAttestationsSubmitter {
-	return &ErroringVersionedAttestationsSubmitter{}
-}
-
-// SubmitVersionedAttestations is a mock.
-func (*ErroringVersionedAttestationsSubmitter) SubmitVersionedAttestations(_ context.Context, _ *api.SubmitAttestationsOpts) error {
-	return errors.New("error")
-}
-
-// SleepyVersionedAttestationsSubmitter is a mock for eth2client.VersionedAttestationsSubmitter.
-type SleepyVersionedAttestationsSubmitter struct {
-	wait time.Duration
-	next eth2client.VersionedAttestationsSubmitter
-}
-
-// NewSleepyVersionedAttestationsSubmitter returns a mock attestations submitter.
-func NewSleepyVersionedAttestationsSubmitter(wait time.Duration, next eth2client.VersionedAttestationsSubmitter) eth2client.VersionedAttestationsSubmitter {
-	return &SleepyVersionedAttestationsSubmitter{
-		wait: wait,
-		next: next,
-	}
-}
-
-// SubmitVersionedAttestations is a mock.
-func (m *SleepyVersionedAttestationsSubmitter) SubmitVersionedAttestations(ctx context.Context, opts *api.SubmitAttestationsOpts) error {
-	time.Sleep(m.wait)
-	return m.next.SubmitVersionedAttestations(ctx, opts)
+	return m.next.SubmitAttestations(ctx, opts)
 }
 
 // ProposalSubmitter is a mock for eth2client.ProposalSubmitter.

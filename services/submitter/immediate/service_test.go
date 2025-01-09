@@ -15,6 +15,7 @@ package immediate_test
 
 import (
 	"context"
+	"github.com/attestantio/go-eth2-client/spec"
 	"testing"
 
 	"github.com/attestantio/go-eth2-client/api"
@@ -311,7 +312,7 @@ func TestSubmitAttestations(t *testing.T) {
 	tests := []struct {
 		name         string
 		params       []immediate.Parameter
-		attestations []*phase0.Attestation
+		attestations []*spec.VersionedAttestation
 		err          string
 	}{
 		{
@@ -342,7 +343,7 @@ func TestSubmitAttestations(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			attestations: []*phase0.Attestation{},
+			attestations: []*spec.VersionedAttestation{},
 			err:          "no attestations supplied",
 		},
 		{
@@ -358,7 +359,7 @@ func TestSubmitAttestations(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			attestations: []*phase0.Attestation{{}},
+			attestations: []*spec.VersionedAttestation{{}},
 			err:          "failed to submit attestations: error",
 		},
 		{
@@ -374,7 +375,7 @@ func TestSubmitAttestations(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			attestations: []*phase0.Attestation{{}},
+			attestations: []*spec.VersionedAttestation{{}},
 		},
 	}
 
@@ -383,7 +384,10 @@ func TestSubmitAttestations(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {
-			err := s.SubmitAttestations(context.Background(), test.attestations)
+			opts := &api.SubmitAttestationsOpts{
+				Attestations: test.attestations,
+			}
+			err := s.SubmitAttestations(context.Background(), opts)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {

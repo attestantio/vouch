@@ -25,16 +25,15 @@ import (
 )
 
 type parameters struct {
-	logLevel                       zerolog.Level
-	processConcurrency             int64
-	monitor                        metrics.Service
-	chainTime                      chaintime.Service
-	specProvider                   eth2client.SpecProvider
-	attestationDataProvider        eth2client.AttestationDataProvider
-	attestationsSubmitter          submitter.AttestationsSubmitter
-	versionedAttestationsSubmitter submitter.VersionedAttestationsSubmitter
-	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
-	beaconAttestationsSigner       signer.BeaconAttestationsSigner
+	logLevel                   zerolog.Level
+	processConcurrency         int64
+	monitor                    metrics.Service
+	chainTime                  chaintime.Service
+	specProvider               eth2client.SpecProvider
+	attestationDataProvider    eth2client.AttestationDataProvider
+	attestationsSubmitter      submitter.AttestationsSubmitter
+	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
+	beaconAttestationsSigner   signer.BeaconAttestationsSigner
 }
 
 // Parameter is the interface for service parameters.
@@ -90,13 +89,6 @@ func WithAttestationsSubmitter(submitter submitter.AttestationsSubmitter) Parame
 	})
 }
 
-// WithVersionedAttestationsSubmitter sets the attestations submitter.
-func WithVersionedAttestationsSubmitter(submitter submitter.VersionedAttestationsSubmitter) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.versionedAttestationsSubmitter = submitter
-	})
-}
-
 // WithMonitor sets the monitor for this module.
 func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -143,9 +135,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.attestationsSubmitter == nil {
 		return nil, errors.New("no attestations submitter specified")
-	}
-	if parameters.versionedAttestationsSubmitter == nil {
-		return nil, errors.New("no versioned attestations submitter specified")
 	}
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")

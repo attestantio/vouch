@@ -32,18 +32,18 @@ import (
 
 // Service is a beacon block attester.
 type Service struct {
-	log                            zerolog.Logger
-	monitor                        metrics.Service
-	processConcurrency             int64
-	slotsPerEpoch                  uint64
-	chainTime                      chaintime.Service
-	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
-	attestationDataProvider        eth2client.AttestationDataProvider
-	attestationsSubmitter          submitter.AttestationsSubmitter
-	versionedAttestationsSubmitter submitter.VersionedAttestationsSubmitter
-	beaconAttestationsSigner       signer.BeaconAttestationsSigner
-	attested                       map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}
-	attestedMu                     sync.Mutex
+	log                        zerolog.Logger
+	monitor                    metrics.Service
+	processConcurrency         int64
+	slotsPerEpoch              uint64
+	chainTime                  chaintime.Service
+	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
+	attestationDataProvider    eth2client.AttestationDataProvider
+	attestationsSubmitter      submitter.AttestationsSubmitter
+	beaconAttestationsSigner   signer.BeaconAttestationsSigner
+	attested                   map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}
+	attestedMu                 sync.Mutex
+	electraForkEpoch           phase0.Epoch
 }
 
 // New creates a new beacon block attester.
@@ -78,20 +78,67 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("SLOTS_PER_EPOCH of unexpected type")
 	}
 
+	_, electraForkEpoch := electraDetails(ctx, log, parameters.specProvider)
+
 	s := &Service{
-		log:                            log,
-		monitor:                        parameters.monitor,
-		processConcurrency:             parameters.processConcurrency,
-		slotsPerEpoch:                  slotsPerEpoch,
-		chainTime:                      parameters.chainTime,
-		validatingAccountsProvider:     parameters.validatingAccountsProvider,
-		attestationDataProvider:        parameters.attestationDataProvider,
-		versionedAttestationsSubmitter: parameters.versionedAttestationsSubmitter,
-		attestationsSubmitter:          parameters.attestationsSubmitter,
-		beaconAttestationsSigner:       parameters.beaconAttestationsSigner,
-		attested:                       make(map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}),
+		log:                        log,
+		monitor:                    parameters.monitor,
+		processConcurrency:         parameters.processConcurrency,
+		slotsPerEpoch:              slotsPerEpoch,
+		chainTime:                  parameters.chainTime,
+		validatingAccountsProvider: parameters.validatingAccountsProvider,
+		attestationDataProvider:    parameters.attestationDataProvider,
+		attestationsSubmitter:      parameters.attestationsSubmitter,
+		beaconAttestationsSigner:   parameters.beaconAttestationsSigner,
+		attested:                   make(map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}),
+		electraForkEpoch:           electraForkEpoch,
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
 	return s, nil
+}
+
+func electraDetails(ctx context.Context, log zerolog.Logger, specProvider eth2client.SpecProvider) (bool, phase0.Epoch) {
+	// Fetch the electra fork epoch from the fork schedule.
+	handlingElectra := true
+	var electraForkEpoch phase0.Epoch
+	electraForkEpoch, err := fetchElectraForkEpoch(ctx, specProvider)
+	if err != nil {
+		// Not handling electra after all.
+		handlingElectra = false
+		electraForkEpoch = 0xffffffffffffffff
+	} else {
+		log.Trace().Uint64("epoch", uint64(electraForkEpoch)).Msg("Obtained Electra fork epoch")
+	}
+	if !handlingElectra {
+		log.Debug().Msg("Not handling Electra")
+	}
+	return handlingElectra, electraForkEpoch
+}
+
+// fetchElectraForkEpoch fetches the epoch for the electra hard fork.
+func fetchElectraForkEpoch(ctx context.Context,
+	specProvider eth2client.SpecProvider,
+) (
+	phase0.Epoch,
+	error,
+) {
+	// Fetch the fork version.
+	specResponse, err := specProvider.Spec(ctx, &api.SpecOpts{})
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to obtain spec")
+	}
+	spec := specResponse.Data
+
+	tmp, exists := spec["ELECTRA_FORK_EPOCH"]
+	if !exists {
+		return 0, errors.New("electra fork version not known by chain")
+	}
+	epoch, isEpoch := tmp.(uint64)
+	if !isEpoch {
+		//nolint:revive
+		return 0, errors.New("ELECTRA_FORK_EPOCH is not a uint64!")
+	}
+
+	return phase0.Epoch(epoch), nil
 }

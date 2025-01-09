@@ -106,33 +106,18 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 		s.pendingAttestations[duty.Slot()] = true
 		s.pendingAttestationsMutex.Unlock()
 
-		if s.handlingElectra && epoch < s.electraForkEpoch {
-			go func(duty *attester.Duty) {
-				jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxAttestationDelay)
-				if err := s.scheduler.ScheduleJob(ctx,
-					"Attest",
-					fmt.Sprintf("Attestations for slot %d", duty.Slot()),
-					jobTime,
-					func(ctx context.Context) { s.AttestAndScheduleAggregate(ctx, duty) },
-				); err != nil {
-					// Don't return here; we want to try to set up as many attester jobs as possible.
-					s.log.Error().Err(err).Msg("Failed to schedule attestation")
-				}
-			}(duty)
-		} else {
-			go func(duty *attester.Duty) {
-				jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxAttestationDelay)
-				if err := s.scheduler.ScheduleJob(ctx,
-					"Attest",
-					fmt.Sprintf("Versioned attestations for slot %d", duty.Slot()),
-					jobTime,
-					func(ctx context.Context) { s.AttestVersionedAndScheduleAggregate(ctx, duty) },
-				); err != nil {
-					// Don't return here; we want to try to set up as many attester jobs as possible.
-					s.log.Error().Err(err).Msg("Failed to schedule versioned attestation")
-				}
-			}(duty)
-		}
+		go func(duty *attester.Duty) {
+			jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxAttestationDelay)
+			if err := s.scheduler.ScheduleJob(ctx,
+				"Attest",
+				fmt.Sprintf("Attestations for slot %d", duty.Slot()),
+				jobTime,
+				func(ctx context.Context) { s.AttestAndScheduleAggregate(ctx, duty) },
+			); err != nil {
+				// Don't return here; we want to try to set up as many attester jobs as possible.
+				s.log.Error().Err(err).Msg("Failed to schedule attestation")
+			}
+		}(duty)
 	}
 	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Scheduled attestations")
 }
@@ -152,103 +137,6 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester
 	}()
 
 	attestations, err := s.attester.Attest(ctx, duty)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to attest")
-		return
-	}
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Attested")
-
-	if len(attestations) == 0 || attestations[0].Data == nil {
-		log.Debug().Msg("No attestations; nothing to aggregate")
-		return
-	}
-
-	epoch := s.chainTimeService.SlotToEpoch(duty.Slot())
-	s.subscriptionInfosMutex.Lock()
-	subscriptionInfoMap, exists := s.subscriptionInfos[epoch]
-	s.subscriptionInfosMutex.Unlock()
-	if !exists {
-		log.Debug().
-			Uint64("epoch", uint64(epoch)).
-			Msg("No subscription info for this epoch; not aggregating")
-		return
-	}
-
-	for _, attestation := range attestations {
-		log := log.With().Uint64("attestation_slot", uint64(attestation.Data.Slot)).Uint64("committee_index", uint64(attestation.Data.Index)).Logger()
-		slotInfoMap, exists := subscriptionInfoMap[attestation.Data.Slot]
-		if !exists {
-			log.Debug().Msg("No slot info; not aggregating")
-			continue
-		}
-		// Do not schedule aggregations for past slots.
-		currentSlot := s.chainTimeService.CurrentSlot()
-		if attestation.Data.Slot < currentSlot {
-			log.Debug().Uint64("current_slot", uint64(currentSlot)).Msg("Aggregation in the past; not scheduling")
-			continue
-		}
-		info, exists := slotInfoMap[attestation.Data.Index]
-		if !exists {
-			log.Debug().Uint64("committee_index", uint64(attestation.Data.Index)).Msg("No committee info; not aggregating")
-			continue
-		}
-		log = log.With().Uint64("validator_index", uint64(info.Duty.ValidatorIndex)).Logger()
-		if info.IsAggregator {
-			accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []phase0.ValidatorIndex{info.Duty.ValidatorIndex})
-			if err != nil {
-				// Don't return here; we want to try to set up as many aggregator jobs as possible.
-				log.Error().Err(err).Msg("Failed to obtain accounts")
-				continue
-			}
-			if len(accounts) == 0 {
-				// Don't return here; we want to try to set up as many aggregator jobs as possible.
-				log.Error().Msg("Failed to obtain account of attester")
-				continue
-			}
-			attestationDataRoot, err := attestation.Data.HashTreeRoot()
-			if err != nil {
-				// Don't return here; we want to try to set up as many aggregator jobs as possible.
-				log.Error().Err(err).Msg("Failed to obtain hash tree root of attestation")
-				continue
-			}
-			aggregatorDuty := &attestationaggregator.Duty{
-				Slot:                info.Duty.Slot,
-				AttestationDataRoot: attestationDataRoot,
-				ValidatorIndex:      info.Duty.ValidatorIndex,
-				SlotSignature:       info.Signature,
-			}
-			if err := s.scheduler.ScheduleJob(ctx,
-				"Aggregate attestations",
-				fmt.Sprintf("Beacon block attestation aggregation for slot %d committee %d", attestation.Data.Slot, attestation.Data.Index),
-				s.chainTimeService.StartOfSlot(attestation.Data.Slot).Add(s.attestationAggregationDelay),
-				func(ctx context.Context) { s.attestationAggregator.Aggregate(ctx, aggregatorDuty) },
-			); err != nil {
-				// Don't return here; we want to try to set up as many aggregator jobs as possible.
-				log.Error().Err(err).Msg("Failed to schedule beacon block attestation aggregation job")
-				continue
-			}
-			// We are set up as an aggregator for this slot and committee.  It is possible that another validator has also been
-			// assigned as an aggregator, but we're already carrying out the task so do not need to go any further.
-			return
-		}
-	}
-}
-
-// AttestVersionedAndScheduleAggregate attests, then schedules aggregation jobs as required.
-func (s *Service) AttestVersionedAndScheduleAggregate(ctx context.Context, duty *attester.Duty) {
-	started := time.Now()
-	log := s.log.With().Uint64("slot", uint64(duty.Slot())).Logger()
-
-	// At the end of this function note that we have carried out the attestation process
-	// for this slot, regardless of result.  This allows the main codebase to shut down
-	// only after attestations have completed for the given slot.
-	defer func() {
-		s.pendingAttestationsMutex.Lock()
-		delete(s.pendingAttestations, duty.Slot())
-		s.pendingAttestationsMutex.Unlock()
-	}()
-
-	attestations, err := s.attester.AttestVersioned(ctx, duty)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to attest")
 		return

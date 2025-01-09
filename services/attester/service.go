@@ -109,9 +109,5 @@ func (d *Duty) Tuples() []string {
 type Service interface {
 	// Attest carries out attestations for a slot.
 	// It returns a list of attestations made.
-	Attest(ctx context.Context, duty *Duty) ([]*phase0.Attestation, error)
-
-	// AttestVersioned carries out the attestations for a slot.
-	// It returns a list of versioned attestations made.
-	AttestVersioned(ctx context.Context, duty *Duty) ([]*spec.VersionedAttestation, error)
+	Attest(ctx context.Context, duty *Duty) ([]*spec.VersionedAttestation, error)
 }

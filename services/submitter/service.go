@@ -28,13 +28,7 @@ type Service interface{}
 // AttestationsSubmitter is the interface for a submitter of attestations.
 type AttestationsSubmitter interface {
 	// SubmitAttestations submits multiple attestations.
-	SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error
-}
-
-// VersionedAttestationsSubmitter is the interface for a submitter of versioned attestations.
-type VersionedAttestationsSubmitter interface {
-	// SubmitVersionedAttestations submits multiple versioned attestations.
-	SubmitVersionedAttestations(ctx context.Context, opts *api.SubmitAttestationsOpts) error
+	SubmitAttestations(ctx context.Context, opts *api.SubmitAttestationsOpts) error
 }
 
 // ProposalSubmitter is the interface for a submitter of proposals.

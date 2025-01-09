@@ -51,9 +51,6 @@ func TestService(t *testing.T) {
 	syncCommitteeContributionsSubmitters := map[string]eth2client.SyncCommitteeContributionsSubmitter{
 		"1": mock.NewSyncCommitteeContributionsSubmitter(),
 	}
-	versionedAttestationsSubmitters := map[string]eth2client.VersionedAttestationsSubmitter{
-		"1": mock.NewVersionedAttestationsSubmitter(),
-	}
 	tests := []struct {
 		name   string
 		params []multinode.Parameter
@@ -74,7 +71,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no client monitor specified",
 		},
@@ -92,7 +88,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no timeout specified",
 		},
@@ -110,7 +105,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no process concurrency specified",
 		},
@@ -127,7 +121,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no proposal submitters specified",
 		},
@@ -145,7 +138,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no proposal submitters specified",
 		},
@@ -162,7 +154,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no attestations submitters specified",
 		},
@@ -180,44 +171,8 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no attestations submitters specified",
-		},
-		{
-			name: "VersionedAttestationsSubmittersMissing",
-			params: []multinode.Parameter{
-				multinode.WithLogLevel(zerolog.Disabled),
-				multinode.WithTimeout(2 * time.Second),
-				multinode.WithProcessConcurrency(2),
-				multinode.WithProposalSubmitters(beaconBlockSubmitters),
-				multinode.WithAttestationsSubmitters(attestationsSubmitters),
-				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
-				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
-				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
-				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
-				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
-				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-			},
-			err: "problem with parameters: no versioned attestations submitters specified",
-		},
-		{
-			name: "VersionedAttestationsSubmittersEmpty",
-			params: []multinode.Parameter{
-				multinode.WithLogLevel(zerolog.Disabled),
-				multinode.WithTimeout(2 * time.Second),
-				multinode.WithProcessConcurrency(2),
-				multinode.WithProposalSubmitters(beaconBlockSubmitters),
-				multinode.WithAttestationsSubmitters(attestationsSubmitters),
-				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
-				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
-				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
-				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
-				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
-				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{}),
-			},
-			err: "problem with parameters: no versioned attestations submitters specified",
 		},
 		{
 			name: "BeaconCommitteeSubscriptionsSubmittersMissing",
@@ -232,7 +187,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no beacon committee subscription submitters specified",
 		},
@@ -250,7 +204,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no beacon committee subscription submitters specified",
 		},
@@ -267,7 +220,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no aggregate attestations submitters specified",
 		},
@@ -285,7 +237,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no aggregate attestations submitters specified",
 		},
@@ -302,7 +253,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no proposal preparations submitters specified",
 		},
@@ -320,7 +270,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no proposal preparations submitters specified",
 		},
@@ -337,7 +286,6 @@ func TestService(t *testing.T) {
 				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no sync committee messages submitters specified",
 		},
@@ -355,7 +303,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{}),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no sync committee messages submitters specified",
 		},
@@ -372,7 +319,6 @@ func TestService(t *testing.T) {
 				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no sync committee subscriptions submitters specified",
 		},
@@ -390,7 +336,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter{}),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no sync committee subscriptions submitters specified",
 		},
@@ -407,7 +352,6 @@ func TestService(t *testing.T) {
 				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no sync committee contributions submitters specified",
 		},
@@ -425,7 +369,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{}),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 			err: "problem with parameters: no sync committee contributions submitters specified",
 		},
@@ -443,7 +386,6 @@ func TestService(t *testing.T) {
 				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
 				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-				multinode.WithVersionedAttestationsSubmitters(versionedAttestationsSubmitters),
 			},
 		},
 	}
@@ -489,9 +431,6 @@ func TestInterfaces(t *testing.T) {
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSyncCommitteeContributionsSubmitter(),
 		}),
-		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
-			"1": mock.NewVersionedAttestationsSubmitter(),
-		}),
 	)
 	require.NoError(t, err)
 	require.Implements(t, (*submitter.ProposalSubmitter)(nil), s)
@@ -502,5 +441,4 @@ func TestInterfaces(t *testing.T) {
 	require.Implements(t, (*submitter.SyncCommitteeMessagesSubmitter)(nil), s)
 	require.Implements(t, (*submitter.SyncCommitteeSubscriptionsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.SyncCommitteeContributionsSubmitter)(nil), s)
-	require.Implements(t, (*submitter.VersionedAttestationsSubmitter)(nil), s)
 }

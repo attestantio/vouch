@@ -15,6 +15,8 @@ package multinode_test
 
 import (
 	"context"
+	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec"
 	"testing"
 	"time"
 
@@ -59,13 +61,12 @@ func TestSubmitAttestationsEmpty(t *testing.T) {
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSyncCommitteeContributionsSubmitter(),
 		}),
-		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
-			"1": mock.NewVersionedAttestationsSubmitter(),
-		}),
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitAttestations(ctx, []*phase0.Attestation{})
+	err = s.SubmitAttestations(ctx, &api.SubmitAttestationsOpts{
+		Attestations: []*spec.VersionedAttestation{},
+	})
 	require.EqualError(t, err, "no attestations supplied")
 }
 
@@ -102,26 +103,28 @@ func TestSubmitAttestations(t *testing.T) {
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSyncCommitteeContributionsSubmitter(),
 		}),
-		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
-			"1": mock.NewVersionedAttestationsSubmitter(),
-		}),
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitAttestations(ctx, []*phase0.Attestation{
-		{
-			Data: &phase0.AttestationData{
-				BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-				Source: &phase0.Checkpoint{
-					Epoch: 5,
-					Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-				},
-				Target: &phase0.Checkpoint{
-					Epoch: 6,
-					Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+	err = s.SubmitAttestations(ctx, &api.SubmitAttestationsOpts{
+		Attestations: []*spec.VersionedAttestation{
+			{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.Attestation{
+					Data: &phase0.AttestationData{
+						BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+						Source: &phase0.Checkpoint{
+							Epoch: 5,
+							Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+						},
+						Target: &phase0.Checkpoint{
+							Epoch: 6,
+							Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+						},
+					},
+					Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 				},
 			},
-			Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 		},
 	})
 	require.NoError(t, err)
@@ -162,26 +165,28 @@ func TestSubmitAttestationsErroring(t *testing.T) {
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSyncCommitteeContributionsSubmitter(),
 		}),
-		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
-			"1": mock.NewVersionedAttestationsSubmitter(),
-		}),
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitAttestations(ctx, []*phase0.Attestation{
-		{
-			Data: &phase0.AttestationData{
-				BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-				Source: &phase0.Checkpoint{
-					Epoch: 5,
-					Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-				},
-				Target: &phase0.Checkpoint{
-					Epoch: 6,
-					Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+	err = s.SubmitAttestations(ctx, &api.SubmitAttestationsOpts{
+		Attestations: []*spec.VersionedAttestation{
+			{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.Attestation{
+					Data: &phase0.AttestationData{
+						BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+						Source: &phase0.Checkpoint{
+							Epoch: 5,
+							Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+						},
+						Target: &phase0.Checkpoint{
+							Epoch: 6,
+							Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+						},
+					},
+					Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 				},
 			},
-			Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 		},
 	})
 	require.EqualError(t, err, "no successful submissions before timeout")
@@ -218,26 +223,27 @@ func TestSubmitAttestationsSleepy(t *testing.T) {
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSyncCommitteeContributionsSubmitter(),
 		}),
-		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
-			"1": mock.NewVersionedAttestationsSubmitter(),
-		}),
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitAttestations(ctx, []*phase0.Attestation{
-		{
-			Data: &phase0.AttestationData{
-				BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-				Source: &phase0.Checkpoint{
-					Epoch: 5,
-					Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-				},
-				Target: &phase0.Checkpoint{
-					Epoch: 6,
-					Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
-				},
-			},
-			Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
+	err = s.SubmitAttestations(ctx, &api.SubmitAttestationsOpts{
+		Attestations: []*spec.VersionedAttestation{
+			{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.Attestation{
+					Data: &phase0.AttestationData{
+						BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+						Source: &phase0.Checkpoint{
+							Epoch: 5,
+							Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+						},
+						Target: &phase0.Checkpoint{
+							Epoch: 6,
+							Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+						},
+					},
+					Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
+				}},
 		},
 	})
 	require.EqualError(t, err, "no successful submissions before timeout")
@@ -274,26 +280,28 @@ func TestSubmitAttestationsSleepySuccess(t *testing.T) {
 		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
 			"1": mock.NewSyncCommitteeContributionsSubmitter(),
 		}),
-		multinode.WithVersionedAttestationsSubmitters(map[string]eth2client.VersionedAttestationsSubmitter{
-			"1": mock.NewVersionedAttestationsSubmitter(),
-		}),
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitAttestations(ctx, []*phase0.Attestation{
-		{
-			Data: &phase0.AttestationData{
-				BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-				Source: &phase0.Checkpoint{
-					Epoch: 5,
-					Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-				},
-				Target: &phase0.Checkpoint{
-					Epoch: 6,
-					Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+	err = s.SubmitAttestations(ctx, &api.SubmitAttestationsOpts{
+		Attestations: []*spec.VersionedAttestation{
+			{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.Attestation{
+					Data: &phase0.AttestationData{
+						BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+						Source: &phase0.Checkpoint{
+							Epoch: 5,
+							Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+						},
+						Target: &phase0.Checkpoint{
+							Epoch: 6,
+							Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+						},
+					},
+					Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 				},
 			},
-			Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 		},
 	})
 	require.NoError(t, err)

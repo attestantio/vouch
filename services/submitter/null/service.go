@@ -65,27 +65,11 @@ func (s *Service) SubmitProposal(_ context.Context, proposal *api.VersionedSigne
 }
 
 // SubmitAttestations submits multiple attestations.
-func (s *Service) SubmitAttestations(_ context.Context, attestations []*phase0.Attestation) error {
-	if len(attestations) == 0 {
+func (s *Service) SubmitAttestations(_ context.Context, opts *api.SubmitAttestationsOpts) error {
+	if opts == nil || len(opts.Attestations) == 0 {
 		return errors.New("no attestations supplied")
 	}
-
-	if e := s.log.Trace(); e.Enabled() {
-		data, err := json.Marshal(attestations)
-		if err == nil {
-			e.Str("attestations", string(data)).Msg("Not submitting attestations")
-		}
-	}
-
-	return nil
-}
-
-// SubmitVersionedAttestations submits multiple attestations.
-func (s *Service) SubmitVersionedAttestations(_ context.Context, opts *api.SubmitAttestationsOpts) error {
 	attestations := opts.Attestations
-	if len(attestations) == 0 {
-		return errors.New("no attestations supplied")
-	}
 
 	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(attestations)
