@@ -52,10 +52,10 @@ func (s *Service) handleHead(event *apiv1.Event) {
 	}
 	block := blockResponse.Data
 
-	s.updateExecutionHeadFromBlock(block)
+	s.updateFromBlock(block)
 }
 
-func (s *Service) updateExecutionHeadFromBlock(block *spec.VersionedSignedBeaconBlock) {
+func (s *Service) updateFromBlock(block *spec.VersionedSignedBeaconBlock) {
 	switch block.Version {
 	case spec.DataVersionPhase0, spec.DataVersionAltair:
 		// No execution information available, nothing to do.
@@ -63,24 +63,33 @@ func (s *Service) updateExecutionHeadFromBlock(block *spec.VersionedSignedBeacon
 		// Potentially execution information available.
 		if block.Bellatrix != nil && block.Bellatrix.Message != nil && block.Bellatrix.Message.Body != nil {
 			executionPayload := block.Bellatrix.Message.Body.ExecutionPayload
-			if executionPayload != nil && !bytes.Equal(executionPayload.StateRoot[:], []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) {
-				s.log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
-				s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
+			if executionPayload != nil {
+				s.setBlockGasLimit(executionPayload.BlockNumber, executionPayload.GasLimit)
+				if !bytes.Equal(executionPayload.StateRoot[:], []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) {
+					s.log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
+					s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
+				}
 			}
 		}
 	case spec.DataVersionCapella:
 		// Execution information available.
 		executionPayload := block.Capella.Message.Body.ExecutionPayload
-		if executionPayload != nil && !bytes.Equal(executionPayload.StateRoot[:], []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) {
-			s.log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
-			s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
+		if executionPayload != nil {
+			s.setBlockGasLimit(executionPayload.BlockNumber, executionPayload.GasLimit)
+			if !bytes.Equal(executionPayload.StateRoot[:], []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) {
+				s.log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
+				s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
+			}
 		}
 	case spec.DataVersionDeneb:
 		// Execution information available.
 		executionPayload := block.Deneb.Message.Body.ExecutionPayload
-		if executionPayload != nil && !executionPayload.StateRoot.IsZero() {
-			s.log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
-			s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
+		if executionPayload != nil {
+			s.setBlockGasLimit(executionPayload.BlockNumber, executionPayload.GasLimit)
+			if !executionPayload.StateRoot.IsZero() {
+				s.log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
+				s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
+			}
 		}
 	default:
 		s.log.Error().Msg("Unhandled block version")

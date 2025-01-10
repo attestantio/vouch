@@ -20,6 +20,7 @@ import (
 
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
@@ -33,6 +34,7 @@ type Service struct {
 	log                      zerolog.Logger
 	monitor                  metrics.Service
 	chainTime                chaintime.Service
+	blockGasLimitProvider    cache.BlockGasLimitProvider
 	timeout                  time.Duration
 	releaseVersion           string
 	relayPubkeys             map[phase0.BLSPubKey]*e2types.BLSPublicKey
@@ -80,6 +82,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log:                      log,
 		monitor:                  parameters.monitor,
 		chainTime:                parameters.chainTime,
+		blockGasLimitProvider:    parameters.blockGasLimitProvider,
 		timeout:                  parameters.timeout,
 		releaseVersion:           parameters.releaseVersion,
 		relayPubkeys:             make(map[phase0.BLSPubKey]*e2types.BLSPublicKey),

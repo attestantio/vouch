@@ -51,3 +51,8 @@ func (s *Service) SetBlockRootToSlot(root phase0.Root, slot phase0.Slot) {
 func (*Service) ExecutionChainHead(_ context.Context) (phase0.Hash32, uint64) {
 	return phase0.Hash32{}, 0
 }
+
+// BlockGasLimit provides the block gas limit for the given height.
+func (s *Service) BlockGasLimit(_ context.Context, _ uint64) (uint64, bool) {
+	return 0, true
+}

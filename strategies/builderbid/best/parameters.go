@@ -19,6 +19,7 @@ import (
 	"time"
 
 	consensusclient "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
@@ -27,13 +28,14 @@ import (
 )
 
 type parameters struct {
-	logLevel       zerolog.Level
-	monitor        metrics.Service
-	specProvider   consensusclient.SpecProvider
-	domainProvider consensusclient.DomainProvider
-	chainTime      chaintime.Service
-	timeout        time.Duration
-	releaseVersion string
+	logLevel              zerolog.Level
+	monitor               metrics.Service
+	specProvider          consensusclient.SpecProvider
+	domainProvider        consensusclient.DomainProvider
+	blockGasLimitProvider cache.BlockGasLimitProvider
+	chainTime             chaintime.Service
+	timeout               time.Duration
+	releaseVersion        string
 }
 
 // Parameter is the interface for service parameters.
@@ -72,6 +74,13 @@ func WithSpecProvider(provider consensusclient.SpecProvider) Parameter {
 func WithDomainProvider(provider consensusclient.DomainProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.domainProvider = provider
+	})
+}
+
+// WithBlockGasLimitProvider sets the block gas limit provider.
+func WithBlockGasLimitProvider(provider cache.BlockGasLimitProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.blockGasLimitProvider = provider
 	})
 }
 
@@ -116,6 +125,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.domainProvider == nil {
 		return nil, errors.New("no domain provider specified")
+	}
+	if parameters.blockGasLimitProvider == nil {
+		return nil, errors.New("no block gas limit provider specified")
 	}
 	if parameters.chainTime == nil {
 		return nil, errors.New("no chain time specified")

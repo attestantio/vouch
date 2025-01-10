@@ -41,6 +41,9 @@ type Service struct {
 	executionChainHeadMu     sync.RWMutex
 	executionChainHeadHeight uint64
 	executionChainHeadRoot   phase0.Hash32
+
+	blockGasLimitMu sync.RWMutex
+	blockGasLimits  map[uint64]uint64
 }
 
 // New creates a new cache.
@@ -66,6 +69,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		signedBeaconBlockProvider:  parameters.signedBeaconBlockProvider,
 		beaconBlockHeadersProvider: parameters.beaconBlockHeadersProvider,
 		blockRootToSlot:            make(map[phase0.Root]phase0.Slot),
+		blockGasLimits:             make(map[uint64]uint64),
 	}
 
 	// Fetch the current execution head.
@@ -76,7 +80,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		// Could happen for various reasons, including the chain not yet being ready.  Log it, but don't error.
 		log.Debug().Err(err).Msg("Failed to obtain head block")
 	} else {
-		s.updateExecutionHeadFromBlock(blockResponse.Data)
+		s.updateFromBlock(blockResponse.Data)
 	}
 
 	if err := parameters.eventsProvider.Events(ctx, []string{"block"}, s.handleBlock); err != nil {
@@ -89,15 +93,21 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	if err := parameters.scheduler.SchedulePeriodicJob(ctx,
 		"Cache",
-		"Clean block root to slot cache",
+		"Clean caches",
 		func(_ context.Context) (time.Time, error) {
 			// Run approximately every 15 minutes.
 			return time.Now().Add(15 * time.Minute), nil
 		},
-		s.cleanBlockRootToSlot,
+		s.cleanCaches,
 	); err != nil {
-		log.Error().Err(err).Msg("Failed to schedule periodic clean of block root to slot cache")
+		log.Error().Err(err).Msg("Failed to schedule periodic clean of caches")
 	}
 
 	return s, nil
+}
+
+// cleanCaches cleans out old entries in the cache.
+func (s *Service) cleanCaches(ctx context.Context) {
+	s.cleanBlockRootToSlot(ctx)
+	s.cleanBlockGasLimit(ctx)
 }

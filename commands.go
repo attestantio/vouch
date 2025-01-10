@@ -23,6 +23,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/blockrelay"
@@ -63,7 +64,14 @@ func proposerConfigCheck(ctx context.Context, majordomo majordomo.Service) bool 
 		fmt.Fprintf(os.Stderr, "Failed to start signer: %v\n", err)
 		return true
 	}
-	blockRelaySvc, err := startBlockRelay(ctx, majordomo, monitor, consensusClient, scheduler, chainTime, accountManager, signer)
+	log.Trace().Msg("Starting cache")
+	cacheSvc, err := startCache(ctx, monitor, chainTime, scheduler, consensusClient, consensusClient.(consensusclient.BeaconBlockHeadersProvider), consensusClient.(consensusclient.SignedBeaconBlockProvider))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start cache: %v\n", err)
+		return true
+	}
+
+	blockRelaySvc, err := startBlockRelay(ctx, majordomo, monitor, consensusClient, scheduler, chainTime, accountManager, signer, cacheSvc)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to start block relay: %v\n", err)
 		return true

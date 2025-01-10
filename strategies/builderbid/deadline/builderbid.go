@@ -153,6 +153,9 @@ func (s *Service) builderBid(ctx context.Context,
 	relayConfig *beaconblockproposer.RelayConfig,
 	deadline time.Time,
 ) {
+	log := zerolog.Ctx(ctx).With().Str("relay", provider.Address()).Logger()
+	ctx = log.WithContext(ctx)
+
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.builderbid.deadline").Start(ctx, "builderBid", trace.WithAttributes(
 		attribute.String("relay", provider.Address()),
 	))
@@ -167,9 +170,8 @@ func (s *Service) builderBid(ctx context.Context,
 	var lastBid *builderspec.VersionedSignedBuilderBid
 	bids := 0
 
-	log := s.log.With().Str("relay", provider.Address()).Logger()
 	for ; ; time.Sleep(s.bidGap) {
-		firstBid, lastBid, bids = s.builderBidAttempt(ctx, &log, span, provider, respCh, errCh, slot, parentHash, pubkey, relayConfig, firstBid, lastBid, bids)
+		firstBid, lastBid, bids = s.builderBidAttempt(ctx, span, provider, respCh, errCh, slot, parentHash, pubkey, relayConfig, firstBid, lastBid, bids)
 
 		if time.Until(deadline) <= s.bidGap {
 			log.Trace().Int64("remaining_ms", time.Until(deadline).Milliseconds()).Msg("Not enough time to re-request bid")
@@ -181,7 +183,6 @@ func (s *Service) builderBid(ctx context.Context,
 }
 
 func (s *Service) builderBidAttempt(ctx context.Context,
-	log *zerolog.Logger,
 	span trace.Span,
 	provider builderclient.BuilderBidProvider,
 	respCh chan *builderBidResponse,
@@ -198,6 +199,8 @@ func (s *Service) builderBidAttempt(ctx context.Context,
 	*builderspec.VersionedSignedBuilderBid,
 	int,
 ) {
+	log := zerolog.Ctx(ctx)
+
 	resp, err := provider.BuilderBid(ctx, &builderapi.BuilderBidOpts{
 		Slot:       slot,
 		ParentHash: parentHash,
@@ -363,6 +366,8 @@ func (s *Service) verifyBidDetails(ctx context.Context,
 		return fmt.Errorf("provided timestamp %d for slot %d not expected value of %d", timestamp, slot, slotTimestamp.Unix())
 	}
 
+	s.verifyBidBlockGasLimit(ctx, bid, relayConfig)
+
 	verified, err := s.verifyBidSignature(ctx, relayConfig, bid, provider)
 	if err != nil {
 		return err
@@ -373,6 +378,44 @@ func (s *Service) verifyBidDetails(ctx context.Context,
 	}
 
 	return nil
+}
+
+func (s *Service) verifyBidBlockGasLimit(ctx context.Context,
+	bid *builderspec.VersionedSignedBuilderBid,
+	relayConfig *beaconblockproposer.RelayConfig,
+) {
+	log := zerolog.Ctx(ctx)
+
+	bidHeight, err := bid.BlockNumber()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to obtain builder bid height")
+
+		return
+	}
+
+	bidGasLimit, err := bid.BlockGasLimit()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to obtain builder bid block gas limit")
+
+		return
+	}
+
+	previousGasLimit, exists := s.blockGasLimitProvider.BlockGasLimit(ctx, bidHeight-1)
+	if !exists {
+		log.Debug().Msg("Cannot obtain gas limit for prior block; skipping check")
+
+		return
+	}
+
+	expectedGasLimit := util.ExpectedGasLimit(previousGasLimit, relayConfig.GasLimit)
+
+	// See if the bid block gas limit is accurate.
+	if bidGasLimit != expectedGasLimit {
+		log.Warn().Uint64("expected_gas_limit", expectedGasLimit).Uint64("bid_gas_limit", bidGasLimit).Msg("Incorrect block gas limit")
+
+		return
+	}
+	log.Trace().Uint64("bid_gas_limit", bidGasLimit).Msg("Correct block gas limit")
 }
 
 func (s *Service) logBidResults(span trace.Span,

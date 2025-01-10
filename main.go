@@ -345,7 +345,7 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to select submitter")
 	}
 
-	blockRelay, err := startBlockRelay(ctx, majordomo, monitor, eth2Client, schedulerSvc, chainTime, accountManager, signerSvc)
+	blockRelay, err := startBlockRelay(ctx, majordomo, monitor, eth2Client, schedulerSvc, chainTime, accountManager, signerSvc, cacheSvc)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1631,11 +1631,12 @@ func startBlockRelay(ctx context.Context,
 	chainTime chaintime.Service,
 	accountManager accountmanager.Service,
 	signerSvc signer.Service,
+	cacheSvc cache.Service,
 ) (
 	blockrelay.Service,
 	error,
 ) {
-	builderBidProvider, err := selectBuilderBidProvider(ctx, monitor, eth2Client, chainTime)
+	builderBidProvider, err := selectBuilderBidProvider(ctx, monitor, eth2Client, chainTime, cacheSvc)
 	if err != nil {
 		return nil, err
 	}
@@ -1710,6 +1711,7 @@ func selectBuilderBidProvider(ctx context.Context,
 	monitor metrics.Service,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
+	cacheSvc cache.Service,
 ) (
 	builderbid.Provider,
 	error,
@@ -1727,6 +1729,7 @@ func selectBuilderBidProvider(ctx context.Context,
 			deadlinebuilderbidstrategy.WithMonitor(monitor),
 			deadlinebuilderbidstrategy.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 			deadlinebuilderbidstrategy.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
+			deadlinebuilderbidstrategy.WithBlockGasLimitProvider(cacheSvc.(cache.BlockGasLimitProvider)),
 			deadlinebuilderbidstrategy.WithChainTime(chainTime),
 			deadlinebuilderbidstrategy.WithDeadline(viper.GetDuration("strategies.builderbid.deadline.deadline")),
 			deadlinebuilderbidstrategy.WithBidGap(viper.GetDuration("strategies.builderbid.deadline.bid-gap")),
@@ -1739,6 +1742,7 @@ func selectBuilderBidProvider(ctx context.Context,
 			bestbuilderbidstrategy.WithMonitor(monitor),
 			bestbuilderbidstrategy.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 			bestbuilderbidstrategy.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
+			bestbuilderbidstrategy.WithBlockGasLimitProvider(cacheSvc.(cache.BlockGasLimitProvider)),
 			bestbuilderbidstrategy.WithChainTime(chainTime),
 			bestbuilderbidstrategy.WithTimeout(util.Timeout("strategies.builderbid.best")),
 			bestbuilderbidstrategy.WithReleaseVersion(ReleaseVersion),

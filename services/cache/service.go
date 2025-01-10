@@ -39,3 +39,9 @@ type ExecutionChainHeadProvider interface {
 	// ExecutionChainHead provides the current execution chain head.
 	ExecutionChainHead(ctx context.Context) (phase0.Hash32, uint64)
 }
+
+// BlockGasLimitProvider provides the block gas limit for execution blocks.
+type BlockGasLimitProvider interface {
+	// BlockGasLimit provides the block gas limit for the given height, and if it exists.
+	BlockGasLimit(ctx context.Context, height uint64) (uint64, bool)
+}

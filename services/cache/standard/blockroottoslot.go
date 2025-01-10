@@ -52,6 +52,7 @@ func (s *Service) SetBlockRootToSlot(root phase0.Root, slot phase0.Slot) {
 	s.blockRootToSlotMu.Lock()
 	s.blockRootToSlot[root] = slot
 	monitorBlockRootToSlotEntriesUpdated(len(s.blockRootToSlot))
+	s.log.Trace().Uint64("slot", uint64(slot)).Stringer("root", root).Msg("Stored root for slot")
 	s.blockRootToSlotMu.Unlock()
 }
 
