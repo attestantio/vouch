@@ -16,23 +16,32 @@ package best
 import (
 	"context"
 
-	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec"
 )
 
 // scoreAggregateAttestation generates a score for an aggregate attestation.
 // The score is relative to the completeness of the aggregate.
 func (s *Service) scoreAggregateAttestation(_ context.Context,
 	name string,
-	aggregate *phase0.Attestation,
+	aggregate *spec.VersionedAttestation,
 ) float64 {
 	if aggregate == nil {
 		return 0
 	}
-
+	aggregationBits, err := aggregate.AggregationBits()
+	if err != nil {
+		s.log.Error().Err(err).Msg("Failed to get aggregation bits")
+		return 0
+	}
+	aggregateData, err := aggregate.Data()
+	if err != nil {
+		s.log.Error().Err(err).Msg("Failed to get aggregation data")
+		return 0
+	}
 	included := 0
-	total := aggregate.AggregationBits.Len()
+	total := aggregationBits.Len()
 	for i := range total {
-		if aggregate.AggregationBits.BitAt(i) {
+		if aggregationBits.BitAt(i) {
 			included++
 		}
 	}
@@ -40,7 +49,7 @@ func (s *Service) scoreAggregateAttestation(_ context.Context,
 
 	s.log.Trace().
 		Str("provider", name).
-		Uint64("attestation_slot", uint64(aggregate.Data.Slot)).
+		Uint64("attestation_slot", uint64(aggregateData.Slot)).
 		Float64("score", score).
 		Msg("Scored aggregate attestation")
 	return score

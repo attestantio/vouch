@@ -21,7 +21,6 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/attestantio/vouch/services/submitter/immediate"
@@ -401,7 +400,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 	tests := []struct {
 		name       string
 		params     []immediate.Parameter
-		aggregates []*phase0.SignedAggregateAndProof
+		aggregates []*spec.VersionedSignedAggregateAndProof
 		err        string
 	}{
 		{
@@ -432,7 +431,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			aggregates: []*phase0.SignedAggregateAndProof{},
+			aggregates: []*spec.VersionedSignedAggregateAndProof{},
 			err:        "no aggregate attestations supplied",
 		},
 		{
@@ -448,7 +447,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			aggregates: []*phase0.SignedAggregateAndProof{
+			aggregates: []*spec.VersionedSignedAggregateAndProof{
 				{},
 			},
 			err: "failed to submit aggregate attestation: error",
@@ -466,7 +465,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 				immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
 				immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
 			},
-			aggregates: []*phase0.SignedAggregateAndProof{
+			aggregates: []*spec.VersionedSignedAggregateAndProof{
 				{},
 			},
 		},
@@ -477,7 +476,11 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {
-			err := s.SubmitAggregateAttestations(context.Background(), test.aggregates)
+			opts := &api.SubmitAggregateAttestationsOpts{
+				Common:                   api.CommonOpts{},
+				SignedAggregateAndProofs: test.aggregates,
+			}
+			err := s.SubmitAggregateAttestations(context.Background(), opts)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
