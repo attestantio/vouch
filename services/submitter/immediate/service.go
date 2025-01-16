@@ -106,16 +106,16 @@ func (s *Service) SubmitProposal(ctx context.Context, proposal *api.VersionedSig
 }
 
 // SubmitAttestations submits multiple attestations.
-func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error {
+func (s *Service) SubmitAttestations(ctx context.Context, opts *api.SubmitAttestationsOpts) error {
 	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitAttestations")
 	defer span.End()
 
-	if len(attestations) == 0 {
+	if len(opts.Attestations) == 0 {
 		return errors.New("no attestations supplied")
 	}
 
 	started := time.Now()
-	err := s.attestationsSubmitter.SubmitAttestations(ctx, attestations)
+	err := s.attestationsSubmitter.SubmitAttestations(ctx, opts)
 	if service, isService := s.attestationsSubmitter.(eth2client.Service); isService {
 		s.clientMonitor.ClientOperation(service.Address(), "submit attestations", err == nil, time.Since(started))
 	} else {
@@ -126,7 +126,7 @@ func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0
 	}
 
 	if e := s.log.Trace(); e.Enabled() {
-		data, err := json.Marshal(attestations)
+		data, err := json.Marshal(opts.Attestations)
 		if err == nil {
 			e.Str("attestations", string(data)).Msg("Submitted attestations")
 		}

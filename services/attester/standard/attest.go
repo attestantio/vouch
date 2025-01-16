@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/attester"
 	"github.com/attestantio/vouch/util"
@@ -32,7 +34,7 @@ import (
 
 // Attest carries out attestations for a slot.
 // It returns a map of attestations made, keyed on the validator index.
-func (s *Service) Attest(ctx context.Context, duty *attester.Duty) ([]*phase0.Attestation, error) {
+func (s *Service) Attest(ctx context.Context, duty *attester.Duty) ([]*spec.VersionedAttestation, error) {
 	ctx, span := otel.Tracer("attestantio.vouch.services.attester.standard").Start(ctx, "Attest")
 	defer span.End()
 	started := time.Now()
@@ -124,12 +126,23 @@ func (s *Service) attest(
 	committeeSizes []uint64,
 	data *phase0.AttestationData,
 	started time.Time,
-) ([]*phase0.Attestation, error) {
+) ([]*spec.VersionedAttestation, error) {
+	// Set the signing committee indices to use.
+	signingCommitteeIndices := make([]phase0.CommitteeIndex, len(committeeIndices))
+	copy(signingCommitteeIndices, committeeIndices)
+	epoch := s.chainTime.SlotToEpoch(duty.Slot())
+	if epoch >= s.electraForkEpoch {
+		for i := range signingCommitteeIndices {
+			// Hardcode the committee indices to be 0 in Electra.
+			signingCommitteeIndices[i] = 0
+		}
+	}
+
 	// Sign the attestation for all validating accounts.
 	sigs, err := s.beaconAttestationsSigner.SignBeaconAttestations(ctx,
 		accounts,
 		duty.Slot(),
-		committeeIndices,
+		signingCommitteeIndices,
 		data.BeaconBlockRoot,
 		data.Source.Epoch,
 		data.Source.Root,
@@ -140,19 +153,28 @@ func (s *Service) attest(
 		return nil, errors.Wrap(err, "failed to sign beacon attestations")
 	}
 	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed")
+	var attestations []*spec.VersionedAttestation
 
-	attestations := s.createAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
-	if len(attestations) == 0 {
-		s.log.Info().Msg("No signed attestations; not submitting")
-		return attestations, nil
+	if epoch < s.electraForkEpoch {
+		attestations = s.createAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
+		if len(attestations) == 0 {
+			s.log.Info().Msg("No signed attestations; not submitting")
+			return attestations, nil
+		}
+	} else {
+		attestations = s.createElectraAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
+		if len(attestations) == 0 {
+			s.log.Info().Msg("No signed attestations; not submitting")
+			return attestations, nil
+		}
 	}
-
-	// Submit the attestations.
+	// Submit the versioned attestations.
 	submissionStarted := time.Now()
-	if err := s.attestationsSubmitter.SubmitAttestations(ctx, attestations); err != nil {
-		return nil, errors.Wrap(err, "failed to submit attestations")
+	opts := &api.SubmitAttestationsOpts{Attestations: attestations}
+	if err := s.attestationsSubmitter.SubmitAttestations(ctx, opts); err != nil {
+		return nil, errors.Wrap(err, "failed to submit versioned attestations")
 	}
-	s.log.Trace().Dur("elapsed", time.Since(started)).Dur("submission_elapsed", time.Since(submissionStarted)).Msg("Submitted attestations")
+	s.log.Trace().Dur("elapsed", time.Since(started)).Dur("submission_elapsed", time.Since(submissionStarted)).Msg("Submitted versioned attestations")
 
 	return attestations, nil
 }
@@ -165,9 +187,9 @@ func (s *Service) createAttestations(_ context.Context,
 	committeeSizes []uint64,
 	data *phase0.AttestationData,
 	sigs []phase0.BLSSignature,
-) []*phase0.Attestation {
+) []*spec.VersionedAttestation {
 	// Create the attestations.
-	attestations := make([]*phase0.Attestation, 0, len(sigs))
+	attestations := make([]*spec.VersionedAttestation, 0, len(sigs))
 	for i := range sigs {
 		if sigs[i].IsZero() {
 			s.log.Warn().
@@ -194,7 +216,57 @@ func (s *Service) createAttestations(_ context.Context,
 			},
 		}
 		copy(attestation.Signature[:], sigs[i][:])
-		attestations = append(attestations, attestation)
+		versionedAttestation := &spec.VersionedAttestation{Version: spec.DataVersionPhase0, Phase0: attestation}
+		attestations = append(attestations, versionedAttestation)
+	}
+
+	return attestations
+}
+
+// createElectraAttestations returns versioned attestations specifically for electra (index set to 0).
+func (s *Service) createElectraAttestations(_ context.Context,
+	duty *attester.Duty,
+	accounts []e2wtypes.Account,
+	committeeIndices []phase0.CommitteeIndex,
+	validatorCommitteeIndices []phase0.ValidatorIndex,
+	committeeSizes []uint64,
+	data *phase0.AttestationData,
+	sigs []phase0.BLSSignature,
+) []*spec.VersionedAttestation {
+	attestations := make([]*spec.VersionedAttestation, 0, len(sigs))
+	for i := range sigs {
+		if sigs[i].IsZero() {
+			s.log.Warn().
+				Str("validator_pubkey", fmt.Sprintf("%#x", accounts[i].PublicKey().Marshal())).
+				Msg("No signature for validator; not creating attestation")
+			continue
+		}
+		aggregationBits := bitfield.NewBitlist(committeeSizes[i])
+		aggregationBits.SetBitAt(uint64(validatorCommitteeIndices[i]), true)
+
+		committeeBits := bitfield.NewBitvector64()
+		committeeBits.SetBitAt(uint64(committeeIndices[i]), true)
+
+		attestation := &electra.Attestation{
+			AggregationBits: aggregationBits,
+			Data: &phase0.AttestationData{
+				Slot:            duty.Slot(),
+				Index:           0, // Deprecated in electra so fixed to 0.
+				BeaconBlockRoot: data.BeaconBlockRoot,
+				Source: &phase0.Checkpoint{
+					Epoch: data.Source.Epoch,
+					Root:  data.Source.Root,
+				},
+				Target: &phase0.Checkpoint{
+					Epoch: data.Target.Epoch,
+					Root:  data.Target.Root,
+				},
+			},
+			CommitteeBits: committeeBits,
+		}
+		copy(attestation.Signature[:], sigs[i][:])
+		versionedAttestation := &spec.VersionedAttestation{Version: spec.DataVersionElectra, Electra: attestation}
+		attestations = append(attestations, versionedAttestation)
 	}
 
 	return attestations

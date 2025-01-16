@@ -51,7 +51,6 @@ func TestService(t *testing.T) {
 	syncCommitteeContributionsSubmitters := map[string]eth2client.SyncCommitteeContributionsSubmitter{
 		"1": mock.NewSyncCommitteeContributionsSubmitter(),
 	}
-
 	tests := []struct {
 		name   string
 		params []multinode.Parameter

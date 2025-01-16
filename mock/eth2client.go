@@ -307,7 +307,7 @@ func NewAttestationsSubmitter() eth2client.AttestationsSubmitter {
 }
 
 // SubmitAttestations is a mock.
-func (*AttestationsSubmitter) SubmitAttestations(_ context.Context, _ []*phase0.Attestation) error {
+func (*AttestationsSubmitter) SubmitAttestations(_ context.Context, _ *api.SubmitAttestationsOpts) error {
 	return nil
 }
 
@@ -320,7 +320,7 @@ func NewErroringAttestationsSubmitter() eth2client.AttestationsSubmitter {
 }
 
 // SubmitAttestations is a mock.
-func (*ErroringAttestationsSubmitter) SubmitAttestations(_ context.Context, _ []*phase0.Attestation) error {
+func (*ErroringAttestationsSubmitter) SubmitAttestations(_ context.Context, _ *api.SubmitAttestationsOpts) error {
 	return errors.New("error")
 }
 
@@ -339,9 +339,9 @@ func NewSleepyAttestationsSubmitter(wait time.Duration, next eth2client.Attestat
 }
 
 // SubmitAttestations is a mock.
-func (m *SleepyAttestationsSubmitter) SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error {
+func (m *SleepyAttestationsSubmitter) SubmitAttestations(ctx context.Context, opts *api.SubmitAttestationsOpts) error {
 	time.Sleep(m.wait)
-	return m.next.SubmitAttestations(ctx, attestations)
+	return m.next.SubmitAttestations(ctx, opts)
 }
 
 // ProposalSubmitter is a mock for eth2client.ProposalSubmitter.

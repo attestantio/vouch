@@ -91,6 +91,13 @@ func (s *Service) updateFromBlock(block *spec.VersionedSignedBeaconBlock) {
 				s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
 			}
 		}
+	case spec.DataVersionElectra:
+		// Execution information available.
+		executionPayload := block.Electra.Message.Body.ExecutionPayload
+		if executionPayload != nil && !executionPayload.StateRoot.IsZero() {
+			s.log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
+			s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
+		}
 	default:
 		s.log.Error().Msg("Unhandled block version")
 	}
