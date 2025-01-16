@@ -19,7 +19,6 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
 // Service is the submitter service.
@@ -46,7 +45,7 @@ type BeaconCommitteeSubscriptionsSubmitter interface {
 // AggregateAttestationsSubmitter is the interface for a submitter of aggregate attestations.
 type AggregateAttestationsSubmitter interface {
 	// SubmitAggregateAttestations submits aggregate attestations.
-	SubmitAggregateAttestations(ctx context.Context, aggregateAttestations []*phase0.SignedAggregateAndProof) error
+	SubmitAggregateAttestations(ctx context.Context, opts *api.SubmitAggregateAttestationsOpts) error
 }
 
 // ProposalPreparationsSubmitter is the interface for a submitter of proposal preparations.

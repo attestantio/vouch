@@ -19,7 +19,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -29,7 +29,7 @@ import (
 
 type aggregateAttestationResponse struct {
 	provider  string
-	aggregate *phase0.Attestation
+	aggregate *spec.VersionedAttestation
 	score     float64
 }
 
@@ -42,7 +42,7 @@ type aggregateAttestationError struct {
 func (s *Service) AggregateAttestation(ctx context.Context,
 	opts *api.AggregateAttestationOpts,
 ) (
-	*api.Response[*phase0.Attestation],
+	*api.Response[*spec.VersionedAttestation],
 	error,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.aggregateattestation.best").Start(ctx, "AggregateAttestation", trace.WithAttributes(
@@ -75,7 +75,7 @@ func (s *Service) AggregateAttestation(ctx context.Context,
 	timedOut := 0
 	softTimedOut := 0
 	bestScore := float64(0)
-	var bestAggregateAttestation *phase0.Attestation
+	var bestAggregateAttestation *spec.VersionedAttestation
 	var bestProvider string
 
 	// Loop 1: prior to soft timeout.
@@ -185,7 +185,7 @@ func (s *Service) AggregateAttestation(ctx context.Context,
 		s.clientMonitor.StrategyOperation("best", bestProvider, "aggregate attestation", time.Since(started))
 	}
 
-	return &api.Response[*phase0.Attestation]{
+	return &api.Response[*spec.VersionedAttestation]{
 		Data:     bestAggregateAttestation,
 		Metadata: make(map[string]any),
 	}, nil
