@@ -22,6 +22,8 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
@@ -133,7 +135,13 @@ func (s *Service) Aggregate(ctx context.Context, duty *attestationaggregator.Dut
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained aggregate attestation")
 
 	// Fetch the validating account.
-	epoch := phase0.Epoch(uint64(aggregateAttestation.Data.Slot) / s.slotsPerEpoch)
+	aggregateAttestationData, err := aggregateAttestation.Data()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to obtain aggregate attestation data")
+		monitorAttestationAggregationCompleted(started, duty.Slot, "failed", startOfSlot)
+		return
+	}
+	epoch := phase0.Epoch(uint64(aggregateAttestationData.Slot) / s.slotsPerEpoch)
 	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, epoch, []phase0.ValidatorIndex{duty.ValidatorIndex})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to obtain proposing validator account")
@@ -149,16 +157,19 @@ func (s *Service) Aggregate(ctx context.Context, duty *attestationaggregator.Dut
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained aggregating account")
 
 	// Sign the aggregate attestation.
-	aggregateAndProof := &phase0.AggregateAndProof{
-		AggregatorIndex: duty.ValidatorIndex,
-		Aggregate:       aggregateAttestation,
-		SelectionProof:  duty.SlotSignature,
+	versionedAggregateAndProof, err := createVersionedAggregateAndProof(duty, aggregateAttestation)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create versioned aggregate and proof")
+		monitorAttestationAggregationCompleted(started, duty.Slot, "failed", startOfSlot)
+		return
 	}
-	aggregateAndProofRoot, err := aggregateAndProof.HashTreeRoot()
+	aggregateAndProofRoot, err := versionedAggregateAndProof.HashTreeRoot()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to generate hash tree root of aggregate and proof")
+		monitorAttestationAggregationCompleted(started, duty.Slot, "failed", startOfSlot)
+		return
 	}
-	sig, err := s.aggregateAndProofSigner.SignAggregateAndProof(ctx, account, duty.Slot, phase0.Root(aggregateAndProofRoot))
+	sig, err := s.aggregateAndProofSigner.SignAggregateAndProof(ctx, account, duty.Slot, aggregateAndProofRoot)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign aggregate and proof")
 		monitorAttestationAggregationCompleted(started, duty.Slot, "failed", startOfSlot)
@@ -167,23 +178,209 @@ func (s *Service) Aggregate(ctx context.Context, duty *attestationaggregator.Dut
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed aggregate attestation")
 
 	// Submit the signed aggregate and proof.
-	signedAggregateAndProofs := []*phase0.SignedAggregateAndProof{
-		{
-			Message:   aggregateAndProof,
-			Signature: sig,
-		},
+	signedAggregateAndProof, err := createVersionedSignedAggregateAndProof(versionedAggregateAndProof, sig)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create versioned signed aggregate and proof")
+		monitorAttestationAggregationCompleted(started, duty.Slot, "failed", startOfSlot)
+		return
 	}
-	if err := s.aggregateAttestationsSubmitter.SubmitAggregateAttestations(ctx, signedAggregateAndProofs); err != nil {
+
+	signedAggregateOpts := &api.SubmitAggregateAttestationsOpts{
+		Common:                   api.CommonOpts{},
+		SignedAggregateAndProofs: []*spec.VersionedSignedAggregateAndProof{signedAggregateAndProof},
+	}
+	if err := s.aggregateAttestationsSubmitter.SubmitAggregateAttestations(ctx, signedAggregateOpts); err != nil {
 		log.Error().Err(err).Msg("Failed to submit aggregate and proof")
 		monitorAttestationAggregationCompleted(started, duty.Slot, "failed", startOfSlot)
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted aggregate attestation")
 
-	frac := float64(aggregateAndProof.Aggregate.AggregationBits.Count()) /
-		float64(aggregateAndProof.Aggregate.AggregationBits.Len())
+	aggregationBits, err := aggregateAttestation.AggregationBits()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to retrieve aggregation bits")
+		monitorAttestationAggregationCompleted(started, duty.Slot, "failed", startOfSlot)
+		return
+	}
+	frac := float64(aggregationBits.Count()) / float64(aggregationBits.Len())
 	monitorAttestationAggregationCoverage(frac)
 	monitorAttestationAggregationCompleted(started, duty.Slot, "succeeded", startOfSlot)
+}
+
+func createVersionedAggregateAndProof(duty *attestationaggregator.Duty, aggregateAttestation *spec.VersionedAttestation) (*spec.VersionedAggregateAndProof, error) {
+	switch aggregateAttestation.Version {
+	case spec.DataVersionPhase0:
+		if aggregateAttestation.Phase0 == nil {
+			return nil, errors.New("no phase0 attestation")
+		}
+		aggregateAndProof := &phase0.AggregateAndProof{
+			AggregatorIndex: duty.ValidatorIndex,
+			Aggregate:       aggregateAttestation.Phase0,
+			SelectionProof:  duty.SlotSignature,
+		}
+		versionedAggregateAndProof := &spec.VersionedAggregateAndProof{
+			Version: aggregateAttestation.Version,
+			Phase0:  aggregateAndProof,
+		}
+		return versionedAggregateAndProof, nil
+	case spec.DataVersionAltair:
+		if aggregateAttestation.Altair == nil {
+			return nil, errors.New("no altair attestation")
+		}
+		aggregateAndProof := &phase0.AggregateAndProof{
+			AggregatorIndex: duty.ValidatorIndex,
+			Aggregate:       aggregateAttestation.Altair,
+			SelectionProof:  duty.SlotSignature,
+		}
+		versionedAggregateAndProof := &spec.VersionedAggregateAndProof{
+			Version: aggregateAttestation.Version,
+			Altair:  aggregateAndProof,
+		}
+		return versionedAggregateAndProof, nil
+	case spec.DataVersionBellatrix:
+		if aggregateAttestation.Bellatrix == nil {
+			return nil, errors.New("no bellatrix attestation")
+		}
+		aggregateAndProof := &phase0.AggregateAndProof{
+			AggregatorIndex: duty.ValidatorIndex,
+			Aggregate:       aggregateAttestation.Bellatrix,
+			SelectionProof:  duty.SlotSignature,
+		}
+		versionedAggregateAndProof := &spec.VersionedAggregateAndProof{
+			Version:   aggregateAttestation.Version,
+			Bellatrix: aggregateAndProof,
+		}
+		return versionedAggregateAndProof, nil
+	case spec.DataVersionCapella:
+		if aggregateAttestation.Capella == nil {
+			return nil, errors.New("no capella attestation")
+		}
+		aggregateAndProof := &phase0.AggregateAndProof{
+			AggregatorIndex: duty.ValidatorIndex,
+			Aggregate:       aggregateAttestation.Capella,
+			SelectionProof:  duty.SlotSignature,
+		}
+		versionedAggregateAndProof := &spec.VersionedAggregateAndProof{
+			Version: aggregateAttestation.Version,
+			Capella: aggregateAndProof,
+		}
+		return versionedAggregateAndProof, nil
+	case spec.DataVersionDeneb:
+		if aggregateAttestation.Deneb == nil {
+			return nil, errors.New("no deneb attestation")
+		}
+		aggregateAndProof := &phase0.AggregateAndProof{
+			AggregatorIndex: duty.ValidatorIndex,
+			Aggregate:       aggregateAttestation.Deneb,
+			SelectionProof:  duty.SlotSignature,
+		}
+		versionedAggregateAndProof := &spec.VersionedAggregateAndProof{
+			Version: aggregateAttestation.Version,
+			Deneb:   aggregateAndProof,
+		}
+		return versionedAggregateAndProof, nil
+	case spec.DataVersionElectra:
+		if aggregateAttestation.Electra == nil {
+			return nil, errors.New("no electra attestation")
+		}
+		aggregateAndProof := &electra.AggregateAndProof{
+			AggregatorIndex: duty.ValidatorIndex,
+			Aggregate:       aggregateAttestation.Electra,
+			SelectionProof:  duty.SlotSignature,
+		}
+		versionedAggregateAndProof := &spec.VersionedAggregateAndProof{
+			Version: aggregateAttestation.Version,
+			Electra: aggregateAndProof,
+		}
+		return versionedAggregateAndProof, nil
+	default:
+		return &spec.VersionedAggregateAndProof{}, errors.New("unknown version")
+	}
+}
+
+func createVersionedSignedAggregateAndProof(aggregateAndProof *spec.VersionedAggregateAndProof, sig phase0.BLSSignature) (*spec.VersionedSignedAggregateAndProof, error) {
+	switch aggregateAndProof.Version {
+	case spec.DataVersionPhase0:
+		if aggregateAndProof.Phase0 == nil {
+			return nil, errors.New("no phase0 aggregate and proof")
+		}
+		signedAggregateAndProof := &phase0.SignedAggregateAndProof{
+			Message:   aggregateAndProof.Phase0,
+			Signature: sig,
+		}
+		signedVersionedAggregateAndProof := &spec.VersionedSignedAggregateAndProof{
+			Version: aggregateAndProof.Version,
+			Phase0:  signedAggregateAndProof,
+		}
+		return signedVersionedAggregateAndProof, nil
+	case spec.DataVersionAltair:
+		if aggregateAndProof.Altair == nil {
+			return nil, errors.New("no altair aggregate and proof")
+		}
+		signedAggregateAndProof := &phase0.SignedAggregateAndProof{
+			Message:   aggregateAndProof.Altair,
+			Signature: sig,
+		}
+		signedVersionedAggregateAndProof := &spec.VersionedSignedAggregateAndProof{
+			Version: aggregateAndProof.Version,
+			Altair:  signedAggregateAndProof,
+		}
+		return signedVersionedAggregateAndProof, nil
+	case spec.DataVersionBellatrix:
+		if aggregateAndProof.Bellatrix == nil {
+			return nil, errors.New("no bellatrix aggregate and proof")
+		}
+		signedAggregateAndProof := &phase0.SignedAggregateAndProof{
+			Message:   aggregateAndProof.Bellatrix,
+			Signature: sig,
+		}
+		signedVersionedAggregateAndProof := &spec.VersionedSignedAggregateAndProof{
+			Version:   aggregateAndProof.Version,
+			Bellatrix: signedAggregateAndProof,
+		}
+		return signedVersionedAggregateAndProof, nil
+	case spec.DataVersionCapella:
+		if aggregateAndProof.Capella == nil {
+			return nil, errors.New("no capella aggregate and proof")
+		}
+		signedAggregateAndProof := &phase0.SignedAggregateAndProof{
+			Message:   aggregateAndProof.Capella,
+			Signature: sig,
+		}
+		signedVersionedAggregateAndProof := &spec.VersionedSignedAggregateAndProof{
+			Version: aggregateAndProof.Version,
+			Capella: signedAggregateAndProof,
+		}
+		return signedVersionedAggregateAndProof, nil
+	case spec.DataVersionDeneb:
+		if aggregateAndProof.Deneb == nil {
+			return nil, errors.New("no deneb aggregate and proof")
+		}
+		signedAggregateAndProof := &phase0.SignedAggregateAndProof{
+			Message:   aggregateAndProof.Deneb,
+			Signature: sig,
+		}
+		signedVersionedAggregateAndProof := &spec.VersionedSignedAggregateAndProof{
+			Version: aggregateAndProof.Version,
+			Deneb:   signedAggregateAndProof,
+		}
+		return signedVersionedAggregateAndProof, nil
+	case spec.DataVersionElectra:
+		if aggregateAndProof.Electra == nil {
+			return nil, errors.New("no electra aggregate and proof")
+		}
+		signedAggregateAndProof := &electra.SignedAggregateAndProof{
+			Message:   aggregateAndProof.Electra,
+			Signature: sig,
+		}
+		signedVersionedAggregateAndProof := &spec.VersionedSignedAggregateAndProof{
+			Version: aggregateAndProof.Version,
+			Electra: signedAggregateAndProof,
+		}
+		return signedVersionedAggregateAndProof, nil
+	default:
+		return &spec.VersionedSignedAggregateAndProof{}, errors.New("unknown version")
+	}
 }
 
 // AggregatorsAndSignatures reports signatures and whether validators are attestation aggregators for a given slot.

@@ -15,6 +15,8 @@ package multinode_test
 
 import (
 	"context"
+	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec"
 	"testing"
 	"time"
 
@@ -61,8 +63,11 @@ func TestSubmitAggregateAttestationsEmpty(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-
-	err = s.SubmitAggregateAttestations(ctx, []*phase0.SignedAggregateAndProof{})
+	opts := &api.SubmitAggregateAttestationsOpts{
+		Common:                   api.CommonOpts{},
+		SignedAggregateAndProofs: []*spec.VersionedSignedAggregateAndProof{},
+	}
+	err = s.SubmitAggregateAttestations(ctx, opts)
 	require.EqualError(t, err, "no aggregate attestations supplied")
 }
 
@@ -101,27 +106,34 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-
-	err = s.SubmitAggregateAttestations(ctx, []*phase0.SignedAggregateAndProof{
+	signedProofs := []*spec.VersionedSignedAggregateAndProof{
 		{
-			Message: &phase0.AggregateAndProof{
-				Aggregate: &phase0.Attestation{
-					Data: &phase0.AttestationData{
-						BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-						Source: &phase0.Checkpoint{
-							Epoch: 5,
-							Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-						},
-						Target: &phase0.Checkpoint{
-							Epoch: 6,
-							Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+			Version: spec.DataVersionPhase0,
+			Phase0: &phase0.SignedAggregateAndProof{
+				Message: &phase0.AggregateAndProof{
+					Aggregate: &phase0.Attestation{
+						Data: &phase0.AttestationData{
+							BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+							Source: &phase0.Checkpoint{
+								Epoch: 5,
+								Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+							},
+							Target: &phase0.Checkpoint{
+								Epoch: 6,
+								Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+							},
 						},
 					},
 				},
+				Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 			},
-			Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 		},
-	})
+	}
+	opts := &api.SubmitAggregateAttestationsOpts{
+		Common:                   api.CommonOpts{},
+		SignedAggregateAndProofs: signedProofs,
+	}
+	err = s.SubmitAggregateAttestations(ctx, opts)
 	require.NoError(t, err)
 
 	// Return happens prior to the log message, so wait before asserting.
@@ -163,26 +175,34 @@ func TestSubmitAggregateAttestationsErroring(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitAggregateAttestations(ctx, []*phase0.SignedAggregateAndProof{
+	signedProofs := []*spec.VersionedSignedAggregateAndProof{
 		{
-			Message: &phase0.AggregateAndProof{
-				Aggregate: &phase0.Attestation{
-					Data: &phase0.AttestationData{
-						BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-						Source: &phase0.Checkpoint{
-							Epoch: 5,
-							Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-						},
-						Target: &phase0.Checkpoint{
-							Epoch: 6,
-							Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+			Version: spec.DataVersionPhase0,
+			Phase0: &phase0.SignedAggregateAndProof{
+				Message: &phase0.AggregateAndProof{
+					Aggregate: &phase0.Attestation{
+						Data: &phase0.AttestationData{
+							BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+							Source: &phase0.Checkpoint{
+								Epoch: 5,
+								Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+							},
+							Target: &phase0.Checkpoint{
+								Epoch: 6,
+								Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+							},
 						},
 					},
 				},
+				Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 			},
-			Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 		},
-	})
+	}
+	opts := &api.SubmitAggregateAttestationsOpts{
+		Common:                   api.CommonOpts{},
+		SignedAggregateAndProofs: signedProofs,
+	}
+	err = s.SubmitAggregateAttestations(ctx, opts)
 	require.EqualError(t, err, "no successful submissions before timeout")
 }
 
@@ -220,26 +240,34 @@ func TestSubmitAggregateAttestationsSleepy(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitAggregateAttestations(ctx, []*phase0.SignedAggregateAndProof{
+	signedProofs := []*spec.VersionedSignedAggregateAndProof{
 		{
-			Message: &phase0.AggregateAndProof{
-				Aggregate: &phase0.Attestation{
-					Data: &phase0.AttestationData{
-						BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-						Source: &phase0.Checkpoint{
-							Epoch: 5,
-							Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-						},
-						Target: &phase0.Checkpoint{
-							Epoch: 6,
-							Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+			Version: spec.DataVersionPhase0,
+			Phase0: &phase0.SignedAggregateAndProof{
+				Message: &phase0.AggregateAndProof{
+					Aggregate: &phase0.Attestation{
+						Data: &phase0.AttestationData{
+							BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+							Source: &phase0.Checkpoint{
+								Epoch: 5,
+								Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+							},
+							Target: &phase0.Checkpoint{
+								Epoch: 6,
+								Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+							},
 						},
 					},
 				},
+				Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 			},
-			Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 		},
-	})
+	}
+	opts := &api.SubmitAggregateAttestationsOpts{
+		Common:                   api.CommonOpts{},
+		SignedAggregateAndProofs: signedProofs,
+	}
+	err = s.SubmitAggregateAttestations(ctx, opts)
 	require.EqualError(t, err, "no successful submissions before timeout")
 }
 
@@ -277,25 +305,33 @@ func TestSubmitAggregateAttestationsSleepySuccess(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = s.SubmitAggregateAttestations(ctx, []*phase0.SignedAggregateAndProof{
+	signedProofs := []*spec.VersionedSignedAggregateAndProof{
 		{
-			Message: &phase0.AggregateAndProof{
-				Aggregate: &phase0.Attestation{
-					Data: &phase0.AttestationData{
-						BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
-						Source: &phase0.Checkpoint{
-							Epoch: 5,
-							Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
-						},
-						Target: &phase0.Checkpoint{
-							Epoch: 6,
-							Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+			Version: spec.DataVersionPhase0,
+			Phase0: &phase0.SignedAggregateAndProof{
+				Message: &phase0.AggregateAndProof{
+					Aggregate: &phase0.Attestation{
+						Data: &phase0.AttestationData{
+							BeaconBlockRoot: testutil.HexToRoot("0x0101010101010101010101010101010101010101010101010101010101010101"),
+							Source: &phase0.Checkpoint{
+								Epoch: 5,
+								Root:  testutil.HexToRoot("0x0202020202020202020202020202020202020202020202020202020202020202"),
+							},
+							Target: &phase0.Checkpoint{
+								Epoch: 6,
+								Root:  testutil.HexToRoot("0x0303030303030303030303030303030303030303030303030303030303030303"),
+							},
 						},
 					},
 				},
+				Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 			},
-			Signature: testutil.HexToSignature("0x040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404"),
 		},
-	})
+	}
+	opts := &api.SubmitAggregateAttestationsOpts{
+		Common:                   api.CommonOpts{},
+		SignedAggregateAndProofs: signedProofs,
+	}
+	err = s.SubmitAggregateAttestations(ctx, opts)
 	require.NoError(t, err)
 }
