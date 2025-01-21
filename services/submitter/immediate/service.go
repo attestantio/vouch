@@ -177,10 +177,10 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, opts *api.Sub
 	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitAggregateAttestations")
 	defer span.End()
 
-	aggregates := opts.SignedAggregateAndProofs
-	if len(aggregates) == 0 {
+	if opts == nil || len(opts.SignedAggregateAndProofs) == 0 {
 		return errors.New("no aggregate attestations supplied")
 	}
+	aggregates := opts.SignedAggregateAndProofs
 
 	started := time.Now()
 	err := s.aggregateAttestationsSubmitter.SubmitAggregateAttestations(ctx, opts)

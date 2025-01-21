@@ -35,8 +35,7 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, opts *api.Sub
 	))
 	defer span.End()
 
-	aggregates := opts.SignedAggregateAndProofs
-	if len(aggregates) == 0 {
+	if opts == nil || len(opts.SignedAggregateAndProofs) == 0 {
 		return errors.New("no aggregate attestations supplied")
 	}
 
