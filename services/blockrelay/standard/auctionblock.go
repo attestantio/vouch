@@ -22,7 +22,6 @@ import (
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
 	builderclient "github.com/attestantio/go-builder-client"
 	"github.com/attestantio/go-builder-client/api/deneb"
-	"github.com/attestantio/go-builder-client/api/electra"
 	builderspec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -104,33 +103,17 @@ func (s *Service) cacheBid(_ context.Context,
 	bid *builderspec.VersionedSignedBuilderBid,
 ) {
 	if bid == nil {
-		epoch := s.chainTime.SlotToEpoch(slot)
-
 		// No bid supplied; create a dummy for the purposes of caching so that if asked for this bid
 		// we can actively respond to say we don't have anything (as opposed to attempting to fetch
 		// a bid when we're queried).
 		s.log.Trace().Msg("Bid is nil; creating dummy")
-		// It would be nice if we could avoid doing this as it would remove the need to set the electraForkEpoch on the service.
-		// At present, I can't see a way to let the controller dictate which dummy we use without refactoring/duplicating a lot
-		// of code. That approach feels a bit heavy-handed for such a simple case.
-		if epoch >= s.electraForkEpoch {
-			bid = &builderspec.VersionedSignedBuilderBid{
-				Version: spec.DataVersionElectra,
-				Electra: &electra.SignedBuilderBid{
-					Message: &electra.BuilderBid{
-						Value: uint256.NewInt(0),
-					},
+		bid = &builderspec.VersionedSignedBuilderBid{
+			Version: spec.DataVersionDeneb,
+			Deneb: &deneb.SignedBuilderBid{
+				Message: &deneb.BuilderBid{
+					Value: uint256.NewInt(0),
 				},
-			}
-		} else {
-			bid = &builderspec.VersionedSignedBuilderBid{
-				Version: spec.DataVersionDeneb,
-				Deneb: &deneb.SignedBuilderBid{
-					Message: &deneb.BuilderBid{
-						Value: uint256.NewInt(0),
-					},
-				},
-			}
+			},
 		}
 	}
 

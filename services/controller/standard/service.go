@@ -131,7 +131,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	handlingAltair, altairForkEpoch := altairDetails(ctx, log, parameters.specProvider, parameters.syncCommitteeAggregator, epochsPerSyncCommitteePeriod)
 	handlingBellatrix, bellatrixForkEpoch := bellatrixDetails(ctx, log, parameters.specProvider)
 	capellaForkEpoch := capellaDetails(ctx, log, parameters.specProvider)
-	handlingElectra, electraForkEpoch := electraDetails(ctx, log, parameters.specProvider)
+	handlingElectra, electraForkEpoch := electraDetails(ctx, log, parameters.chainTimeService)
 
 	s := &Service{
 		log:                           log,
@@ -563,33 +563,6 @@ func (s *Service) handleBellatrixForkEpoch(ctx context.Context) {
 	}()
 }
 
-// fetchElectraForkEpoch fetches the epoch for the electra hard fork.
-func fetchElectraForkEpoch(ctx context.Context,
-	specProvider eth2client.SpecProvider,
-) (
-	phase0.Epoch,
-	error,
-) {
-	// Fetch the fork version.
-	specResponse, err := specProvider.Spec(ctx, &api.SpecOpts{})
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to obtain spec")
-	}
-	spec := specResponse.Data
-
-	tmp, exists := spec["ELECTRA_FORK_EPOCH"]
-	if !exists {
-		return 0, errors.New("electra fork version not known by chain")
-	}
-	epoch, isEpoch := tmp.(uint64)
-	if !isEpoch {
-		//nolint:revive
-		return 0, errors.New("ELECTRA_FORK_EPOCH is not a uint64!")
-	}
-
-	return phase0.Epoch(epoch), nil
-}
-
 // HasPendingAttestations returns true if there are pending attestations for the given slot.
 func (s *Service) HasPendingAttestations(_ context.Context,
 	slot phase0.Slot,
@@ -695,15 +668,13 @@ func altairDetails(ctx context.Context, log zerolog.Logger, specProvider eth2cli
 	return handlingAltair, altairForkEpoch
 }
 
-func electraDetails(ctx context.Context, log zerolog.Logger, specProvider eth2client.SpecProvider) (bool, phase0.Epoch) {
+func electraDetails(ctx context.Context, log zerolog.Logger, chainTimeService chaintime.Service) (bool, phase0.Epoch) {
 	// Fetch the electra fork epoch from the fork schedule.
 	handlingElectra := true
-	var electraForkEpoch phase0.Epoch
-	electraForkEpoch, err := fetchElectraForkEpoch(ctx, specProvider)
-	if err != nil {
+	electraForkEpoch := chainTimeService.HardForkEpoch(ctx, "ELECTRA_FORK_EPOCH")
+	if electraForkEpoch == 0xffffffffffffffff {
 		// Not handling electra after all.
 		handlingElectra = false
-		electraForkEpoch = 0xffffffffffffffff
 	} else {
 		log.Trace().Uint64("epoch", uint64(electraForkEpoch)).Msg("Obtained Electra fork epoch")
 	}

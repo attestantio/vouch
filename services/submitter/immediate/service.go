@@ -110,7 +110,7 @@ func (s *Service) SubmitAttestations(ctx context.Context, opts *api.SubmitAttest
 	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitAttestations")
 	defer span.End()
 
-	if len(opts.Attestations) == 0 {
+	if opts == nil || len(opts.Attestations) == 0 {
 		return errors.New("no attestations supplied")
 	}
 

@@ -78,8 +78,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("SLOTS_PER_EPOCH of unexpected type")
 	}
 
-	_, electraForkEpoch := electraDetails(ctx, log, parameters.specProvider)
-
+	electraForkEpoch := parameters.chainTime.HardForkEpoch(ctx, "ELECTRA_FORK_EPOCH")
 	s := &Service{
 		log:                        log,
 		monitor:                    parameters.monitor,
@@ -96,49 +95,4 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
 	return s, nil
-}
-
-func electraDetails(ctx context.Context, log zerolog.Logger, specProvider eth2client.SpecProvider) (bool, phase0.Epoch) {
-	// Fetch the electra fork epoch from the fork schedule.
-	handlingElectra := true
-	var electraForkEpoch phase0.Epoch
-	electraForkEpoch, err := fetchElectraForkEpoch(ctx, specProvider)
-	if err != nil {
-		// Not handling electra after all.
-		handlingElectra = false
-		electraForkEpoch = 0xffffffffffffffff
-	} else {
-		log.Trace().Uint64("epoch", uint64(electraForkEpoch)).Msg("Obtained Electra fork epoch")
-	}
-	if !handlingElectra {
-		log.Debug().Msg("Not handling Electra")
-	}
-	return handlingElectra, electraForkEpoch
-}
-
-// fetchElectraForkEpoch fetches the epoch for the electra hard fork.
-func fetchElectraForkEpoch(ctx context.Context,
-	specProvider eth2client.SpecProvider,
-) (
-	phase0.Epoch,
-	error,
-) {
-	// Fetch the fork version.
-	specResponse, err := specProvider.Spec(ctx, &api.SpecOpts{})
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to obtain spec")
-	}
-	spec := specResponse.Data
-
-	tmp, exists := spec["ELECTRA_FORK_EPOCH"]
-	if !exists {
-		return 0, errors.New("electra fork version not known by chain")
-	}
-	epoch, isEpoch := tmp.(uint64)
-	if !isEpoch {
-		//nolint:revive
-		return 0, errors.New("ELECTRA_FORK_EPOCH is not a uint64!")
-	}
-
-	return phase0.Epoch(epoch), nil
 }

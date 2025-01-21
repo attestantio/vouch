@@ -143,9 +143,14 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Attested")
 
-	firstAttestationData, err := attestations[0].Data()
-	if len(attestations) == 0 || err != nil || firstAttestationData == nil {
+	if len(attestations) == 0 {
 		log.Debug().Msg("No attestations; nothing to aggregate")
+		return
+	}
+
+	firstAttestationData, err := attestations[0].Data()
+	if err != nil || firstAttestationData == nil {
+		log.Error().Err(err).Msg("Failed to get first attestation data")
 		return
 	}
 

@@ -155,18 +155,15 @@ func (s *Service) attest(
 	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed")
 	var attestations []*spec.VersionedAttestation
 
-	if epoch < s.electraForkEpoch {
+	switch {
+	case epoch < s.electraForkEpoch:
 		attestations = s.createAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
-		if len(attestations) == 0 {
-			s.log.Info().Msg("No signed attestations; not submitting")
-			return attestations, nil
-		}
-	} else {
+	default:
 		attestations = s.createElectraAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
-		if len(attestations) == 0 {
-			s.log.Info().Msg("No signed attestations; not submitting")
-			return attestations, nil
-		}
+	}
+	if len(attestations) == 0 {
+		s.log.Info().Msg("No signed attestations; not submitting")
+		return attestations, nil
 	}
 	// Submit the versioned attestations.
 	submissionStarted := time.Now()
