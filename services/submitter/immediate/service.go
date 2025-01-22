@@ -22,7 +22,6 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -174,16 +173,17 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(ctx context.Context, subscr
 }
 
 // SubmitAggregateAttestations submits aggregate attestations.
-func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []*phase0.SignedAggregateAndProof) error {
+func (s *Service) SubmitAggregateAttestations(ctx context.Context, opts *api.SubmitAggregateAttestationsOpts) error {
 	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitAggregateAttestations")
 	defer span.End()
 
-	if len(aggregates) == 0 {
+	if opts == nil || len(opts.SignedAggregateAndProofs) == 0 {
 		return errors.New("no aggregate attestations supplied")
 	}
+	aggregates := opts.SignedAggregateAndProofs
 
 	started := time.Now()
-	err := s.aggregateAttestationsSubmitter.SubmitAggregateAttestations(ctx, aggregates)
+	err := s.aggregateAttestationsSubmitter.SubmitAggregateAttestations(ctx, opts)
 	if service, isService := s.aggregateAttestationsSubmitter.(eth2client.Service); isService {
 		s.clientMonitor.ClientOperation(service.Address(), "submit aggregate attestation", err == nil, time.Since(started))
 	} else {

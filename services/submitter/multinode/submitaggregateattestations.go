@@ -20,7 +20,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -29,13 +29,13 @@ import (
 )
 
 // SubmitAggregateAttestations submits aggregate attestations.
-func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []*phase0.SignedAggregateAndProof) error {
+func (s *Service) SubmitAggregateAttestations(ctx context.Context, opts *api.SubmitAggregateAttestationsOpts) error {
 	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.multinode").Start(ctx, "SubmitAggregateAttestations", trace.WithAttributes(
 		attribute.String("strategy", "multinode"),
 	))
 	defer span.End()
 
-	if len(aggregates) == 0 {
+	if opts == nil || len(opts.SignedAggregateAndProofs) == 0 {
 		return errors.New("no aggregate attestations supplied")
 	}
 
@@ -44,7 +44,7 @@ func (s *Service) SubmitAggregateAttestations(ctx context.Context, aggregates []
 	w := sync.NewCond(&sync.Mutex{})
 	w.L.Lock()
 	for name, submitter := range s.aggregateAttestationsSubmitters {
-		go s.submitAggregateAttestations(ctx, sem, w, submissionCompleted, name, aggregates, submitter)
+		go s.submitAggregateAttestations(ctx, sem, w, submissionCompleted, name, opts, submitter)
 	}
 	// Also set a timeout condition, in case no submitters return.
 	go func(s *Service, w *sync.Cond) {
@@ -69,10 +69,17 @@ func (s *Service) submitAggregateAttestations(ctx context.Context,
 	w *sync.Cond,
 	submissionCompleted *atomic.Bool,
 	name string,
-	aggregates []*phase0.SignedAggregateAndProof,
+	opts *api.SubmitAggregateAttestationsOpts,
 	submitter eth2client.AggregateAttestationsSubmitter,
 ) {
-	log := s.log.With().Str("beacon_node_address", name).Uint64("slot", uint64(aggregates[0].Message.Aggregate.Data.Slot)).Logger()
+	aggregates := opts.SignedAggregateAndProofs
+	slot, err := aggregates[0].Slot()
+	if err != nil {
+		s.log.Error().Err(err).Msg("Failed to obtain aggregate attestation slot")
+		return
+	}
+
+	log := s.log.With().Str("beacon_node_address", name).Uint64("slot", uint64(slot)).Logger()
 	if err := sem.Acquire(ctx, 1); err != nil {
 		log.Error().Err(err).Msg("Failed to acquire semaphore")
 		return
@@ -81,7 +88,7 @@ func (s *Service) submitAggregateAttestations(ctx context.Context,
 
 	_, address := s.serviceInfo(ctx, submitter)
 	started := time.Now()
-	err := submitter.SubmitAggregateAttestations(ctx, aggregates)
+	err = submitter.SubmitAggregateAttestations(ctx, opts)
 
 	s.clientMonitor.ClientOperation(address, "submit aggregate attestations", err == nil, time.Since(started))
 	if err != nil {
