@@ -220,6 +220,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester
 				AttestationDataRoot: attestationDataRoot,
 				ValidatorIndex:      info.Duty.ValidatorIndex,
 				SlotSignature:       info.Signature,
+				CommitteeIndex:      committeeIndex,
 			}
 			if err := s.scheduler.ScheduleJob(ctx,
 				"Aggregate attestations",
