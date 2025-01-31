@@ -238,6 +238,13 @@ func (s *Service) createElectraAttestations(_ context.Context,
 				Msg("No signature for validator; not creating attestation")
 			continue
 		}
+		if len(duty.ValidatorIndices()) < i {
+			s.log.Warn().Str("validator_pubkey", fmt.Sprintf("%#x", accounts[i].PublicKey().Marshal())).
+				Msg("Validator indices array smaller than requested index; not creating attestation")
+			continue
+		}
+		validatorIndex := duty.ValidatorIndices()[i]
+
 		aggregationBits := bitfield.NewBitlist(committeeSizes[i])
 		aggregationBits.SetBitAt(uint64(validatorCommitteeIndices[i]), true)
 
@@ -262,7 +269,8 @@ func (s *Service) createElectraAttestations(_ context.Context,
 			CommitteeBits: committeeBits,
 		}
 		copy(attestation.Signature[:], sigs[i][:])
-		versionedAttestation := &spec.VersionedAttestation{Version: spec.DataVersionElectra, Electra: attestation}
+
+		versionedAttestation := &spec.VersionedAttestation{Version: spec.DataVersionElectra, Electra: attestation, ValidatorIndex: &validatorIndex}
 		attestations = append(attestations, versionedAttestation)
 	}
 

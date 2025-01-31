@@ -122,6 +122,7 @@ func (s *Service) Aggregate(ctx context.Context, duty *attestationaggregator.Dut
 	aggregateAttestationResponse, err := s.aggregateAttestationProvider.AggregateAttestation(ctx, &api.AggregateAttestationOpts{
 		Slot:                duty.Slot,
 		AttestationDataRoot: duty.AttestationDataRoot,
+		CommitteeIndex:      duty.CommitteeIndex,
 	})
 
 	startOfSlot := s.chainTime.StartOfSlot(duty.Slot)
