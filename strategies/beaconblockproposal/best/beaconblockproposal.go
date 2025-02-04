@@ -24,6 +24,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -54,6 +55,7 @@ func (s *Service) Proposal(ctx context.Context,
 
 	started := time.Now()
 	log := util.LogWithID(ctx, s.log, "strategy_id").With().Uint64("slot", uint64(opts.Slot)).Logger()
+	ctx = log.WithContext(ctx)
 
 	// We have two timeouts: a soft timeout and a hard timeout.
 	// At the soft timeout, we return if we have any responses so far.
@@ -223,6 +225,8 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 	errCh chan *beaconBlockError,
 	opts *api.ProposalOpts,
 ) {
+	log := zerolog.Ctx(ctx).With().Str("provider", name).Logger()
+
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.best").Start(ctx, "beaconBlockProposal", trace.WithAttributes(
 		attribute.String("provider", name),
 	))
@@ -239,7 +243,7 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 		return
 	}
 	proposal := proposalResponse.Data
-	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
 
 	if proposal.Version != spec.DataVersionPhase0 &&
 		proposal.Version != spec.DataVersionAltair {
@@ -264,9 +268,9 @@ func (s *Service) beaconBlockProposal(ctx context.Context,
 
 	gasLimit, err := proposalResponse.Data.GasLimit()
 	if err != nil {
-		s.log.Warn().Err(err).Msg("Failed to obtain proposal gas limit")
+		log.Warn().Err(err).Msg("Failed to obtain proposal gas limit")
 	} else {
-		s.log.Trace().Str("provider", name).Uint64("gas_limit", gasLimit).Msg("Proposal gas limit")
+		log.Trace().Str("provider", name).Uint64("gas_limit", gasLimit).Msg("Proposal gas limit")
 	}
 
 	score := s.scoreBeaconBlockProposal(ctx, name, proposal)
