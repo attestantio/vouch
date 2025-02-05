@@ -79,11 +79,13 @@ func (s *Service) Attest(ctx context.Context, duty *attester.Duty) ([]*spec.Vers
 	}
 	committeeIndices := make([]phase0.CommitteeIndex, len(validatingAccounts))
 	validatorCommitteeIndices := make([]phase0.ValidatorIndex, len(validatingAccounts))
+	validatorOrderedIndices := make([]phase0.ValidatorIndex, len(validatingAccounts))
 	committeeSizes := make([]uint64, len(validatingAccounts))
 	for i := range accountsArray {
 		committeeIndices[i] = duty.CommitteeIndices()[validatorIndexToArrayIndexMap[accountValidatorIndices[i]]]
 		validatorCommitteeIndices[i] = phase0.ValidatorIndex(duty.ValidatorCommitteeIndices()[validatorIndexToArrayIndexMap[accountValidatorIndices[i]]])
 		committeeSizes[i] = duty.CommitteeSize(committeeIndices[i])
+		validatorOrderedIndices[i] = accountValidatorIndices[i]
 	}
 
 	attestations, err := s.attest(ctx,
@@ -92,6 +94,7 @@ func (s *Service) Attest(ctx context.Context, duty *attester.Duty) ([]*spec.Vers
 		committeeIndices,
 		validatorCommitteeIndices,
 		committeeSizes,
+		validatorOrderedIndices,
 		attestationData,
 		started,
 	)
@@ -124,12 +127,12 @@ func (s *Service) attest(
 	committeeIndices []phase0.CommitteeIndex,
 	validatorCommitteeIndices []phase0.ValidatorIndex,
 	committeeSizes []uint64,
+	validatorIndices []phase0.ValidatorIndex,
 	data *phase0.AttestationData,
 	started time.Time,
 ) ([]*spec.VersionedAttestation, error) {
 	// Set the signing committee indices to use.
 	signingCommitteeIndices := make([]phase0.CommitteeIndex, len(committeeIndices))
-	copy(signingCommitteeIndices, committeeIndices)
 	epoch := s.chainTime.SlotToEpoch(duty.Slot())
 	if epoch >= s.electraForkEpoch {
 		for i := range signingCommitteeIndices {
@@ -159,7 +162,7 @@ func (s *Service) attest(
 	case epoch < s.electraForkEpoch:
 		attestations = s.createAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
 	default:
-		attestations = s.createElectraAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
+		attestations = s.createElectraAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, validatorIndices, data, sigs)
 	}
 	if len(attestations) == 0 {
 		s.log.Info().Msg("No signed attestations; not submitting")
@@ -227,6 +230,7 @@ func (s *Service) createElectraAttestations(_ context.Context,
 	committeeIndices []phase0.CommitteeIndex,
 	validatorCommitteeIndices []phase0.ValidatorIndex,
 	committeeSizes []uint64,
+	validatorIndices []phase0.ValidatorIndex,
 	data *phase0.AttestationData,
 	sigs []phase0.BLSSignature,
 ) []*spec.VersionedAttestation {
@@ -238,12 +242,12 @@ func (s *Service) createElectraAttestations(_ context.Context,
 				Msg("No signature for validator; not creating attestation")
 			continue
 		}
-		if len(duty.ValidatorIndices()) < i {
+		if len(validatorIndices) < i {
 			s.log.Warn().Str("validator_pubkey", fmt.Sprintf("%#x", accounts[i].PublicKey().Marshal())).
 				Msg("Validator indices array smaller than requested index; not creating attestation")
 			continue
 		}
-		validatorIndex := duty.ValidatorIndices()[i]
+		validatorIndex := validatorIndices[i]
 
 		aggregationBits := bitfield.NewBitlist(committeeSizes[i])
 		aggregationBits.SetBitAt(uint64(validatorCommitteeIndices[i]), true)
