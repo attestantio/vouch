@@ -19,7 +19,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -31,7 +31,7 @@ import (
 func (s *Service) AggregateAttestation(ctx context.Context,
 	opts *api.AggregateAttestationOpts,
 ) (
-	*api.Response[*phase0.Attestation],
+	*api.Response[*spec.VersionedAttestation],
 	error,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.aggregateattestation.first").Start(ctx, "AggregateAttestation", trace.WithAttributes(
@@ -45,12 +45,12 @@ func (s *Service) AggregateAttestation(ctx context.Context,
 	// We create a cancelable context with a timeout.  When a provider responds we cancel the context to cancel the other requests.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 
-	respCh := make(chan *phase0.Attestation, 1)
+	respCh := make(chan *spec.VersionedAttestation, 1)
 	for name, provider := range s.aggregateAttestationProviders {
 		go func(ctx context.Context,
 			name string,
 			provider eth2client.AggregateAttestationProvider,
-			ch chan *phase0.Attestation,
+			ch chan *spec.VersionedAttestation,
 		) {
 			log := log.With().Str("provider", name).Uint64("slot", uint64(opts.Slot)).Logger()
 
@@ -77,7 +77,7 @@ func (s *Service) AggregateAttestation(ctx context.Context,
 		return nil, errors.New("failed to obtain aggregate attestation before timeout")
 	case aggregate := <-respCh:
 		cancel()
-		return &api.Response[*phase0.Attestation]{
+		return &api.Response[*spec.VersionedAttestation]{
 			Data:     aggregate,
 			Metadata: make(map[string]any),
 		}, nil

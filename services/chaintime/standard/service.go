@@ -15,8 +15,10 @@ package standard
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
@@ -30,6 +32,7 @@ type Service struct {
 	genesisTime   time.Time
 	slotDuration  time.Duration
 	slotsPerEpoch uint64
+	specProvider  client.SpecProvider
 }
 
 // New creates a new controller.
@@ -83,6 +86,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		genesisTime:   genesisTime,
 		slotDuration:  slotDuration,
 		slotsPerEpoch: slotsPerEpoch,
+		specProvider:  parameters.specProvider,
 	}
 
 	return s, nil
@@ -127,4 +131,34 @@ func (s *Service) SlotToEpoch(slot phase0.Slot) phase0.Epoch {
 // FirstSlotOfEpoch provides the first slot of the given epoch.
 func (s *Service) FirstSlotOfEpoch(epoch phase0.Epoch) phase0.Slot {
 	return phase0.Slot(uint64(epoch) * s.slotsPerEpoch)
+}
+
+// HardForkEpoch returns the activation epoch of the specified hard fork or far future epoch if missing.
+func (s *Service) HardForkEpoch(ctx context.Context, hardForkName string) phase0.Epoch {
+	forkEpoch, err := s.getHardForkEpoch(ctx, hardForkName)
+	if err != nil {
+		s.log.Error().Err(err).Msg("Failed to obtain hard fork")
+		return 0xffffffffffffffff
+	}
+	return forkEpoch
+}
+
+func (s *Service) getHardForkEpoch(ctx context.Context, hardForkName string) (phase0.Epoch, error) {
+	// Fetch the fork version.
+	specResponse, err := s.specProvider.Spec(ctx, &api.SpecOpts{})
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to obtain spec")
+	}
+	spec := specResponse.Data
+
+	tmp, exists := spec[hardForkName]
+	if !exists {
+		return 0, fmt.Errorf("%s version not known by chain", hardForkName)
+	}
+	epoch, isEpoch := tmp.(uint64)
+	if !isEpoch {
+		return 0, fmt.Errorf("%s is not a uint64", hardForkName)
+	}
+
+	return phase0.Epoch(epoch), nil
 }

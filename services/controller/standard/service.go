@@ -93,6 +93,8 @@ type Service struct {
 	handlingBellatrix  bool
 	bellatrixForkEpoch phase0.Epoch
 	capellaForkEpoch   phase0.Epoch
+	handlingElectra    bool
+	electraForkEpoch   phase0.Epoch
 
 	// Tracking for reorgs.
 	lastBlockRoot             phase0.Root
@@ -129,6 +131,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	handlingAltair, altairForkEpoch := altairDetails(ctx, log, parameters.specProvider, parameters.syncCommitteeAggregator, epochsPerSyncCommitteePeriod)
 	handlingBellatrix, bellatrixForkEpoch := bellatrixDetails(ctx, log, parameters.specProvider)
 	capellaForkEpoch := capellaDetails(ctx, log, parameters.specProvider)
+	handlingElectra, electraForkEpoch := electraDetails(ctx, log, parameters.chainTimeService)
 
 	s := &Service{
 		log:                           log,
@@ -169,6 +172,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		handlingBellatrix:             handlingBellatrix,
 		bellatrixForkEpoch:            bellatrixForkEpoch,
 		capellaForkEpoch:              capellaForkEpoch,
+		handlingElectra:               handlingElectra,
+		electraForkEpoch:              electraForkEpoch,
 		pendingAttestations:           make(map[phase0.Slot]bool),
 	}
 
@@ -661,4 +666,20 @@ func altairDetails(ctx context.Context, log zerolog.Logger, specProvider eth2cli
 		log.Debug().Msg("Not handling Altair")
 	}
 	return handlingAltair, altairForkEpoch
+}
+
+func electraDetails(ctx context.Context, log zerolog.Logger, chainTimeService chaintime.Service) (bool, phase0.Epoch) {
+	// Fetch the electra fork epoch from the fork schedule.
+	handlingElectra := true
+	electraForkEpoch := chainTimeService.HardForkEpoch(ctx, "ELECTRA_FORK_EPOCH")
+	if electraForkEpoch == 0xffffffffffffffff {
+		// Not handling electra after all.
+		handlingElectra = false
+	} else {
+		log.Trace().Uint64("epoch", uint64(electraForkEpoch)).Msg("Obtained Electra fork epoch")
+	}
+	if !handlingElectra {
+		log.Debug().Msg("Not handling Electra")
+	}
+	return handlingElectra, electraForkEpoch
 }

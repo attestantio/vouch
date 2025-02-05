@@ -26,10 +26,12 @@ type Duty struct {
 	Slot phase0.Slot
 	// Attestation data root is the root of the attestation to be aggregated; required for obtaining the aggregate.
 	AttestationDataRoot phase0.Root
-	// ValidatorIndex is the index of the validator carrying out the aggregation; reuqired for submitting the aggregate.
+	// ValidatorIndex is the index of the validator carrying out the aggregation; required for submitting the aggregate.
 	ValidatorIndex phase0.ValidatorIndex
-	// SlotSignature is the signature of the slot by the validator carrying out the aggregation; reuqired for submitting the aggregate.
+	// SlotSignature is the signature of the slot by the validator carrying out the aggregation; required for submitting the aggregate.
 	SlotSignature phase0.BLSSignature
+	// CommitteeIndex is the committee index of the validator carrying out the aggregation; required for submitting the aggregate.
+	CommitteeIndex phase0.CommitteeIndex
 }
 
 // Service is the attestation aggregation service.

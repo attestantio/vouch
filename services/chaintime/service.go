@@ -14,6 +14,7 @@
 package chaintime
 
 import (
+	"context"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -35,4 +36,6 @@ type Service interface {
 	SlotToEpoch(slot phase0.Slot) phase0.Epoch
 	// FirstSlotOfEpoch provides the first slot of the given epoch.
 	FirstSlotOfEpoch(epoch phase0.Epoch) phase0.Slot
+	// HardForkEpoch returns the activation epoch of the specified hard fork or far future epoch if missing.
+	HardForkEpoch(ctx context.Context, hardForkName string) phase0.Epoch
 }

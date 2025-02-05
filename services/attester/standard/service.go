@@ -43,6 +43,7 @@ type Service struct {
 	beaconAttestationsSigner   signer.BeaconAttestationsSigner
 	attested                   map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}
 	attestedMu                 sync.Mutex
+	electraForkEpoch           phase0.Epoch
 }
 
 // New creates a new beacon block attester.
@@ -77,6 +78,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("SLOTS_PER_EPOCH of unexpected type")
 	}
 
+	electraForkEpoch := parameters.chainTime.HardForkEpoch(ctx, "ELECTRA_FORK_EPOCH")
 	s := &Service{
 		log:                        log,
 		monitor:                    parameters.monitor,
@@ -88,6 +90,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		attestationsSubmitter:      parameters.attestationsSubmitter,
 		beaconAttestationsSigner:   parameters.beaconAttestationsSigner,
 		attested:                   make(map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}),
+		electraForkEpoch:           electraForkEpoch,
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
