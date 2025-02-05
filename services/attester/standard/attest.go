@@ -79,13 +79,11 @@ func (s *Service) Attest(ctx context.Context, duty *attester.Duty) ([]*spec.Vers
 	}
 	committeeIndices := make([]phase0.CommitteeIndex, len(validatingAccounts))
 	validatorCommitteeIndices := make([]phase0.ValidatorIndex, len(validatingAccounts))
-	validatorOrderedIndices := make([]phase0.ValidatorIndex, len(validatingAccounts))
 	committeeSizes := make([]uint64, len(validatingAccounts))
 	for i := range accountsArray {
 		committeeIndices[i] = duty.CommitteeIndices()[validatorIndexToArrayIndexMap[accountValidatorIndices[i]]]
 		validatorCommitteeIndices[i] = phase0.ValidatorIndex(duty.ValidatorCommitteeIndices()[validatorIndexToArrayIndexMap[accountValidatorIndices[i]]])
 		committeeSizes[i] = duty.CommitteeSize(committeeIndices[i])
-		validatorOrderedIndices[i] = accountValidatorIndices[i]
 	}
 
 	attestations, err := s.attest(ctx,
@@ -94,7 +92,7 @@ func (s *Service) Attest(ctx context.Context, duty *attester.Duty) ([]*spec.Vers
 		committeeIndices,
 		validatorCommitteeIndices,
 		committeeSizes,
-		validatorOrderedIndices,
+		accountValidatorIndices,
 		attestationData,
 		started,
 	)
