@@ -6,6 +6,10 @@ dev:
   - log all obtained attestation data if the majority strategy fails to reach threshold
   - warn if block proposal gas limit is not the expected value
   - default fallback gas limit to 36mm in line with execution clients
+  - update go-eth2-client library for electra compatible containers
+  - submit electra single attestations
+  - fetch and submit electra aggregate and proofs
+  - always retrieve attestation data for 0 committee index
 
 1.9.2:
   - update go-eth2-wallet-dirk to enable mixed signing thresholds for multisign

@@ -326,7 +326,7 @@ func (s *Service) obtainAttestationData(ctx context.Context,
 ) {
 	attestationDataResponse, err := s.attestationDataProvider.AttestationData(ctx, &api.AttestationDataOpts{
 		Slot:           duty.Slot(),
-		CommitteeIndex: duty.CommitteeIndices()[0],
+		CommitteeIndex: 0,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain attestation data")
