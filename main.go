@@ -136,7 +136,7 @@ func main2() int {
 		return 1
 	}
 
-	if exit := runCommands(ctx, majordomo); exit {
+	if runCommands(ctx, majordomo) {
 		return 0
 	}
 
