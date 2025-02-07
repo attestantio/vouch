@@ -136,7 +136,7 @@ func main2() int {
 		return 1
 	}
 
-	if exit := runCommands(ctx, majordomo); exit {
+	if runCommands(ctx, majordomo) {
 		return 0
 	}
 
@@ -244,7 +244,7 @@ func fetchConfig() error {
 	viper.SetDefault("controller.fast-track.grace", 500*time.Millisecond)
 	viper.SetDefault("blockrelay.timeout", 1*time.Second)
 	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
-	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(30000000))
+	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(36000000))
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.0005))
 	viper.SetDefault("beaconblockproposer.builder-boost-factor", 91)

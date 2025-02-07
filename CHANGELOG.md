@@ -5,6 +5,7 @@ dev:
   - use multisign for signing slot selections with enabled accounts
   - log all obtained attestation data if the majority strategy fails to reach threshold
   - warn if block proposal gas limit is not the expected value
+  - default fallback gas limit to 36mm in line with execution clients
 
 1.9.2:
   - update go-eth2-wallet-dirk to enable mixed signing thresholds for multisign
