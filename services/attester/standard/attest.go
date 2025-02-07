@@ -131,6 +131,7 @@ func (s *Service) attest(
 ) ([]*spec.VersionedAttestation, error) {
 	// Set the signing committee indices to use.
 	signingCommitteeIndices := make([]phase0.CommitteeIndex, len(committeeIndices))
+	copy(signingCommitteeIndices, committeeIndices)
 	epoch := s.chainTime.SlotToEpoch(duty.Slot())
 	if epoch >= s.electraForkEpoch {
 		for i := range signingCommitteeIndices {
