@@ -17,6 +17,7 @@ import (
 	"context"
 
 	"github.com/attestantio/go-eth2-client/api"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 )
@@ -39,12 +40,24 @@ func (s *Service) BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0
 		monitorBlockRootToSlot("failed")
 		return 0, errors.Wrap(err, "failed to obtain block header")
 	}
-	s.SetBlockRootToSlot(root, blockResponse.Data.Header.Message.Slot)
 
-	s.log.Trace().Stringer("root", root).Uint64("slot", uint64(slot)).Msg("Obtained slot from block header")
 	monitorBlockRootToSlot("miss")
 
-	return slot, nil
+	if isBlockHeaderResponseValid(blockResponse) {
+		fetchedSlot := blockResponse.Data.Header.Message.Slot
+		s.SetBlockRootToSlot(root, fetchedSlot)
+		s.log.Trace().Stringer("root", root).Uint64("slot", uint64(fetchedSlot)).Msg("Obtained slot from block header")
+		return fetchedSlot, nil
+	}
+
+	return 0, errors.New("failed to obtain block header - invalid response")
+}
+
+func isBlockHeaderResponseValid(blockResponse *api.Response[*apiv1.BeaconBlockHeader]) bool {
+	return blockResponse != nil &&
+		blockResponse.Data != nil &&
+		blockResponse.Data.Header != nil &&
+		blockResponse.Data.Header.Message != nil
 }
 
 // SetBlockRootToSlot sets the block root to slot mapping.
