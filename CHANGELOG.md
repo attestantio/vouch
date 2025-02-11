@@ -1,4 +1,4 @@
-dev:
+1.10.0-beta.1:
   - use multisign for sync committee messages with enabled accounts
   - use multisign for sync committee selections with enabled accounts
   - use multisign for contributions and proofs with enabled accounts
@@ -10,6 +10,7 @@ dev:
   - submit electra single attestations
   - fetch and submit electra aggregate and proofs
   - always retrieve attestation data for 0 committee index
+  - update go-block-relay and go-builder-client for electra compatible containers
 
 1.9.2:
   - update go-eth2-wallet-dirk to enable mixed signing thresholds for multisign
