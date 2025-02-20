@@ -20,7 +20,6 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -65,10 +64,11 @@ func (s *Service) SubmitProposal(_ context.Context, proposal *api.VersionedSigne
 }
 
 // SubmitAttestations submits multiple attestations.
-func (s *Service) SubmitAttestations(_ context.Context, attestations []*phase0.Attestation) error {
-	if len(attestations) == 0 {
+func (s *Service) SubmitAttestations(_ context.Context, opts *api.SubmitAttestationsOpts) error {
+	if opts == nil || len(opts.Attestations) == 0 {
 		return errors.New("no attestations supplied")
 	}
+	attestations := opts.Attestations
 
 	if e := s.log.Trace(); e.Enabled() {
 		data, err := json.Marshal(attestations)
@@ -105,13 +105,13 @@ func (s *Service) SubmitBeaconCommitteeSubscriptions(_ context.Context, subscrip
 }
 
 // SubmitAggregateAttestations submits aggregate attestations.
-func (s *Service) SubmitAggregateAttestations(_ context.Context, aggregates []*phase0.SignedAggregateAndProof) error {
-	if len(aggregates) == 0 {
+func (s *Service) SubmitAggregateAttestations(_ context.Context, opts *api.SubmitAggregateAttestationsOpts) error {
+	if opts == nil || len(opts.SignedAggregateAndProofs) == 0 {
 		return errors.New("no aggregate attestations supplied")
 	}
 
 	if e := s.log.Trace(); e.Enabled() {
-		data, err := json.Marshal(aggregates)
+		data, err := json.Marshal(opts.SignedAggregateAndProofs)
 		if err == nil {
 			e.Str("attestation", string(data)).Msg("Not submitting aggregate attestations")
 		}

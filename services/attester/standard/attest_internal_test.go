@@ -15,6 +15,7 @@ package standard
 
 import (
 	"context"
+	"github.com/attestantio/go-eth2-client/spec"
 	"testing"
 	"time"
 
@@ -106,7 +107,7 @@ func TestCreateAttestations(t *testing.T) {
 		committeeSizes            []uint64
 		data                      *phase0.AttestationData
 		sigs                      []phase0.BLSSignature
-		expected                  []*phase0.Attestation
+		expected                  []*spec.VersionedAttestation
 		err                       string
 		logEntries                []string
 	}{
@@ -114,7 +115,7 @@ func TestCreateAttestations(t *testing.T) {
 			name:     "NoAttestations",
 			duty:     duty,
 			accounts: []e2wtypes.Account{account},
-			expected: []*phase0.Attestation{},
+			expected: []*spec.VersionedAttestation{},
 		},
 		{
 			name:     "ZeroSig",
@@ -123,7 +124,7 @@ func TestCreateAttestations(t *testing.T) {
 			sigs: []phase0.BLSSignature{
 				{},
 			},
-			expected:   []*phase0.Attestation{},
+			expected:   []*spec.VersionedAttestation{},
 			logEntries: []string{"No signature for validator; not creating attestation"},
 		},
 		{
@@ -149,23 +150,26 @@ func TestCreateAttestations(t *testing.T) {
 			sigs: []phase0.BLSSignature{
 				{0x01},
 			},
-			expected: []*phase0.Attestation{
+			expected: []*spec.VersionedAttestation{
 				{
-					AggregationBits: bitlist1,
-					Data: &phase0.AttestationData{
-						Slot:            100,
-						Index:           1,
-						BeaconBlockRoot: phase0.Root{0x02},
-						Source: &phase0.Checkpoint{
-							Epoch: 3,
-							Root:  phase0.Root{0x03},
+					Version: spec.DataVersionPhase0,
+					Phase0: &phase0.Attestation{
+						AggregationBits: bitlist1,
+						Data: &phase0.AttestationData{
+							Slot:            100,
+							Index:           1,
+							BeaconBlockRoot: phase0.Root{0x02},
+							Source: &phase0.Checkpoint{
+								Epoch: 3,
+								Root:  phase0.Root{0x03},
+							},
+							Target: &phase0.Checkpoint{
+								Epoch: 4,
+								Root:  phase0.Root{0x04},
+							},
 						},
-						Target: &phase0.Checkpoint{
-							Epoch: 4,
-							Root:  phase0.Root{0x04},
-						},
+						Signature: phase0.BLSSignature{0x01},
 					},
-					Signature: phase0.BLSSignature{0x01},
 				},
 			},
 		},

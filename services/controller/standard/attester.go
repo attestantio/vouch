@@ -143,8 +143,14 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Attested")
 
-	if len(attestations) == 0 || attestations[0].Data == nil {
+	if len(attestations) == 0 {
 		log.Debug().Msg("No attestations; nothing to aggregate")
+		return
+	}
+
+	firstAttestationData, err := attestations[0].Data()
+	if err != nil || firstAttestationData == nil {
+		log.Error().Err(err).Msg("Failed to get first attestation data")
 		return
 	}
 
@@ -160,21 +166,34 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester
 	}
 
 	for _, attestation := range attestations {
-		log := log.With().Uint64("attestation_slot", uint64(attestation.Data.Slot)).Uint64("committee_index", uint64(attestation.Data.Index)).Logger()
-		slotInfoMap, exists := subscriptionInfoMap[attestation.Data.Slot]
+		attestationData, err := attestation.Data()
+		if err != nil {
+			log.Debug().Msg("No attestation data; not aggregating")
+			continue
+		}
+		committeeIndex := attestationData.Index
+		if s.handlingElectra && epoch >= s.electraForkEpoch {
+			committeeIndex, err = attestation.CommitteeIndex()
+			if err != nil {
+				log.Debug().Msg("Failed to get committee index from committee bits; not aggregating")
+				continue
+			}
+		}
+		log := log.With().Uint64("attestation_slot", uint64(attestationData.Slot)).Uint64("committee_index", uint64(committeeIndex)).Logger()
+		slotInfoMap, exists := subscriptionInfoMap[attestationData.Slot]
 		if !exists {
 			log.Debug().Msg("No slot info; not aggregating")
 			continue
 		}
 		// Do not schedule aggregations for past slots.
 		currentSlot := s.chainTimeService.CurrentSlot()
-		if attestation.Data.Slot < currentSlot {
+		if attestationData.Slot < currentSlot {
 			log.Debug().Uint64("current_slot", uint64(currentSlot)).Msg("Aggregation in the past; not scheduling")
 			continue
 		}
-		info, exists := slotInfoMap[attestation.Data.Index]
+		info, exists := slotInfoMap[committeeIndex]
 		if !exists {
-			log.Debug().Uint64("committee_index", uint64(attestation.Data.Index)).Msg("No committee info; not aggregating")
+			log.Debug().Uint64("committee_index", uint64(committeeIndex)).Msg("No committee info; not aggregating")
 			continue
 		}
 		log = log.With().Uint64("validator_index", uint64(info.Duty.ValidatorIndex)).Logger()
@@ -190,7 +209,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester
 				log.Error().Msg("Failed to obtain account of attester")
 				continue
 			}
-			attestationDataRoot, err := attestation.Data.HashTreeRoot()
+			attestationDataRoot, err := attestationData.HashTreeRoot()
 			if err != nil {
 				// Don't return here; we want to try to set up as many aggregator jobs as possible.
 				log.Error().Err(err).Msg("Failed to obtain hash tree root of attestation")
@@ -201,11 +220,12 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester
 				AttestationDataRoot: attestationDataRoot,
 				ValidatorIndex:      info.Duty.ValidatorIndex,
 				SlotSignature:       info.Signature,
+				CommitteeIndex:      committeeIndex,
 			}
 			if err := s.scheduler.ScheduleJob(ctx,
 				"Aggregate attestations",
-				fmt.Sprintf("Beacon block attestation aggregation for slot %d committee %d", attestation.Data.Slot, attestation.Data.Index),
-				s.chainTimeService.StartOfSlot(attestation.Data.Slot).Add(s.attestationAggregationDelay),
+				fmt.Sprintf("Beacon block attestation aggregation for slot %d committee %d", attestationData.Slot, committeeIndex),
+				s.chainTimeService.StartOfSlot(attestationData.Slot).Add(s.attestationAggregationDelay),
 				func(ctx context.Context) { s.attestationAggregator.Aggregate(ctx, aggregatorDuty) },
 			); err != nil {
 				// Don't return here; we want to try to set up as many aggregator jobs as possible.

@@ -21,7 +21,8 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -31,13 +32,13 @@ import (
 )
 
 // SubmitAttestations submits a batch of attestations.
-func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0.Attestation) error {
+func (s *Service) SubmitAttestations(ctx context.Context, opts *api.SubmitAttestationsOpts) error {
 	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "SubmitAttestations", trace.WithAttributes(
 		attribute.String("strategy", "multinode"),
 	))
 	defer span.End()
 
-	if len(attestations) == 0 {
+	if opts == nil || len(opts.Attestations) == 0 {
 		return errors.New("no attestations supplied")
 	}
 
@@ -46,7 +47,7 @@ func (s *Service) SubmitAttestations(ctx context.Context, attestations []*phase0
 	w := sync.NewCond(&sync.Mutex{})
 	w.L.Lock()
 	for name, submitter := range s.attestationsSubmitters {
-		go s.submitAttestations(ctx, sem, w, submissionCompleted, name, attestations, submitter)
+		go s.submitAttestations(ctx, sem, w, submissionCompleted, name, opts.Attestations, submitter)
 	}
 	// Also set a timeout condition, in case no submitters return.
 	go func(s *Service, w *sync.Cond) {
@@ -71,7 +72,7 @@ func (s *Service) submitAttestations(ctx context.Context,
 	w *sync.Cond,
 	submissionCompleted *atomic.Bool,
 	name string,
-	attestations []*phase0.Attestation,
+	attestations []*spec.VersionedAttestation,
 	submitter eth2client.AttestationsSubmitter,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "submitAttestations", trace.WithAttributes(
@@ -79,7 +80,13 @@ func (s *Service) submitAttestations(ctx context.Context,
 	))
 	defer span.End()
 
-	log := s.log.With().Str("beacon_node_address", name).Uint64("slot", uint64(attestations[0].Data.Slot)).Logger()
+	data, err := attestations[0].Data()
+	if err != nil {
+		s.log.Error().Err(err).Msg("Failed to acquire data from first attestation")
+		return
+	}
+	slot := uint64(data.Slot)
+	log := s.log.With().Str("beacon_node_address", name).Uint64("slot", slot).Logger()
 	if err := sem.Acquire(ctx, 1); err != nil {
 		log.Error().Err(err).Msg("Failed to acquire semaphore")
 		return
@@ -88,8 +95,10 @@ func (s *Service) submitAttestations(ctx context.Context,
 
 	_, address := s.serviceInfo(ctx, submitter)
 	started := time.Now()
-	_, err := util.Scatter(len(attestations), int(s.processConcurrency), func(offset int, entries int, _ *sync.RWMutex) (interface{}, error) {
-		return nil, submitter.SubmitAttestations(ctx, attestations[offset:offset+entries])
+	_, err = util.Scatter(len(attestations), int(s.processConcurrency), func(offset int, entries int, _ *sync.RWMutex) (interface{}, error) {
+		return nil, submitter.SubmitAttestations(ctx, &api.SubmitAttestationsOpts{
+			Attestations: attestations[offset : offset+entries],
+		})
 	})
 	if err != nil {
 		err = s.handleAttestationsError(ctx, submitter, err)

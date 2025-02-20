@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
@@ -108,5 +109,5 @@ func (d *Duty) Tuples() []string {
 type Service interface {
 	// Attest carries out attestations for a slot.
 	// It returns a list of attestations made.
-	Attest(ctx context.Context, duty *Duty) ([]*phase0.Attestation, error)
+	Attest(ctx context.Context, duty *Duty) ([]*spec.VersionedAttestation, error)
 }

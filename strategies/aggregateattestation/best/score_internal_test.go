@@ -15,6 +15,7 @@ package best
 
 import (
 	"context"
+	"github.com/attestantio/go-eth2-client/spec"
 	"testing"
 	"time"
 
@@ -50,7 +51,7 @@ func TestScore(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		aggregate *phase0.Attestation
+		aggregate *spec.VersionedAttestation
 		score     float64
 	}{
 		{
@@ -59,20 +60,26 @@ func TestScore(t *testing.T) {
 		},
 		{
 			name: "Empty",
-			aggregate: &phase0.Attestation{
-				AggregationBits: populatedBitlist(100, 0),
-				Data: &phase0.AttestationData{
-					Slot: 5,
+			aggregate: &spec.VersionedAttestation{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.Attestation{
+					AggregationBits: populatedBitlist(100, 0),
+					Data: &phase0.AttestationData{
+						Slot: 5,
+					},
 				},
 			},
 			score: 0,
 		},
 		{
 			name: "Full",
-			aggregate: &phase0.Attestation{
-				AggregationBits: populatedBitlist(100, 100),
-				Data: &phase0.AttestationData{
-					Slot: 5,
+			aggregate: &spec.VersionedAttestation{
+				Version: spec.DataVersionPhase0,
+				Phase0: &phase0.Attestation{
+					AggregationBits: populatedBitlist(100, 100),
+					Data: &phase0.AttestationData{
+						Slot: 5,
+					},
 				},
 			},
 			score: 1,

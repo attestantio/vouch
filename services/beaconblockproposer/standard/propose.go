@@ -29,11 +29,13 @@ import (
 	apiv1bellatrix "github.com/attestantio/go-eth2-client/api/v1/bellatrix"
 	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	apiv1deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
+	apiv1electra "github.com/attestantio/go-eth2-client/api/v1/electra"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/electra"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/util"
@@ -316,6 +318,22 @@ func (s *Service) signProposalData(ctx context.Context,
 				Blobs:     proposal.Deneb.Blobs,
 			}
 		}
+	case spec.DataVersionElectra:
+		if proposal.Blinded {
+			signedProposal.ElectraBlinded = &apiv1electra.SignedBlindedBeaconBlock{
+				Message:   proposal.ElectraBlinded,
+				Signature: sig,
+			}
+		} else {
+			signedProposal.Electra = &apiv1electra.SignedBlockContents{
+				SignedBlock: &electra.SignedBeaconBlock{
+					Message:   proposal.Electra.Block,
+					Signature: sig,
+				},
+				KZGProofs: proposal.Electra.KZGProofs,
+				Blobs:     proposal.Electra.Blobs,
+			}
+		}
 	default:
 		return nil, errors.New("unhandled proposal version")
 	}
@@ -377,6 +395,7 @@ func (s *Service) unblindProposal(ctx context.Context,
 						Bellatrix: proposal.BellatrixBlinded,
 						Capella:   proposal.CapellaBlinded,
 						Deneb:     proposal.DenebBlinded,
+						Electra:   proposal.ElectraBlinded,
 					},
 				})
 
@@ -433,6 +452,9 @@ func (s *Service) unblindProposal(ctx context.Context,
 		case spec.DataVersionDeneb:
 			proposal.DenebBlinded = nil
 			proposal.Deneb = signedBlock.Deneb
+		case spec.DataVersionElectra:
+			proposal.ElectraBlinded = nil
+			proposal.Electra = signedBlock.Electra
 		default:
 			return fmt.Errorf("unsupported version %v", proposal.Version)
 		}

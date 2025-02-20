@@ -39,7 +39,8 @@ func (s *Service) BlockRootToSlot(ctx context.Context, root phase0.Root) (phase0
 		monitorBlockRootToSlot("failed")
 		return 0, errors.Wrap(err, "failed to obtain block header")
 	}
-	s.SetBlockRootToSlot(root, blockResponse.Data.Header.Message.Slot)
+	slot = blockResponse.Data.Header.Message.Slot
+	s.SetBlockRootToSlot(root, slot)
 
 	s.log.Trace().Stringer("root", root).Uint64("slot", uint64(slot)).Msg("Obtained slot from block header")
 	monitorBlockRootToSlot("miss")

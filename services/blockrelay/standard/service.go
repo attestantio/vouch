@@ -80,6 +80,9 @@ type Service struct {
 	controlledValidatorsMu sync.RWMutex
 
 	activitySem *semaphore.Weighted
+
+	// Needed only to create dummy VersionedSignedBuilderBid in cacheBid.
+	electraForkEpoch phase0.Epoch
 }
 
 // New creates a new controller.
@@ -98,6 +101,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if err := registerMetrics(ctx, parameters.monitor); err != nil {
 		return nil, errors.New("failed to register metrics")
 	}
+	electraForkEpoch := parameters.chainTime.HardForkEpoch(ctx, "ELECTRA_FORK_EPOCH")
 
 	s := &Service{
 		log:                          log,
@@ -125,6 +129,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		builderBidProvider:   parameters.builderBidProvider,
 		builderConfigs:       parameters.builderConfigs,
 		controlledValidators: make(map[phase0.BLSPubKey]struct{}),
+		electraForkEpoch:     electraForkEpoch,
 	}
 
 	// Carry out initial fetch of execution configuration.

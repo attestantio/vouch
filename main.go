@@ -110,7 +110,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.10.0-dev"
+var ReleaseVersion = "1.10.0-beta.1"
 
 func main() {
 	exitCode := main2()
@@ -136,7 +136,7 @@ func main2() int {
 		return 1
 	}
 
-	if exit := runCommands(ctx, majordomo); exit {
+	if runCommands(ctx, majordomo) {
 		return 0
 	}
 
@@ -325,7 +325,7 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to wait for genesis block")
 	}
 
-	altairCapable, bellatrixCapable, _, err := consensusClientCapabilities(ctx, eth2Client)
+	altairCapable, bellatrixCapable, err := consensusClientCapabilities(ctx, eth2Client)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1587,40 +1587,29 @@ func runCommands(ctx context.Context,
 	return false
 }
 
-func consensusClientCapabilities(ctx context.Context, consensusClient eth2client.Service) (bool, bool, bool, error) {
+func consensusClientCapabilities(ctx context.Context, consensusClient eth2client.Service) (bool, bool, error) {
 	// Decide if the ETH2 client is capable of Altair.
 	altairCapable := false
 	specResponse, err := consensusClient.(eth2client.SpecProvider).Spec(ctx, &api.SpecOpts{})
 	if err != nil {
-		return false, false, false, errors.Wrap(err, "failed to obtain spec")
+		return false, false, errors.Wrap(err, "failed to obtain spec")
 	}
 	spec := specResponse.Data
 	if _, exists := spec["ALTAIR_FORK_EPOCH"]; exists {
 		altairCapable = true
-		log.Info().Msg("Client is Altair-capable")
 	} else {
-		log.Info().Msg("Client is not Altair-capable")
+		log.Warn().Msg("Client is not Altair-capable")
 	}
 
-	// Decide if the ETH2 client is capabale of Bellatrix.
+	// Decide if the ETH2 client is capable of Bellatrix.
 	bellatrixCapable := false
 	if _, exists := spec["BELLATRIX_FORK_EPOCH"]; exists {
 		bellatrixCapable = true
-		log.Info().Msg("Client is Bellatrix-capable")
 	} else {
-		log.Info().Msg("Client is not Bellatrix-capable")
+		log.Warn().Msg("Client is not Bellatrix-capable")
 	}
 
-	// Decide if the ETH2 client is capabale of Capella.
-	capellaCapable := false
-	if _, exists := spec["CAPELLA_FORK_EPOCH"]; exists {
-		capellaCapable = true
-		log.Info().Msg("Client is Capella-capable")
-	} else {
-		log.Info().Msg("Client is not Capella-capable")
-	}
-
-	return altairCapable, bellatrixCapable, capellaCapable, nil
+	return altairCapable, bellatrixCapable, nil
 }
 
 func startBlockRelay(ctx context.Context,
