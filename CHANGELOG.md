@@ -1,3 +1,6 @@
+dev:
+  - fix erroneous block gas limit warning when proposing
+
 1.10.0-beta.1:
   - use multisign for sync committee messages with enabled accounts
   - use multisign for sync committee selections with enabled accounts

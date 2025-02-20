@@ -31,6 +31,7 @@ func ExpectedGasLimit(
 		}
 	case lastBlockGasLimit == targetGasLimit:
 		// We expect the gas limit to stay the same.
+		expectedGasLimit = targetGasLimit
 	case lastBlockGasLimit > targetGasLimit:
 		// We expect the gas limit to fall.
 		expectedGasLimit = lastBlockGasLimit - delta
