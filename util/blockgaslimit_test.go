@@ -57,6 +57,12 @@ func TestExpectedGasLimit(t *testing.T) {
 			target:   1999990,
 			expected: 1999990,
 		},
+		{
+			name:     "Equal",
+			latest:   2000000,
+			target:   2000000,
+			expected: 2000000,
+		},
 	}
 
 	for _, test := range tests {
