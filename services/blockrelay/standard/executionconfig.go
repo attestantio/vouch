@@ -16,7 +16,6 @@ package standard
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -58,12 +57,6 @@ func (s *Service) fetchExecutionConfig(ctx context.Context) {
 		return
 	}
 	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained validating accounts")
-
-	if len(accounts) == 0 {
-		monitorExecutionConfig(time.Since(started), false)
-		s.log.Debug().Msg("No validating accounts; not fetching execution config")
-		return
-	}
 
 	// Build list of public keys.
 	pubkeys := make([]phase0.BLSPubKey, 0, len(accounts))
@@ -118,12 +111,6 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 		res, err = s.majordomo.Fetch(ctx, s.configURL)
 	} else {
 		// We are fetching from a dynamic source, need to provide additional parameters.
-		if len(pubkeys) == 0 {
-			// No results, but no error.
-			s.log.Trace().Msg("no public keys supplied; cannot fetch execution configuation")
-			return nil, nil
-		}
-
 		if s.clientCertURL != "" {
 			certPEMBlock, err := s.majordomo.Fetch(ctx, s.clientCertURL)
 			if err != nil {
@@ -147,12 +134,8 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 
 		ctx = context.WithValue(ctx, &httpconfidant.HTTPMethod{}, http.MethodPost)
 		ctx = context.WithValue(ctx, &httpconfidant.MIMEType{}, "application/json")
-		pubkeyStrs := make([]string, 0, len(pubkeys))
-		for _, pubkey := range pubkeys {
-			pubkeyStrs = append(pubkeyStrs, pubkey.String())
-		}
-		// skipcq: GO-R4002
-		ctx = context.WithValue(ctx, &httpconfidant.Body{}, []byte(fmt.Sprintf(`["%s"]`, strings.Join(pubkeyStrs, `","`))))
+		body := pubKeysToArray(pubkeys)
+		ctx = context.WithValue(ctx, &httpconfidant.Body{}, []byte(body))
 
 		res, err = s.majordomo.Fetch(ctx, s.configURL)
 	}
@@ -168,4 +151,20 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 	}
 
 	return executionConfig, nil
+}
+
+func pubKeysToArray(pubkeys []phase0.BLSPubKey) string {
+	body := strings.Builder{}
+	body.WriteString(`[`)
+	for i, pubkey := range pubkeys {
+		body.WriteString(`"`)
+		body.WriteString(pubkey.String())
+		body.WriteString(`"`)
+		if i != len(pubkeys)-1 {
+			body.WriteString(`,`)
+		}
+	}
+	body.WriteString(`]`)
+
+	return body.String()
 }
