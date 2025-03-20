@@ -243,12 +243,15 @@ blockrelay:
 # multiinstance allows multiple instances of Vouch to run simultaneously, with the inactive Vouch instances taking over if they
 # fail to see expected attestations or proposals within the given time period.
 multiinstance:
-  # style can be 'static-delay' or 'none'.  'none' means that the instance will carry out its duties regardless.  'static-delay' means
-  # that the instance will wait for an amount of time if inactive before becoming active.
+  # style can be 'static-delay' or 'always'.  'always' means that the instance will carry out its duties regardless of which other
+  # instances may active.  'static-delay' means that the instance will wait for an amount of time if inactive before becoming active.
+  # Note that for the 'static-delay' style to be effective the beacon node(s) to which Vouch connects must be running with the
+  # 'subscribe all subnets' option enabled.  This is because this style looks at the attestation data to see if other instance(s) of
+  # Vouch are active.
   style: 'static-delay'
   static-delay:
     # attester-delay is the time for inactive Vouch instances to wait to see expected attestations prior to becoming active themselves.
-    attester-delay: '500ms'
+    attester-delay: '1s'
     # proposer-delay is the time for inactive Vouch instances to wait to see expected proposals prior to becoming active themselves.
     proposer-delay: '2s'
 
