@@ -254,7 +254,7 @@ func fetchConfig() error {
 	viper.SetDefault("strategies.builderbid.deadline.deadline", time.Second)
 	viper.SetDefault("strategies.builderbid.deadline.bid-gap", 100*time.Millisecond)
 	viper.SetDefault("submitter.style", "multinode")
-	viper.SetDefault("multiinstance.static-delay.attester-delay", 500*time.Millisecond)
+	viper.SetDefault("multiinstance.static-delay.attester-delay", time.Second)
 	viper.SetDefault("multiinstance.static-delay.proposer-delay", 2*time.Second)
 
 	if err := viper.ReadInConfig(); err != nil {
