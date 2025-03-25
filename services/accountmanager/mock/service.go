@@ -1,4 +1,4 @@
-// Copyright © 2021, 2022 Attestant Limited.
+// Copyright © 2021 - 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -33,6 +33,11 @@ func NewValidatingAccountsProvider() *ValidatingAccountsProvider {
 	return &ValidatingAccountsProvider{
 		validatingAccounts: make(map[phase0.ValidatorIndex]e2wtypes.Account),
 	}
+}
+
+// HasSlashingProtection returns true if the account manage provides built-in slashing protection.
+func (*ValidatingAccountsProvider) HasSlashingProtection() bool {
+	return false
 }
 
 // AddAccount adds an account to the mock provider.
@@ -93,6 +98,11 @@ func NewAccountsProvider() accountmanager.AccountsProvider {
 	return &accountsProvider{}
 }
 
+// HasSlashingProtection returns true if the account manage provides built-in slashing protection.
+func (*accountsProvider) HasSlashingProtection() bool {
+	return false
+}
+
 // AccountByPublicKey is a mock.
 func (*accountsProvider) AccountByPublicKey(_ context.Context, _ phase0.BLSPubKey) (e2wtypes.Account, error) {
 	return nil, nil
@@ -113,6 +123,11 @@ type erroringValidatingAccountsProvider struct{}
 // NewErroringValidatingAccountsProvider is a mock.
 func NewErroringValidatingAccountsProvider() accountmanager.ValidatingAccountsProvider {
 	return &erroringValidatingAccountsProvider{}
+}
+
+// HasSlashingProtection returns true if the account manage provides built-in slashing protection.
+func (*erroringValidatingAccountsProvider) HasSlashingProtection() bool {
+	return false
 }
 
 // ValidatingAccountsForEpoch is a mock.
