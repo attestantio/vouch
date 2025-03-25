@@ -500,5 +500,5 @@ func (s *Service) AccountByPublicKey(_ context.Context, pubkey phase0.BLSPubKey)
 
 // HasSlashingProtection returns true if the account manage provides built-in slashing protection.
 func (*Service) HasSlashingProtection() bool {
-	return false
+	return true
 }
