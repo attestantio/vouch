@@ -35,7 +35,7 @@ func NewValidatingAccountsProvider() *ValidatingAccountsProvider {
 	}
 }
 
-// HasSlashingProtection returns true if the account manage provides built-in slashing protection.
+// HasSlashingProtection returns true if the account manager provides built-in slashing protection.
 func (*ValidatingAccountsProvider) HasSlashingProtection() bool {
 	return false
 }
@@ -98,7 +98,7 @@ func NewAccountsProvider() accountmanager.AccountsProvider {
 	return &accountsProvider{}
 }
 
-// HasSlashingProtection returns true if the account manage provides built-in slashing protection.
+// HasSlashingProtection returns true if the account manager provides built-in slashing protection.
 func (*accountsProvider) HasSlashingProtection() bool {
 	return false
 }
@@ -125,7 +125,7 @@ func NewErroringValidatingAccountsProvider() accountmanager.ValidatingAccountsPr
 	return &erroringValidatingAccountsProvider{}
 }
 
-// HasSlashingProtection returns true if the account manage provides built-in slashing protection.
+// HasSlashingProtection returns true if the account manager provides built-in slashing protection.
 func (*erroringValidatingAccountsProvider) HasSlashingProtection() bool {
 	return false
 }

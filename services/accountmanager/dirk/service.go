@@ -498,7 +498,7 @@ func (s *Service) AccountByPublicKey(_ context.Context, pubkey phase0.BLSPubKey)
 	return account, nil
 }
 
-// HasSlashingProtection returns true if the account manage provides built-in slashing protection.
+// HasSlashingProtection returns true if the account manager provides built-in slashing protection.
 func (*Service) HasSlashingProtection() bool {
 	return true
 }

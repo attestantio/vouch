@@ -23,7 +23,7 @@ import (
 
 // Service is the generic accountmanager service.
 type Service interface {
-	// HasSlashingProtection returns true if the account manage provides built-in slashing protection.
+	// HasSlashingProtection returns true if the account manager provides built-in slashing protection.
 	HasSlashingProtection() bool
 }
 
