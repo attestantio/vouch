@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -418,4 +418,9 @@ func (s *Service) AccountByPublicKey(_ context.Context, pubkey phase0.BLSPubKey)
 		return nil, errors.New("not found")
 	}
 	return account, nil
+}
+
+// HasSlashingProtection returns true if the account manager provides built-in slashing protection.
+func (*Service) HasSlashingProtection() bool {
+	return false
 }
