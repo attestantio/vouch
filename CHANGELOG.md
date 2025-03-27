@@ -1,7 +1,7 @@
 dev:
-  - fix erroneous block gas limit warning when proposing
+  - 
 
-1.10.0-beta.1:
+1.10.0:
   - use multisign for sync committee messages with enabled accounts
   - use multisign for sync committee selections with enabled accounts
   - use multisign for contributions and proofs with enabled accounts
@@ -14,6 +14,7 @@ dev:
   - fetch and submit electra aggregate and proofs
   - always retrieve attestation data for 0 committee index
   - update go-block-relay and go-builder-client for electra compatible containers
+  - fix erroneous block gas limit warning when proposing
 
 1.9.2:
   - update go-eth2-wallet-dirk to enable mixed signing thresholds for multisign
