@@ -2,6 +2,7 @@ dev:
   - 
 
 1.10.0:
+  - support Electra
   - use multisign for sync committee messages with enabled accounts
   - use multisign for sync committee selections with enabled accounts
   - use multisign for contributions and proofs with enabled accounts
