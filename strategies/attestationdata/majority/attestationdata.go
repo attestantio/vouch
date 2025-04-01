@@ -1,4 +1,4 @@
-// Copyright © 2023, 2024 Attestant Limited.
+// Copyright © 2023 - 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -69,46 +69,97 @@ func (s *Service) AttestationData(ctx context.Context,
 	span.AddEvent("Issued requests")
 
 	attestationDataResponses := make(map[phase0.Root][]*attestationDataResponse)
-	attestationDataCounts := make(map[phase0.Root]int)
-	attestationDataProviders := make(map[phase0.Root][]string)
-	responded, errored := s.attestationDataLoop1(softCtx, started, requests, attestationDataResponses, attestationDataCounts, attestationDataProviders, respCh, errCh)
+	responded, errored := s.attestationDataLoop1(softCtx, started, requests, attestationDataResponses, respCh, errCh)
 	softCancel()
 
-	s.attestationDataLoop2(hardCtx, started, requests, attestationDataResponses, attestationDataCounts, attestationDataProviders, respCh, errCh, responded, errored)
+	s.attestationDataLoop2(hardCtx, started, requests, attestationDataResponses, respCh, errCh, responded, errored)
 	cancel()
 
-	var bestAttestationDataRoot phase0.Root
-	var bestAttestationData phase0.AttestationData
-	bestAttestationDataCount := 0
+	bestAttestationData, err := s.selectAttestationData(ctx, started, attestationDataResponses)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.Response[*phase0.AttestationData]{
+		Data:     bestAttestationData,
+		Metadata: make(map[string]any),
+	}, nil
+}
+
+func (s *Service) selectAttestationData(ctx context.Context,
+	started time.Time,
+	attestationDataResponses map[phase0.Root][]*attestationDataResponse,
+) (
+	*phase0.AttestationData,
+	error,
+) {
+	// Start off by obtaining the majority attestation data response.
+	majorityAttestationDataResponses := s.majorityAttestationDataResponse(ctx, started, attestationDataResponses)
+	majorityCount := len(majorityAttestationDataResponses)
+
+	if majorityCount == 0 {
+		monitorAttestationData("no responses")
+
+		return nil, errors.New("no attestation data received")
+	}
+	bestAttestationData := majorityAttestationDataResponses[0].attestationData
+
+	if majorityCount >= s.threshold {
+		monitorAttestationData("threshold")
+
+		return bestAttestationData, nil
+	}
+
+	// If we reach here there is no outright majority.
+	if !s.recombination {
+		monitorAttestationData("threshold not met")
+
+		return nil, fmt.Errorf("majority of %d does not satisfy threshold %d", majorityCount, s.threshold)
+	}
+
+	// Attempt to recombine responses into partial consensus attestation data.
+	bestAttestationData, err := s.recombineAttestationData(ctx, started, attestationDataResponses)
+	if err != nil {
+		monitorAttestationData("recombination threshold not met")
+
+		return nil, err
+	}
+	monitorAttestationData("recombination")
+
+	return bestAttestationData, nil
+}
+
+func (s *Service) majorityAttestationDataResponse(ctx context.Context,
+	started time.Time,
+	attestationDataResponses map[phase0.Root][]*attestationDataResponse,
+) []*attestationDataResponse {
+	log := zerolog.Ctx(ctx)
+
 	bestAttestationDataSlot := phase0.Slot(0)
-	for root, response := range attestationDataResponses {
-		count := attestationDataCounts[root]
-		slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, response[0].attestationData.BeaconBlockRoot)
+	var bestResponses []*attestationDataResponse
+	for _, responses := range attestationDataResponses {
+		count := len(responses)
+		slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, responses[0].attestationData.BeaconBlockRoot)
 		if err != nil {
-			log.Debug().Stringer("root", response[0].attestationData.BeaconBlockRoot).Err(err).Msg("Failed to obtain attestation data head slot; assuming 0")
+			log.Debug().Stringer("root", responses[0].attestationData.BeaconBlockRoot).Err(err).Msg("Failed to obtain attestation data head slot; assuming 0")
 		}
 		switch {
-		case count > bestAttestationDataCount:
+		case count > len(bestResponses):
 			// New majority.
-			bestAttestationData = *response[0].attestationData
-			bestAttestationDataCount = count
+			bestResponses = responses
 			bestAttestationDataSlot = slot
-			bestAttestationDataRoot = root
-		case count == bestAttestationDataCount:
+		case count == len(bestResponses):
 			// Tie, take the one with the higher slot.
 			if slot > bestAttestationDataSlot {
-				bestAttestationData = *response[0].attestationData
 				bestAttestationDataSlot = slot
+				bestResponses = responses
 			}
 		default:
 			// Fewer votes than current; ignore.
 		}
 	}
 
-	if bestAttestationDataCount == 0 {
-		return nil, errors.New("no attestation data received")
-	}
-	if bestAttestationDataCount < s.threshold {
+	if len(bestResponses) < s.threshold {
 		// Log out all of the attestations in this situation, to help understand what went wrong.
 		for _, responses := range attestationDataResponses {
 			providers := make([]string, 0, len(responses))
@@ -120,27 +171,95 @@ func (s *Service) AttestationData(ctx context.Context,
 				log.Debug().Strs("providers", providers).RawJSON("data", data).Msg("Non-majority attestation response received")
 			}
 		}
+	} else {
+		bestAttestationData := bestResponses[0].attestationData
 
-		return nil, fmt.Errorf("majority attestation data count of %d lower than threshold %d", bestAttestationDataCount, s.threshold)
+		for _, response := range bestResponses {
+			s.clientMonitor.StrategyOperation("majority", response.provider, "attestation data", time.Since(started))
+		}
+
+		slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, bestAttestationData.BeaconBlockRoot)
+		if err != nil {
+			log.Debug().Stringer("root", bestAttestationData.BeaconBlockRoot).Err(err).Msg("Failed to obtain best attestation data head slot; assuming 0")
+		}
+
+		log.Trace().
+			Dur("elapsed", time.Since(started)).
+			Stringer("attestation_data", bestAttestationData).
+			Int64("head_distance", util.SlotToInt64(bestAttestationData.Slot)-util.SlotToInt64(slot)).
+			Int("count", len(bestResponses)).
+			Msg("Selected majority attestation data")
 	}
-	slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, bestAttestationData.BeaconBlockRoot)
-	if err != nil {
-		log.Debug().Stringer("root", bestAttestationData.BeaconBlockRoot).Err(err).Msg("Failed to obtain best attestation data head slot; assuming 0")
+
+	return bestResponses
+}
+
+// recombineAttestationData attempts to combine non-consensus attestation data responses into a consensus response.
+// It does this by picking out individual elements (source, target) on which there is consensus.
+func (s *Service) recombineAttestationData(ctx context.Context,
+	started time.Time,
+	attestationDataResponses map[phase0.Root][]*attestationDataResponse,
+) (
+	*phase0.AttestationData,
+	error,
+) {
+	log := zerolog.Ctx(ctx)
+
+	builtAttestationData := &phase0.AttestationData{
+		Source: &phase0.Checkpoint{},
+		Target: &phase0.Checkpoint{},
 	}
+
+	sources := make(map[phase0.Root]int)
+	sourceEpochs := make(map[phase0.Root]phase0.Epoch)
+	targets := make(map[phase0.Root]int)
+	targetEpochs := make(map[phase0.Root]phase0.Epoch)
+
+	for _, responses := range attestationDataResponses {
+		attestationData := responses[0].attestationData
+
+		builtAttestationData.Slot = attestationData.Slot
+		builtAttestationData.Index = attestationData.Index
+		sources[attestationData.Source.Root] += len(responses)
+		sourceEpochs[attestationData.Source.Root] = attestationData.Source.Epoch
+		targets[attestationData.Target.Root] += len(responses)
+		targetEpochs[attestationData.Target.Root] = attestationData.Target.Epoch
+	}
+
+	for sourceRoot, count := range sources {
+		if count >= s.threshold {
+			builtAttestationData.Source.Root = sourceRoot
+			builtAttestationData.Source.Epoch = sourceEpochs[sourceRoot]
+			break
+		}
+	}
+	if builtAttestationData.Source.Epoch == 0 {
+		// We cannot proceed here as this is a potentially slashable attestation.
+		log.Debug().Msg("Attempt to build attestation data resulted in no source checkpoint; aborting")
+
+		return nil, errors.New("could not build majority attestation data; no source checkpoint")
+	}
+
+	for targetRoot, count := range targets {
+		if count >= s.threshold {
+			builtAttestationData.Target.Root = targetRoot
+			builtAttestationData.Target.Epoch = targetEpochs[targetRoot]
+			break
+		}
+	}
+	if builtAttestationData.Target.Epoch == 0 {
+		// We cannot proceed here as this is a potentially slashable attestation.
+		log.Debug().Msg("Attempt to build attestation data resulted in no target checkpoint; aborting")
+
+		return nil, errors.New("could not build majority attestation data; no target checkpoint")
+	}
+
 	log.Trace().
 		Dur("elapsed", time.Since(started)).
-		Stringer("attestation_data", &bestAttestationData).
-		Int64("head_distance", util.SlotToInt64(bestAttestationData.Slot)-util.SlotToInt64(slot)).
-		Int("count", bestAttestationDataCount).
-		Msg("Selected majority attestation data")
-	for _, provider := range attestationDataProviders[bestAttestationDataRoot] {
-		s.clientMonitor.StrategyOperation("majority", provider, "attestation data", time.Since(started))
-	}
+		Stringer("attestation_data", builtAttestationData).
+		Msg("Recombined majority attestation data")
 
-	return &api.Response[*phase0.AttestationData]{
-		Data:     &bestAttestationData,
-		Metadata: make(map[string]any),
-	}, nil
+	return builtAttestationData, nil
 }
 
 func (s *Service) issueAttestationDataRequests(ctx context.Context,
@@ -218,8 +337,6 @@ func (*Service) attestationDataLoop1(ctx context.Context,
 	started time.Time,
 	requests int,
 	attestationDataResponses map[phase0.Root][]*attestationDataResponse,
-	attestationDataCounts map[phase0.Root]int,
-	attestationDataProviders map[phase0.Root][]string,
 	respCh chan *attestationDataResponse,
 	errCh chan *attestationDataError,
 ) (
@@ -253,11 +370,9 @@ func (*Service) attestationDataLoop1(ctx context.Context,
 				attestationDataResponses[attestationDataRoot] = make([]*attestationDataResponse, 0)
 			}
 			attestationDataResponses[attestationDataRoot] = append(attestationDataResponses[attestationDataRoot], resp)
-			attestationDataCounts[attestationDataRoot]++
-			if attestationDataCounts[attestationDataRoot] > largestCount {
-				largestCount = attestationDataCounts[attestationDataRoot]
+			if len(attestationDataResponses[attestationDataRoot]) > largestCount {
+				largestCount = len(attestationDataResponses[attestationDataRoot])
 			}
-			attestationDataProviders[attestationDataRoot] = append(attestationDataProviders[attestationDataRoot], resp.provider)
 
 		case err := <-errCh:
 			errored++
@@ -286,8 +401,6 @@ func (*Service) attestationDataLoop2(ctx context.Context,
 	started time.Time,
 	requests int,
 	attestationDataResponses map[phase0.Root][]*attestationDataResponse,
-	attestationDataCounts map[phase0.Root]int,
-	attestationDataProviders map[phase0.Root][]string,
 	respCh chan *attestationDataResponse,
 	errCh chan *attestationDataError,
 	responded int,
@@ -296,9 +409,9 @@ func (*Service) attestationDataLoop2(ctx context.Context,
 	log := zerolog.Ctx(ctx)
 
 	largestCount := 0
-	for _, v := range attestationDataCounts {
-		if v > largestCount {
-			largestCount = v
+	for _, responses := range attestationDataResponses {
+		if len(responses) > largestCount {
+			largestCount = len(responses)
 		}
 	}
 	strictMajority := requests/2 + 1
@@ -322,11 +435,9 @@ func (*Service) attestationDataLoop2(ctx context.Context,
 				attestationDataResponses[attestationDataRoot] = make([]*attestationDataResponse, 0)
 			}
 			attestationDataResponses[attestationDataRoot] = append(attestationDataResponses[attestationDataRoot], resp)
-			attestationDataCounts[attestationDataRoot]++
-			if attestationDataCounts[attestationDataRoot] > largestCount {
-				largestCount = attestationDataCounts[attestationDataRoot]
+			if len(attestationDataResponses[attestationDataRoot]) > largestCount {
+				largestCount = len(attestationDataResponses[attestationDataRoot])
 			}
-			attestationDataProviders[attestationDataRoot] = append(attestationDataProviders[attestationDataRoot], resp.provider)
 		case err := <-errCh:
 			errored++
 			log.Debug().

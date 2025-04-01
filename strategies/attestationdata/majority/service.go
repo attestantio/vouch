@@ -1,4 +1,4 @@
-// Copyright © 2023, 2024 Attestant Limited.
+// Copyright © 2023 - 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -36,10 +36,11 @@ type Service struct {
 	chainTime                chaintime.Service
 	blockRootToSlotCache     cache.BlockRootToSlotProvider
 	threshold                int
+	recombination            bool
 }
 
 // New creates a new attestation data strategy.
-func New(_ context.Context, params ...Parameter) (*Service, error) {
+func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem with parameters")
@@ -51,6 +52,10 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		log = log.Level(parameters.logLevel)
 	}
 
+	if err := registerMetrics(ctx, parameters.monitor); err != nil {
+		return nil, errors.New("failed to register metrics")
+	}
+
 	s := &Service{
 		log:                      log,
 		timeout:                  parameters.timeout,
@@ -60,6 +65,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		chainTime:                parameters.chainTime,
 		blockRootToSlotCache:     parameters.blockRootToSlotCache,
 		threshold:                parameters.threshold,
+		recombination:            parameters.recombination,
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
