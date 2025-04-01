@@ -180,13 +180,13 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	// Subscribe to head events.  This allows us to go early for attestations if a block arrives, as well as
 	// re-request duties if there is a change in beacon block.
 	// This also allows us to re-request duties if the dependent roots change.
-	if err := parameters.eventsProvider.Events(ctx, []string{"head"}, s.HandleHeadEvent); err != nil {
-		return nil, errors.Wrap(err, "failed to add head event handler")
-	}
-
-	// Subscribe to block events.  This allows us to keep the cache for the block roots to slot number up to date.
-	if err := parameters.eventsProvider.Events(ctx, []string{"block"}, s.HandleBlockEvent); err != nil {
-		return nil, errors.Wrap(err, "failed to add block event handler")
+	// Also subscribe to block events.  This allows us to keep the cache for the block roots to slot number up to date.
+	if err := parameters.eventsProvider.Events(ctx, &api.EventsOpts{
+		Topics:       []string{"block", "head"},
+		HeadHandler:  s.HandleHeadEvent,
+		BlockHandler: s.HandleBlockEvent,
+	}); err != nil {
+		return nil, errors.Wrap(err, "failed to add events handler")
 	}
 
 	// Start tickers, to carry out periodic operations.
