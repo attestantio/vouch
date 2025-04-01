@@ -1,4 +1,4 @@
-// Copyright © 2023 Attestant Limited.
+// Copyright © 2023, 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -30,6 +30,7 @@ import (
 
 type parameters struct {
 	logLevel                 zerolog.Level
+	monitor                  metrics.Service
 	clientMonitor            metrics.ClientMonitor
 	processConcurrency       int64
 	attestationDataProviders map[string]eth2client.AttestationDataProvider
@@ -37,6 +38,7 @@ type parameters struct {
 	chainTime                chaintime.Service
 	blockRootToSlotCache     cache.BlockRootToSlotProvider
 	threshold                int
+	recombination            bool
 }
 
 // Parameter is the interface for service parameters.
@@ -54,6 +56,13 @@ func (f parameterFunc) apply(p *parameters) {
 func WithLogLevel(logLevel zerolog.Level) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.logLevel = logLevel
+	})
+}
+
+// WithMonitor sets the monitor for the service.
+func WithMonitor(monitor metrics.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.monitor = monitor
 	})
 }
 
@@ -107,11 +116,19 @@ func WithThreshold(minimumMajority int) Parameter {
 	})
 }
 
+// WithRecombination allows the strategy to build synthetic attestation data from that presented to it.
+func WithRecombination(recombination bool) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.recombination = recombination
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel:           zerolog.GlobalLevel(),
 		clientMonitor:      nullmetrics.New(),
+		monitor:            nullmetrics.New(),
 		processConcurrency: int64(runtime.GOMAXPROCS(-1)),
 	}
 	for _, p := range params {
@@ -122,6 +139,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 
 	if parameters.timeout == 0 {
 		return nil, errors.New("no timeout specified")
+	}
+	if parameters.monitor == nil {
+		return nil, errors.New("no monitor specified")
 	}
 	if parameters.clientMonitor == nil {
 		return nil, errors.New("no client monitor specified")

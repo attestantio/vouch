@@ -147,6 +147,12 @@ strategies:
       # threshold is the minimum number of beacon nodes that have to provide the same attestation data for Vouch with the 'majority'
       # strategy to use it.
       threshold: 2
+      # recombination happens if the above threshold is not met.  It attempts to satisfy the threshold for both source and target
+      # votes, leaving the head vote as 0.  This provides thest best possible response for the chain in situations where nodes may
+      # be running slow or otherwise disagreeing on current head.
+      # Because this action could theoretically result in attestation data that could be slashable, this option is only available
+      # if the account manager being used has built-in slashing protection.
+      recombination: false
   # The aggregateattestation strategy obtains aggregate attestations from multiple sources.
   # Note that the list of nodes here must be a subset of those in the attestationdata strategy.  If not, the nodes will not have
   # been gathering the attestations to aggregate and will error when the aggregate request is made.

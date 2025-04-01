@@ -662,6 +662,7 @@ func startProviders(ctx context.Context,
 	chainTime chaintime.Service,
 	cache cache.Service,
 	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider,
+	accountManager accountmanager.Service,
 ) (
 	graffitiprovider.Service,
 	eth2client.ProposalProvider,
@@ -682,7 +683,7 @@ func startProviders(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting attestation data provider")
-	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, eth2Client, chainTime, cache)
+	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, eth2Client, chainTime, cache, accountManager)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to select attestation data provider")
 	}
@@ -795,6 +796,7 @@ func startSigningServices(ctx context.Context,
 		chainTime,
 		cacheSvc,
 		signedBeaconBlockProvider,
+		accountManager,
 	)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -1197,6 +1199,7 @@ func selectAttestationDataProvider(ctx context.Context,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cacheSvc cache.Service,
+	accountManager accountmanager.Service,
 ) (eth2client.AttestationDataProvider, error) {
 	var attestationDataProvider eth2client.AttestationDataProvider
 	var err error
@@ -1233,15 +1236,24 @@ func selectAttestationDataProvider(ctx context.Context,
 			}
 			attestationDataProviders[address] = client.(eth2client.AttestationDataProvider)
 		}
+
+		recombination := viper.GetBool("strategies.attestationdata.majority.recombination")
+		if recombination && !accountManager.HasSlashingProtection() {
+			log.Warn().Msg("Attestation data recombination is only allowed with wallets that have built-in slashing protection; disabling")
+			recombination = false
+		}
+
 		attestationDataProvider, err = majorityattestationdatastrategy.New(ctx,
+			majorityattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.majority")),
+			majorityattestationdatastrategy.WithMonitor(monitor),
 			majorityattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			majorityattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.majority")),
-			majorityattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.majority")),
 			majorityattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
 			majorityattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.majority")),
 			majorityattestationdatastrategy.WithChainTime(chainTime),
 			majorityattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
 			majorityattestationdatastrategy.WithThreshold(viper.GetInt("strategies.attestationdata.majority.threshold")),
+			majorityattestationdatastrategy.WithRecombination(recombination),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start majority attestation data strategy")
