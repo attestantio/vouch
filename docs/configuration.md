@@ -244,15 +244,22 @@ blockrelay:
 # fail to see expected attestations or proposals within the given time period.
 multiinstance:
   # style can be 'static-delay' or 'always'.  'always' means that the instance will carry out its duties regardless of which other
-  # instances may active.  'static-delay' means that the instance will wait for an amount of time if inactive before becoming active.
-  # Note that for the 'static-delay' style to be effective the beacon node(s) to which Vouch connects must be running with the
-  # 'subscribe all subnets' option enabled.  This is because this style looks at the attestation data to see if other instance(s) of
-  # Vouch are active.
-  style: 'static-delay'
+  # instances may active.  'static-delay' means that the instance will wait for an amount of time if inactive before becoming
+  # active.  Note that for the 'static-delay' style to operate the beacon node(s) to which Vouch connects must be running with the
+  # 'subscribe all subnets' option enabled.  This is because this style looks at the attestation data to see if other instance(s)
+  # of Vouch are active.  However, Vouch cannot detect if the beacon nodes are configured correctly so it is up to the user to
+  # carry out this work themselves.
+  style: 'always'
   static-delay:
-    # attester-delay is the time for inactive Vouch instances to wait to see expected attestations prior to becoming active themselves.
+    # attester-delay is the time for inactive Vouch instances to wait to see expected attestations prior to becoming active 
+    # themselves.  The higher this value is, the more likely it is that an inactive Vouch will miss a slot's worth of attestations
+    # before becoming active.  The lower this value is, the more likely it is that multiple Vouch instances will consider
+    # themselves as all active and potentially cause attestation failures.  If either of these situations is seen commonly then the
+    # value below may need to be changed accordingly.
     attester-delay: '1s'
     # proposer-delay is the time for inactive Vouch instances to wait to see expected proposals prior to becoming active themselves.
+    # The same caveats apply to this value as to the attester delay, however in general it is very unlikely that a Vouch instance
+    # will become inactive around a proposal, given the relative frequency of proposals and attestations.
     proposer-delay: '2s'
 
 # tracing sends OTLP trace data to the supplied endpoint.
