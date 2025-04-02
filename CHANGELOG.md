@@ -1,5 +1,5 @@
 dev:
-  - 
+  - add initial multi instance implementation
 
 1.10.0:
   - support Electra
