@@ -30,6 +30,7 @@ import (
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/multiinstance"
 	"github.com/attestantio/vouch/services/proposalpreparer"
 	"github.com/attestantio/vouch/services/scheduler"
 	"github.com/attestantio/vouch/services/synccommitteeaggregator"
@@ -86,6 +87,7 @@ type Service struct {
 	fastTrackAttestations         bool
 	fastTrackSyncCommittees       bool
 	fastTrackGrace                time.Duration
+	multiInstance                 multiinstance.Service
 
 	// Hard fork control
 	handlingAltair     bool
@@ -166,6 +168,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		fastTrackAttestations:         parameters.fastTrackAttestations,
 		fastTrackSyncCommittees:       parameters.fastTrackSyncCommittees,
 		fastTrackGrace:                parameters.fastTrackGrace,
+		multiInstance:                 parameters.multiInstance,
 		subscriptionInfos:             make(map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
 		handlingAltair:                handlingAltair,
 		altairForkEpoch:               altairForkEpoch,

@@ -1630,3 +1630,67 @@ func (m *SleepySyncCommitteeContributionProvider) SyncCommitteeContribution(ctx 
 	time.Sleep(m.wait)
 	return m.next.SyncCommitteeContribution(ctx, opts)
 }
+
+// AttestationPoolProvider is a mock for eth2client.AttestationPoolProvider.
+type AttestationPoolProvider struct{}
+
+// NewAttestationPoolProvider returns a mock attestation data provider.
+func NewAttestationPoolProvider() eth2client.AttestationPoolProvider {
+	return &AttestationPoolProvider{}
+}
+
+// AttestationPool is a mock.
+func (*AttestationPoolProvider) AttestationPool(_ context.Context,
+	_ *api.AttestationPoolOpts,
+) (
+	*api.Response[[]*phase0.Attestation],
+	error,
+) {
+	return &api.Response[[]*phase0.Attestation]{
+		Data:     []*phase0.Attestation{},
+		Metadata: make(map[string]any),
+	}, nil
+}
+
+// ErroringAttestationPoolProvider is a mock for eth2client.AttestationPoolProvider.
+type ErroringAttestationPoolProvider struct{}
+
+// NewErroringAttestationPoolProvider returns a mock attestation data provider.
+func NewErroringAttestationPoolProvider() eth2client.AttestationPoolProvider {
+	return &ErroringAttestationPoolProvider{}
+}
+
+// AttestationPool is a mock.
+func (*ErroringAttestationPoolProvider) AttestationPool(_ context.Context,
+	_ *api.AttestationPoolOpts,
+) (
+	*api.Response[[]*phase0.Attestation],
+	error,
+) {
+	return nil, errors.New("mock error")
+}
+
+// SleepyAttestationPoolProvider is a mock for eth2client.AttestationPoolProvider.
+type SleepyAttestationPoolProvider struct {
+	wait time.Duration
+	next eth2client.AttestationPoolProvider
+}
+
+// NewSleepyAttestationPoolProvider returns a mock attestation pool provider.
+func NewSleepyAttestationPoolProvider(wait time.Duration, next eth2client.AttestationPoolProvider) eth2client.AttestationPoolProvider {
+	return &SleepyAttestationPoolProvider{
+		wait: wait,
+		next: next,
+	}
+}
+
+// AttestationPool is a mock.
+func (m *SleepyAttestationPoolProvider) AttestationPool(ctx context.Context,
+	opts *api.AttestationPoolOpts,
+) (
+	*api.Response[[]*phase0.Attestation],
+	error,
+) {
+	time.Sleep(m.wait)
+	return m.next.AttestationPool(ctx, opts)
+}

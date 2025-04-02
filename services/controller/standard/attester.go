@@ -136,9 +136,16 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester
 		s.pendingAttestationsMutex.Unlock()
 	}()
 
+	if !s.multiInstance.ShouldAttest(ctx, duty) {
+		// Another instance is attesting.
+		return
+	}
+
 	attestations, err := s.attester.Attest(ctx, duty)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to attest")
+		s.multiInstance.OnAttestationFailure(ctx, duty)
+
 		return
 	}
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Attested")
