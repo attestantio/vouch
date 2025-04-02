@@ -30,27 +30,17 @@ import (
 )
 
 // HandleBlockEvent handles the "block" events from the beacon node.
-func (s *Service) HandleBlockEvent(event *apiv1.Event) {
-	if event.Data == nil {
-		return
-	}
-
-	data := event.Data.(*apiv1.BlockEvent)
+func (s *Service) HandleBlockEvent(_ context.Context, data *apiv1.BlockEvent) {
 	// We update the block to slot cache here, in an attempt to avoid
 	// unnecessary lookups.
 	s.blockToSlotSetter.SetBlockRootToSlot(data.Block, data.Slot)
 }
 
 // HandleHeadEvent handles the "head" events from the beacon node.
-func (s *Service) HandleHeadEvent(event *apiv1.Event) {
-	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(context.Background(), "HandleHeadEvent")
+func (s *Service) HandleHeadEvent(ctx context.Context, data *apiv1.HeadEvent) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.controller.standard").Start(ctx, "HandleHeadEvent")
 	defer span.End()
 
-	if event.Data == nil {
-		return
-	}
-
-	data := event.Data.(*apiv1.HeadEvent)
 	s.log.Trace().Uint64("slot", uint64(data.Slot)).Msg("Received head event")
 
 	if data.Slot != s.chainTimeService.CurrentSlot() {

@@ -281,7 +281,7 @@ func NewEventsProvider() eth2client.EventsProvider {
 }
 
 // Events is a mock.
-func (*EventsProvider) Events(_ context.Context, _ []string, _ eth2client.EventHandlerFunc) error {
+func (*EventsProvider) Events(_ context.Context, _ *api.EventsOpts) error {
 	return nil
 }
 
@@ -294,7 +294,7 @@ func NewErroringEventsProvider() eth2client.EventsProvider {
 }
 
 // Events submits sync committee contributions.
-func (*ErroringEventsProvider) Events(_ context.Context, _ []string, _ eth2client.EventHandlerFunc) error {
+func (*ErroringEventsProvider) Events(_ context.Context, _ *api.EventsOpts) error {
 	return errors.New("error")
 }
 

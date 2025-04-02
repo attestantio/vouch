@@ -83,12 +83,12 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		s.updateFromBlock(blockResponse.Data)
 	}
 
-	if err := parameters.eventsProvider.Events(ctx, []string{"block"}, s.handleBlock); err != nil {
-		return nil, errors.Wrap(err, "failed to configure block event")
-	}
-
-	if err := parameters.eventsProvider.Events(ctx, []string{"head"}, s.handleHead); err != nil {
-		return nil, errors.Wrap(err, "failed to configure head event")
+	if err := parameters.eventsProvider.Events(ctx, &api.EventsOpts{
+		Topics:       []string{"block", "head"},
+		BlockHandler: s.handleBlock,
+		HeadHandler:  s.handleHead,
+	}); err != nil {
+		return nil, errors.Wrap(err, "failed to configure events listener")
 	}
 
 	if err := parameters.scheduler.SchedulePeriodicJob(ctx,

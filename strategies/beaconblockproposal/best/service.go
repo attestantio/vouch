@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -175,7 +175,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	// Subscribe to head events.  This allows us to go early for attestations if a block arrives, as well as
 	// re-request duties if there is a change in beacon block.
 	// This also allows us to re-request duties if the dependent roots change.
-	if err := parameters.eventsProvider.Events(ctx, []string{"head"}, s.HandleHeadEvent); err != nil {
+	if err := parameters.eventsProvider.Events(ctx, &api.EventsOpts{
+		Topics:      []string{"head"},
+		HeadHandler: s.HandleHeadEvent,
+	}); err != nil {
 		return nil, errors.Wrap(err, "failed to add head event handler")
 	}
 

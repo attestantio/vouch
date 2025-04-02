@@ -25,14 +25,7 @@ import (
 )
 
 // HandleHeadEvent handles the "head" events from the beacon node.
-func (s *Service) HandleHeadEvent(event *apiv1.Event) {
-	if event.Data == nil {
-		return
-	}
-
-	ctx := context.Background()
-
-	data := event.Data.(*apiv1.HeadEvent)
+func (s *Service) HandleHeadEvent(ctx context.Context, data *apiv1.HeadEvent) {
 	log := s.log.With().Uint64("slot", uint64(data.Slot)).Logger()
 	log.Trace().Msg("Received head event")
 
