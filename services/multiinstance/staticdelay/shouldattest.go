@@ -50,7 +50,7 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 		CommitteeIndex: &committeeIndex,
 	})
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to obtain attester duties; activating attester")
+		log.Warn().Err(err).Msg("Failed to obtain attestation pool; activating attester")
 		s.enableAttester(ctx)
 
 		return true
