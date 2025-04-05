@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -86,6 +86,7 @@ import (
 	bestbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	firstbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/first"
 	firstbeaconblockrootstrategy "github.com/attestantio/vouch/strategies/beaconblockroot/first"
+	latestbeaconblockrootstrategy "github.com/attestantio/vouch/strategies/beaconblockroot/latest"
 	majoritybeaconblockrootstrategy "github.com/attestantio/vouch/strategies/beaconblockroot/majority"
 	"github.com/attestantio/vouch/strategies/builderbid"
 	bestbuilderbidstrategy "github.com/attestantio/vouch/strategies/builderbid/best"
@@ -1431,6 +1432,25 @@ func selectBeaconBlockRootProvider(ctx context.Context,
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start first beacon block root strategy")
+		}
+	case "latest":
+		log.Info().Msg("Starting latest beacon block root strategy")
+		beaconBlockRootProviders := make(map[string]eth2client.BeaconBlockRootProvider)
+		for _, address := range util.BeaconNodeAddresses("strategies.beaconblockroot.latest") {
+			client, err := fetchClient(ctx, monitor, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block root strategy", address))
+			}
+			beaconBlockRootProviders[address] = client.(eth2client.BeaconBlockRootProvider)
+		}
+		beaconBlockRootProvider, err = latestbeaconblockrootstrategy.New(ctx,
+			latestbeaconblockrootstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			latestbeaconblockrootstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockroot.latest")),
+			latestbeaconblockrootstrategy.WithBeaconBlockRootProviders(beaconBlockRootProviders),
+			latestbeaconblockrootstrategy.WithTimeout(util.Timeout("strategies.beaconblockroot.latest")),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start latest beacon block root strategy")
 		}
 	default:
 		log.Info().Msg("Starting simple beacon block root strategy")
