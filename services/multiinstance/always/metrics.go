@@ -66,16 +66,11 @@ func registerPrometheusMetrics(_ context.Context) error {
 }
 
 // monitorActive provides metrics for the instance activity status.
-func monitorActive(operation string, active bool) {
+func monitorActive(operation string) {
 	if activeCounter == nil {
 		return
 	}
 
-	if active {
-		activeCounter.WithLabelValues(operation, "active").Inc()
-		activeState.Set(1)
-	} else {
-		activeCounter.WithLabelValues(operation, "inactive").Inc()
-		activeState.Set(0)
-	}
+	activeCounter.WithLabelValues(operation, "active").Inc()
+	activeState.Set(1)
 }

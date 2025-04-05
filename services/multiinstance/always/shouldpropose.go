@@ -21,7 +21,7 @@ import (
 
 // ShouldPropose returns true if this Vouch instance should propose.
 func (*Service) ShouldPropose(_ context.Context, _ *beaconblockproposer.Duty) bool {
-	monitorActive("proposer", true)
+	monitorActive("proposer")
 
 	return true
 }

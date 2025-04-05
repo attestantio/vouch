@@ -21,7 +21,7 @@ import (
 
 // ShouldAttest returns true if this Vouch instance should attest.
 func (*Service) ShouldAttest(_ context.Context, _ *attester.Duty) bool {
-	monitorActive("attester", true)
+	monitorActive("attester")
 
 	return true
 }
