@@ -76,20 +76,18 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	return s, nil
 }
 
-func (s *Service) disableAttester(_ context.Context) {
+func (s *Service) disableAttester(ctx context.Context) {
 	s.attesterActive.Store(false)
 	monitorActive("attester", false)
 	// We also deactivate the proposer pre-emptively, on the basis that if we cannot attest we are unlikely to be able to propose.
-	s.proposerActive.Store(false)
-	monitorActive("proposer", false)
+	s.disableProposer(ctx)
 }
 
-func (s *Service) enableAttester(_ context.Context) {
+func (s *Service) enableAttester(ctx context.Context) {
 	s.attesterActive.Store(true)
 	monitorActive("attester", true)
 	// We also activate the proposer pre-emptively, on the basis that if we are attesting we should be proposing also.
-	s.proposerActive.Store(true)
-	monitorActive("proposer", true)
+	s.enableProposer(ctx)
 }
 
 func (s *Service) disableProposer(_ context.Context) {
