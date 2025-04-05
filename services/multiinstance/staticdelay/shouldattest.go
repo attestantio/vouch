@@ -51,7 +51,7 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 	})
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to obtain attester duties; activating attester")
-		s.disableAttester(ctx)
+		s.enableAttester(ctx)
 
 		return true
 	}
