@@ -105,7 +105,7 @@ func (s *Service) scheduleProposals(ctx context.Context,
 				"Propose",
 				fmt.Sprintf("Beacon block proposal for slot %d", duty.Slot()),
 				s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxProposalDelay),
-				func(ctx context.Context) { s.beaconBlockProposer.Propose(ctx, duty) },
+				func(ctx context.Context) { s.propose(ctx, duty) },
 			); err != nil {
 				// Don't return here; we want to try to set up as many proposer jobs as possible.
 				s.log.Error().Err(err).Msg("Failed to schedule beacon block proposal")
@@ -113,6 +113,20 @@ func (s *Service) scheduleProposals(ctx context.Context,
 		}(duty)
 	}
 	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Scheduled beacon block proposals")
+}
+
+func (s *Service) propose(ctx context.Context, duty *beaconblockproposer.Duty) {
+	log := s.log.With().Uint64("slot", uint64(duty.Slot())).Logger()
+
+	if !s.multiInstance.ShouldPropose(ctx, duty) {
+		// Another instance is proposing.
+		return
+	}
+
+	if err := s.beaconBlockProposer.Propose(ctx, duty); err != nil {
+		log.Error().Err(err).Msg("Failed to propose")
+		s.multiInstance.OnProposalFailure(ctx, duty)
+	}
 }
 
 // proposeEarly attempts to propose as soon as the slot starts, as long
