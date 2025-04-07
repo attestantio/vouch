@@ -15,6 +15,7 @@ package staticdelay
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/api"
@@ -42,27 +43,30 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 	// Sleep to let other instances do their work.
 	time.Sleep(s.attesterDelay)
 
+	// Look for any attestations that we are meant to generate that are already in the node's attestation pool.
 	slot := duty.Slot()
-	committeeIndex := duty.CommitteeIndices()[0]
-	validatorCommitteeIndex := duty.ValidatorCommitteeIndices()[0]
-	resp, err := s.attestationPoolProvider.AttestationPool(ctx, &api.AttestationPoolOpts{
-		Slot:           &slot,
-		CommitteeIndex: &committeeIndex,
-	})
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to obtain attestation pool; activating attester")
-		s.enableAttester(ctx)
+	// Go through the committee indices one at a time, to avoid overloading ourselves with attestations from the pool, and because
+	// we expect to find attestations in all committees if the network is behaving so don't pull data unnecessarily.
+	for _, committeeIndex := range duty.CommitteeIndices() {
+		log.Info().Uint64("slot", uint64(slot)).Uint64("committee_index", uint64(committeeIndex)).Msg("Checking committee for existing attestations")
+		validatorCommitteeIndices := duty.ValidatorCommitteeIndices()
+		resp, err := s.attestationPoolProvider.AttestationPool(ctx, &api.AttestationPoolOpts{
+			Slot:           &slot,
+			CommitteeIndex: &committeeIndex,
+		})
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to obtain attestation pool")
+			continue
+		}
 
-		return true
-	}
+		for _, attestation := range resp.Data {
+			if slices.ContainsFunc(validatorCommitteeIndices, func(index uint64) bool { return attestation.AggregationBits.BitAt(index) }) {
+				// An attestation is already in the pool; we don't need to act.
+				log.Trace().Msg("Another instance is attesting; not activating attester")
+				s.disableAttester(ctx)
 
-	for _, attestation := range resp.Data {
-		if attestation.AggregationBits.BitAt(validatorCommitteeIndex) {
-			// An attestation is already in the pool; we don't need to act.
-			log.Trace().Msg("Another instance is attesting; not activating attester")
-			s.disableAttester(ctx)
-
-			return false
+				return false
+			}
 		}
 	}
 
