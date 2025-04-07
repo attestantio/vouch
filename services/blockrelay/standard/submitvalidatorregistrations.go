@@ -236,6 +236,12 @@ func (s *Service) submitRelayRegistrations(ctx context.Context,
 				return
 			}
 			if err := submitter.SubmitValidatorRegistrations(ctx, &builderapi.SubmitValidatorRegistrationsOpts{
+				// Validator registrations can take a long time, as they are processed sequentially by some relays.  As such,
+				// unilaterally set the timeout here.  This code is within a waitgroup, so we're okay to wait for a little longer
+				// than we would with most requests.
+				Common: builderapi.CommonOpts{
+					Timeout: time.Second * time.Duration(len(providerRegistrations)),
+				},
 				Registrations: providerRegistrations,
 			}); err != nil {
 				s.log.Error().Err(err).Str("builder", builder).Msg("Failed to submit validator registrations")
