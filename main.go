@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -113,7 +113,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.10.0"
+var ReleaseVersion = "1.11.0-alpha.1"
 
 func main() {
 	exitCode := main2()
@@ -355,7 +355,18 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	beaconBlockProposer, attesterSvc, attestationAggregator, beaconCommitteeSubscriber, err := startSigningServices(ctx, majordomo, monitor, eth2Client, chainTime, cacheSvc, signerSvc, blockRelay, accountManager, submitter)
+	beaconBlockProposer, attesterSvc, attestationAggregator, beaconCommitteeSubscriber, err := startSigningServices(ctx,
+		majordomo,
+		monitor,
+		eth2Client,
+		chainTime,
+		cacheSvc,
+		signerSvc,
+		blockRelay,
+		accountManager,
+		submitter,
+		signedBeaconBlockProvider,
+	)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -376,7 +387,7 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	multiInstance, err := startMultiInstance(ctx, monitor, eth2Client, chainTime)
+	multiInstance, err := startMultiInstance(ctx, monitor, eth2Client, chainTime, beaconBlockHeaderProvider)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -398,6 +409,7 @@ func startServices(ctx context.Context,
 		syncCommitteeMessenger,
 		syncCommitteeAggregator,
 		syncCommitteeSubscriber,
+		beaconBlockHeaderProvider,
 		multiInstance,
 	)
 	if err != nil {
@@ -424,6 +436,7 @@ func initController(ctx context.Context,
 	syncCommitteeMessenger synccommitteemessenger.Service,
 	syncCommitteeAggregator synccommitteeaggregator.Service,
 	syncCommitteeSubscriber synccommitteesubscriber.Service,
+	beaconBlockHeaderProvider eth2client.BeaconBlockHeadersProvider,
 	multiInstance multiinstance.Service,
 ) (
 	*standardcontroller.Service,
@@ -452,7 +465,7 @@ func initController(ctx context.Context,
 		standardcontroller.WithSyncCommitteeMessenger(syncCommitteeMessenger),
 		standardcontroller.WithSyncCommitteeAggregator(syncCommitteeAggregator),
 		standardcontroller.WithBeaconBlockProposer(beaconBlockProposer),
-		standardcontroller.WithBeaconBlockHeadersProvider(eth2Client.(eth2client.BeaconBlockHeadersProvider)),
+		standardcontroller.WithBeaconBlockHeadersProvider(beaconBlockHeaderProvider),
 		standardcontroller.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 		standardcontroller.WithProposalsPreparer(proposalPreparer),
 		standardcontroller.WithAttestationAggregator(attestationAggregator),
@@ -646,6 +659,7 @@ func startProviders(ctx context.Context,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cache cache.Service,
+	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider,
 ) (
 	graffitiprovider.Service,
 	eth2client.ProposalProvider,
@@ -660,7 +674,7 @@ func startProviders(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting beacon block proposal provider")
-	beaconBlockProposalProvider, err := selectProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
+	beaconBlockProposalProvider, err := selectProposalProvider(ctx, monitor, eth2Client, chainTime, cache, signedBeaconBlockProvider)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to select beacon block proposal provider")
 	}
@@ -764,6 +778,7 @@ func startSigningServices(ctx context.Context,
 	blockRelay blockrelay.Service,
 	accountManager accountmanager.Service,
 	submitterStrategy submitter.Service,
+	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider,
 ) (
 	beaconblockproposer.Service,
 	attester.Service,
@@ -771,7 +786,14 @@ func startSigningServices(ctx context.Context,
 	beaconcommitteesubscriber.Service,
 	error,
 ) {
-	graffitiProvider, proposalProvider, attestationDataProvider, aggregateAttestationProvider, err := startProviders(ctx, majordomo, monitor, eth2Client, chainTime, cacheSvc)
+	graffitiProvider, proposalProvider, attestationDataProvider, aggregateAttestationProvider, err := startProviders(ctx,
+		majordomo,
+		monitor,
+		eth2Client,
+		chainTime,
+		cacheSvc,
+		signedBeaconBlockProvider,
+	)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -1312,6 +1334,7 @@ func selectProposalProvider(ctx context.Context,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cacheSvc cache.Service,
+	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider,
 ) (eth2client.ProposalProvider, error) {
 	var proposalProvider eth2client.ProposalProvider
 	var err error
@@ -1334,7 +1357,7 @@ func selectProposalProvider(ctx context.Context,
 			bestbeaconblockproposalstrategy.WithChainTimeService(chainTime),
 			bestbeaconblockproposalstrategy.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 			bestbeaconblockproposalstrategy.WithProposalProviders(proposalProviders),
-			bestbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(eth2Client.(eth2client.SignedBeaconBlockProvider)),
+			bestbeaconblockproposalstrategy.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 			bestbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.best")),
 			bestbeaconblockproposalstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
 			bestbeaconblockproposalstrategy.WithExecutionPayloadFactor(viper.GetFloat64("strategies.beaconblockproposal.best.execution-payload-factor")),
@@ -1991,6 +2014,7 @@ func startMultiInstance(ctx context.Context,
 	monitor metrics.Service,
 	consensusClient eth2client.Service,
 	chainTime chaintime.Service,
+	beaconBlockHeadersProvider eth2client.BeaconBlockHeadersProvider,
 ) (multiinstance.Service, error) {
 	var service multiinstance.Service
 	var err error
@@ -1998,25 +2022,6 @@ func startMultiInstance(ctx context.Context,
 	switch viper.GetString("multiinstance.style") {
 	case "static-delay":
 		log.Info().Msg("Starting static delay multi instance system")
-		beaconBlockHeaderProviders := make(map[string]eth2client.BeaconBlockHeadersProvider)
-		path := "strategies.beaconblockheader.first"
-		for _, address := range util.BeaconNodeAddresses(path) {
-			client, err := fetchClient(ctx, monitor, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block header strategy", address))
-			}
-			beaconBlockHeaderProviders[address] = client.(eth2client.BeaconBlockHeadersProvider)
-		}
-		var beaconBlockHeadersProvider eth2client.BeaconBlockHeadersProvider
-		beaconBlockHeadersProvider, err = firstbeaconblockheaderstrategy.New(ctx,
-			firstbeaconblockheaderstrategy.WithTimeout(util.Timeout(path)),
-			firstbeaconblockheaderstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			firstbeaconblockheaderstrategy.WithLogLevel(util.LogLevel(path)),
-			firstbeaconblockheaderstrategy.WithBeaconBlockHeadersProviders(beaconBlockHeaderProviders),
-		)
-		if err != nil {
-			return nil, err
-		}
 
 		service, err = staticdelaymultiinstance.New(ctx,
 			staticdelaymultiinstance.WithLogLevel(util.LogLevel("multiinstance.static-delay")),

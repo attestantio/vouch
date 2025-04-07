@@ -1,5 +1,8 @@
 dev:
   - add initial multi instance implementation
+  - enable 'latest' beacon block root strategy
+  - allow partial attestations to be generated for majority strategy
+  - use strategy fetchers for data where appropriate
 
 1.10.0:
   - support Electra
