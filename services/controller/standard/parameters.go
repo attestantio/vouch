@@ -27,6 +27,7 @@ import (
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/multiinstance"
 	"github.com/attestantio/vouch/services/proposalpreparer"
 	"github.com/attestantio/vouch/services/scheduler"
 	"github.com/attestantio/vouch/services/synccommitteeaggregator"
@@ -69,6 +70,7 @@ type parameters struct {
 	fastTrackAttestations         bool
 	fastTrackSyncCommittees       bool
 	fastTrackGrace                time.Duration
+	multiInstance                 multiinstance.Service
 }
 
 // Parameter is the interface for service parameters.
@@ -306,6 +308,13 @@ func WithFastTrackGrace(grace time.Duration) Parameter {
 	})
 }
 
+// WithMultiInstance sets the multi instance service.
+func WithMultiInstance(service multiinstance.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.multiInstance = service
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(ctx context.Context, params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -365,6 +374,9 @@ func parseAndCheckParameters(ctx context.Context, params ...Parameter) (*paramet
 	}
 	if parameters.blockToSlotSetter == nil {
 		return nil, errors.New("no block to slot setter specified")
+	}
+	if parameters.multiInstance == nil {
+		return nil, errors.New("no multi instance service specified")
 	}
 	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {

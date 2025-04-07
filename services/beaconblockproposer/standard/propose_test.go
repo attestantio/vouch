@@ -82,43 +82,29 @@ func TestPropose(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name string
-		data *beaconblockproposer.Duty
-		errs []map[string]any
+		name       string
+		data       *beaconblockproposer.Duty
+		err        string
+		logEntries []map[string]any
 	}{
 		{
 			name: "Nil",
-			errs: []map[string]any{
-				{
-					"message": "Invalid duty",
-					"error":   "no duty supplied",
-				},
-			},
+			err:  "no duty supplied",
 		},
 		{
 			name: "Empty",
 			data: duty(phase0.BLSSignature{}, nil),
-			errs: []map[string]any{
-				{
-					"message": "Invalid duty",
-					"error":   "duty missing RANDAO reveal",
-				},
-			},
+			err:  "duty missing RANDAO reveal",
 		},
 		{
 			name: "AccountMissing",
 			data: duty(phase0.BLSSignature{0x01}, nil),
-			errs: []map[string]any{
-				{
-					"message": "Invalid duty",
-					"error":   "duty missing account",
-				},
-			},
+			err:  "duty missing account",
 		},
 		{
 			name: "Good",
 			data: duty(phase0.BLSSignature{0x01}, account),
-			errs: []map[string]any{
+			logEntries: []map[string]any{
 				{
 					"message": "Submitted proposal",
 				},
@@ -144,9 +130,14 @@ func TestPropose(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			s.Propose(ctx, test.data)
+			err = s.Propose(ctx, test.data)
+			if test.err == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, test.err)
+			}
 
-			for _, err := range test.errs {
+			for _, err := range test.logEntries {
 				require.True(t, capture.HasLog(err))
 			}
 		})

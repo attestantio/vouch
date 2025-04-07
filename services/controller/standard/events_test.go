@@ -23,6 +23,7 @@ import (
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	alwaysmultiinstance "github.com/attestantio/vouch/services/multiinstance/always"
 	"github.com/attestantio/vouch/services/synccommitteemessenger"
 	"github.com/attestantio/vouch/testutil"
 	"github.com/prysmaticlabs/go-bitfield"
@@ -86,6 +87,9 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 	mockBeaconCommitteeSubscriber := mockbeaconcommitteesubscriber.New()
 	mockBlockToSlotSetter := mockcache.New(map[phase0.Root]phase0.Slot{}).(cache.BlockRootToSlotSetter)
 
+	multiInstance, err := alwaysmultiinstance.New(ctx)
+	require.NoError(t, err)
+
 	params := []standard.Parameter{
 		standard.WithLogLevel(zerolog.TraceLevel),
 		standard.WithMonitor(nullmetrics.New()),
@@ -108,6 +112,7 @@ func TestVerifySyncCommitteeEvents(t *testing.T) {
 		standard.WithAccountsRefresher(mockAccountsRefresher),
 		standard.WithBlockToSlotSetter(mockBlockToSlotSetter),
 		standard.WithBeaconBlockHeadersProvider(mockBlockHeadersProvider),
+		standard.WithMultiInstance(multiInstance),
 	}
 
 	epoch := phase0.Epoch(100)
