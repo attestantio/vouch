@@ -1,4 +1,4 @@
-// Copyright © 2024 Attestant Limited.
+// Copyright © 2024, 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -27,6 +27,7 @@ import (
 type parameters struct {
 	logLevel                   zerolog.Level
 	monitor                    metrics.Service
+	specProvider               consensusclient.SpecProvider
 	attestationPoolProvider    consensusclient.AttestationPoolProvider
 	beaconBlockHeadersProvider consensusclient.BeaconBlockHeadersProvider
 	chainTime                  chaintime.Service
@@ -56,6 +57,13 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 func WithMonitor(monitor metrics.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.monitor = monitor
+	})
+}
+
+// WithSpecProvider sets the specification provider for the module.
+func WithSpecProvider(provider consensusclient.SpecProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.specProvider = provider
 	})
 }
 
@@ -106,6 +114,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 
 	if parameters.monitor == nil {
 		return nil, errors.New("no monitor specified")
+	}
+	if parameters.specProvider == nil {
+		return nil, errors.New("no spec provider specified")
 	}
 	if parameters.attestationPoolProvider == nil {
 		return nil, errors.New("no attestation pool provider specified")

@@ -1,4 +1,4 @@
-// Copyright © 2024 Attestant Limited.
+// Copyright © 2024, 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -58,6 +58,7 @@ func TestService(t *testing.T) {
 			params: []staticdelay.Parameter{
 				staticdelay.WithLogLevel(zerolog.Disabled),
 				staticdelay.WithMonitor(nil),
+				staticdelay.WithSpecProvider(specProvider),
 				staticdelay.WithAttestationPoolProvider(attestationPoolProvider),
 				staticdelay.WithBeaconBlockHeadersProvider(beaconBlockHeadersProvider),
 				staticdelay.WithChainTime(chainTime),
@@ -67,10 +68,25 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: no monitor specified",
 		},
 		{
-			name: "AttestationProviderMissing",
+			name: "SpecProviderMissing",
 			params: []staticdelay.Parameter{
 				staticdelay.WithLogLevel(zerolog.Disabled),
 				staticdelay.WithMonitor(monitor),
+				staticdelay.WithSpecProvider(nil),
+				staticdelay.WithAttestationPoolProvider(attestationPoolProvider),
+				staticdelay.WithBeaconBlockHeadersProvider(beaconBlockHeadersProvider),
+				staticdelay.WithChainTime(chainTime),
+				staticdelay.WithAttesterDelay(100 * time.Millisecond),
+				staticdelay.WithProposerDelay(100 * time.Millisecond),
+			},
+			err: "problem with parameters: no spec provider specified",
+		},
+		{
+			name: "AttestationPoolProviderMissing",
+			params: []staticdelay.Parameter{
+				staticdelay.WithLogLevel(zerolog.Disabled),
+				staticdelay.WithMonitor(monitor),
+				staticdelay.WithSpecProvider(specProvider),
 				staticdelay.WithAttestationPoolProvider(nil),
 				staticdelay.WithBeaconBlockHeadersProvider(beaconBlockHeadersProvider),
 				staticdelay.WithChainTime(chainTime),
@@ -84,6 +100,7 @@ func TestService(t *testing.T) {
 			params: []staticdelay.Parameter{
 				staticdelay.WithLogLevel(zerolog.Disabled),
 				staticdelay.WithMonitor(monitor),
+				staticdelay.WithSpecProvider(specProvider),
 				staticdelay.WithAttestationPoolProvider(attestationPoolProvider),
 				staticdelay.WithBeaconBlockHeadersProvider(nil),
 				staticdelay.WithChainTime(chainTime),
@@ -97,6 +114,7 @@ func TestService(t *testing.T) {
 			params: []staticdelay.Parameter{
 				staticdelay.WithLogLevel(zerolog.Disabled),
 				staticdelay.WithMonitor(monitor),
+				staticdelay.WithSpecProvider(specProvider),
 				staticdelay.WithAttestationPoolProvider(attestationPoolProvider),
 				staticdelay.WithBeaconBlockHeadersProvider(beaconBlockHeadersProvider),
 				staticdelay.WithChainTime(nil),
@@ -110,6 +128,7 @@ func TestService(t *testing.T) {
 			params: []staticdelay.Parameter{
 				staticdelay.WithLogLevel(zerolog.Disabled),
 				staticdelay.WithMonitor(monitor),
+				staticdelay.WithSpecProvider(specProvider),
 				staticdelay.WithAttestationPoolProvider(attestationPoolProvider),
 				staticdelay.WithBeaconBlockHeadersProvider(beaconBlockHeadersProvider),
 				staticdelay.WithChainTime(chainTime),
@@ -123,6 +142,7 @@ func TestService(t *testing.T) {
 			params: []staticdelay.Parameter{
 				staticdelay.WithLogLevel(zerolog.Disabled),
 				staticdelay.WithMonitor(monitor),
+				staticdelay.WithSpecProvider(specProvider),
 				staticdelay.WithAttestationPoolProvider(attestationPoolProvider),
 				staticdelay.WithBeaconBlockHeadersProvider(beaconBlockHeadersProvider),
 				staticdelay.WithChainTime(chainTime),
@@ -136,6 +156,7 @@ func TestService(t *testing.T) {
 			params: []staticdelay.Parameter{
 				staticdelay.WithLogLevel(zerolog.Disabled),
 				staticdelay.WithMonitor(monitor),
+				staticdelay.WithSpecProvider(specProvider),
 				staticdelay.WithAttestationPoolProvider(attestationPoolProvider),
 				staticdelay.WithBeaconBlockHeadersProvider(beaconBlockHeadersProvider),
 				staticdelay.WithChainTime(chainTime),

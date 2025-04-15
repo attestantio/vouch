@@ -1643,11 +1643,11 @@ func NewAttestationPoolProvider() eth2client.AttestationPoolProvider {
 func (*AttestationPoolProvider) AttestationPool(_ context.Context,
 	_ *api.AttestationPoolOpts,
 ) (
-	*api.Response[[]*phase0.Attestation],
+	*api.Response[[]*spec.VersionedAttestation],
 	error,
 ) {
-	return &api.Response[[]*phase0.Attestation]{
-		Data:     []*phase0.Attestation{},
+	return &api.Response[[]*spec.VersionedAttestation]{
+		Data:     []*spec.VersionedAttestation{},
 		Metadata: make(map[string]any),
 	}, nil
 }
@@ -1664,7 +1664,7 @@ func NewErroringAttestationPoolProvider() eth2client.AttestationPoolProvider {
 func (*ErroringAttestationPoolProvider) AttestationPool(_ context.Context,
 	_ *api.AttestationPoolOpts,
 ) (
-	*api.Response[[]*phase0.Attestation],
+	*api.Response[[]*spec.VersionedAttestation],
 	error,
 ) {
 	return nil, errors.New("mock error")
@@ -1688,7 +1688,7 @@ func NewSleepyAttestationPoolProvider(wait time.Duration, next eth2client.Attest
 func (m *SleepyAttestationPoolProvider) AttestationPool(ctx context.Context,
 	opts *api.AttestationPoolOpts,
 ) (
-	*api.Response[[]*phase0.Attestation],
+	*api.Response[[]*spec.VersionedAttestation],
 	error,
 ) {
 	time.Sleep(m.wait)
