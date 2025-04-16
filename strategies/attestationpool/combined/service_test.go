@@ -13,20 +13,14 @@
 
 package combined_test
 
-// TODO
-
 import (
 	"context"
 	"testing"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
-	"github.com/attestantio/vouch/services/cache"
-	mockcache "github.com/attestantio/vouch/services/cache/mock"
-	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
-	"github.com/attestantio/vouch/strategies/attestationdata/best"
+	"github.com/attestantio/vouch/strategies/attestationpool/combined"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
@@ -34,117 +28,73 @@ import (
 func TestService(t *testing.T) {
 	ctx := context.Background()
 
-	attestationDataProviders := map[string]eth2client.AttestationDataProvider{
-		"localhost:1": mock.NewAttestationDataProvider(),
+	attestationPoolProviders := map[string]eth2client.AttestationPoolProvider{
+		"localhost:1": mock.NewAttestationPoolProvider(),
 	}
-
-	genesisTime := time.Now()
-	genesisProvider := mock.NewGenesisProvider(genesisTime)
-	specProvider := mock.NewSpecProvider()
-	chainTime, err := standardchaintime.New(ctx,
-		standardchaintime.WithLogLevel(zerolog.Disabled),
-		standardchaintime.WithGenesisProvider(genesisProvider),
-		standardchaintime.WithSpecProvider(specProvider),
-	)
-	require.NoError(t, err)
-
-	cache := mockcache.New(map[phase0.Root]phase0.Slot{}).(cache.BlockRootToSlotProvider)
 
 	tests := []struct {
 		name   string
-		params []best.Parameter
+		params []combined.Parameter
 		err    string
 	}{
 		{
 			name: "TimeoutMissing",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithAttestationDataProviders(attestationDataProviders),
-				best.WithChainTime(chainTime),
-				best.WithBlockRootToSlotCache(cache),
+			params: []combined.Parameter{
+				combined.WithLogLevel(zerolog.TraceLevel),
+				combined.WithAttestationPoolProviders(attestationPoolProviders),
 			},
 			err: "problem with parameters: no timeout specified",
 		},
 		{
 			name: "TimeoutZero",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(0),
-				best.WithAttestationDataProviders(attestationDataProviders),
-				best.WithChainTime(chainTime),
-				best.WithBlockRootToSlotCache(cache),
+			params: []combined.Parameter{
+				combined.WithLogLevel(zerolog.TraceLevel),
+				combined.WithTimeout(0),
+				combined.WithAttestationPoolProviders(attestationPoolProviders),
 			},
 			err: "problem with parameters: no timeout specified",
 		},
 		{
 			name: "ClientMonitorMissing",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(2 * time.Second),
-				best.WithClientMonitor(nil),
-				best.WithAttestationDataProviders(attestationDataProviders),
-				best.WithChainTime(chainTime),
-				best.WithBlockRootToSlotCache(cache),
+			params: []combined.Parameter{
+				combined.WithLogLevel(zerolog.TraceLevel),
+				combined.WithTimeout(2 * time.Second),
+				combined.WithClientMonitor(nil),
+				combined.WithAttestationPoolProviders(attestationPoolProviders),
 			},
 			err: "problem with parameters: no client monitor specified",
 		},
 		{
-			name: "AttestationDataProvidersNil",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(2 * time.Second),
-				best.WithAttestationDataProviders(nil),
-				best.WithChainTime(chainTime),
-				best.WithBlockRootToSlotCache(cache),
+			name: "AttestationPoolProvidersNil",
+			params: []combined.Parameter{
+				combined.WithLogLevel(zerolog.TraceLevel),
+				combined.WithTimeout(2 * time.Second),
+				combined.WithAttestationPoolProviders(nil),
 			},
-			err: "problem with parameters: no attestation data providers specified",
+			err: "problem with parameters: no attestation pool providers specified",
 		},
 		{
 			name: "AttestationDataProvidersEmpty",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(2 * time.Second),
-				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{}),
-				best.WithChainTime(chainTime),
-				best.WithBlockRootToSlotCache(cache),
+			params: []combined.Parameter{
+				combined.WithLogLevel(zerolog.TraceLevel),
+				combined.WithTimeout(2 * time.Second),
+				combined.WithAttestationPoolProviders(map[string]eth2client.AttestationPoolProvider{}),
 			},
-			err: "problem with parameters: no attestation data providers specified",
-		},
-		{
-			name: "ChainTimeMissing",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(2 * time.Second),
-				best.WithAttestationDataProviders(attestationDataProviders),
-				best.WithBlockRootToSlotCache(cache),
-			},
-			err: "problem with parameters: no chain time service specified",
+			err: "problem with parameters: no attestation pool providers specified",
 		},
 		{
 			name: "Good",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(2 * time.Second),
-				best.WithAttestationDataProviders(attestationDataProviders),
-				best.WithChainTime(chainTime),
-				best.WithBlockRootToSlotCache(cache),
+			params: []combined.Parameter{
+				combined.WithLogLevel(zerolog.TraceLevel),
+				combined.WithTimeout(2 * time.Second),
+				combined.WithAttestationPoolProviders(attestationPoolProviders),
 			},
-		},
-		{
-			name: "BlockRootToSlotCacheMissing",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(2 * time.Second),
-				best.WithAttestationDataProviders(attestationDataProviders),
-				best.WithChainTime(chainTime),
-			},
-			err: "problem with parameters: no block root to slot cache specified",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := best.New(context.Background(), test.params...)
+			_, err := combined.New(ctx, test.params...)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
@@ -152,34 +102,4 @@ func TestService(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestInterfaces(t *testing.T) {
-	ctx := context.Background()
-
-	attestationDataProviders := map[string]eth2client.AttestationDataProvider{
-		"localhost:1": mock.NewAttestationDataProvider(),
-	}
-
-	genesisTime := time.Now()
-	genesisProvider := mock.NewGenesisProvider(genesisTime)
-	specProvider := mock.NewSpecProvider()
-	chainTime, err := standardchaintime.New(ctx,
-		standardchaintime.WithLogLevel(zerolog.Disabled),
-		standardchaintime.WithGenesisProvider(genesisProvider),
-		standardchaintime.WithSpecProvider(specProvider),
-	)
-	require.NoError(t, err)
-
-	cache := mockcache.New(map[phase0.Root]phase0.Slot{}).(cache.BlockRootToSlotProvider)
-
-	s, err := best.New(context.Background(),
-		best.WithLogLevel(zerolog.Disabled),
-		best.WithTimeout(2*time.Second),
-		best.WithAttestationDataProviders(attestationDataProviders),
-		best.WithChainTime(chainTime),
-		best.WithBlockRootToSlotCache(cache),
-	)
-	require.NoError(t, err)
-	require.Implements(t, (*eth2client.AttestationDataProvider)(nil), s)
 }

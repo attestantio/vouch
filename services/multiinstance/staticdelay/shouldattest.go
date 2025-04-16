@@ -87,7 +87,6 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 			}
 			for validatorCommitteeIndex := range dutyAttestations {
 				if aggregationBits.BitAt(validatorCommitteeIndex) {
-					// if slices.ContainsFunc(validatorCommitteeIndices, func(index uint64) bool { return attestation.AggregationBits.BitAt(index) }) {
 					// An attestation is already in the pool; we don't need to act.
 					log.Trace().Msg("Another instance is attesting; not activating attester")
 					s.disableAttester(ctx)

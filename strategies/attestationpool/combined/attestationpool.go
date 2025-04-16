@@ -22,6 +22,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/util"
+	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -177,6 +178,10 @@ func (s *Service) AttestationPool(ctx context.Context,
 		Int("errored", errored).
 		Int("timed_out", timedOut).
 		Msg("Results")
+
+	if responded == 0 {
+		return nil, errors.New("no responses received")
+	}
 
 	attestationsSlice := make([]*spec.VersionedAttestation, 0, len(attestations))
 	for _, attestation := range attestations {
