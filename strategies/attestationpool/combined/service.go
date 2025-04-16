@@ -40,7 +40,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// Set logging.
-	log := zerologger.With().Str("strategy", "attestationdata").Str("impl", "best").Logger()
+	log := zerologger.With().Str("strategy", "attestationpool").Str("impl", "combined").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
