@@ -32,7 +32,7 @@ type Service struct {
 	timeout                  time.Duration
 }
 
-// New creates a new attestation data strategy.
+// New creates a new attestation pool strategy.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
