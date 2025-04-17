@@ -85,6 +85,7 @@ import (
 	bestattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/best"
 	firstattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/first"
 	majorityattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/majority"
+	combinedattestationpoolstrategy "github.com/attestantio/vouch/strategies/attestationpool/combined"
 	firstbeaconblockheaderstrategy "github.com/attestantio/vouch/strategies/beaconblockheader/first"
 	bestbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	firstbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/first"
@@ -388,7 +389,7 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	multiInstance, err := startMultiInstance(ctx, monitor, eth2Client, chainTime, beaconBlockHeaderProvider)
+	multiInstance, err := startMultiInstance(ctx, monitor, chainTime, eth2Client, beaconBlockHeaderProvider)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2032,8 +2033,8 @@ func selectBeaconHeaderProvider(ctx context.Context,
 
 func startMultiInstance(ctx context.Context,
 	monitor metrics.Service,
-	consensusClient eth2client.Service,
 	chainTime chaintime.Service,
+	consensusClient eth2client.Service,
 	beaconBlockHeadersProvider eth2client.BeaconBlockHeadersProvider,
 ) (multiinstance.Service, error) {
 	var service multiinstance.Service
@@ -2043,10 +2044,31 @@ func startMultiInstance(ctx context.Context,
 	case "static-delay":
 		log.Info().Msg("Starting static delay multi instance system")
 
+		attestationPoolProviders := make(map[string]eth2client.AttestationPoolProvider)
+		path := "strategies.attestationpool.combined"
+		for _, address := range util.BeaconNodeAddresses(path) {
+			client, err := fetchClient(ctx, monitor, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for attestation pool strategy", address))
+			}
+			attestationPoolProviders[address] = client.(eth2client.AttestationPoolProvider)
+		}
+		var attestationPoolProvider eth2client.AttestationPoolProvider
+		attestationPoolProvider, err = combinedattestationpoolstrategy.New(ctx,
+			combinedattestationpoolstrategy.WithLogLevel(util.LogLevel("strategies.attestationpool.combined")),
+			combinedattestationpoolstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			combinedattestationpoolstrategy.WithTimeout(util.Timeout("strategies.attestationpool")),
+			combinedattestationpoolstrategy.WithAttestationPoolProviders(attestationPoolProviders),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to instantiate attestation pool strategy")
+		}
+
 		service, err = staticdelaymultiinstance.New(ctx,
 			staticdelaymultiinstance.WithLogLevel(util.LogLevel("multiinstance.static-delay")),
 			staticdelaymultiinstance.WithMonitor(monitor),
-			staticdelaymultiinstance.WithAttestationPoolProvider(consensusClient.(eth2client.AttestationPoolProvider)),
+			staticdelaymultiinstance.WithAttestationPoolProvider(attestationPoolProvider),
+			staticdelaymultiinstance.WithSpecProvider(consensusClient.(eth2client.SpecProvider)),
 			staticdelaymultiinstance.WithBeaconBlockHeadersProvider(beaconBlockHeadersProvider),
 			staticdelaymultiinstance.WithChainTime(chainTime),
 			staticdelaymultiinstance.WithAttesterDelay(viper.GetDuration("multiinstance.static-delay.attester-delay")),
