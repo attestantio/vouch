@@ -1,6 +1,9 @@
 dev:
   - 
 
+1.10.1:
+  - set block gas limit for electra
+
 1.10.0:
   - support Electra
   - use multisign for sync committee messages with enabled accounts
