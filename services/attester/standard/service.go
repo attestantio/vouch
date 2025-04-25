@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,6 +16,7 @@ package standard
 import (
 	"context"
 	"sync"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
@@ -36,6 +37,7 @@ type Service struct {
 	monitor                    metrics.Service
 	processConcurrency         int64
 	slotsPerEpoch              uint64
+	grace                      time.Duration
 	chainTime                  chaintime.Service
 	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
 	attestationDataProvider    eth2client.AttestationDataProvider
@@ -84,6 +86,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		monitor:                    parameters.monitor,
 		processConcurrency:         parameters.processConcurrency,
 		slotsPerEpoch:              slotsPerEpoch,
+		grace:                      parameters.grace,
 		chainTime:                  parameters.chainTime,
 		validatingAccountsProvider: parameters.validatingAccountsProvider,
 		attestationDataProvider:    parameters.attestationDataProvider,

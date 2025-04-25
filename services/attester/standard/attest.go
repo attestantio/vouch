@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -42,6 +42,9 @@ func (s *Service) Attest(ctx context.Context, duty *attester.Duty) ([]*spec.Vers
 	span.SetAttributes(attribute.Int64("slot", util.SlotToInt64(duty.Slot())))
 
 	validatorIndices := s.fetchValidatorIndices(ctx, duty)
+
+	// Grace period.
+	time.Sleep(s.grace)
 
 	// Fetch the attestation data.
 	startOfSlot := s.chainTime.StartOfSlot(duty.Slot())

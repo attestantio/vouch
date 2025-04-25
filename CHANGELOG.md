@@ -3,6 +3,7 @@ dev:
   - enable 'latest' beacon block root strategy
   - allow partial attestations to be generated for majority strategy
   - use strategy fetchers for data where appropriate
+  - add 'attester.grace' grace period to attester service
 
 1.10.0:
   - support Electra
