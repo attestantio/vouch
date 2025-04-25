@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020, 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,6 +14,8 @@
 package standard
 
 import (
+	"time"
+
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/chaintime"
@@ -28,6 +30,7 @@ type parameters struct {
 	logLevel                   zerolog.Level
 	processConcurrency         int64
 	monitor                    metrics.Service
+	grace                      time.Duration
 	chainTime                  chaintime.Service
 	specProvider               eth2client.SpecProvider
 	attestationDataProvider    eth2client.AttestationDataProvider
@@ -58,6 +61,13 @@ func WithLogLevel(logLevel zerolog.Level) Parameter {
 func WithProcessConcurrency(concurrency int64) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.processConcurrency = concurrency
+	})
+}
+
+// WithGrace sets the grace before the service starts attesting.
+func WithGrace(grace time.Duration) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.grace = grace
 	})
 }
 

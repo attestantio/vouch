@@ -99,6 +99,12 @@ beaconblockproposer:
   # - 100: `builder value` must be more than the local value (`local value*(100/100)`) to be used
   builder-boost-factor: 91
 
+# attester provides control of the attester process.
+attester:
+  # grace is the amount of time to wait between starting the attestation process and fetching attestation data.  This can be
+  # useful when using multiple beacon nodes to give them a chance to be up-to-date with block processing prior to fetching data.
+  grace: '0s'
+
 # submitter submits data to beacon nodes.  If not present the nodes in beacon-node-address above will be used.
 submitter:
   # style can currently only be 'multinode'
