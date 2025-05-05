@@ -1,7 +1,7 @@
 dev:
   - 
 
-1.10.2-alpha:
+1.10.2:
   - import latest go-builder-client for sending consensus version headers to proposal unblinder 
 
 1.10.1:
