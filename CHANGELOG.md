@@ -27,7 +27,7 @@ dev:
   - update go-block-relay and go-builder-client for electra compatible containers
   - fix erroneous block gas limit warning when proposing
 
-1.9.2:x 
+1.9.2:
   - update go-eth2-wallet-dirk to enable mixed signing thresholds for multisign
   - fix issue with execution config gas_limit not being used
 
