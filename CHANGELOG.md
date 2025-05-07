@@ -5,6 +5,12 @@ dev:
   - use strategy fetchers for data where appropriate
   - add 'attester.grace' grace period to attester service
 
+1.10.2:
+- import latest go-builder-client for sending consensus version headers to proposal unblinder
+
+1.10.1:
+- set block gas limit for electra
+
 1.10.0:
   - support Electra
   - use multisign for sync committee messages with enabled accounts
