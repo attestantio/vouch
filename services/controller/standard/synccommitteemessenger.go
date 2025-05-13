@@ -47,7 +47,10 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 	}
 	// If we are in the sync committee that starts at slot x we need to generate a message during slot x-1
 	// for it to be included in slot x, hence -1.
-	firstSlot := s.chainTimeService.FirstSlotOfEpoch(firstEpoch) - 1
+	firstSlot := s.chainTimeService.FirstSlotOfEpoch(firstEpoch)
+	if firstSlot != 0 {
+		firstSlot -= 1
+	}
 	if firstSlot < s.chainTimeService.CurrentSlot() {
 		firstSlot = s.chainTimeService.CurrentSlot()
 	}
