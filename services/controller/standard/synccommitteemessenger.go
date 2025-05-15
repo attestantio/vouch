@@ -45,12 +45,7 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 	if firstEpoch < s.chainTimeService.CurrentEpoch() {
 		firstEpoch = s.chainTimeService.CurrentEpoch()
 	}
-	// If we are in the sync committee that starts at slot x we need to generate a message during slot x-1
-	// for it to be included in slot x, hence -1.
-	firstSlot := s.chainTimeService.FirstSlotOfEpoch(firstEpoch) - 1
-	if firstSlot < s.chainTimeService.CurrentSlot() {
-		firstSlot = s.chainTimeService.CurrentSlot()
-	}
+	firstSlot := s.calcLastSlotOfPreviousEpoch(firstEpoch)
 	lastEpoch := s.firstEpochOfSyncPeriod(period+1) - 1
 	// If we are in the sync committee that ends at slot x we do not generate a message during slot x-1
 	// as it will never be included, hence -1.
@@ -128,6 +123,19 @@ func (s *Service) scheduleSyncCommitteeMessages(ctx context.Context,
 		return
 	}
 	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Submitted sync committee subscribers")
+}
+
+func (s *Service) calcLastSlotOfPreviousEpoch(epoch phase0.Epoch) phase0.Slot {
+	// If we are in the sync committee that starts at slot x we need to generate a message during slot x-1
+	// for it to be included in slot x, hence -1.
+	firstSlot := s.chainTimeService.FirstSlotOfEpoch(epoch)
+	if firstSlot != 0 {
+		firstSlot--
+	}
+	if firstSlot < s.chainTimeService.CurrentSlot() {
+		firstSlot = s.chainTimeService.CurrentSlot()
+	}
+	return firstSlot
 }
 
 func (s *Service) prepareMessageSyncCommittee(ctx context.Context, duty *synccommitteemessenger.Duty) {
