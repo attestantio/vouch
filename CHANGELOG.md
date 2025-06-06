@@ -5,6 +5,9 @@ dev:
   - use strategy fetchers for data where appropriate
   - add 'attester.grace' grace period to attester service
 
+1.10.3:
+- import latest go-builder-client for copying execution requests on unblinding
+
 1.10.2:
 - import latest go-builder-client for sending consensus version headers to proposal unblinder
 
