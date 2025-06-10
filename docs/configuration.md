@@ -246,6 +246,11 @@ blockrelay:
       # With a factor of 0 bids from this builder will be ignored.
       factor: 0
 
+# builderclient configures the go-builder-client used to interact with block builders via http.
+builderclient:
+  # timeout defines the maximum amount of time that Vouch will wait for builder clients to respond. 
+  timeout: '2s'
+
 # multiinstance allows multiple instances of Vouch to run simultaneously, with the inactive Vouch instances taking over if they
 # fail to see expected attestations or proposals within the given time period.
 multiinstance:
