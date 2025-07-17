@@ -124,7 +124,7 @@ func (s *Service) signRootsMulti(ctx context.Context,
 	}
 
 	if multiSigner, isMultiSigner := accounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
-		// Deduplicate (account, root) pairs to avoid duplicate signing requests
+		// Deduplicate (account, root) pairs to avoid duplicate signing requests.
 		dedup := s.deduplicateAccountRootPairs(accounts, data)
 
 		var err error
@@ -141,10 +141,10 @@ func (s *Service) signRootsMulti(ctx context.Context,
 			}
 		}
 	} else {
-		// Deduplicate (account, root) pairs for sequential signing as well
+		// Deduplicate (account, root) pairs for sequential signing as well.
 		dedup := s.deduplicateAccountRootPairs(accounts, data)
-		
-		// Sign unique pairs only
+
+		// Sign unique pairs only.
 		uniqueSigs := make([]e2types.Signature, len(dedup.uniqueAccounts))
 		for i := range dedup.uniqueAccounts {
 			container := phase0.SigningData{
@@ -164,7 +164,7 @@ func (s *Service) signRootsMulti(ctx context.Context,
 				return []phase0.BLSSignature{}, err
 			}
 		}
-		
+
 		// Map unique signatures back to original positions.
 		for i := range accounts {
 			uniqueIndex := dedup.originalToUniqueIndex[i]

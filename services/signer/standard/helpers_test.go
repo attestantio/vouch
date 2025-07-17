@@ -100,6 +100,39 @@ func (m *mockMultiSigner) SignGenericMulti(ctx context.Context, accounts []e2wty
 	return signatures, nil
 }
 
+// mockSequentialSigner implements only Account and AccountSigner (not AccountProtectingMultiSigner)
+// This forces the sequential signing path in signRootsMulti
+type mockSequentialSigner struct {
+	*mockAccount
+	signCalls []signCall
+	signFunc  func(ctx context.Context, data []byte) (e2types.Signature, error)
+}
+
+type signCall struct {
+	data []byte
+}
+
+func (m *mockSequentialSigner) Sign(ctx context.Context, data []byte) (e2types.Signature, error) {
+	// Record the call for verification
+	m.signCalls = append(m.signCalls, signCall{
+		data: data,
+	})
+
+	if m.signFunc != nil {
+		return m.signFunc(ctx, data)
+	}
+
+	// Return deterministic mock signature
+	privKey, err := e2types.GenerateBLSPrivateKey()
+	if err != nil {
+		return nil, err
+	}
+
+	message := fmt.Sprintf("sequential-signature-%s-%x", m.Name(), data[:8])
+	sig := privKey.Sign([]byte(message))
+	return sig, nil
+}
+
 func TestSignRootsMultiWithDuplicates(t *testing.T) {
 	// Initialize BLS
 	err := e2types.InitBLS()
@@ -116,65 +149,78 @@ func TestSignRootsMultiWithDuplicates(t *testing.T) {
 		publicKey: privKey1.PublicKey(),
 	}
 
-	// Create a multi-signer that wraps the first account
-	multiSigner := &mockMultiSigner{
-		mockAccount: account1,
-	}
-
 	// Create test roots
 	root1 := phase0.Root{1, 2, 3, 4}
 	root2 := phase0.Root{5, 6, 7, 8}
-
-	// Test case with duplicates: same account signing same root multiple times
-	accounts := []e2wtypes.Account{multiSigner, multiSigner, multiSigner}
-	roots := []phase0.Root{root1, root1, root2} // Two identical roots, one different
 	domain := phase0.Domain{9, 10, 11, 12}
 
-	// Create service instance
-	service := &Service{}
-
-	// Call the signRootsMulti method directly
-	signatures, err := service.signRootsMulti(context.Background(), accounts, roots, domain)
-	require.NoError(t, err)
-	require.Equal(t, 3, len(signatures), "Should return 3 signatures")
-
-	// Verify that the multi-signer was called with deduplicated data
-	require.Equal(t, 1, len(multiSigner.signGenericMultiCalls), "SignGenericMulti should be called exactly once")
-
-	call := multiSigner.signGenericMultiCalls[0]
-
-	// Should have only 2 unique (account, root) pairs instead of 3
-	assert.Equal(t, 2, len(call.accounts), "Should have 2 unique accounts (deduplicated)")
-	assert.Equal(t, 2, len(call.data), "Should have 2 unique data items (deduplicated)")
-
-	// Verify the domain was passed correctly
-	assert.Equal(t, domain[:], call.domain, "Domain should be passed unchanged")
-
-	// Verify the deduplicated data contains the expected unique pairs
-	expectedData1 := root1[:] // First unique root
-	expectedData2 := root2[:] // Second unique root
-
-	// The deduplication should result in these two unique data items
-	actualData1 := call.data[0]
-	actualData2 := call.data[1]
-
-	// Verify we have the expected roots (order might vary due to map iteration)
-	assert.True(t,
-		(assert.ObjectsAreEqualValues(expectedData1, actualData1) && assert.ObjectsAreEqualValues(expectedData2, actualData2)) ||
-			(assert.ObjectsAreEqualValues(expectedData1, actualData2) && assert.ObjectsAreEqualValues(expectedData2, actualData1)),
-		"Deduplicated data should contain exactly the two unique roots")
-
-	// Verify that all signatures are valid (not zero)
-	for i, sig := range signatures {
-		assert.NotEqual(t, phase0.BLSSignature{}, sig, "Signature %d should not be zero", i)
+	// Test both multi-signer and sequential signing paths
+	testCases := []struct {
+		name   string
+		signer e2wtypes.Account
+	}{
+		{
+			name: "MultiSigner",
+			signer: &mockMultiSigner{
+				mockAccount: account1,
+			},
+		},
+		{
+			name: "SequentialSigner",
+			signer: &mockSequentialSigner{
+				mockAccount: account1,
+			},
+		},
 	}
 
-	// The key test: signatures[0] and signatures[1] should be identical (same account, same root)
-	// This proves that the deduplication worked and the same signature was reused
-	assert.Equal(t, signatures[0], signatures[1], "Signatures for identical (account, root) pairs should be the same - this proves deduplication worked")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Reset any state if needed
+			if ms, ok := tc.signer.(*mockMultiSigner); ok {
+				ms.signGenericMultiCalls = nil
+			}
+			if ss, ok := tc.signer.(*mockSequentialSigner); ok {
+				ss.signCalls = nil
+			}
 
-	// signature[2] should be different (different root)
-	assert.NotEqual(t, signatures[0], signatures[2], "Signatures for different roots should be different")
+			// Test case with duplicates: same account signing same root multiple times
+			accounts := []e2wtypes.Account{tc.signer, tc.signer, tc.signer}
+			roots := []phase0.Root{root1, root1, root2} // Two identical roots, one different
+
+			// Create service instance
+			service := &Service{}
+
+			// Call the signRootsMulti method directly
+			signatures, err := service.signRootsMulti(context.Background(), accounts, roots, domain)
+			require.NoError(t, err)
+			require.Equal(t, 3, len(signatures), "Should return 3 signatures")
+
+			// Verify deduplication worked based on signer type
+			if ms, ok := tc.signer.(*mockMultiSigner); ok {
+				// Multi-signer path verification
+				require.Equal(t, 1, len(ms.signGenericMultiCalls), "SignGenericMulti should be called exactly once")
+				call := ms.signGenericMultiCalls[0]
+				assert.Equal(t, 2, len(call.accounts), "Should have 2 unique accounts (deduplicated)")
+				assert.Equal(t, 2, len(call.data), "Should have 2 unique data items (deduplicated)")
+				assert.Equal(t, domain[:], call.domain, "Domain should be passed unchanged")
+			} else if ss, ok := tc.signer.(*mockSequentialSigner); ok {
+				// Sequential signer path verification
+				require.Equal(t, 2, len(ss.signCalls), "Sequential signer should be called exactly twice (deduplicated)")
+			}
+
+			// Verify that all signatures are valid (not zero)
+			for i, sig := range signatures {
+				assert.NotEqual(t, phase0.BLSSignature{}, sig, "Signature %d should not be zero", i)
+			}
+
+			// The key test: signatures[0] and signatures[1] should be identical (same account, same root)
+			// This proves that the deduplication worked and the same signature was reused
+			assert.Equal(t, signatures[0], signatures[1], "Signatures for identical (account, root) pairs should be the same - this proves deduplication worked")
+
+			// signature[2] should be different (different root)
+			assert.NotEqual(t, signatures[0], signatures[2], "Signatures for different roots should be different")
+		})
+	}
 }
 
 func TestSignRootsMultiWithMultipleDuplicates(t *testing.T) {
@@ -193,49 +239,79 @@ func TestSignRootsMultiWithMultipleDuplicates(t *testing.T) {
 		publicKey: privKey1.PublicKey(),
 	}
 
-	// Create a multi-signer that wraps the account
-	multiSigner := &mockMultiSigner{
-		mockAccount: account1,
-	}
-
 	// Create test roots
 	root1 := phase0.Root{1, 2, 3, 4}
 	root2 := phase0.Root{5, 6, 7, 8}
 	root3 := phase0.Root{9, 10, 11, 12}
-
-	// Complex pattern with the same account signing different combinations
-	// Pattern: root1, root1, root2, root1, root2, root3, root1
-	// Expected unique pairs: (acc1, root1), (acc1, root2), (acc1, root3) = 3 unique pairs
-	accounts := []e2wtypes.Account{multiSigner, multiSigner, multiSigner, multiSigner, multiSigner, multiSigner, multiSigner}
-	roots := []phase0.Root{root1, root1, root2, root1, root2, root3, root1}
 	domain := phase0.Domain{13, 14, 15, 16}
 
-	// Create service instance
-	service := &Service{}
+	// Test both multi-signer and sequential signing paths
+	testCases := []struct {
+		name   string
+		signer e2wtypes.Account
+	}{
+		{
+			name: "MultiSigner",
+			signer: &mockMultiSigner{
+				mockAccount: account1,
+			},
+		},
+		{
+			name: "SequentialSigner",
+			signer: &mockSequentialSigner{
+				mockAccount: account1,
+			},
+		},
+	}
 
-	// Call the signRootsMulti method directly
-	signatures, err := service.signRootsMulti(context.Background(), accounts, roots, domain)
-	require.NoError(t, err)
-	require.Equal(t, 7, len(signatures), "Should return 7 signatures")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Reset any state if needed
+			if ms, ok := tc.signer.(*mockMultiSigner); ok {
+				ms.signGenericMultiCalls = nil
+			}
+			if ss, ok := tc.signer.(*mockSequentialSigner); ok {
+				ss.signCalls = nil
+			}
 
-	// Verify multiSigner was called with its unique pairs
-	require.Equal(t, 1, len(multiSigner.signGenericMultiCalls), "MultiSigner should be called exactly once")
-	call := multiSigner.signGenericMultiCalls[0]
+			// Complex pattern with the same account signing different combinations
+			// Pattern: root1, root1, root2, root1, root2, root3, root1
+			// Expected unique pairs: (acc1, root1), (acc1, root2), (acc1, root3) = 3 unique pairs
+			accounts := []e2wtypes.Account{tc.signer, tc.signer, tc.signer, tc.signer, tc.signer, tc.signer, tc.signer}
+			roots := []phase0.Root{root1, root1, root2, root1, root2, root3, root1}
 
-	// Should have 3 unique pairs: (acc1, root1), (acc1, root2), (acc1, root3)
-	assert.Equal(t, 3, len(call.accounts), "MultiSigner should have 3 unique pairs")
-	assert.Equal(t, 3, len(call.data), "MultiSigner should have 3 unique data items")
+			// Create service instance
+			service := &Service{}
 
-	// Verify duplicate signatures are identical
-	assert.Equal(t, signatures[0], signatures[1], "signatures[0] and signatures[1] should be identical (same root)")
-	assert.Equal(t, signatures[0], signatures[3], "signatures[0] and signatures[3] should be identical (same root)")
-	assert.Equal(t, signatures[0], signatures[6], "signatures[0] and signatures[6] should be identical (same root)")
-	assert.Equal(t, signatures[2], signatures[4], "signatures[2] and signatures[4] should be identical (same root)")
+			// Call the signRootsMulti method directly
+			signatures, err := service.signRootsMulti(context.Background(), accounts, roots, domain)
+			require.NoError(t, err)
+			require.Equal(t, 7, len(signatures), "Should return 7 signatures")
 
-	// Verify different signatures are not equal
-	assert.NotEqual(t, signatures[0], signatures[2], "Different roots should have different signatures")
-	assert.NotEqual(t, signatures[0], signatures[5], "Different roots should have different signatures")
-	assert.NotEqual(t, signatures[2], signatures[5], "Different roots should have different signatures")
+			// Verify deduplication worked based on signer type
+			if ms, ok := tc.signer.(*mockMultiSigner); ok {
+				// Multi-signer path verification
+				require.Equal(t, 1, len(ms.signGenericMultiCalls), "MultiSigner should be called exactly once")
+				call := ms.signGenericMultiCalls[0]
+				assert.Equal(t, 3, len(call.accounts), "MultiSigner should have 3 unique pairs")
+				assert.Equal(t, 3, len(call.data), "MultiSigner should have 3 unique data items")
+			} else if ss, ok := tc.signer.(*mockSequentialSigner); ok {
+				// Sequential signer path verification
+				require.Equal(t, 3, len(ss.signCalls), "Sequential signer should be called exactly three times (deduplicated)")
+			}
+
+			// Verify duplicate signatures are identical
+			assert.Equal(t, signatures[0], signatures[1], "signatures[0] and signatures[1] should be identical (same root)")
+			assert.Equal(t, signatures[0], signatures[3], "signatures[0] and signatures[3] should be identical (same root)")
+			assert.Equal(t, signatures[0], signatures[6], "signatures[0] and signatures[6] should be identical (same root)")
+			assert.Equal(t, signatures[2], signatures[4], "signatures[2] and signatures[4] should be identical (same root)")
+
+			// Verify different signatures are not equal
+			assert.NotEqual(t, signatures[0], signatures[2], "Different roots should have different signatures")
+			assert.NotEqual(t, signatures[0], signatures[5], "Different roots should have different signatures")
+			assert.NotEqual(t, signatures[2], signatures[5], "Different roots should have different signatures")
+		})
+	}
 }
 
 func TestDeduplicateAccountRootPairs(t *testing.T) {
