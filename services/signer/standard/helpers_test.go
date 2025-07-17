@@ -237,3 +237,122 @@ func TestSignRootsMultiWithMultipleDuplicates(t *testing.T) {
 	assert.NotEqual(t, signatures[0], signatures[5], "Different roots should have different signatures")
 	assert.NotEqual(t, signatures[2], signatures[5], "Different roots should have different signatures")
 }
+
+func TestDeduplicateAccountRootPairs(t *testing.T) {
+	// Test the dedicated deduplication function
+	err := e2types.InitBLS()
+	require.NoError(t, err)
+
+	// Create mock accounts with real public keys
+	privKey1, err := e2types.GenerateBLSPrivateKey()
+	require.NoError(t, err)
+	privKey2, err := e2types.GenerateBLSPrivateKey()
+	require.NoError(t, err)
+
+	account1 := &mockAccount{
+		id:        uuid.New(),
+		name:      "account1",
+		publicKey: privKey1.PublicKey(),
+	}
+	account2 := &mockAccount{
+		id:        uuid.New(),
+		name:      "account2",
+		publicKey: privKey2.PublicKey(),
+	}
+
+	tests := []struct {
+		name                   string
+		accounts               []e2wtypes.Account
+		data                   [][]byte
+		expectedUniqueAccounts int
+		expectedUniqueData     int
+		expectedMapping        []int
+	}{
+		{
+			name:                   "NoDuplicates",
+			accounts:               []e2wtypes.Account{account1, account2},
+			data:                   [][]byte{{1, 2, 3}, {4, 5, 6}},
+			expectedUniqueAccounts: 2,
+			expectedUniqueData:     2,
+			expectedMapping:        []int{0, 1},
+		},
+		{
+			name:                   "SameAccountDifferentData",
+			accounts:               []e2wtypes.Account{account1, account1},
+			data:                   [][]byte{{1, 2, 3}, {4, 5, 6}},
+			expectedUniqueAccounts: 2,
+			expectedUniqueData:     2,
+			expectedMapping:        []int{0, 1},
+		},
+		{
+			name:                   "DifferentAccountsSameData",
+			accounts:               []e2wtypes.Account{account1, account2},
+			data:                   [][]byte{{1, 2, 3}, {1, 2, 3}},
+			expectedUniqueAccounts: 2,
+			expectedUniqueData:     2,
+			expectedMapping:        []int{0, 1},
+		},
+		{
+			name:                   "ExactDuplicates",
+			accounts:               []e2wtypes.Account{account1, account1},
+			data:                   [][]byte{{1, 2, 3}, {1, 2, 3}},
+			expectedUniqueAccounts: 1,
+			expectedUniqueData:     1,
+			expectedMapping:        []int{0, 0},
+		},
+		{
+			name:                   "MultipleDuplicates",
+			accounts:               []e2wtypes.Account{account1, account1, account1, account1},
+			data:                   [][]byte{{1, 2, 3}, {1, 2, 3}, {1, 2, 3}, {1, 2, 3}},
+			expectedUniqueAccounts: 1,
+			expectedUniqueData:     1,
+			expectedMapping:        []int{0, 0, 0, 0},
+		},
+		{
+			name:                   "MixedDuplicatesAndUnique",
+			accounts:               []e2wtypes.Account{account1, account1, account2},
+			data:                   [][]byte{{1, 2, 3}, {1, 2, 3}, {1, 2, 3}},
+			expectedUniqueAccounts: 2,
+			expectedUniqueData:     2,
+			expectedMapping:        []int{0, 0, 1},
+		},
+		{
+			name:                   "ComplexPattern",
+			accounts:               []e2wtypes.Account{account1, account2, account1, account2, account1},
+			data:                   [][]byte{{1, 2, 3}, {1, 2, 3}, {4, 5, 6}, {1, 2, 3}, {1, 2, 3}},
+			expectedUniqueAccounts: 3,
+			expectedUniqueData:     3,
+			expectedMapping:        []int{0, 1, 2, 1, 0},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := deduplicateAccountRootPairs(test.accounts, test.data)
+
+			// Verify results
+			assert.Equal(t, test.expectedUniqueAccounts, len(result.uniqueAccounts), "Unique accounts count mismatch")
+			assert.Equal(t, test.expectedUniqueData, len(result.uniqueData), "Unique data count mismatch")
+			assert.Equal(t, test.expectedMapping, result.originalToUniqueIndex, "Index mapping mismatch")
+
+			// Verify that mapping back works correctly
+			for i := range test.accounts {
+				uniqueIndex := result.originalToUniqueIndex[i]
+				assert.Equal(t, test.accounts[i], result.uniqueAccounts[uniqueIndex], "Account mapping incorrect at index %d", i)
+				assert.Equal(t, test.data[i], result.uniqueData[uniqueIndex], "Data mapping incorrect at index %d", i)
+			}
+
+			// Verify that unique accounts and data are consistent
+			for i, account := range result.uniqueAccounts {
+				expectedData := test.data[0] // Find first occurrence data for this account
+				for j, origAccount := range test.accounts {
+					if origAccount == account && assert.ObjectsAreEqualValues(test.data[j], result.uniqueData[i]) {
+						expectedData = test.data[j]
+						break
+					}
+				}
+				assert.Equal(t, expectedData, result.uniqueData[i], "Unique data should match expected data for account at index %d", i)
+			}
+		})
+	}
+}
