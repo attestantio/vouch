@@ -87,8 +87,8 @@ func (*Service) signRootsMulti(ctx context.Context,
 		}
 
 		uniquePairs := make(map[accountRootPair]int) // map to first occurrence index
-		uniqueAccounts := []e2wtypes.Account{}
-		uniqueData := [][]byte{}
+		var uniqueAccounts []e2wtypes.Account
+		var uniqueData [][]byte
 		originalToUniqueIndex := make([]int, len(accounts)) // maps original index to unique index
 
 		for i := range accounts {

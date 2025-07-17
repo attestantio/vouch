@@ -102,8 +102,8 @@ func TestDeduplicationLogic(t *testing.T) {
 			}
 
 			uniquePairs := make(map[accountRootPair]int)
-			uniqueAccounts := []string{}
-			uniqueData := []string{}
+			var uniqueAccounts []string
+			var uniqueData []string
 			originalToUniqueIndex := make([]int, len(test.accountKeys))
 
 			for i := range test.accountKeys {
