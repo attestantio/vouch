@@ -88,6 +88,11 @@ output:
 
 # All available settings of specific linters.
 linters-settings:
+  godot:
+    scope: all
+    period: true
+    capital: true
+
   gosec:
     excludes:
       - G115 # This generates a lot of false positives, recheck once https://github.com/securego/gosec/issues/1212 is closed

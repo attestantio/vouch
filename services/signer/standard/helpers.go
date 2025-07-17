@@ -76,20 +76,21 @@ func (*Service) deduplicateAccountRootPairs(accounts []e2wtypes.Account, data []
 		rootKey    string
 	}
 
-	uniquePairs := make(map[accountRootPair]int) // map to first occurrence index
+	// Map to first occurrence index.
+	uniquePairs := make(map[accountRootPair]int)
 	var uniqueAccounts []e2wtypes.Account
 	var uniqueData [][]byte
 	originalToUniqueIndex := make([]int, len(accounts))
 
 	for i := range accounts {
-		accountKey := string(accounts[i].PublicKey().Marshal())
+		accountKey := accounts[i].ID().String()
 		rootKey := string(data[i])
 		pair := accountRootPair{accountKey: accountKey, rootKey: rootKey}
 
 		if uniqueIndex, exists := uniquePairs[pair]; exists {
 			originalToUniqueIndex[i] = uniqueIndex
 		} else {
-			uniqueIndex := len(uniqueAccounts)
+			uniqueIndex = len(uniqueAccounts)
 			uniquePairs[pair] = uniqueIndex
 			originalToUniqueIndex[i] = uniqueIndex
 			uniqueAccounts = append(uniqueAccounts, accounts[i])
@@ -132,7 +133,7 @@ func (s *Service) signRootsMulti(ctx context.Context,
 			return []phase0.BLSSignature{}, err
 		}
 
-		// Map unique signatures back to original positions
+		// Map unique signatures back to original positions.
 		for i := range accounts {
 			uniqueIndex := dedup.originalToUniqueIndex[i]
 			if uniqueIndex < len(signatures) && signatures[uniqueIndex] != nil {
@@ -140,24 +141,36 @@ func (s *Service) signRootsMulti(ctx context.Context,
 			}
 		}
 	} else {
-		for i := range accounts {
+		// Deduplicate (account, root) pairs for sequential signing as well
+		dedup := s.deduplicateAccountRootPairs(accounts, data)
+		
+		// Sign unique pairs only
+		uniqueSigs := make([]e2types.Signature, len(dedup.uniqueAccounts))
+		for i := range dedup.uniqueAccounts {
 			container := phase0.SigningData{
-				ObjectRoot: roots[i],
+				ObjectRoot: phase0.Root(dedup.uniqueData[i]),
 				Domain:     domain,
 			}
 			hashTreeRoot, err := container.HashTreeRoot()
 			if err != nil {
 				return []phase0.BLSSignature{}, errors.Wrap(err, "failed to generate hash tree root")
 			}
-			signer, isAccountSigner := accounts[i].(e2wtypes.AccountSigner)
+			signer, isAccountSigner := dedup.uniqueAccounts[i].(e2wtypes.AccountSigner)
 			if !isAccountSigner {
 				return []phase0.BLSSignature{}, errors.New("unknown signer type; cannot sign")
 			}
-			sig, err := signer.Sign(ctx, hashTreeRoot[:])
+			uniqueSigs[i], err = signer.Sign(ctx, hashTreeRoot[:])
 			if err != nil {
 				return []phase0.BLSSignature{}, err
 			}
-			copy(sigs[i][:], sig.Marshal())
+		}
+		
+		// Map unique signatures back to original positions.
+		for i := range accounts {
+			uniqueIndex := dedup.originalToUniqueIndex[i]
+			if uniqueIndex < len(uniqueSigs) && uniqueSigs[uniqueIndex] != nil {
+				copy(sigs[i][:], uniqueSigs[uniqueIndex].Marshal())
+			}
 		}
 	}
 	return sigs, nil
