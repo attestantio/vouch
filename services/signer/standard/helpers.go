@@ -122,7 +122,7 @@ func signRootsMulti(ctx context.Context,
 }
 
 // signRootsByAccountType collect roots by account type and multi-sign each type.
-func (s *Service) signRootsByAccountType(ctx context.Context, accounts []e2wtypes.Account, roots []phase0.Root, domain phase0.Domain) ([]phase0.BLSSignature, error) {
+func (*Service) signRootsByAccountType(ctx context.Context, accounts []e2wtypes.Account, roots []phase0.Root, domain phase0.Domain) ([]phase0.BLSSignature, error) {
 	if len(accounts) != len(roots) {
 		return []phase0.BLSSignature{}, errors.New("number of accounts and roots do not match")
 	}
