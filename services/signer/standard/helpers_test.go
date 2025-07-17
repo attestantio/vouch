@@ -60,7 +60,7 @@ type signGenericMultiCall struct {
 
 // skipcq: RVV-B0012, RVV-B0013
 // This is just a stub to satisfy the interface.
-func (_ *mockMultiSigner) SignBeaconAttestations(_ context.Context,
+func (*mockMultiSigner) SignBeaconAttestations(_ context.Context,
 	_ uint64,
 	_ []e2wtypes.Account,
 	_ []uint64,
