@@ -80,14 +80,46 @@ func (*Service) signRootsMulti(ctx context.Context,
 	}
 
 	if multiSigner, isMultiSigner := accounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
+		// Deduplicate (account, root) pairs to avoid duplicate signing requests
+		type accountRootPair struct {
+			accountKey string
+			rootKey    string
+		}
+
+		uniquePairs := make(map[accountRootPair]int) // map to first occurrence index
+		uniqueAccounts := []e2wtypes.Account{}
+		uniqueData := [][]byte{}
+		originalToUniqueIndex := make([]int, len(accounts)) // maps original index to unique index
+
+		for i := range accounts {
+			accountKey := string(accounts[i].PublicKey().Marshal())
+			rootKey := string(data[i])
+			pair := accountRootPair{accountKey: accountKey, rootKey: rootKey}
+
+			if uniqueIndex, exists := uniquePairs[pair]; exists {
+				// This (account, root) pair already exists, reuse its index
+				originalToUniqueIndex[i] = uniqueIndex
+			} else {
+				// New unique pair, add it to the unique lists
+				uniqueIndex := len(uniqueAccounts)
+				uniquePairs[pair] = uniqueIndex
+				originalToUniqueIndex[i] = uniqueIndex
+				uniqueAccounts = append(uniqueAccounts, accounts[i])
+				uniqueData = append(uniqueData, data[i])
+			}
+		}
+
 		var err error
-		signatures, err := multiSigner.SignGenericMulti(ctx, accounts, data, domain[:])
+		signatures, err := multiSigner.SignGenericMulti(ctx, uniqueAccounts, uniqueData, domain[:])
 		if err != nil {
 			return []phase0.BLSSignature{}, err
 		}
-		for i := range signatures {
-			if signatures[i] != nil {
-				copy(sigs[i][:], signatures[i].Marshal())
+
+		// Map unique signatures back to original positions
+		for i := range accounts {
+			uniqueIndex := originalToUniqueIndex[i]
+			if uniqueIndex < len(signatures) && signatures[uniqueIndex] != nil {
+				copy(sigs[i][:], signatures[uniqueIndex].Marshal())
 			}
 		}
 	} else {
