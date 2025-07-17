@@ -58,17 +58,18 @@ type signGenericMultiCall struct {
 	domain   []byte
 }
 
-func (m *mockMultiSigner) SignBeaconAttestations(ctx context.Context,
-	slot uint64,
-	accounts []e2wtypes.Account,
-	committeeIndices []uint64,
-	blockRoot []byte,
-	sourceEpoch uint64,
-	sourceRoot []byte,
-	targetEpoch uint64,
-	targetRoot []byte,
-	domain []byte) ([]e2types.Signature, error) {
-	// Not used in this test, just a stub to satisfy the interface
+// skipcq: RVV-B0012, RVV-B0013
+// This is just a stub to satisfy the interface.
+func (_ *mockMultiSigner) SignBeaconAttestations(_ context.Context,
+	_ uint64,
+	_ []e2wtypes.Account,
+	_ []uint64,
+	_ []byte,
+	_ uint64,
+	_ []byte,
+	_ uint64,
+	_ []byte,
+	_ []byte) ([]e2types.Signature, error) {
 	return nil, fmt.Errorf("SignBeaconAttestations not implemented in mock")
 }
 
