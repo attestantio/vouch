@@ -328,7 +328,8 @@ func TestDeduplicateAccountRootPairs(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := deduplicateAccountRootPairs(test.accounts, test.data)
+			service := &Service{}
+			result := service.deduplicateAccountRootPairs(test.accounts, test.data)
 
 			// Verify results
 			assert.Equal(t, test.expectedUniqueAccounts, len(result.uniqueAccounts), "Unique accounts count mismatch")

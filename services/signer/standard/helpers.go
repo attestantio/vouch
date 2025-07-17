@@ -22,6 +22,13 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
+// deduplicationResult holds the result of deduplicating account-root pairs.
+type deduplicationResult struct {
+	uniqueAccounts        []e2wtypes.Account
+	uniqueData            [][]byte
+	originalToUniqueIndex []int
+}
+
 // sign signs a root, using protected methods if possible.
 func (*Service) sign(ctx context.Context,
 	account e2wtypes.Account,
@@ -61,16 +68,9 @@ func (*Service) sign(ctx context.Context,
 	return signature, nil
 }
 
-// deduplicationResult holds the result of deduplicating account-root pairs
-type deduplicationResult struct {
-	uniqueAccounts        []e2wtypes.Account
-	uniqueData            [][]byte
-	originalToUniqueIndex []int
-}
-
 // deduplicateAccountRootPairs deduplicates (account, root) pairs to avoid duplicate signing requests.
 // It returns unique accounts and data along with a mapping from original indices to unique indices.
-func deduplicateAccountRootPairs(accounts []e2wtypes.Account, data [][]byte) deduplicationResult {
+func (*Service) deduplicateAccountRootPairs(accounts []e2wtypes.Account, data [][]byte) deduplicationResult {
 	type accountRootPair struct {
 		accountKey string
 		rootKey    string
@@ -79,7 +79,7 @@ func deduplicateAccountRootPairs(accounts []e2wtypes.Account, data [][]byte) ded
 	uniquePairs := make(map[accountRootPair]int) // map to first occurrence index
 	var uniqueAccounts []e2wtypes.Account
 	var uniqueData [][]byte
-	originalToUniqueIndex := make([]int, len(accounts)) // maps original index to unique index
+	originalToUniqueIndex := make([]int, len(accounts))
 
 	for i := range accounts {
 		accountKey := string(accounts[i].PublicKey().Marshal())
@@ -87,10 +87,8 @@ func deduplicateAccountRootPairs(accounts []e2wtypes.Account, data [][]byte) ded
 		pair := accountRootPair{accountKey: accountKey, rootKey: rootKey}
 
 		if uniqueIndex, exists := uniquePairs[pair]; exists {
-			// This (account, root) pair already exists, reuse its index
 			originalToUniqueIndex[i] = uniqueIndex
 		} else {
-			// New unique pair, add it to the unique lists
 			uniqueIndex := len(uniqueAccounts)
 			uniquePairs[pair] = uniqueIndex
 			originalToUniqueIndex[i] = uniqueIndex
@@ -107,7 +105,7 @@ func deduplicateAccountRootPairs(accounts []e2wtypes.Account, data [][]byte) ded
 }
 
 // signRootsMulti signs multiple roots for multiple accounts, using protected methods if possible.
-func (*Service) signRootsMulti(ctx context.Context,
+func (s *Service) signRootsMulti(ctx context.Context,
 	accounts []e2wtypes.Account,
 	roots []phase0.Root,
 	domain phase0.Domain,
@@ -126,7 +124,7 @@ func (*Service) signRootsMulti(ctx context.Context,
 
 	if multiSigner, isMultiSigner := accounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
 		// Deduplicate (account, root) pairs to avoid duplicate signing requests
-		dedup := deduplicateAccountRootPairs(accounts, data)
+		dedup := s.deduplicateAccountRootPairs(accounts, data)
 
 		var err error
 		signatures, err := multiSigner.SignGenericMulti(ctx, dedup.uniqueAccounts, dedup.uniqueData, domain[:])
