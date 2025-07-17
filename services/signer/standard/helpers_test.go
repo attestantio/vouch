@@ -11,128 +11,228 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package standard_test
+package standard
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	e2types "github.com/wealdtech/go-eth2-types/v2"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
-// TestSignRootsMultiWithDuplicates is currently disabled due to interface implementation complexity.
-// The deduplication logic is tested in TestDeduplicationLogic instead.
-func TestSignRootsMultiWithDuplicates(t *testing.T) {
-	t.Skip("Skipped due to mock interface complexity - deduplication logic tested in TestDeduplicationLogic")
+// mockAccount implements the e2wtypes.Account interface for testing
+type mockAccount struct {
+	id        uuid.UUID
+	name      string
+	publicKey e2types.PublicKey
 }
 
-func TestDeduplicationLogic(t *testing.T) {
-	// Test the deduplication logic directly
-	tests := []struct {
-		name                   string
-		accountKeys            []string
-		rootKeys               []string
-		expectedUniqueAccounts int
-		expectedUniqueData     int
-		expectedMapping        []int // maps original index to unique index
-	}{
-		{
-			name:                   "NoDuplicates",
-			accountKeys:            []string{"acc1", "acc2"},
-			rootKeys:               []string{"root1", "root2"},
-			expectedUniqueAccounts: 2,
-			expectedUniqueData:     2,
-			expectedMapping:        []int{0, 1},
-		},
-		{
-			name:                   "SameAccountDifferentRoots",
-			accountKeys:            []string{"acc1", "acc1"},
-			rootKeys:               []string{"root1", "root2"},
-			expectedUniqueAccounts: 2,
-			expectedUniqueData:     2,
-			expectedMapping:        []int{0, 1},
-		},
-		{
-			name:                   "DifferentAccountsSameRoot",
-			accountKeys:            []string{"acc1", "acc2"},
-			rootKeys:               []string{"root1", "root1"},
-			expectedUniqueAccounts: 2,
-			expectedUniqueData:     2,
-			expectedMapping:        []int{0, 1},
-		},
-		{
-			name:                   "ExactDuplicates",
-			accountKeys:            []string{"acc1", "acc1"},
-			rootKeys:               []string{"root1", "root1"},
-			expectedUniqueAccounts: 1,
-			expectedUniqueData:     1,
-			expectedMapping:        []int{0, 0},
-		},
-		{
-			name:                   "MultipleDuplicates",
-			accountKeys:            []string{"acc1", "acc1", "acc1", "acc1"},
-			rootKeys:               []string{"root1", "root1", "root1", "root1"},
-			expectedUniqueAccounts: 1,
-			expectedUniqueData:     1,
-			expectedMapping:        []int{0, 0, 0, 0},
-		},
-		{
-			name:                   "MixedDuplicatesAndUnique",
-			accountKeys:            []string{"acc1", "acc1", "acc2"},
-			rootKeys:               []string{"root1", "root1", "root1"},
-			expectedUniqueAccounts: 2,
-			expectedUniqueData:     2,
-			expectedMapping:        []int{0, 0, 1},
-		},
-		{
-			name:                   "ComplexPattern",
-			accountKeys:            []string{"acc1", "acc2", "acc1", "acc2", "acc1"},
-			rootKeys:               []string{"root1", "root1", "root2", "root1", "root1"},
-			expectedUniqueAccounts: 3,
-			expectedUniqueData:     3,
-			expectedMapping:        []int{0, 1, 2, 1, 0},
-		},
+func (m *mockAccount) ID() uuid.UUID {
+	return m.id
+}
+
+func (m *mockAccount) Name() string {
+	return m.name
+}
+
+func (m *mockAccount) PublicKey() e2types.PublicKey {
+	return m.publicKey
+}
+
+// mockMultiSigner implements both Account and AccountProtectingMultiSigner
+type mockMultiSigner struct {
+	*mockAccount
+	signGenericMultiCalls []signGenericMultiCall
+	signGenericMultiFunc  func(ctx context.Context, accounts []e2wtypes.Account, data [][]byte, domain []byte) ([]e2types.Signature, error)
+}
+
+type signGenericMultiCall struct {
+	accounts []e2wtypes.Account
+	data     [][]byte
+	domain   []byte
+}
+
+func (m *mockMultiSigner) SignBeaconAttestations(ctx context.Context,
+	slot uint64,
+	accounts []e2wtypes.Account,
+	committeeIndices []uint64,
+	blockRoot []byte,
+	sourceEpoch uint64,
+	sourceRoot []byte,
+	targetEpoch uint64,
+	targetRoot []byte,
+	domain []byte) ([]e2types.Signature, error) {
+	// Not used in this test, just a stub to satisfy the interface
+	return nil, fmt.Errorf("SignBeaconAttestations not implemented in mock")
+}
+
+func (m *mockMultiSigner) SignGenericMulti(ctx context.Context, accounts []e2wtypes.Account, data [][]byte, domain []byte) ([]e2types.Signature, error) {
+	// Record the call for verification
+	m.signGenericMultiCalls = append(m.signGenericMultiCalls, signGenericMultiCall{
+		accounts: accounts,
+		data:     data,
+		domain:   domain,
+	})
+
+	if m.signGenericMultiFunc != nil {
+		return m.signGenericMultiFunc(ctx, accounts, data, domain)
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			// Simulate the deduplication logic from signRootsMulti
-			type accountRootPair struct {
-				accountKey string
-				rootKey    string
-			}
+	// Return deterministic mock signatures
+	signatures := make([]e2types.Signature, len(accounts))
+	for i := range signatures {
+		privKey, err := e2types.GenerateBLSPrivateKey()
+		if err != nil {
+			return nil, err
+		}
 
-			uniquePairs := make(map[accountRootPair]int)
-			var uniqueAccounts []string
-			var uniqueData []string
-			originalToUniqueIndex := make([]int, len(test.accountKeys))
-
-			for i := range test.accountKeys {
-				accountKey := test.accountKeys[i]
-				rootKey := test.rootKeys[i]
-				pair := accountRootPair{accountKey: accountKey, rootKey: rootKey}
-
-				if uniqueIndex, exists := uniquePairs[pair]; exists {
-					originalToUniqueIndex[i] = uniqueIndex
-				} else {
-					uniqueIndex := len(uniqueAccounts)
-					uniquePairs[pair] = uniqueIndex
-					originalToUniqueIndex[i] = uniqueIndex
-					uniqueAccounts = append(uniqueAccounts, accountKey)
-					uniqueData = append(uniqueData, rootKey)
-				}
-			}
-
-			// Verify results
-			assert.Equal(t, test.expectedUniqueAccounts, len(uniqueAccounts), "Unique accounts count mismatch")
-			assert.Equal(t, test.expectedUniqueData, len(uniqueData), "Unique data count mismatch")
-			assert.Equal(t, test.expectedMapping, originalToUniqueIndex, "Index mapping mismatch")
-
-			// Verify that mapping back works correctly
-			for i := range test.accountKeys {
-				uniqueIndex := originalToUniqueIndex[i]
-				assert.Equal(t, test.accountKeys[i], uniqueAccounts[uniqueIndex], "Account mapping incorrect at index %d", i)
-				assert.Equal(t, test.rootKeys[i], uniqueData[uniqueIndex], "Root mapping incorrect at index %d", i)
-			}
-		})
+		message := fmt.Sprintf("test-signature-%s-%x", accounts[i].Name(), data[i][:8])
+		sig := privKey.Sign([]byte(message))
+		signatures[i] = sig
 	}
+	return signatures, nil
+}
+
+func TestSignRootsMultiWithDuplicates(t *testing.T) {
+	// Initialize BLS
+	err := e2types.InitBLS()
+	require.NoError(t, err)
+
+	// Generate real public keys for the accounts
+	privKey1, err := e2types.GenerateBLSPrivateKey()
+	require.NoError(t, err)
+
+	// Create mock accounts
+	account1 := &mockAccount{
+		id:        uuid.New(),
+		name:      "account1",
+		publicKey: privKey1.PublicKey(),
+	}
+
+	// Create a multi-signer that wraps the first account
+	multiSigner := &mockMultiSigner{
+		mockAccount: account1,
+	}
+
+	// Create test roots
+	root1 := phase0.Root{1, 2, 3, 4}
+	root2 := phase0.Root{5, 6, 7, 8}
+
+	// Test case with duplicates: same account signing same root multiple times
+	accounts := []e2wtypes.Account{multiSigner, multiSigner, multiSigner}
+	roots := []phase0.Root{root1, root1, root2} // Two identical roots, one different
+	domain := phase0.Domain{9, 10, 11, 12}
+
+	// Create service instance
+	service := &Service{}
+
+	// Call the signRootsMulti method directly
+	signatures, err := service.signRootsMulti(context.Background(), accounts, roots, domain)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(signatures), "Should return 3 signatures")
+
+	// Verify that the multi-signer was called with deduplicated data
+	require.Equal(t, 1, len(multiSigner.signGenericMultiCalls), "SignGenericMulti should be called exactly once")
+
+	call := multiSigner.signGenericMultiCalls[0]
+
+	// Should have only 2 unique (account, root) pairs instead of 3
+	assert.Equal(t, 2, len(call.accounts), "Should have 2 unique accounts (deduplicated)")
+	assert.Equal(t, 2, len(call.data), "Should have 2 unique data items (deduplicated)")
+
+	// Verify the domain was passed correctly
+	assert.Equal(t, domain[:], call.domain, "Domain should be passed unchanged")
+
+	// Verify the deduplicated data contains the expected unique pairs
+	expectedData1 := root1[:] // First unique root
+	expectedData2 := root2[:] // Second unique root
+
+	// The deduplication should result in these two unique data items
+	actualData1 := call.data[0]
+	actualData2 := call.data[1]
+
+	// Verify we have the expected roots (order might vary due to map iteration)
+	assert.True(t,
+		(assert.ObjectsAreEqualValues(expectedData1, actualData1) && assert.ObjectsAreEqualValues(expectedData2, actualData2)) ||
+			(assert.ObjectsAreEqualValues(expectedData1, actualData2) && assert.ObjectsAreEqualValues(expectedData2, actualData1)),
+		"Deduplicated data should contain exactly the two unique roots")
+
+	// Verify that all signatures are valid (not zero)
+	for i, sig := range signatures {
+		assert.NotEqual(t, phase0.BLSSignature{}, sig, "Signature %d should not be zero", i)
+	}
+
+	// The key test: signatures[0] and signatures[1] should be identical (same account, same root)
+	// This proves that the deduplication worked and the same signature was reused
+	assert.Equal(t, signatures[0], signatures[1], "Signatures for identical (account, root) pairs should be the same - this proves deduplication worked")
+
+	// signature[2] should be different (different root)
+	assert.NotEqual(t, signatures[0], signatures[2], "Signatures for different roots should be different")
+}
+
+func TestSignRootsMultiWithMultipleDuplicates(t *testing.T) {
+	// Initialize BLS
+	err := e2types.InitBLS()
+	require.NoError(t, err)
+
+	// Generate real public key for the account
+	privKey1, err := e2types.GenerateBLSPrivateKey()
+	require.NoError(t, err)
+
+	// Create mock account
+	account1 := &mockAccount{
+		id:        uuid.New(),
+		name:      "account1",
+		publicKey: privKey1.PublicKey(),
+	}
+
+	// Create a multi-signer that wraps the account
+	multiSigner := &mockMultiSigner{
+		mockAccount: account1,
+	}
+
+	// Create test roots
+	root1 := phase0.Root{1, 2, 3, 4}
+	root2 := phase0.Root{5, 6, 7, 8}
+	root3 := phase0.Root{9, 10, 11, 12}
+
+	// Complex pattern with the same account signing different combinations
+	// Pattern: root1, root1, root2, root1, root2, root3, root1
+	// Expected unique pairs: (acc1, root1), (acc1, root2), (acc1, root3) = 3 unique pairs
+	accounts := []e2wtypes.Account{multiSigner, multiSigner, multiSigner, multiSigner, multiSigner, multiSigner, multiSigner}
+	roots := []phase0.Root{root1, root1, root2, root1, root2, root3, root1}
+	domain := phase0.Domain{13, 14, 15, 16}
+
+	// Create service instance
+	service := &Service{}
+
+	// Call the signRootsMulti method directly
+	signatures, err := service.signRootsMulti(context.Background(), accounts, roots, domain)
+	require.NoError(t, err)
+	require.Equal(t, 7, len(signatures), "Should return 7 signatures")
+
+	// Verify multiSigner was called with its unique pairs
+	require.Equal(t, 1, len(multiSigner.signGenericMultiCalls), "MultiSigner should be called exactly once")
+	call := multiSigner.signGenericMultiCalls[0]
+
+	// Should have 3 unique pairs: (acc1, root1), (acc1, root2), (acc1, root3)
+	assert.Equal(t, 3, len(call.accounts), "MultiSigner should have 3 unique pairs")
+	assert.Equal(t, 3, len(call.data), "MultiSigner should have 3 unique data items")
+
+	// Verify duplicate signatures are identical
+	assert.Equal(t, signatures[0], signatures[1], "signatures[0] and signatures[1] should be identical (same root)")
+	assert.Equal(t, signatures[0], signatures[3], "signatures[0] and signatures[3] should be identical (same root)")
+	assert.Equal(t, signatures[0], signatures[6], "signatures[0] and signatures[6] should be identical (same root)")
+	assert.Equal(t, signatures[2], signatures[4], "signatures[2] and signatures[4] should be identical (same root)")
+
+	// Verify different signatures are not equal
+	assert.NotEqual(t, signatures[0], signatures[2], "Different roots should have different signatures")
+	assert.NotEqual(t, signatures[0], signatures[5], "Different roots should have different signatures")
+	assert.NotEqual(t, signatures[2], signatures[5], "Different roots should have different signatures")
 }
