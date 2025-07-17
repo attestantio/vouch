@@ -69,7 +69,7 @@ func (*Service) sign(ctx context.Context,
 }
 
 // signRootsMulti signs multiple roots for multiple accounts, using protected methods if possible.
-func signRootsMulti(ctx context.Context,
+func (*Service) signRootsMulti(ctx context.Context,
 	accounts []e2wtypes.Account,
 	roots []phase0.Root,
 	domain phase0.Domain,
@@ -122,7 +122,7 @@ func signRootsMulti(ctx context.Context,
 }
 
 // signRootsByAccountType collect roots by account type and multi-sign each type.
-func (*Service) signRootsByAccountType(ctx context.Context, accounts []e2wtypes.Account, roots []phase0.Root, domain phase0.Domain) ([]phase0.BLSSignature, error) {
+func (s *Service) signRootsByAccountType(ctx context.Context, accounts []e2wtypes.Account, roots []phase0.Root, domain phase0.Domain) ([]phase0.BLSSignature, error) {
 	if len(accounts) != len(roots) {
 		return []phase0.BLSSignature{}, errors.New("number of accounts and roots do not match")
 	}
@@ -153,7 +153,7 @@ func (*Service) signRootsByAccountType(ctx context.Context, accounts []e2wtypes.
 	// which would result in neither of them returning the full set of signatures and hence both erroring out.
 	sigs := make([]phase0.BLSSignature, len(accounts))
 	if len(signingAccounts) > 0 {
-		signatures, err := signRootsMulti(ctx, signingAccounts, signingAccountRoots, domain)
+		signatures, err := s.signRootsMulti(ctx, signingAccounts, signingAccountRoots, domain)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to sign for individual accounts")
 		}
@@ -162,7 +162,7 @@ func (*Service) signRootsByAccountType(ctx context.Context, accounts []e2wtypes.
 		}
 	}
 	if len(signingDistributedAccounts) > 0 {
-		signatures, err := signRootsMulti(ctx, signingDistributedAccounts, distributedAccountRoots, domain)
+		signatures, err := s.signRootsMulti(ctx, signingDistributedAccounts, distributedAccountRoots, domain)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to sign for distributed accounts")
 		}

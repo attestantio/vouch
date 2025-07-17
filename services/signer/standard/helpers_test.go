@@ -187,8 +187,9 @@ func TestSignRootsMultiWithDuplicates(t *testing.T) {
 			accounts := []e2wtypes.Account{tc.signer, tc.signer, tc.signer}
 			roots := []phase0.Root{root1, root1, root2} // Two identical roots, one different
 
-			// Call the signRootsMulti function directly
-			signatures, err := signRootsMulti(context.Background(), accounts, roots, domain)
+			service := &Service{}
+
+			signatures, err := service.signRootsMulti(context.Background(), accounts, roots, domain)
 			require.NoError(t, err)
 			require.Equal(t, 3, len(signatures), "Should return 3 signatures")
 
@@ -277,8 +278,9 @@ func TestSignRootsMultiWithMultipleDuplicates(t *testing.T) {
 			accounts := []e2wtypes.Account{tc.signer, tc.signer, tc.signer, tc.signer, tc.signer, tc.signer, tc.signer}
 			roots := []phase0.Root{root1, root1, root2, root1, root2, root3, root1}
 
-			// Call the signRootsMulti function directly
-			signatures, err := signRootsMulti(context.Background(), accounts, roots, domain)
+			service := &Service{}
+
+			signatures, err := service.signRootsMulti(context.Background(), accounts, roots, domain)
 			require.NoError(t, err)
 			require.Equal(t, 7, len(signatures), "Should return 7 signatures")
 
