@@ -187,11 +187,8 @@ func TestSignRootsMultiWithDuplicates(t *testing.T) {
 			accounts := []e2wtypes.Account{tc.signer, tc.signer, tc.signer}
 			roots := []phase0.Root{root1, root1, root2} // Two identical roots, one different
 
-			// Create service instance
-			service := &Service{}
-
-			// Call the signRootsMulti method directly
-			signatures, err := service.signRootsMulti(context.Background(), accounts, roots, domain)
+			// Call the signRootsMulti function directly
+			signatures, err := signRootsMulti(context.Background(), accounts, roots, domain)
 			require.NoError(t, err)
 			require.Equal(t, 3, len(signatures), "Should return 3 signatures")
 
@@ -280,11 +277,8 @@ func TestSignRootsMultiWithMultipleDuplicates(t *testing.T) {
 			accounts := []e2wtypes.Account{tc.signer, tc.signer, tc.signer, tc.signer, tc.signer, tc.signer, tc.signer}
 			roots := []phase0.Root{root1, root1, root2, root1, root2, root3, root1}
 
-			// Create service instance
-			service := &Service{}
-
-			// Call the signRootsMulti method directly
-			signatures, err := service.signRootsMulti(context.Background(), accounts, roots, domain)
+			// Call the signRootsMulti function directly
+			signatures, err := signRootsMulti(context.Background(), accounts, roots, domain)
 			require.NoError(t, err)
 			require.Equal(t, 7, len(signatures), "Should return 7 signatures")
 
@@ -404,8 +398,7 @@ func TestDeduplicateAccountRootPairs(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			service := &Service{}
-			result := service.deduplicateAccountRootPairs(test.accounts, test.data)
+			result := deduplicateAccountRootPairs(test.accounts, test.data)
 
 			// Verify results
 			assert.Equal(t, test.expectedUniqueAccounts, len(result.uniqueAccounts), "Unique accounts count mismatch")

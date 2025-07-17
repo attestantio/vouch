@@ -68,45 +68,8 @@ func (*Service) sign(ctx context.Context,
 	return signature, nil
 }
 
-// deduplicateAccountRootPairs deduplicates (account, root) pairs to avoid duplicate signing requests.
-// It returns unique accounts and data along with a mapping from original indices to unique indices.
-func (*Service) deduplicateAccountRootPairs(accounts []e2wtypes.Account, data [][]byte) deduplicationResult {
-	type accountRootPair struct {
-		accountKey string
-		rootKey    string
-	}
-
-	// Map to first occurrence index.
-	uniquePairs := make(map[accountRootPair]int)
-	var uniqueAccounts []e2wtypes.Account
-	var uniqueData [][]byte
-	originalToUniqueIndex := make([]int, len(accounts))
-
-	for i := range accounts {
-		accountKey := accounts[i].ID().String()
-		rootKey := string(data[i])
-		pair := accountRootPair{accountKey: accountKey, rootKey: rootKey}
-
-		if uniqueIndex, exists := uniquePairs[pair]; exists {
-			originalToUniqueIndex[i] = uniqueIndex
-		} else {
-			uniqueIndex = len(uniqueAccounts)
-			uniquePairs[pair] = uniqueIndex
-			originalToUniqueIndex[i] = uniqueIndex
-			uniqueAccounts = append(uniqueAccounts, accounts[i])
-			uniqueData = append(uniqueData, data[i])
-		}
-	}
-
-	return deduplicationResult{
-		uniqueAccounts:        uniqueAccounts,
-		uniqueData:            uniqueData,
-		originalToUniqueIndex: originalToUniqueIndex,
-	}
-}
-
 // signRootsMulti signs multiple roots for multiple accounts, using protected methods if possible.
-func (s *Service) signRootsMulti(ctx context.Context,
+func signRootsMulti(ctx context.Context,
 	accounts []e2wtypes.Account,
 	roots []phase0.Root,
 	domain phase0.Domain,
@@ -123,27 +86,16 @@ func (s *Service) signRootsMulti(ctx context.Context,
 		data[i] = roots[i][:]
 	}
 
-	if multiSigner, isMultiSigner := accounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
-		// Deduplicate (account, root) pairs to avoid duplicate signing requests.
-		dedup := s.deduplicateAccountRootPairs(accounts, data)
+	// Deduplicate (account, root) pairs to avoid duplicate signing requests.
+	dedup := deduplicateAccountRootPairs(accounts, data)
 
-		var err error
+	if multiSigner, isMultiSigner := accounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
 		signatures, err := multiSigner.SignGenericMulti(ctx, dedup.uniqueAccounts, dedup.uniqueData, domain[:])
 		if err != nil {
 			return []phase0.BLSSignature{}, err
 		}
-
-		// Map unique signatures back to original positions.
-		for i := range accounts {
-			uniqueIndex := dedup.originalToUniqueIndex[i]
-			if uniqueIndex < len(signatures) && signatures[uniqueIndex] != nil {
-				copy(sigs[i][:], signatures[uniqueIndex].Marshal())
-			}
-		}
+		mapSignaturesToOriginalPositions(sigs, signatures, dedup)
 	} else {
-		// Deduplicate (account, root) pairs for sequential signing as well.
-		dedup := s.deduplicateAccountRootPairs(accounts, data)
-
 		// Sign unique pairs only.
 		uniqueSigs := make([]e2types.Signature, len(dedup.uniqueAccounts))
 		for i := range dedup.uniqueAccounts {
@@ -164,14 +116,7 @@ func (s *Service) signRootsMulti(ctx context.Context,
 				return []phase0.BLSSignature{}, err
 			}
 		}
-
-		// Map unique signatures back to original positions.
-		for i := range accounts {
-			uniqueIndex := dedup.originalToUniqueIndex[i]
-			if uniqueIndex < len(uniqueSigs) && uniqueSigs[uniqueIndex] != nil {
-				copy(sigs[i][:], uniqueSigs[uniqueIndex].Marshal())
-			}
-		}
+		mapSignaturesToOriginalPositions(sigs, uniqueSigs, dedup)
 	}
 	return sigs, nil
 }
@@ -208,7 +153,7 @@ func (s *Service) signRootsByAccountType(ctx context.Context, accounts []e2wtype
 	// which would result in neither of them returning the full set of signatures and hence both erroring out.
 	sigs := make([]phase0.BLSSignature, len(accounts))
 	if len(signingAccounts) > 0 {
-		signatures, err := s.signRootsMulti(ctx, signingAccounts, signingAccountRoots, domain)
+		signatures, err := signRootsMulti(ctx, signingAccounts, signingAccountRoots, domain)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to sign for individual accounts")
 		}
@@ -217,7 +162,7 @@ func (s *Service) signRootsByAccountType(ctx context.Context, accounts []e2wtype
 		}
 	}
 	if len(signingDistributedAccounts) > 0 {
-		signatures, err := s.signRootsMulti(ctx, signingDistributedAccounts, distributedAccountRoots, domain)
+		signatures, err := signRootsMulti(ctx, signingDistributedAccounts, distributedAccountRoots, domain)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to sign for distributed accounts")
 		}
@@ -226,4 +171,55 @@ func (s *Service) signRootsByAccountType(ctx context.Context, accounts []e2wtype
 		}
 	}
 	return sigs, nil
+}
+
+// deduplicateAccountRootPairs deduplicates (account, root) pairs to avoid duplicate signing requests.
+// It returns unique accounts and data along with a mapping from original indices to unique indices.
+func deduplicateAccountRootPairs(accounts []e2wtypes.Account, data [][]byte) deduplicationResult {
+	type accountRootPair struct {
+		accountKey string
+		rootKey    string
+	}
+
+	// Map to first occurrence index.
+	uniquePairs := make(map[accountRootPair]int)
+	var uniqueAccounts []e2wtypes.Account
+	var uniqueData [][]byte
+	originalToUniqueIndex := make([]int, len(accounts))
+
+	for i := range accounts {
+		accountKey := accounts[i].ID().String()
+		rootKey := string(data[i])
+		pair := accountRootPair{accountKey: accountKey, rootKey: rootKey}
+
+		if uniqueIndex, exists := uniquePairs[pair]; exists {
+			originalToUniqueIndex[i] = uniqueIndex
+		} else {
+			uniqueIndex = len(uniqueAccounts)
+			uniquePairs[pair] = uniqueIndex
+			originalToUniqueIndex[i] = uniqueIndex
+			uniqueAccounts = append(uniqueAccounts, accounts[i])
+			uniqueData = append(uniqueData, data[i])
+		}
+	}
+
+	return deduplicationResult{
+		uniqueAccounts:        uniqueAccounts,
+		uniqueData:            uniqueData,
+		originalToUniqueIndex: originalToUniqueIndex,
+	}
+}
+
+// mapSignaturesToOriginalPositions maps unique signatures back to the original request positions.
+func mapSignaturesToOriginalPositions(
+	sigs []phase0.BLSSignature,
+	uniqueSigs []e2types.Signature,
+	dedup deduplicationResult,
+) {
+	for i := range sigs {
+		uniqueIndex := dedup.originalToUniqueIndex[i]
+		if uniqueIndex < len(uniqueSigs) && uniqueSigs[uniqueIndex] != nil {
+			copy(sigs[i][:], uniqueSigs[uniqueIndex].Marshal())
+		}
+	}
 }
