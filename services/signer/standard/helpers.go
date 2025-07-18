@@ -94,7 +94,9 @@ func (*Service) signRootsMulti(ctx context.Context,
 		if err != nil {
 			return []phase0.BLSSignature{}, err
 		}
-		mapSignaturesToOriginalPositions(sigs, signatures, dedup)
+		if err := mapSignaturesToOriginalPositions(sigs, signatures, dedup); err != nil {
+			return []phase0.BLSSignature{}, errors.Wrap(err, "failed to map signatures to original positions")
+		}
 	} else {
 		// Sign unique pairs only.
 		uniqueSigs := make([]e2types.Signature, len(dedup.uniqueAccounts))
@@ -116,7 +118,9 @@ func (*Service) signRootsMulti(ctx context.Context,
 				return []phase0.BLSSignature{}, err
 			}
 		}
-		mapSignaturesToOriginalPositions(sigs, uniqueSigs, dedup)
+		if err := mapSignaturesToOriginalPositions(sigs, uniqueSigs, dedup); err != nil {
+			return []phase0.BLSSignature{}, errors.Wrap(err, "failed to map signatures to original positions")
+		}
 	}
 	return sigs, nil
 }
@@ -215,11 +219,16 @@ func mapSignaturesToOriginalPositions(
 	sigs []phase0.BLSSignature,
 	uniqueSigs []e2types.Signature,
 	dedup deduplicationResult,
-) {
+) error {
 	for i := range sigs {
 		uniqueIndex := dedup.originalToUniqueIndex[i]
-		if uniqueIndex < len(uniqueSigs) && uniqueSigs[uniqueIndex] != nil {
-			copy(sigs[i][:], uniqueSigs[uniqueIndex].Marshal())
+		if uniqueIndex >= len(uniqueSigs) {
+			return errors.New("unique index out of bounds")
 		}
+		if uniqueSigs[uniqueIndex] == nil {
+			return errors.New("signature is nil")
+		}
+		copy(sigs[i][:], uniqueSigs[uniqueIndex].Marshal())
 	}
+	return nil
 }
