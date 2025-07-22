@@ -56,7 +56,7 @@ Vouch sits between the beacon node(s) and signer(s) in an Ethereum 2 validating 
 
 ## Maintainers
 
-Jim McDonald: [@mcdee](https://github.com/mcdee).
+Chris Berry: [@bez625](https://github.com/Bez625).
 
 ## Contribute
 
