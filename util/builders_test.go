@@ -29,10 +29,10 @@ import (
 // mockMonitor is a mock implementation of metrics.Service for testing.
 type mockMonitor struct{}
 
-func (m *mockMonitor) Presenter() string                    { return "mock" }
-func (m *mockMonitor) Gauge(string) func(float64)           { return func(float64) {} }
-func (m *mockMonitor) Counter(string) func(uint64)          { return func(uint64) {} }
-func (m *mockMonitor) Histogram(string) func(time.Duration) { return func(time.Duration) {} }
+func (*mockMonitor) Presenter() string                    { return "mock" }
+func (*mockMonitor) Gauge(string) func(float64)           { return func(float64) {} }
+func (*mockMonitor) Counter(string) func(uint64)          { return func(uint64) {} }
+func (*mockMonitor) Histogram(string) func(time.Duration) { return func(time.Duration) {} }
 
 // setupViperDefaults sets up common viper defaults for tests.
 func setupViperDefaults() {
@@ -43,7 +43,7 @@ func setupViperDefaults() {
 
 // createMockServer creates a simple HTTP test server.
 func createMockServer() *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 }
