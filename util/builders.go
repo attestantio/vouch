@@ -69,26 +69,18 @@ func FetchBuilderClient(ctx context.Context, service string, address string, mon
 
 	client, exists := builders[cacheKey]
 	if !exists {
-		// Build timeout path: builderclient.service.address.
-		var timeoutPath string
+		// Build configuration path: builderclient.service.address.
+		var configPath string
 		if service != "" {
-			timeoutPath = fmt.Sprintf("builderclient.%s.%s", service, address)
+			configPath = fmt.Sprintf("builderclient.%s.%s", service, address)
 		} else {
-			timeoutPath = fmt.Sprintf("builderclient.%s", address)
-		}
-
-		// Build log level path: builderclient.service.address.
-		var logLevelPath string
-		if service != "" {
-			logLevelPath = fmt.Sprintf("builderclient.%s.%s", service, address)
-		} else {
-			logLevelPath = fmt.Sprintf("builderclient.%s", address)
+			configPath = fmt.Sprintf("builderclient.%s", address)
 		}
 
 		client, err = httpclient.New(ctx,
 			httpclient.WithMonitor(monitor),
-			httpclient.WithLogLevel(LogLevel(logLevelPath)),
-			httpclient.WithTimeout(Timeout(timeoutPath)),
+			httpclient.WithLogLevel(LogLevel(configPath)),
+			httpclient.WithTimeout(Timeout(configPath)),
 			httpclient.WithAddress(address),
 			httpclient.WithExtraHeaders(extraHeaders),
 		)
