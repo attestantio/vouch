@@ -1,12 +1,14 @@
 # Configuration
-Vouch can be configured through environment, command-line or configuration file.  In the case of conflicting configuration the order of precedence is:
 
-  - command-line; then
-  - environment; then
-  - configuration file.
+Vouch can be configured through environment, command-line or configuration file. In the case of conflicting configuration the order of precedence is:
+
+- command-line; then
+- environment; then
+- configuration file.
 
 # The configuration file
-Vouch's configuration file can be written in JSON or YAML.  The file can either be in the user's home directory, in which case it will be called `.vouch.json` (or `.vouch.yml`), or it can be in a directory specified by the command line option `--base-dir` or environment variable `VOUCH_BASE_DIR`, in which case it will be called `vouch.json` (or `vouch.yml`).
+
+Vouch's configuration file can be written in JSON or YAML. The file can either be in the user's home directory, in which case it will be called `.vouch.json` (or `.vouch.yml`), or it can be in a directory specified by the command line option `--base-dir` or environment variable `VOUCH_BASE_DIR`, in which case it will be called `vouch.json` (or `vouch.yml`).
 
 A sample configuration file in YAML with is shown below:
 
@@ -70,7 +72,7 @@ graffiti:
 
 # controller controls when validating actions take place.
 controller:
-  fast-track: 
+  fast-track:
     # If attestations is true then Vouch will attest as soon as it receives notification that the head block has been updated
     # for the duties' slot.  Otherwise it will wait until 4 seconds into the slot before attesting.
     attestations: true
@@ -81,7 +83,7 @@ controller:
     # grace is the delay between receiving the notification of the head block and starting the fast track process.  This allows
     # the rest of the network to settle if we saw the head block early.
     grace: '500ms'
-  # This flag enables verification of sync committee messages included in SyncAggregate. Exposes information via metrics and logs, 
+  # This flag enables verification of sync committee messages included in SyncAggregate. Exposes information via metrics and logs,
   # defaults to false as this requires some extra processing to calculate the required metrics.
   verify-sync-committee-inclusion: false
 
@@ -246,6 +248,26 @@ blockrelay:
       # With a factor of 0 bids from this builder will be ignored.
       factor: 0
 
+# builderclient provides timeout configuration for builder/relay communication.
+# Vouch communicates with MEV-boost relays for validator registration, bid fetching, and block unblinding.
+# Different operations have different performance characteristics and may benefit from different timeout values.
+builderclient:
+  # Global timeout for all builderclient operations. Falls back to the global 'timeout' value if not set.
+  timeout: '10s'
+
+  # Validator registration timeout (default: 5s)
+  submitvalidatorregistrations:
+    timeout: '30s'
+
+  # Builder bid strategy timeout (default: 5s)
+  strategies:
+    builderbid:
+      timeout: '2s'
+
+  # Block relay timeout for unblinding operations (default: 10s)
+  blockrelay:
+    timeout: '15s'
+
 # multiinstance allows multiple instances of Vouch to run simultaneously, with the inactive Vouch instances taking over if they
 # fail to see expected attestations or proposals within the given time period.
 multiinstance:
@@ -257,7 +279,7 @@ multiinstance:
   # carry out this work themselves.
   style: 'always'
   static-delay:
-    # attester-delay is the time for inactive Vouch instances to wait to see expected attestations prior to becoming active 
+    # attester-delay is the time for inactive Vouch instances to wait to see expected attestations prior to becoming active
     # themselves.  The higher this value is, the more likely it is that an inactive Vouch will miss a slot's worth of attestations
     # before becoming active.  The lower this value is, the more likely it is that multiple Vouch instances will consider
     # themselves as all active and potentially cause attestation failures.  If either of these situations is seen commonly then the
@@ -280,14 +302,15 @@ tracing:
 ```
 
 ## Hierarchical configuration.
-A number of items in the configuration are hierarchical.  If not stated explicitly at a point in the configuration file, Vouch will move up the levels of configuration to attempt to find the relevant information.  For example, when searching for the value `submitter.attestation.multinode.beacon-node-addresses` the following points in the configuration will be checked:
 
-  - `submitter.attestation.multinode.beacon-node-addresses`
-  - `submitter.attestation.beacon-node-addresses`
-  - `submitter.beacon-node-addresses`
-  - `beacon-node-addresses`
+A number of items in the configuration are hierarchical. If not stated explicitly at a point in the configuration file, Vouch will move up the levels of configuration to attempt to find the relevant information. For example, when searching for the value `submitter.attestation.multinode.beacon-node-addresses` the following points in the configuration will be checked:
 
-Vouch will use the first value obtained.  Continuing the example, if a configuration file is set up as follows:
+- `submitter.attestation.multinode.beacon-node-addresses`
+- `submitter.attestation.beacon-node-addresses`
+- `submitter.beacon-node-addresses`
+- `beacon-node-addresses`
+
+Vouch will use the first value obtained. Continuing the example, if a configuration file is set up as follows:
 
 ```YAML
 beacon-node-addresses: [ 'localhost:4000', 'localhost:5051' ]
@@ -304,62 +327,86 @@ submitter:
 ```
 
 Then the configuration will resolve as follows:
-  - `beacon-node-addresses` resolves to `['localhost:4000', 'localhost:5051']` with a direct match
-  - `strategies.attestationdata.best.beacon-node-addresses` resolves `['localhost:5051']` at `strategies.beacon-node-addresses`
-  - `strategies.beaconblockproposal.best.beacon-node-addresses` resolves `['localhost:4000']` at `strategies.beacon-node-addresses`
-  - `submitter.proposal.multinode.beacon-node-addresses` resolves `['localhost:4000', 'localhost:9000']` with a direct match
-  - `submitter.attestation.multinode.beacon-node-addresses` resolves `['localhost:4000', 'localhost:5051']` at `beacon-node-addresses`
+
+- `beacon-node-addresses` resolves to `['localhost:4000', 'localhost:5051']` with a direct match
+- `strategies.attestationdata.best.beacon-node-addresses` resolves `['localhost:5051']` at `strategies.beacon-node-addresses`
+- `strategies.beaconblockproposal.best.beacon-node-addresses` resolves `['localhost:4000']` at `strategies.beacon-node-addresses`
+- `submitter.proposal.multinode.beacon-node-addresses` resolves `['localhost:4000', 'localhost:9000']` with a direct match
+- `submitter.attestation.multinode.beacon-node-addresses` resolves `['localhost:4000', 'localhost:5051']` at `beacon-node-addresses`
 
 Hierarchical configuration provides a simple way of setting defaults and overrides, and is available for `beacon-node-addresses`, `log-level`, `timeout` and `process-concurrency` configuration values.
 
-## Logging
-Vouch has a modular logging system that allows different modules to log at different levels.  The available log levels are:
+### Builder client timeout hierarchy
 
-  - **Fatal**: messages that result in Vouch stopping immediately;
-  - **Error**: messages due to Vouch being unable to fulfil a valid process;
-  - **Warning**: messages that result in Vouch not completing a process due to transient or user issues;
-  - **Information**: messages that are part of Vouch's normal startup and shutdown process;
-  - **Debug**: messages when one of Vouch's processes diverge from normal operations;
-  - **Trace**: messages that detail the flow of Vouch's normal operations; or
-  - **None**: no messages are written.
+The `builderclient` timeout configuration follows the same hierarchical pattern. For example, when searching for the timeout value for `builderclient.strategies.builderbid.relay1.flashbots.net`, the following points will be checked:
+
+- `builderclient.strategies.builderbid.relay1.flashbots.net.timeout`
+- `builderclient.strategies.builderbid.timeout`
+- `builderclient.timeout`
+- `timeout`
+
+If none of these are explicitly configured, service-specific defaults are applied:
+
+- `blockrelay`: 10s default
+- `submitvalidatorregistrations`: 5s default
+- `strategies.builderbid`: 5s default
+
+## Logging
+
+Vouch has a modular logging system that allows different modules to log at different levels. The available log levels are:
+
+- **Fatal**: messages that result in Vouch stopping immediately;
+- **Error**: messages due to Vouch being unable to fulfil a valid process;
+- **Warning**: messages that result in Vouch not completing a process due to transient or user issues;
+- **Information**: messages that are part of Vouch's normal startup and shutdown process;
+- **Debug**: messages when one of Vouch's processes diverge from normal operations;
+- **Trace**: messages that detail the flow of Vouch's normal operations; or
+- **None**: no messages are written.
 
 ### Global level
-The global level is used for all modules that do not have an explicit log level.  This can be configured using the command line option `--log-level`, the environment variable `VOUCH_LOG_LEVEL` or the configuration option `log-level`.
+
+The global level is used for all modules that do not have an explicit log level. This can be configured using the command line option `--log-level`, the environment variable `VOUCH_LOG_LEVEL` or the configuration option `log-level`.
 
 ### Module levels
-Modules levels are used for each module, overriding the global log level.  The available modules are:
 
-  - **accountmanager** access to validating accounts
-  - **attestationaggregator** aggregating attestations
-  - **attester** attesting to blocks
-  - **beaconcommitteesubscriber** subscribing to beacon committees
-  - **beaconblockproposer** proposing beacon blocks
-  - **chaintime** calculations for time on the blockchain (start of slot, first slot in an epoch _etc._)
-  - **controller** control of which jobs occur when
-  - **graffiti** provision of graffiti for proposed blocks
-  - **majordomo** accesss to secrets
-  - **scheduler** starting internal jobs such as proposing a block at the appropriate time
-  - **signer** carries out signing activities
-  - **strategies.attestationdata** decisions on how to obtain information from multiple beacon nodes
-  - **strategies.aggregateattestation** decisions on how to obtain information from multiple beacon nodes
-  - **strategies.beaconblockproposal** decisions on how to obtain information from multiple beacon nodes
-  - **strategies.synccommitteecontribution** decisions on how to obtain information from multiple beacon nodes
-  - **submitter** decisions on how to submit information to multiple beacon nodes
-  - **validatorsmanager** obtaining validator state from beacon nodes and providing it to other modules
+Modules levels are used for each module, overriding the global log level. The available modules are:
 
-This can be configured using the environment variables `VOUCH_<MODULE>_LOG_LEVEL` or the configuration option `<module>.log-level`.  For example, the controller module logging could be configured using the environment variable `VOUCH_CONTROLLER_LOG_LEVEL` or the configuration option `controller.log-level`.
+- **accountmanager** access to validating accounts
+- **attestationaggregator** aggregating attestations
+- **attester** attesting to blocks
+- **beaconcommitteesubscriber** subscribing to beacon committees
+- **beaconblockproposer** proposing beacon blocks
+- **chaintime** calculations for time on the blockchain (start of slot, first slot in an epoch _etc._)
+- **controller** control of which jobs occur when
+- **graffiti** provision of graffiti for proposed blocks
+- **majordomo** accesss to secrets
+- **scheduler** starting internal jobs such as proposing a block at the appropriate time
+- **signer** carries out signing activities
+- **strategies.attestationdata** decisions on how to obtain information from multiple beacon nodes
+- **strategies.aggregateattestation** decisions on how to obtain information from multiple beacon nodes
+- **strategies.beaconblockproposal** decisions on how to obtain information from multiple beacon nodes
+- **strategies.synccommitteecontribution** decisions on how to obtain information from multiple beacon nodes
+- **submitter** decisions on how to submit information to multiple beacon nodes
+- **validatorsmanager** obtaining validator state from beacon nodes and providing it to other modules
+
+This can be configured using the environment variables `VOUCH_<MODULE>_LOG_LEVEL` or the configuration option `<module>.log-level`. For example, the controller module logging could be configured using the environment variable `VOUCH_CONTROLLER_LOG_LEVEL` or the configuration option `controller.log-level`.
 
 ## Advanced options
-Advanced options can change the performance of Vouch to be severely detrimental to its operation.  It is strongly recommended that these options are not changed unless the user understands completely what they do and their possible performance impact.
+
+Advanced options can change the performance of Vouch to be severely detrimental to its operation. It is strongly recommended that these options are not changed unless the user understands completely what they do and their possible performance impact.
 
 ### controller.max-attestation-delay
-This is a duration parameter, that defaults to `4s`.  It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
+
+This is a duration parameter, that defaults to `4s`. It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
 
 ### controller.attestation-aggregation-delay
-This is a duration parameter, that defaults to `8s`.  It defines the time that Vouch will wait from the start of a slot before aggregating existing attestations.
+
+This is a duration parameter, that defaults to `8s`. It defines the time that Vouch will wait from the start of a slot before aggregating existing attestations.
 
 ### controller.max-sync-committee-message-delay
-This is a duration parameter, that defaults to `4s`.  It defines the maximum time that Vouch will wait from the start of a slot for a block before generating sync committee messages on the basis that the slot is empty.
+
+This is a duration parameter, that defaults to `4s`. It defines the maximum time that Vouch will wait from the start of a slot for a block before generating sync committee messages on the basis that the slot is empty.
 
 ### controller.sync-committee-aggregation-delay
-This is a duration parameter, that defaults to `8s`.  It defines the time that Vouch will wait from the start of a slot before aggregating existing sync committee messages.
+
+This is a duration parameter, that defaults to `8s`. It defines the time that Vouch will wait from the start of a slot before aggregating existing sync committee messages.
