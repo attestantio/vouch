@@ -225,7 +225,7 @@ func (s *Service) submitRelayRegistrations(ctx context.Context,
 			))
 			defer span.End()
 
-			client, err := util.FetchBuilderClient(ctx, builder, monitor, s.releaseVersion)
+			client, err := util.FetchBuilderClient(ctx, "submitvalidatorregistrations", builder, monitor, s.releaseVersion)
 			if err != nil {
 				s.log.Error().Err(err).Str("builder", builder).Msg("Failed to fetch builder client")
 				return

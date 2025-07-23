@@ -6,6 +6,7 @@ dev:
   - add 'attester.grace' grace period to attester service
   - de-duplicate signing roots if we have duplicate values to sign
   - import latest go-eth2-client for complex Spec types
+  - add service-specific timeout configs for builderclient interactions
 
 1.10.3:
 - import latest go-builder-client for copying execution requests on unblinding

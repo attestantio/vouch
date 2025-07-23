@@ -94,7 +94,7 @@ func (s *Service) BuilderBid(ctx context.Context,
 	// Kick off the requests.
 
 	for _, relay := range proposerConfig.Relays {
-		builderClient, err := util.FetchBuilderClient(ctx, relay.Address, s.monitor, s.releaseVersion)
+		builderClient, err := util.FetchBuilderClient(ctx, "strategies.builderbid", relay.Address, s.monitor, s.releaseVersion)
 		if err != nil {
 			// Error but continue.
 			log.Error().Err(err).Msg("Failed to obtain builder client for block auction")

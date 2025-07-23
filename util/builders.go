@@ -26,16 +26,32 @@ import (
 	"github.com/spf13/viper"
 )
 
+// setServiceDefaults sets default timeouts for builderclient services only if not already configured
+func setServiceDefaults() {
+	if viper.GetDuration("builderclient.blockrelay.timeout") == 0 && !viper.IsSet("builderclient.blockrelay.timeout") {
+		viper.SetDefault("builderclient.blockrelay.timeout", "10s")
+	}
+	if viper.GetDuration("builderclient.submitvalidatorregistrations.timeout") == 0 && !viper.IsSet("builderclient.submitvalidatorregistrations.timeout") {
+		viper.SetDefault("builderclient.submitvalidatorregistrations.timeout", "5s")
+	}
+	if viper.GetDuration("builderclient.strategies.builderbid.timeout") == 0 && !viper.IsSet("builderclient.strategies.builderbid.timeout") {
+		viper.SetDefault("builderclient.strategies.builderbid.timeout", "5s")
+	}
+}
+
 var (
 	builders   map[string]builder.Service
 	buildersMu sync.Mutex
 )
 
 // FetchBuilderClient fetches a builder client, instantiating it if required.
-func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Service, releaseVersion string) (builder.Service, error) {
+func FetchBuilderClient(ctx context.Context, service string, address string, monitor metrics.Service, releaseVersion string) (builder.Service, error) {
 	if address == "" {
 		return nil, errors.New("no address supplied")
 	}
+
+	// Set service defaults only if not already configured
+	setServiceDefaults()
 
 	buildersMu.Lock()
 	defer buildersMu.Unlock()
@@ -43,24 +59,43 @@ func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Ser
 		builders = make(map[string]builder.Service)
 	}
 
+	// Create a unique cache key that includes the service to allow different configurations per service
+	cacheKey := fmt.Sprintf("%s:%s", service, address)
+
 	extraHeaders, err := builderClientHeaders(address, releaseVersion)
 	if err != nil {
 		return nil, err
 	}
 
-	client, exists := builders[address]
+	client, exists := builders[cacheKey]
 	if !exists {
+		// Build timeout path: builderclient.service.address
+		var timeoutPath string
+		if service != "" {
+			timeoutPath = fmt.Sprintf("builderclient.%s.%s", service, address)
+		} else {
+			timeoutPath = fmt.Sprintf("builderclient.%s", address)
+		}
+
+		// Build log level path: builderclient.service.address
+		var logLevelPath string
+		if service != "" {
+			logLevelPath = fmt.Sprintf("builderclient.%s.%s", service, address)
+		} else {
+			logLevelPath = fmt.Sprintf("builderclient.%s", address)
+		}
+
 		client, err = httpclient.New(ctx,
 			httpclient.WithMonitor(monitor),
-			httpclient.WithLogLevel(LogLevel(fmt.Sprintf("builderclient.%s", address))),
-			httpclient.WithTimeout(Timeout(fmt.Sprintf("builderclient.%s", address))),
+			httpclient.WithLogLevel(LogLevel(logLevelPath)),
+			httpclient.WithTimeout(Timeout(timeoutPath)),
 			httpclient.WithAddress(address),
 			httpclient.WithExtraHeaders(extraHeaders),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate builder client")
 		}
-		builders[address] = client
+		builders[cacheKey] = client
 	}
 
 	return client, nil
