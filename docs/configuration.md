@@ -267,7 +267,7 @@ builderclient:
 
   # Block relay timeout for unblinding operations
   blockrelay:
-    timeout: '10s'
+    timeout: '5s'
 
 # multiinstance allows multiple instances of Vouch to run simultaneously, with the inactive Vouch instances taking over if they
 # fail to see expected attestations or proposals within the given time period.

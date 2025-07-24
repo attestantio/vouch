@@ -29,7 +29,7 @@ import (
 // SetServiceDefaults sets default timeouts for builderclient services only if not already configured.
 func SetServiceDefaults() {
 	if viper.GetDuration("builderclient.blockrelay.timeout") == 0 && !viper.IsSet("builderclient.blockrelay.timeout") {
-		viper.SetDefault("builderclient.blockrelay.timeout", "10s")
+		viper.SetDefault("builderclient.blockrelay.timeout", "5s")
 	}
 	if viper.GetDuration("builderclient.submitvalidatorregistrations.timeout") == 0 && !viper.IsSet("builderclient.submitvalidatorregistrations.timeout") {
 		viper.SetDefault("builderclient.submitvalidatorregistrations.timeout", "5s")
