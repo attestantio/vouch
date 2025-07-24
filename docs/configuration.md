@@ -348,7 +348,7 @@ The `builderclient` timeout configuration follows the same hierarchical pattern.
 
 If none of these are explicitly configured, service-specific defaults are applied:
 
-- `blockrelay`: 10s default
+- `blockrelay`: 5s default
 - `submitvalidatorregistrations`: 5s default
 - `strategies.builderbid`: 5s default
 

@@ -202,7 +202,7 @@ func TestServiceDefaultTimeouts(t *testing.T) {
 		{
 			name:     "BlockRelayDefault",
 			service:  "blockrelay",
-			expected: 10 * time.Second,
+			expected: 5 * time.Second,
 		},
 		{
 			name:     "SubmitValidatorRegistrationsDefault",
