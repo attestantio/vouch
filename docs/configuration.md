@@ -252,17 +252,22 @@ blockrelay:
 # Vouch communicates with MEV-boost relays for validator registration, bid fetching, and block unblinding.
 # Different operations have different performance characteristics and may benefit from different timeout values.
 builderclient:
-  # Global timeout for all builderclient operations. Falls back to the global 'timeout' value if not set.
-  timeout: '10s'
+  # Global timeout for all builderclient operations. Falls back to the global 'timeout' value (2s) if not set.
+  timeout: '2s'
 
-  # Validator registration timeout (default: 5s)
+  # Validator registration timeout
+  # Falls back to: submitvalidatorregistrations.timeout → builderclient.timeout → global timeout
+  # Default when all timeouts are unset: 5s
   submitvalidatorregistrations:
-    timeout: '30s'
+    timeout: '5s'
 
-  # Builder bid strategy timeout (default: 5s)
+  # Builder bid strategy timeout
+  # The 'strategies' section is needed because builder bid operations are part of Vouch's strategies module
+  # Falls back to: strategies.builderbid.timeout → builderclient.timeout → global timeout
+  # Default when all timeouts are unset: 5s
   strategies:
     builderbid:
-      timeout: '2s'
+      timeout: '5s'
 
   # Block relay timeout for unblinding operations (default: 10s)
   blockrelay:
