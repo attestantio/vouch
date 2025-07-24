@@ -256,22 +256,18 @@ builderclient:
   timeout: '2s'
 
   # Validator registration timeout
-  # Falls back to: submitvalidatorregistrations.timeout → builderclient.timeout → global timeout
-  # Default when all timeouts are unset: 5s
   submitvalidatorregistrations:
     timeout: '5s'
 
   # Builder bid strategy timeout
   # The 'strategies' section is needed because builder bid operations are part of Vouch's strategies module
-  # Falls back to: strategies.builderbid.timeout → builderclient.timeout → global timeout
-  # Default when all timeouts are unset: 5s
   strategies:
     builderbid:
       timeout: '5s'
 
-  # Block relay timeout for unblinding operations (default: 10s)
+  # Block relay timeout for unblinding operations
   blockrelay:
-    timeout: '15s'
+    timeout: '10s'
 
 # multiinstance allows multiple instances of Vouch to run simultaneously, with the inactive Vouch instances taking over if they
 # fail to see expected attestations or proposals within the given time period.
