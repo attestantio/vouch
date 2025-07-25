@@ -257,7 +257,7 @@ builderclient:
 
   # Validator registration timeout
   submitvalidatorregistrations:
-    timeout: '5s'
+    timeout: '10s'
 
   # Builder bid strategy timeout
   # The 'strategies' section is needed because builder bid operations are part of Vouch's strategies module
@@ -349,7 +349,7 @@ The `builderclient` timeout configuration follows the same hierarchical pattern.
 If none of these are explicitly configured, service-specific defaults are applied:
 
 - `blockrelay`: 5s default
-- `submitvalidatorregistrations`: 5s default
+- `submitvalidatorregistrations`: 10s default
 - `strategies.builderbid`: 5s default
 
 ## Logging

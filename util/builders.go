@@ -30,7 +30,7 @@ import (
 func SetServiceDefaults() {
 	defaults := map[string]string{
 		"builderclient.blockrelay.timeout":                   "5s",
-		"builderclient.submitvalidatorregistrations.timeout": "5s",
+		"builderclient.submitvalidatorregistrations.timeout": "10s",
 		"builderclient.strategies.builderbid.timeout":        "5s",
 	}
 
