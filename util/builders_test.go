@@ -207,7 +207,7 @@ func TestServiceDefaultTimeouts(t *testing.T) {
 		{
 			name:     "SubmitValidatorRegistrationsDefault",
 			service:  "submitvalidatorregistrations",
-			expected: 5 * time.Second,
+			expected: 10 * time.Second,
 		},
 		{
 			name:     "StrategiesBuilderbidDefault",
