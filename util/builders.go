@@ -26,16 +26,34 @@ import (
 	"github.com/spf13/viper"
 )
 
+// SetServiceDefaults sets default timeouts for builderclient services only if not already configured.
+func SetServiceDefaults() {
+	defaults := map[string]string{
+		"builderclient.blockrelay.timeout":                   "5s",
+		"builderclient.submitvalidatorregistrations.timeout": "10s",
+		"builderclient.strategies.builderbid.timeout":        "5s",
+	}
+
+	for key, defaultValue := range defaults {
+		if viper.GetDuration(key) == 0 && !viper.IsSet(key) {
+			viper.SetDefault(key, defaultValue)
+		}
+	}
+}
+
 var (
 	builders   map[string]builder.Service
 	buildersMu sync.Mutex
 )
 
 // FetchBuilderClient fetches a builder client, instantiating it if required.
-func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Service, releaseVersion string) (builder.Service, error) {
+func FetchBuilderClient(ctx context.Context, service string, address string, monitor metrics.Service, releaseVersion string) (builder.Service, error) {
 	if address == "" {
 		return nil, errors.New("no address supplied")
 	}
+
+	// Set service defaults only if not already configured.
+	SetServiceDefaults()
 
 	buildersMu.Lock()
 	defer buildersMu.Unlock()
@@ -43,24 +61,35 @@ func FetchBuilderClient(ctx context.Context, address string, monitor metrics.Ser
 		builders = make(map[string]builder.Service)
 	}
 
+	// Create a unique cache key that includes the service to allow different configurations per service.
+	cacheKey := fmt.Sprintf("%s:%s", service, address)
+
 	extraHeaders, err := builderClientHeaders(address, releaseVersion)
 	if err != nil {
 		return nil, err
 	}
 
-	client, exists := builders[address]
+	client, exists := builders[cacheKey]
 	if !exists {
+		// Build configuration path: builderclient.service.address.
+		var configPath string
+		if service != "" {
+			configPath = fmt.Sprintf("builderclient.%s.%s", service, address)
+		} else {
+			configPath = fmt.Sprintf("builderclient.%s", address)
+		}
+
 		client, err = httpclient.New(ctx,
 			httpclient.WithMonitor(monitor),
-			httpclient.WithLogLevel(LogLevel(fmt.Sprintf("builderclient.%s", address))),
-			httpclient.WithTimeout(Timeout(fmt.Sprintf("builderclient.%s", address))),
+			httpclient.WithLogLevel(LogLevel(configPath)),
+			httpclient.WithTimeout(Timeout(configPath)),
 			httpclient.WithAddress(address),
 			httpclient.WithExtraHeaders(extraHeaders),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate builder client")
 		}
-		builders[address] = client
+		builders[cacheKey] = client
 	}
 
 	return client, nil

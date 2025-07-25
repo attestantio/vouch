@@ -292,7 +292,7 @@ func (s *Service) issueBuilderBidRequests(ctx context.Context,
 	errCh := make(chan *builderBidError, requests)
 	// Kick off the requests.  Continue on errors to issue as many requests as we are able.
 	for _, relay := range proposerConfig.Relays {
-		builderClient, err := util.FetchBuilderClient(ctx, relay.Address, s.monitor, s.releaseVersion)
+		builderClient, err := util.FetchBuilderClient(ctx, "strategies.builderbid", relay.Address, s.monitor, s.releaseVersion)
 		if err != nil {
 			log.Error().Str("address", builderClient.Address()).Err(err).Msg("Failed to obtain builder client for block auction")
 			continue

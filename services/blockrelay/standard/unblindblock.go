@@ -111,7 +111,7 @@ func (s *Service) unblindersForProposal(ctx context.Context,
 
 	providers := make([]builderclient.UnblindedProposalProvider, 0, len(proposerConfig.Relays))
 	for _, relay := range proposerConfig.Relays {
-		builderClient, err := util.FetchBuilderClient(ctx, relay.Address, s.monitor, s.releaseVersion)
+		builderClient, err := util.FetchBuilderClient(ctx, "blockrelay", relay.Address, s.monitor, s.releaseVersion)
 		if err != nil {
 			// Error but continue.
 			s.log.Error().Err(err).Msg("Failed to obtain builder client for unblinding")
