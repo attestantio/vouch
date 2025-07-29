@@ -4,7 +4,6 @@ dev:
   - allow partial attestations to be generated for majority strategy
   - use strategy fetchers for data where appropriate
   - add 'attester.grace' grace period to attester service
-  - de-duplicate signing roots if we have duplicate values to sign
   - import latest go-eth2-client for complex Spec types
   - add service-specific timeout configs for builderclient interactions
 
