@@ -15,7 +15,6 @@ package standard
 
 import (
 	"context"
-
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
@@ -88,7 +87,11 @@ func (*Service) signRootsMulti(ctx context.Context,
 
 	// Deduplicate (account, root) pairs to avoid duplicate signing requests.
 	dedup := deduplicateAccountRootPairs(accounts, data)
-
+	// fmt.Println(fmt.Sprintf("dedupl accounts: %d, real accounts: %d", len(dedup.uniqueAccounts), len(accounts)))
+	// for i, acc := range dedup.uniqueAccounts {
+	// 	pubKey := phase0.Root(acc.PublicKey().Marshal()).String()
+	// 	fmt.Println(fmt.Sprintf("%s,%s,%s,%s", acc.Name(), pubKey, acc.ID().String(), phase0.Root(dedup.uniqueData[i]).String()))
+	// }
 	if multiSigner, isMultiSigner := accounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
 		signatures, err := multiSigner.SignGenericMulti(ctx, dedup.uniqueAccounts, dedup.uniqueData, domain[:])
 		if err != nil {
@@ -180,27 +183,20 @@ func (s *Service) signRootsByAccountType(ctx context.Context, accounts []e2wtype
 // deduplicateAccountRootPairs deduplicates (account, root) pairs to avoid duplicate signing requests.
 // It returns unique accounts and data along with a mapping from original indices to unique indices.
 func deduplicateAccountRootPairs(accounts []e2wtypes.Account, data [][]byte) deduplicationResult {
-	type accountRootPair struct {
-		accountKey string
-		rootKey    string
-	}
-
 	// Map to first occurrence index.
-	uniquePairs := make(map[accountRootPair]int)
+	uniquePairs := make(map[string]int)
 	var uniqueAccounts []e2wtypes.Account
 	var uniqueData [][]byte
 	originalToUniqueIndex := make([]int, len(accounts))
 
 	for i := range accounts {
-		accountKey := accounts[i].ID().String()
-		rootKey := string(data[i])
-		pair := accountRootPair{accountKey: accountKey, rootKey: rootKey}
+		accountKey := accounts[i].Name() // + phase0.Root(data[i]).String()
 
-		if uniqueIndex, exists := uniquePairs[pair]; exists {
+		if uniqueIndex, exists := uniquePairs[accountKey]; exists {
 			originalToUniqueIndex[i] = uniqueIndex
 		} else {
 			uniqueIndex = len(uniqueAccounts)
-			uniquePairs[pair] = uniqueIndex
+			uniquePairs[accountKey] = uniqueIndex
 			originalToUniqueIndex[i] = uniqueIndex
 			uniqueAccounts = append(uniqueAccounts, accounts[i])
 			uniqueData = append(uniqueData, data[i])

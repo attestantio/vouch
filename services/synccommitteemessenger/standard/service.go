@@ -329,6 +329,21 @@ func (s *Service) getAggregatorsSignatureData(
 	}
 
 	// Sign the slot for all accounts.
+	// uniqueAccounts := make([]e2wtypes.Account, 0)
+	// uniqueMap := make(map[string]struct{})
+	// for i, account := range accounts {
+	// 	accountKey := account.Name() + strconv.Itoa(int(subcommitteeIndices[i]))
+	// 	_, exists := uniqueMap[accountKey]
+	// 	if !exists {
+	// 		uniqueMap[accountKey] = struct{}{}
+	// 		uniqueAccounts = append(uniqueAccounts, account)
+	// 	}
+	// }
+	// s.log.Warn().
+	// 	Int("unique_accounts", len(uniqueAccounts)).
+	// 	Int("actual_accounts", len(accounts)).
+	// 	Uint64("slot", uint64(slot)).
+	// 	Msg("Aggregator signatures")
 	sigs, err := s.syncCommitteeSelectionSigner.SignSyncCommitteeSelections(ctx, accounts, slot, subcommitteeIndices)
 	if err != nil {
 		return []AggregatorSignatureData{}, errors.Wrap(err, "failed to sign the slot for selections")
