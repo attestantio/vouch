@@ -142,9 +142,6 @@ linters:
       # Allow two-line blocks without requiring a newline
       block-size: 3
 
-    stylecheck:
-      checks: [ "all", "-ST1000" ]
-
     tagliatelle:
       case:
         # use-field-name: true
