@@ -162,8 +162,8 @@ func (s *Service) handleSubmitSyncCommitteeMessagesError(ctx context.Context,
 			return err
 		}
 		for i := range len(resp.Failures) {
-			switch {
-			case resp.Failures[i].Message == "Ignoring sync committee message as a duplicate was processed during validation":
+			switch resp.Failures[i].Message {
+			case "Ignoring sync committee message as a duplicate was processed during validation":
 				s.log.Trace().Str("provider", provider).Str("index", resp.Failures[i].Index).Msg("Message already received for that slot; ignoring")
 				allowedFailures++
 			default:

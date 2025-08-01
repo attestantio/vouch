@@ -89,7 +89,7 @@ type Service struct {
 	fastTrackGrace                time.Duration
 	multiInstance                 multiinstance.Service
 
-	// Hard fork control
+	// Hard fork control.
 	handlingAltair     bool
 	altairForkEpoch    phase0.Epoch
 	handlingBellatrix  bool
@@ -225,13 +225,13 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	go s.scheduleAttestations(ctx, epoch, validatorIndices, !s.waitedForGenesis)
 	if handlingAltair {
 		thisSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch) / s.epochsPerSyncCommitteePeriod)
-		go s.scheduleSyncCommitteeMessages(ctx, thisSyncCommitteePeriodStartEpoch, syncCommitteeValidatorIndices, true /* notCurrentSlot */)
+		go s.scheduleSyncCommitteeMessages(ctx, thisSyncCommitteePeriodStartEpoch, syncCommitteeValidatorIndices, true /* notCurrentSlot. */)
 		nextSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch)/s.epochsPerSyncCommitteePeriod + 1)
 		if uint64(nextSyncCommitteePeriodStartEpoch-epoch) <= syncCommitteePreparationEpochs {
-			go s.scheduleSyncCommitteeMessages(ctx, nextSyncCommitteePeriodStartEpoch, syncCommitteeNextEpochValidatorIndices, true /* notCurrentSlot */)
+			go s.scheduleSyncCommitteeMessages(ctx, nextSyncCommitteePeriodStartEpoch, syncCommitteeNextEpochValidatorIndices, true /* notCurrentSlot. */)
 		}
 	}
-	go s.scheduleAttestations(ctx, epoch+1, nextEpochValidatorIndices, true /* notCurrentSlot */)
+	go s.scheduleAttestations(ctx, epoch+1, nextEpochValidatorIndices, true /* notCurrentSlot. */)
 
 	// Update beacon committee subscriptions for this and the next epoch.
 	go s.subscribeToBeaconCommittees(ctx, epoch, accounts)
@@ -336,7 +336,7 @@ func (s *Service) epochTicker(ctx context.Context, data *epochTickerData) {
 	<-waitCtx.Done()
 	cancel()
 
-	go s.scheduleProposals(ctx, currentEpoch, validatorIndices, false /* notCurrentSlot */)
+	go s.scheduleProposals(ctx, currentEpoch, validatorIndices, false /* notCurrentSlot. */)
 	if s.handlingAltair {
 		// Handle the Altair hard fork transition epoch.
 		if currentEpoch == s.altairForkEpoch {
@@ -352,7 +352,7 @@ func (s *Service) epochTicker(ctx context.Context, data *epochTickerData) {
 				s.log.Error().Err(err).Uint64("epoch", uint64(currentEpoch)).Msg("Failed to obtain sync committee eligible validators for epoch")
 				cancel()
 			} else {
-				go s.scheduleSyncCommitteeMessages(ctx, currentEpoch+phase0.Epoch(syncCommitteePreparationEpochs), syncCommitteeValidatorIndices, false /* notCurrentSlot */)
+				go s.scheduleSyncCommitteeMessages(ctx, currentEpoch+phase0.Epoch(syncCommitteePreparationEpochs), syncCommitteeValidatorIndices, false /* notCurrentSlot. */)
 			}
 		}
 	}
@@ -403,7 +403,7 @@ func (s *Service) prepareForEpoch(ctx context.Context, preparationData *prepareF
 		return
 	}
 
-	go s.scheduleAttestations(ctx, preparationData.epoch, validatorIndices, false /* notCurrentSlot */)
+	go s.scheduleAttestations(ctx, preparationData.epoch, validatorIndices, false /* notCurrentSlot. */)
 	go s.subscribeToBeaconCommittees(ctx, preparationData.epoch, accounts)
 }
 
@@ -467,7 +467,7 @@ func fetchAltairForkEpoch(ctx context.Context,
 	}
 	epoch, isEpoch := tmp.(uint64)
 	if !isEpoch {
-		//nolint:revive
+		//revive:disable:nolint
 		return 0, errors.New("ALTAIR_FORK_EPOCH is not a uint64!")
 	}
 
@@ -493,7 +493,7 @@ func fetchBellatrixForkEpoch(ctx context.Context,
 	}
 	epoch, isEpoch := tmp.(uint64)
 	if !isEpoch {
-		//nolint:revive
+		//revive:disable:nolint
 		return 0, errors.New("BELLATRIX_FORK_EPOCH is not a uint64!")
 	}
 
@@ -519,7 +519,7 @@ func fetchCapellaForkEpoch(ctx context.Context,
 	}
 	epoch, isEpoch := tmp.(uint64)
 	if !isEpoch {
-		//nolint:revive
+		//revive:disable:nolint
 		return 0, errors.New("CAPELLA_FORK_EPOCH is not a uint64!")
 	}
 
@@ -538,7 +538,7 @@ func (s *Service) handleAltairForkEpoch(ctx context.Context) {
 			s.log.Error().Err(err).Msg("Failed to obtain active validator indices for the Altair fork epoch")
 			return
 		}
-		go s.scheduleSyncCommitteeMessages(ctx, s.altairForkEpoch, validatorIndices, false /* notCurrentSlot */)
+		go s.scheduleSyncCommitteeMessages(ctx, s.altairForkEpoch, validatorIndices, false /* notCurrentSlot. */)
 	}()
 
 	go func() {
@@ -549,7 +549,7 @@ func (s *Service) handleAltairForkEpoch(ctx context.Context) {
 				s.log.Error().Err(err).Msg("Failed to obtain active validator indices for the period following the Altair fork epoch")
 				return
 			}
-			go s.scheduleSyncCommitteeMessages(ctx, nextPeriodEpoch, validatorIndices, false /* notCurrentSlot */)
+			go s.scheduleSyncCommitteeMessages(ctx, nextPeriodEpoch, validatorIndices, false /* notCurrentSlot. */)
 		}
 	}()
 }

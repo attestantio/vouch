@@ -240,7 +240,7 @@ func (s *Service) openWallet(ctx context.Context, name string) (e2wtypes.Wallet,
 			dirk.WithEndpoints(s.endpoints),
 			dirk.WithTimeout(s.timeout),
 		)
-		// wallet, err = dirk.OpenWallet(ctx, name, s.credentials, s.endpoints)
+
 		if err != nil {
 			return nil, err
 		}

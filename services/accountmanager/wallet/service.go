@@ -75,7 +75,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("failed to register metrics")
 	}
 
-	// Warn about lack of slashing protection
+	// Warn about lack of slashing protection.
 	log.Warn().Msg("The wallet account manager does not provide built-in slashing protection.  Please use the dirk account manager for production systems.")
 
 	stores := make([]e2wtypes.Store, 0, len(parameters.locations))

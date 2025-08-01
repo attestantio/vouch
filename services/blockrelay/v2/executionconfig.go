@@ -332,7 +332,7 @@ func (e *ExecutionConfig) generateRelayConfig(
 		// Fetch from execution config.
 		relayConfig.FeeRecipient = *e.FeeRecipient
 	default:
-		// No value; set to default
+		// No value; set to default.
 		relayConfig.FeeRecipient = fallbackFeeRecipient
 	}
 

@@ -24,7 +24,7 @@ import (
 
 // ExecutionConfigurator is the interface providing proposer configuration information.
 type ExecutionConfigurator interface {
-	// ProposerConfig returns the proposer configuration for the given validator,
+	// ProposerConfig returns the proposer configuration for the given validator.
 	ProposerConfig(ctx context.Context,
 		account e2wtypes.Account,
 		pubkey phase0.BLSPubKey,
