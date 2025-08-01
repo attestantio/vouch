@@ -59,7 +59,7 @@ type priorBlockVotes struct {
 	root   phase0.Root
 	parent phase0.Root
 	slot   phase0.Slot
-	// votes is a map of attestation slot -> committee index -> votes
+	// votes is a map of attestation slot -> committee index -> votes.
 	votes map[phase0.Slot]map[phase0.CommitteeIndex]bitfield.Bitlist
 }
 

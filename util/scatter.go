@@ -63,7 +63,7 @@ func Scatter(inputLen int, concurrency int, work func(int, int, *sync.RWMutex) (
 		}(offset, entries)
 	}
 
-	// Collect results from workers
+	// Collect results from workers.
 	results := make([]*ScatterResult, workers)
 	var err error
 	for i := range workers {

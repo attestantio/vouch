@@ -145,7 +145,7 @@ func (s *Service) checkEventForReorg(ctx context.Context,
 func (s *Service) fastTrackJobs(ctx context.Context,
 	slot phase0.Slot,
 ) {
-	if !(s.fastTrackAttestations || s.fastTrackSyncCommittees) {
+	if !s.fastTrackAttestations && !s.fastTrackSyncCommittees {
 		// No fast track required.
 		return
 	}
@@ -220,7 +220,7 @@ func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch phase
 		return
 	}
 
-	s.scheduleProposals(ctx, epoch, validatorIndices, true /* notCurrentSlot */)
+	s.scheduleProposals(ctx, epoch, validatorIndices, true /* notCurrentSlot. */)
 }
 
 func (s *Service) refreshAttesterDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {
@@ -317,7 +317,7 @@ func (s *Service) refreshSyncCommitteeDutiesForEpochPeriod(ctx context.Context, 
 	}
 
 	// Reschedule sync committee messages.
-	go s.scheduleSyncCommitteeMessages(ctx, epoch, validatorIndices, false /* notCurrentSlot */)
+	go s.scheduleSyncCommitteeMessages(ctx, epoch, validatorIndices, false /* notCurrentSlot. */)
 }
 
 func (s *Service) subscribeToBeaconCommittees(ctx context.Context,

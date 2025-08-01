@@ -89,7 +89,7 @@ func (d *Duty) Tuples() []string {
 // // RANDAOReveal provides the RANDAO reveal.
 // func (d *Duty) RANDAOReveal() spec.BLSSignature {
 // 	return d.randaoReveal
-// }
+// }.
 
 // SetAccount sets the account.
 func (d *Duty) SetAccount(index phase0.ValidatorIndex, account e2wtypes.Account) {
