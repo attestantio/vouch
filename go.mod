@@ -7,7 +7,7 @@ toolchain go1.23.2
 require (
 	github.com/attestantio/go-block-relay v0.4.4
 	github.com/attestantio/go-builder-client v0.6.4
-	github.com/attestantio/go-eth2-client v0.26.0
+	github.com/attestantio/go-eth2-client v0.26.1-0.20250721122214-dc2928832acc
 	github.com/aws/aws-sdk-go v1.55.6
 	github.com/holiman/uint256 v1.3.2
 	github.com/mitchellh/go-homedir v1.1.0
@@ -68,6 +68,7 @@ require (
 	github.com/go-playground/validator/v10 v10.26.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/goccy/go-yaml v1.17.1 // indirect
+	github.com/golangci/golangci-lint v1.64.8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect

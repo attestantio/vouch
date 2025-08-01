@@ -336,6 +336,22 @@ func (s *Service) signProposalData(ctx context.Context,
 				Blobs:     proposal.Electra.Blobs,
 			}
 		}
+	case spec.DataVersionFulu:
+		if proposal.Blinded {
+			signedProposal.FuluBlinded = &apiv1electra.SignedBlindedBeaconBlock{
+				Message:   proposal.FuluBlinded,
+				Signature: sig,
+			}
+		} else {
+			signedProposal.Fulu = &apiv1electra.SignedBlockContents{
+				SignedBlock: &electra.SignedBeaconBlock{
+					Message:   proposal.Fulu.Block,
+					Signature: sig,
+				},
+				KZGProofs: proposal.Fulu.KZGProofs,
+				Blobs:     proposal.Fulu.Blobs,
+			}
+		}
 	default:
 		return nil, errors.New("unhandled proposal version")
 	}
@@ -457,6 +473,9 @@ func (s *Service) unblindProposal(ctx context.Context,
 		case spec.DataVersionElectra:
 			proposal.ElectraBlinded = nil
 			proposal.Electra = signedBlock.Electra
+		case spec.DataVersionFulu:
+			proposal.FuluBlinded = nil
+			proposal.Fulu = signedBlock.Fulu
 		default:
 			return fmt.Errorf("unsupported version %v", proposal.Version)
 		}
