@@ -276,6 +276,7 @@ func (s *Service) createElectraAttestations(_ context.Context,
 		}
 		copy(attestation.Signature[:], sigs[i][:])
 
+		// TODO: Check if we need to switch on version for fulu.
 		versionedAttestation := &spec.VersionedAttestation{Version: spec.DataVersionElectra, Electra: attestation, ValidatorIndex: &validatorIndex}
 		attestations = append(attestations, versionedAttestation)
 	}

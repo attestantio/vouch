@@ -294,6 +294,20 @@ func createVersionedAggregateAndProof(duty *attestationaggregator.Duty, aggregat
 			Electra: aggregateAndProof,
 		}
 		return versionedAggregateAndProof, nil
+	case spec.DataVersionFulu:
+		if aggregateAttestation.Fulu == nil {
+			return nil, errors.New("no fulu attestation")
+		}
+		aggregateAndProof := &electra.AggregateAndProof{
+			AggregatorIndex: duty.ValidatorIndex,
+			Aggregate:       aggregateAttestation.Fulu,
+			SelectionProof:  duty.SlotSignature,
+		}
+		versionedAggregateAndProof := &spec.VersionedAggregateAndProof{
+			Version: aggregateAttestation.Version,
+			Fulu:    aggregateAndProof,
+		}
+		return versionedAggregateAndProof, nil
 	default:
 		return &spec.VersionedAggregateAndProof{}, errors.New("unknown version")
 	}
@@ -377,6 +391,19 @@ func createVersionedSignedAggregateAndProof(aggregateAndProof *spec.VersionedAgg
 		signedVersionedAggregateAndProof := &spec.VersionedSignedAggregateAndProof{
 			Version: aggregateAndProof.Version,
 			Electra: signedAggregateAndProof,
+		}
+		return signedVersionedAggregateAndProof, nil
+	case spec.DataVersionFulu:
+		if aggregateAndProof.Fulu == nil {
+			return nil, errors.New("no fulu aggregate and proof")
+		}
+		signedAggregateAndProof := &electra.SignedAggregateAndProof{
+			Message:   aggregateAndProof.Fulu,
+			Signature: sig,
+		}
+		signedVersionedAggregateAndProof := &spec.VersionedSignedAggregateAndProof{
+			Version: aggregateAndProof.Version,
+			Fulu:    signedAggregateAndProof,
 		}
 		return signedVersionedAggregateAndProof, nil
 	default:
