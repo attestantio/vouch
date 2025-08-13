@@ -1515,6 +1515,7 @@ func selectBeaconBlockRootProvider(ctx context.Context,
 			latestbeaconblockrootstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockroot.latest")),
 			latestbeaconblockrootstrategy.WithBeaconBlockRootProviders(beaconBlockRootProviders),
 			latestbeaconblockrootstrategy.WithTimeout(util.Timeout("strategies.beaconblockroot.latest")),
+			latestbeaconblockrootstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start latest beacon block root strategy")
