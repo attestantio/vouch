@@ -1,5 +1,8 @@
 dev:
 
+1.11.1:
+  - ensure builderclient timeout defaults are set once on startup
+
 1.11.0:
   - add initial multi instance implementation
   - import latest go-eth2-client for complex Spec types
