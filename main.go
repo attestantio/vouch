@@ -115,7 +115,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.11.0-fulu.1"
+var ReleaseVersion = "1.12.0-alpha.1"
 
 func main() {
 	exitCode := main2()
@@ -1694,13 +1694,6 @@ func consensusClientCapabilities(ctx context.Context, consensusClient eth2client
 		bellatrixCapable = true
 	} else {
 		log.Warn().Msg("Client is not Bellatrix-capable")
-	}
-
-	// Check if the ETH2 client is capable of Fulu.
-	if _, exists := spec["FULU_FORK_EPOCH"]; exists {
-		log.Info().Msg("Client is Fulu-capable")
-	} else {
-		log.Warn().Msg("Client is not Fulu-capable")
 	}
 
 	return altairCapable, bellatrixCapable, nil
