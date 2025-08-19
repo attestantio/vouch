@@ -6,7 +6,7 @@ toolchain go1.24.4
 
 require (
 	github.com/attestantio/go-block-relay v0.4.4
-	github.com/attestantio/go-builder-client v0.6.4
+	github.com/attestantio/go-builder-client v0.6.5-0.20250819005651-7837a8549259
 	github.com/attestantio/go-eth2-client v0.26.1-0.20250721122214-dc2928832acc
 	github.com/aws/aws-sdk-go v1.55.6
 	github.com/holiman/uint256 v1.3.2
@@ -68,7 +68,6 @@ require (
 	github.com/go-playground/validator/v10 v10.26.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/goccy/go-yaml v1.17.1 // indirect
-	github.com/golangci/golangci-lint v1.64.8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -101,6 +100,7 @@ require (
 	github.com/prometheus/common v0.63.0 // indirect
 	github.com/prometheus/procfs v0.16.0 // indirect
 	github.com/r3labs/sse/v2 v2.10.0 // indirect
+	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/shibukawa/configdir v0.0.0-20170330084843-e180dbdc8da0 // indirect
