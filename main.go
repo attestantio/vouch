@@ -259,6 +259,9 @@ func fetchConfig() error {
 	viper.SetDefault("multiinstance.static-delay.attester-delay", time.Second)
 	viper.SetDefault("multiinstance.static-delay.proposer-delay", 2*time.Second)
 
+	// Set builder client defaults.
+	util.SetBuilderClientTimeoutDefaults()
+
 	if err := viper.ReadInConfig(); err != nil {
 		switch {
 		case errors.As(err, &viper.ConfigFileNotFoundError{}):
