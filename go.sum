@@ -84,6 +84,8 @@ github.com/attestantio/go-builder-client v0.6.5-0.20250819165721-b47401471705 h1
 github.com/attestantio/go-builder-client v0.6.5-0.20250819165721-b47401471705/go.mod h1:2AvPEAIpYntCHIdcAdQaPin0VVS6I+vULwtsE58f2wA=
 github.com/attestantio/go-builder-client v0.6.5-0.20250819171904-8139b9a8766f h1:4Xt7S2CKqM91WyjYKH080CC6BYE0X75mG0Exhk6Iaf8=
 github.com/attestantio/go-builder-client v0.6.5-0.20250819171904-8139b9a8766f/go.mod h1:2AvPEAIpYntCHIdcAdQaPin0VVS6I+vULwtsE58f2wA=
+github.com/attestantio/go-builder-client v0.6.5-0.20250819173409-5d93c5ac6b14 h1:k+ql+8eLKqJFWBzXUdFXVevUCaFGjn88dco+q+/Wer8=
+github.com/attestantio/go-builder-client v0.6.5-0.20250819173409-5d93c5ac6b14/go.mod h1:2AvPEAIpYntCHIdcAdQaPin0VVS6I+vULwtsE58f2wA=
 github.com/attestantio/go-eth2-client v0.26.1-0.20250721122214-dc2928832acc h1:rLrx/o7WeRqmE9iXvhyBMDrugOPZRhNBLQD/4XbG6hU=
 github.com/attestantio/go-eth2-client v0.26.1-0.20250721122214-dc2928832acc/go.mod h1:fvULSL9WtNskkOB4i+Yyr6BKpNHXvmpGZj9969fCrfY=
 github.com/aws/aws-sdk-go v1.44.81/go.mod h1:y4AeaBuwd2Lk+GepC1E9v0qOiTws0MIWAX4oIKwKHZo=
