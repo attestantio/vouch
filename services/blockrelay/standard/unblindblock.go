@@ -160,6 +160,7 @@ func (s *Service) unblindProposal(ctx context.Context,
 						Capella:   proposal.CapellaBlinded,
 						Deneb:     proposal.DenebBlinded,
 						Electra:   proposal.ElectraBlinded,
+						Fulu:      proposal.FuluBlinded,
 					},
 				})
 
