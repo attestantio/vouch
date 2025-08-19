@@ -1,4 +1,4 @@
-// Copyright © 2022, 2023 Attestant Limited.
+// Copyright © 2022 - 2025 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -26,8 +26,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-// SetServiceDefaults sets default timeouts for builderclient services only if not already configured.
-func SetServiceDefaults() {
+// SetBuilderClientTimeoutDefaults sets default timeouts for builderclient services only if not already configured.
+func SetBuilderClientTimeoutDefaults() {
 	defaults := map[string]string{
 		"builderclient.blockrelay.timeout":                   "5s",
 		"builderclient.submitvalidatorregistrations.timeout": "10s",
@@ -51,9 +51,6 @@ func FetchBuilderClient(ctx context.Context, service string, address string, mon
 	if address == "" {
 		return nil, errors.New("no address supplied")
 	}
-
-	// Set service defaults only if not already configured.
-	SetServiceDefaults()
 
 	buildersMu.Lock()
 	defer buildersMu.Unlock()

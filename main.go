@@ -115,7 +115,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.11.0"
+var ReleaseVersion = "1.11.1"
 
 func main() {
 	exitCode := main2()
@@ -258,6 +258,9 @@ func fetchConfig() error {
 	viper.SetDefault("submitter.style", "multinode")
 	viper.SetDefault("multiinstance.static-delay.attester-delay", time.Second)
 	viper.SetDefault("multiinstance.static-delay.proposer-delay", 2*time.Second)
+
+	// Set builder client defaults.
+	util.SetBuilderClientTimeoutDefaults()
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch {

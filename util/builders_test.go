@@ -38,7 +38,7 @@ func (*mockMonitor) Histogram(string) func(time.Duration) { return func(time.Dur
 func setupViperDefaults() {
 	viper.Reset()
 	viper.SetDefault("timeout", "2s")
-	util.SetServiceDefaults()
+	util.SetBuilderClientTimeoutDefaults()
 }
 
 // createMockServer creates a simple HTTP test server.
