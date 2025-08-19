@@ -97,8 +97,6 @@ type Service struct {
 	capellaForkEpoch   phase0.Epoch
 	handlingElectra    bool
 	electraForkEpoch   phase0.Epoch
-	handlingFulu       bool
-	fuluForkEpoch      phase0.Epoch
 
 	// Tracking for reorgs.
 	lastBlockRoot             phase0.Root
@@ -136,7 +134,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	handlingBellatrix, bellatrixForkEpoch := bellatrixDetails(ctx, log, parameters.specProvider)
 	capellaForkEpoch := capellaDetails(ctx, log, parameters.specProvider)
 	handlingElectra, electraForkEpoch := electraDetails(ctx, log, parameters.chainTimeService)
-	handlingFulu, fuluForkEpoch := fuluDetails(ctx, log, parameters.chainTimeService)
 
 	s := &Service{
 		log:                           log,
@@ -180,8 +177,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		capellaForkEpoch:              capellaForkEpoch,
 		handlingElectra:               handlingElectra,
 		electraForkEpoch:              electraForkEpoch,
-		handlingFulu:                  handlingFulu,
-		fuluForkEpoch:                 fuluForkEpoch,
 		pendingAttestations:           make(map[phase0.Slot]bool),
 	}
 
@@ -690,20 +685,4 @@ func electraDetails(ctx context.Context, log zerolog.Logger, chainTimeService ch
 		log.Debug().Msg("Not handling Electra")
 	}
 	return handlingElectra, electraForkEpoch
-}
-
-func fuluDetails(ctx context.Context, log zerolog.Logger, chainTimeService chaintime.Service) (bool, phase0.Epoch) {
-	// Fetch the fulu fork epoch from the fork schedule.
-	handlingFulu := true
-	fuluForkEpoch := chainTimeService.HardForkEpoch(ctx, "FULU_FORK_EPOCH")
-	if fuluForkEpoch == 0xffffffffffffffff {
-		// Not handling fulu after all.
-		handlingFulu = false
-	} else {
-		log.Trace().Uint64("epoch", uint64(fuluForkEpoch)).Msg("Obtained Fulu fork epoch")
-	}
-	if !handlingFulu {
-		log.Debug().Msg("Not handling Fulu")
-	}
-	return handlingFulu, fuluForkEpoch
 }
