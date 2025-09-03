@@ -6,8 +6,8 @@ toolchain go1.24.4
 
 require (
 	github.com/attestantio/go-block-relay v0.4.4
-	github.com/attestantio/go-builder-client v0.6.5-0.20250819214917-4e94ae70ae4f
-	github.com/attestantio/go-eth2-client v0.26.1-0.20250721122214-dc2928832acc
+	github.com/attestantio/go-builder-client v0.6.5-0.20250901141559-94d1ecfeeb53
+	github.com/attestantio/go-eth2-client v0.26.1-0.20250829122455-ff89a2135a43
 	github.com/aws/aws-sdk-go v1.55.6
 	github.com/holiman/uint256 v1.3.2
 	github.com/mitchellh/go-homedir v1.1.0
