@@ -30,6 +30,7 @@ import (
 	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	apiv1deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	apiv1electra "github.com/attestantio/go-eth2-client/api/v1/electra"
+	apiv1fulu "github.com/attestantio/go-eth2-client/api/v1/fulu"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -343,7 +344,7 @@ func (s *Service) signProposalData(ctx context.Context,
 				Signature: sig,
 			}
 		} else {
-			signedProposal.Fulu = &apiv1electra.SignedBlockContents{
+			signedProposal.Fulu = &apiv1fulu.SignedBlockContents{
 				SignedBlock: &electra.SignedBeaconBlock{
 					Message:   proposal.Fulu.Block,
 					Signature: sig,
