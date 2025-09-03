@@ -230,6 +230,9 @@ func (*Service) confirmProposalData(_ context.Context,
 	return nil
 }
 
+// skipcq: GO-R1005
+// Complexity is due to handling all Ethereum protocol versions.
+// Each version requires specific signing logic for blinded/unblinded proposals.
 func (s *Service) signProposalData(ctx context.Context,
 	proposal *api.VersionedProposal,
 	duty *beaconblockproposer.Duty,
@@ -386,6 +389,9 @@ func (s *Service) auctionBlock(ctx context.Context,
 	return auctionResults, nil
 }
 
+// skipcq: GO-R1005
+// Complexity is due to handling all Ethereum protocol versions.
+// Each version requires specific logic to convert blinded to unblinded blocks.
 func (s *Service) unblindProposal(ctx context.Context,
 	proposal *api.VersionedSignedProposal,
 	providers []builderclient.UnblindedProposalProvider,
