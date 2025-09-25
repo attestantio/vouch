@@ -12,12 +12,12 @@ permissions:
 jobs:
   golangci:
     name: lint
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/setup-go@v5
         with:
           cache: false
-          go-version: '^1.24'
+          go-version: '^1.23'
       - uses: actions/checkout@v4
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8

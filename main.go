@@ -115,7 +115,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.12.0-alpha.1"
+var ReleaseVersion = "1.12.0-beta.1"
 
 func main() {
 	exitCode := main2()
@@ -258,6 +258,9 @@ func fetchConfig() error {
 	viper.SetDefault("submitter.style", "multinode")
 	viper.SetDefault("multiinstance.static-delay.attester-delay", time.Second)
 	viper.SetDefault("multiinstance.static-delay.proposer-delay", 2*time.Second)
+
+	// Set builder client defaults.
+	util.SetBuilderClientTimeoutDefaults()
 
 	if err := viper.ReadInConfig(); err != nil {
 		switch {
@@ -1515,6 +1518,7 @@ func selectBeaconBlockRootProvider(ctx context.Context,
 			latestbeaconblockrootstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockroot.latest")),
 			latestbeaconblockrootstrategy.WithBeaconBlockRootProviders(beaconBlockRootProviders),
 			latestbeaconblockrootstrategy.WithTimeout(util.Timeout("strategies.beaconblockroot.latest")),
+			latestbeaconblockrootstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start latest beacon block root strategy")
@@ -1694,6 +1698,13 @@ func consensusClientCapabilities(ctx context.Context, consensusClient eth2client
 		bellatrixCapable = true
 	} else {
 		log.Warn().Msg("Client is not Bellatrix-capable")
+	}
+
+	// Check if the ETH2 client is capable of Fulu.
+	if _, exists := spec["FULU_FORK_EPOCH"]; exists {
+		log.Info().Msg("Client is Fulu-capable")
+	} else {
+		log.Warn().Msg("Client is not Fulu-capable")
 	}
 
 	return altairCapable, bellatrixCapable, nil

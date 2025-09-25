@@ -1,20 +1,25 @@
 dev:
+
+1.11.1:
+  - ensure builderclient timeout defaults are set once on startup
+
+1.11.0:
   - add initial multi instance implementation
-  - enable 'latest' beacon block root strategy
-  - allow partial attestations to be generated for majority strategy
-  - use strategy fetchers for data where appropriate
-  - add 'attester.grace' grace period to attester service
   - import latest go-eth2-client for complex Spec types
   - add service-specific timeout configs for builderclient interactions
+  - add 'attester.grace' grace period to attester service
+  - enable 'latest' beacon block root strategy
+  - add combined attestation pool strategy
+  - use strategy fetchers for data where appropriate
 
 1.10.3:
-- import latest go-builder-client for copying execution requests on unblinding
+  - import latest go-builder-client for copying execution requests on unblinding
 
 1.10.2:
-- import latest go-builder-client for sending consensus version headers to proposal unblinder
+  - import latest go-builder-client for sending consensus version headers to proposal unblinder
 
 1.10.1:
-- set block gas limit for electra
+  - set block gas limit for electra
 
 1.10.0:
   - support Electra
