@@ -30,6 +30,7 @@ import (
 	apiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	apiv1deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	apiv1electra "github.com/attestantio/go-eth2-client/api/v1/electra"
+	apiv1fulu "github.com/attestantio/go-eth2-client/api/v1/fulu"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -229,6 +230,9 @@ func (*Service) confirmProposalData(_ context.Context,
 	return nil
 }
 
+// skipcq: GO-R1005
+// Complexity is due to handling all Ethereum protocol versions.
+// Each version requires specific signing logic for blinded/unblinded proposals.
 func (s *Service) signProposalData(ctx context.Context,
 	proposal *api.VersionedProposal,
 	duty *beaconblockproposer.Duty,
@@ -336,6 +340,22 @@ func (s *Service) signProposalData(ctx context.Context,
 				Blobs:     proposal.Electra.Blobs,
 			}
 		}
+	case spec.DataVersionFulu:
+		if proposal.Blinded {
+			signedProposal.FuluBlinded = &apiv1electra.SignedBlindedBeaconBlock{
+				Message:   proposal.FuluBlinded,
+				Signature: sig,
+			}
+		} else {
+			signedProposal.Fulu = &apiv1fulu.SignedBlockContents{
+				SignedBlock: &electra.SignedBeaconBlock{
+					Message:   proposal.Fulu.Block,
+					Signature: sig,
+				},
+				KZGProofs: proposal.Fulu.KZGProofs,
+				Blobs:     proposal.Fulu.Blobs,
+			}
+		}
 	default:
 		return nil, errors.New("unhandled proposal version")
 	}
@@ -369,6 +389,9 @@ func (s *Service) auctionBlock(ctx context.Context,
 	return auctionResults, nil
 }
 
+// skipcq: GO-R1005
+// Complexity is due to handling all Ethereum protocol versions.
+// Each version requires specific logic to convert blinded to unblinded blocks.
 func (s *Service) unblindProposal(ctx context.Context,
 	proposal *api.VersionedSignedProposal,
 	providers []builderclient.UnblindedProposalProvider,
@@ -398,6 +421,7 @@ func (s *Service) unblindProposal(ctx context.Context,
 						Capella:   proposal.CapellaBlinded,
 						Deneb:     proposal.DenebBlinded,
 						Electra:   proposal.ElectraBlinded,
+						Fulu:      proposal.FuluBlinded,
 					},
 				})
 
@@ -457,6 +481,9 @@ func (s *Service) unblindProposal(ctx context.Context,
 		case spec.DataVersionElectra:
 			proposal.ElectraBlinded = nil
 			proposal.Electra = signedBlock.Electra
+		case spec.DataVersionFulu:
+			proposal.FuluBlinded = nil
+			proposal.Fulu = signedBlock.Fulu
 		default:
 			return fmt.Errorf("unsupported version %v", proposal.Version)
 		}

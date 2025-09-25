@@ -5,9 +5,9 @@ go 1.23.0
 toolchain go1.23.2
 
 require (
-	github.com/attestantio/go-block-relay v0.4.4
-	github.com/attestantio/go-builder-client v0.6.4
-	github.com/attestantio/go-eth2-client v0.26.0
+	github.com/attestantio/go-block-relay v0.5.0
+	github.com/attestantio/go-builder-client v0.7.1
+	github.com/attestantio/go-eth2-client v0.27.0
 	github.com/aws/aws-sdk-go v1.55.6
 	github.com/holiman/uint256 v1.3.2
 	github.com/mitchellh/go-homedir v1.1.0
@@ -100,6 +100,7 @@ require (
 	github.com/prometheus/common v0.63.0 // indirect
 	github.com/prometheus/procfs v0.16.0 // indirect
 	github.com/r3labs/sse/v2 v2.10.0 // indirect
+	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/shibukawa/configdir v0.0.0-20170330084843-e180dbdc8da0 // indirect
