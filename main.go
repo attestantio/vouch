@@ -1700,13 +1700,6 @@ func consensusClientCapabilities(ctx context.Context, consensusClient eth2client
 		log.Warn().Msg("Client is not Bellatrix-capable")
 	}
 
-	// Check if the ETH2 client is capable of Fulu.
-	if _, exists := spec["FULU_FORK_EPOCH"]; exists {
-		log.Info().Msg("Client is Fulu-capable")
-	} else {
-		log.Warn().Msg("Client is not Fulu-capable")
-	}
-
 	return altairCapable, bellatrixCapable, nil
 }
 
