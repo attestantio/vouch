@@ -2,6 +2,7 @@ dev:
   - import fulu container specs from go-eth2-client
   - import fulu block handling from go-builder-client and go-block-relay
   - add handling for fulu versioned containers
+  - import increase in max blobs from go-eth2-client
 
 1.11.1:
   - ensure builderclient timeout defaults are set once on startup
