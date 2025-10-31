@@ -136,7 +136,7 @@ func (s *Service) attest(
 	signingCommitteeIndices := make([]phase0.CommitteeIndex, len(committeeIndices))
 	copy(signingCommitteeIndices, committeeIndices)
 	epoch := s.chainTime.SlotToEpoch(duty.Slot())
-	if epoch >= s.electraForkEpoch {
+	if epoch >= s.forkEpoch[spec.DataVersionElectra] {
 		for i := range signingCommitteeIndices {
 			// Hardcode the committee indices to be 0 in Electra.
 			signingCommitteeIndices[i] = 0
@@ -161,10 +161,12 @@ func (s *Service) attest(
 	var attestations []*spec.VersionedAttestation
 
 	switch {
-	case epoch < s.electraForkEpoch:
+	case epoch < s.forkEpoch[spec.DataVersionElectra]:
 		attestations = s.createAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
+	case epoch < s.forkEpoch[spec.DataVersionFulu]:
+		attestations = s.createElectraAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, validatorIndices, data, sigs, spec.DataVersionElectra)
 	default:
-		attestations = s.createElectraAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, validatorIndices, data, sigs)
+		attestations = s.createElectraAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, validatorIndices, data, sigs, spec.DataVersionFulu)
 	}
 	if len(attestations) == 0 {
 		s.log.Info().Msg("No signed attestations; not submitting")
@@ -235,6 +237,7 @@ func (s *Service) createElectraAttestations(_ context.Context,
 	validatorIndices []phase0.ValidatorIndex,
 	data *phase0.AttestationData,
 	sigs []phase0.BLSSignature,
+	version spec.DataVersion,
 ) []*spec.VersionedAttestation {
 	attestations := make([]*spec.VersionedAttestation, 0, len(sigs))
 	for i := range sigs {
@@ -276,7 +279,19 @@ func (s *Service) createElectraAttestations(_ context.Context,
 		}
 		copy(attestation.Signature[:], sigs[i][:])
 
-		versionedAttestation := &spec.VersionedAttestation{Version: spec.DataVersionElectra, Electra: attestation, ValidatorIndex: &validatorIndex}
+		var versionedAttestation *spec.VersionedAttestation
+		switch version {
+		case spec.DataVersionElectra:
+			versionedAttestation = &spec.VersionedAttestation{Version: spec.DataVersionElectra, Electra: attestation, ValidatorIndex: &validatorIndex}
+		case spec.DataVersionFulu:
+			versionedAttestation = &spec.VersionedAttestation{Version: spec.DataVersionFulu, Fulu: attestation, ValidatorIndex: &validatorIndex}
+		default:
+			s.log.Warn().
+				Str("validator_pubkey", fmt.Sprintf("%#x", accounts[i].PublicKey().Marshal())).
+				Str("version", version.String()).
+				Msg("Unsupported version for electra attestation; not creating attestation")
+			continue
+		}
 		attestations = append(attestations, versionedAttestation)
 	}
 

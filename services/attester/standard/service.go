@@ -20,6 +20,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/chaintime"
@@ -45,7 +46,7 @@ type Service struct {
 	beaconAttestationsSigner   signer.BeaconAttestationsSigner
 	attested                   map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}
 	attestedMu                 sync.Mutex
-	electraForkEpoch           phase0.Epoch
+	forkEpoch                  map[spec.DataVersion]phase0.Epoch
 }
 
 // New creates a new beacon block attester.
@@ -69,9 +70,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to obtain spec")
 	}
-	spec := specResponse.Data
+	specData := specResponse.Data
 
-	tmp, exists := spec["SLOTS_PER_EPOCH"]
+	tmp, exists := specData["SLOTS_PER_EPOCH"]
 	if !exists {
 		return nil, errors.New("SLOTS_PER_EPOCH not found in spec")
 	}
@@ -80,7 +81,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("SLOTS_PER_EPOCH of unexpected type")
 	}
 
-	electraForkEpoch := parameters.chainTime.HardForkEpoch(ctx, "ELECTRA_FORK_EPOCH")
+	forkEpoch := make(map[spec.DataVersion]phase0.Epoch)
+	forkEpoch[spec.DataVersionElectra] = parameters.chainTime.HardForkEpoch(ctx, "ELECTRA_FORK_EPOCH")
+	forkEpoch[spec.DataVersionFulu] = parameters.chainTime.HardForkEpoch(ctx, "FULU_FORK_EPOCH")
+
 	s := &Service{
 		log:                        log,
 		monitor:                    parameters.monitor,
@@ -93,7 +97,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		attestationsSubmitter:      parameters.attestationsSubmitter,
 		beaconAttestationsSigner:   parameters.beaconAttestationsSigner,
 		attested:                   make(map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}),
-		electraForkEpoch:           electraForkEpoch,
+		forkEpoch:                  forkEpoch,
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
