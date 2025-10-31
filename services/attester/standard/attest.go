@@ -164,7 +164,7 @@ func (s *Service) attest(
 	case epoch < s.electraForkEpoch:
 		attestations = s.createAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
 	default:
-		attestations = s.createElectraAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, validatorIndices, data, sigs)
+		attestations = s.createElectraAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, validatorIndices, data, sigs, epoch)
 	}
 	if len(attestations) == 0 {
 		s.log.Info().Msg("No signed attestations; not submitting")
@@ -235,6 +235,7 @@ func (s *Service) createElectraAttestations(_ context.Context,
 	validatorIndices []phase0.ValidatorIndex,
 	data *phase0.AttestationData,
 	sigs []phase0.BLSSignature,
+	epoch phase0.Epoch,
 ) []*spec.VersionedAttestation {
 	attestations := make([]*spec.VersionedAttestation, 0, len(sigs))
 	for i := range sigs {
@@ -276,8 +277,13 @@ func (s *Service) createElectraAttestations(_ context.Context,
 		}
 		copy(attestation.Signature[:], sigs[i][:])
 
-		versionedAttestation := &spec.VersionedAttestation{Version: spec.DataVersionElectra, Electra: attestation, ValidatorIndex: &validatorIndex}
-		attestations = append(attestations, versionedAttestation)
+		if epoch < s.fuluForkEpoch {
+			versionedAttestation := &spec.VersionedAttestation{Version: spec.DataVersionElectra, Electra: attestation, ValidatorIndex: &validatorIndex}
+			attestations = append(attestations, versionedAttestation)
+		} else {
+			versionedAttestation := &spec.VersionedAttestation{Version: spec.DataVersionFulu, Fulu: attestation, ValidatorIndex: &validatorIndex}
+			attestations = append(attestations, versionedAttestation)
+		}
 	}
 
 	return attestations

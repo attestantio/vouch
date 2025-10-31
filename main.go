@@ -115,7 +115,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.12.0-beta.3"
+var ReleaseVersion = "1.12.0-beta.4"
 
 func main() {
 	exitCode := main2()
