@@ -47,7 +47,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           cache: false
-          go-version: '~1.24'
+          go-version: '^1.24'
 
       - name: Check out repository into the Go module directory
         uses: actions/checkout@v4
@@ -126,7 +126,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           cache: false
-          go-version: '~1.24'
+          go-version: '^1.24'
 
       - name: Check out repository into the Go module directory
         uses: actions/checkout@v4
@@ -172,7 +172,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           cache: false
-          go-version: '~1.24'
+          go-version: '^1.24'
 
       - name: Check out repository into the Go module directory
         uses: actions/checkout@v4
