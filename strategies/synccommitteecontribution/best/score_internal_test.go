@@ -18,10 +18,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/OffchainLabs/go-bitfield"
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/vouch/mock"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )

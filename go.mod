@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.23.2
 
 require (
+	github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506
 	github.com/attestantio/go-block-relay v0.5.1
 	github.com/attestantio/go-builder-client v0.7.2
 	github.com/attestantio/go-eth2-client v0.27.1
@@ -13,7 +14,6 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.21.1
-	github.com/prysmaticlabs/go-bitfield v0.0.0-20240618144021-706c95b2dd15
 	github.com/rs/zerolog v1.34.0
 	github.com/sasha-s/go-deadlock v0.3.6
 	github.com/shopspring/decimal v1.4.0
@@ -99,6 +99,7 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.63.0 // indirect
 	github.com/prometheus/procfs v0.16.0 // indirect
+	github.com/prysmaticlabs/go-bitfield v0.0.0-20240618144021-706c95b2dd15 // indirect
 	github.com/r3labs/sse/v2 v2.10.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
