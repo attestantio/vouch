@@ -68,21 +68,21 @@ func (s *Service) AttestationData(ctx context.Context,
 	respCh, errCh := s.issueAttestationDataRequests(hardCtx, opts, started, requests)
 	span.AddEvent("Issued requests")
 
-	attestationDataResponses := make(map[phase0.Root][]*attestationDataResponse)
-	attestationDataCounts := make(map[phase0.Root]int)
-	attestationDataProviders := make(map[phase0.Root][]string)
+	attestationDataResponses := make(map[string][]*attestationDataResponse)
+	attestationDataCounts := make(map[string]int)
+	attestationDataProviders := make(map[string][]string)
 	responded, errored := s.attestationDataLoop1(softCtx, started, requests, attestationDataResponses, attestationDataCounts, attestationDataProviders, respCh, errCh)
 	softCancel()
 
 	s.attestationDataLoop2(hardCtx, started, requests, attestationDataResponses, attestationDataCounts, attestationDataProviders, respCh, errCh, responded, errored)
 	cancel()
 
-	var bestAttestationDataRoot phase0.Root
+	var bestAttestationDataKey string
 	var bestAttestationData phase0.AttestationData
 	bestAttestationDataCount := 0
 	bestAttestationDataSlot := phase0.Slot(0)
-	for root, response := range attestationDataResponses {
-		count := attestationDataCounts[root]
+	for attestationKey, response := range attestationDataResponses {
+		count := attestationDataCounts[attestationKey]
 		slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, response[0].attestationData.BeaconBlockRoot)
 		if err != nil {
 			log.Debug().Stringer("root", response[0].attestationData.BeaconBlockRoot).Err(err).Msg("Failed to obtain attestation data head slot; assuming 0")
@@ -93,12 +93,13 @@ func (s *Service) AttestationData(ctx context.Context,
 			bestAttestationData = *response[0].attestationData
 			bestAttestationDataCount = count
 			bestAttestationDataSlot = slot
-			bestAttestationDataRoot = root
+			bestAttestationDataKey = attestationKey
 		case count == bestAttestationDataCount:
 			// Tie, take the one with the higher slot.
 			if slot > bestAttestationDataSlot {
 				bestAttestationData = *response[0].attestationData
 				bestAttestationDataSlot = slot
+				bestAttestationDataKey = attestationKey
 			}
 		default:
 			// Fewer votes than current; ignore.
@@ -133,7 +134,7 @@ func (s *Service) AttestationData(ctx context.Context,
 		Int64("head_distance", util.SlotToInt64(bestAttestationData.Slot)-util.SlotToInt64(slot)).
 		Int("count", bestAttestationDataCount).
 		Msg("Selected majority attestation data")
-	for _, provider := range attestationDataProviders[bestAttestationDataRoot] {
+	for _, provider := range attestationDataProviders[bestAttestationDataKey] {
 		s.clientMonitor.StrategyOperation("majority", provider, "attestation data", time.Since(started))
 	}
 
@@ -217,9 +218,9 @@ func (s *Service) attestationData(ctx context.Context,
 func (*Service) attestationDataLoop1(ctx context.Context,
 	started time.Time,
 	requests int,
-	attestationDataResponses map[phase0.Root][]*attestationDataResponse,
-	attestationDataCounts map[phase0.Root]int,
-	attestationDataProviders map[phase0.Root][]string,
+	attestationDataResponses map[string][]*attestationDataResponse,
+	attestationDataCounts map[string]int,
+	attestationDataProviders map[string][]string,
 	respCh chan *attestationDataResponse,
 	errCh chan *attestationDataError,
 ) (
@@ -244,20 +245,16 @@ func (*Service) attestationDataLoop1(ctx context.Context,
 				Int("responded", responded).
 				Int("errored", errored).
 				Msg("Response received")
-			attestationDataRoot, err := resp.attestationData.HashTreeRoot()
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to obtain root of attestation data")
-				continue
+			attestationKey := generateAttestationKey(resp.attestationData)
+			if _, exists := attestationDataResponses[attestationKey]; !exists {
+				attestationDataResponses[attestationKey] = make([]*attestationDataResponse, 0)
 			}
-			if _, exists := attestationDataResponses[attestationDataRoot]; !exists {
-				attestationDataResponses[attestationDataRoot] = make([]*attestationDataResponse, 0)
+			attestationDataResponses[attestationKey] = append(attestationDataResponses[attestationKey], resp)
+			attestationDataCounts[attestationKey]++
+			if attestationDataCounts[attestationKey] > largestCount {
+				largestCount = attestationDataCounts[attestationKey]
 			}
-			attestationDataResponses[attestationDataRoot] = append(attestationDataResponses[attestationDataRoot], resp)
-			attestationDataCounts[attestationDataRoot]++
-			if attestationDataCounts[attestationDataRoot] > largestCount {
-				largestCount = attestationDataCounts[attestationDataRoot]
-			}
-			attestationDataProviders[attestationDataRoot] = append(attestationDataProviders[attestationDataRoot], resp.provider)
+			attestationDataProviders[attestationKey] = append(attestationDataProviders[attestationKey], resp.provider)
 
 		case err := <-errCh:
 			errored++
@@ -285,9 +282,9 @@ func (*Service) attestationDataLoop1(ctx context.Context,
 func (*Service) attestationDataLoop2(ctx context.Context,
 	started time.Time,
 	requests int,
-	attestationDataResponses map[phase0.Root][]*attestationDataResponse,
-	attestationDataCounts map[phase0.Root]int,
-	attestationDataProviders map[phase0.Root][]string,
+	attestationDataResponses map[string][]*attestationDataResponse,
+	attestationDataCounts map[string]int,
+	attestationDataProviders map[string][]string,
 	respCh chan *attestationDataResponse,
 	errCh chan *attestationDataError,
 	responded int,
@@ -313,20 +310,16 @@ func (*Service) attestationDataLoop2(ctx context.Context,
 				Int("responded", responded).
 				Int("errored", errored).
 				Msg("Response received")
-			attestationDataRoot, err := resp.attestationData.HashTreeRoot()
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to obtain root of attestation data")
-				continue
+			attestationKey := generateAttestationKey(resp.attestationData)
+			if _, exists := attestationDataResponses[attestationKey]; !exists {
+				attestationDataResponses[attestationKey] = make([]*attestationDataResponse, 0)
 			}
-			if _, exists := attestationDataResponses[attestationDataRoot]; !exists {
-				attestationDataResponses[attestationDataRoot] = make([]*attestationDataResponse, 0)
+			attestationDataResponses[attestationKey] = append(attestationDataResponses[attestationKey], resp)
+			attestationDataCounts[attestationKey]++
+			if attestationDataCounts[attestationKey] > largestCount {
+				largestCount = attestationDataCounts[attestationKey]
 			}
-			attestationDataResponses[attestationDataRoot] = append(attestationDataResponses[attestationDataRoot], resp)
-			attestationDataCounts[attestationDataRoot]++
-			if attestationDataCounts[attestationDataRoot] > largestCount {
-				largestCount = attestationDataCounts[attestationDataRoot]
-			}
-			attestationDataProviders[attestationDataRoot] = append(attestationDataProviders[attestationDataRoot], resp.provider)
+			attestationDataProviders[attestationKey] = append(attestationDataProviders[attestationKey], resp.provider)
 		case err := <-errCh:
 			errored++
 			log.Debug().
@@ -353,4 +346,8 @@ func (*Service) attestationDataLoop2(ctx context.Context,
 		Int("responded", responded).
 		Int("errored", errored).
 		Msg("Results")
+}
+
+func generateAttestationKey(attestationData *phase0.AttestationData) string {
+	return fmt.Sprintf("%s-%s-%d", attestationData.Source.Root.String(), attestationData.Target.Root.String(), attestationData.Slot)
 }
