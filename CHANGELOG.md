@@ -1,3 +1,6 @@
+dev:
+  - update majordomo to v1.1.2
+
 1.12.0:
   - import fulu container specs from go-eth2-client
   - import fulu block handling from go-builder-client and go-block-relay
