@@ -29,7 +29,7 @@ require (
 	github.com/wealdtech/go-eth2-wallet-store-filesystem v1.18.1
 	github.com/wealdtech/go-eth2-wallet-store-scratch v1.7.2
 	github.com/wealdtech/go-eth2-wallet-types/v2 v2.12.0
-	github.com/wealdtech/go-majordomo v1.1.1
+	github.com/wealdtech/go-majordomo v1.1.2
 	go.opentelemetry.io/otel v1.35.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.35.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.35.0
