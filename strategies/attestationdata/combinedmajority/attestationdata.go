@@ -30,6 +30,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+type hashTreeRoot [32]byte
+
 type attestationDataResponse struct {
 	provider        string
 	attestationData *phase0.AttestationData
@@ -68,16 +70,16 @@ func (s *Service) AttestationData(ctx context.Context,
 	respCh, errCh := s.issueAttestationDataRequests(hardCtx, opts, started, requests)
 	span.AddEvent("Issued requests")
 
-	attestationDataResponses := make(map[string][]*attestationDataResponse)
-	attestationDataCounts := make(map[string]int)
-	attestationDataProviders := make(map[string][]string)
+	attestationDataResponses := make(map[hashTreeRoot][]*attestationDataResponse)
+	attestationDataCounts := make(map[hashTreeRoot]int)
+	attestationDataProviders := make(map[hashTreeRoot][]string)
 	responded, errored := s.attestationDataLoop1(softCtx, started, requests, attestationDataResponses, attestationDataCounts, attestationDataProviders, respCh, errCh)
 	softCancel()
 
 	s.attestationDataLoop2(hardCtx, started, requests, attestationDataResponses, attestationDataCounts, attestationDataProviders, respCh, errCh, responded, errored)
 	cancel()
 
-	var bestAttestationDataKey string
+	var bestAttestationDataKey hashTreeRoot
 	var bestAttestationData phase0.AttestationData
 	bestAttestationDataCount := 0
 	bestAttestationDataSlot := phase0.Slot(0)
@@ -232,9 +234,9 @@ func (s *Service) attestationData(ctx context.Context,
 func (*Service) attestationDataLoop1(ctx context.Context,
 	started time.Time,
 	requests int,
-	attestationDataResponses map[string][]*attestationDataResponse,
-	attestationDataCounts map[string]int,
-	attestationDataProviders map[string][]string,
+	attestationDataResponses map[hashTreeRoot][]*attestationDataResponse,
+	attestationDataCounts map[hashTreeRoot]int,
+	attestationDataProviders map[hashTreeRoot][]string,
 	respCh chan *attestationDataResponse,
 	errCh chan *attestationDataError,
 ) (
@@ -259,7 +261,11 @@ func (*Service) attestationDataLoop1(ctx context.Context,
 				Int("responded", responded).
 				Int("errored", errored).
 				Msg("Response received")
-			attestationKey := generateAttestationKey(resp.attestationData)
+			attestationKey, err := generateAttestationKey(resp.attestationData)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to obtain hash tree root for attestation data")
+				continue
+			}
 			if _, exists := attestationDataResponses[attestationKey]; !exists {
 				attestationDataResponses[attestationKey] = make([]*attestationDataResponse, 0)
 			}
@@ -304,9 +310,9 @@ func (*Service) attestationDataLoop1(ctx context.Context,
 func (*Service) attestationDataLoop2(ctx context.Context,
 	started time.Time,
 	requests int,
-	attestationDataResponses map[string][]*attestationDataResponse,
-	attestationDataCounts map[string]int,
-	attestationDataProviders map[string][]string,
+	attestationDataResponses map[hashTreeRoot][]*attestationDataResponse,
+	attestationDataCounts map[hashTreeRoot]int,
+	attestationDataProviders map[hashTreeRoot][]string,
 	respCh chan *attestationDataResponse,
 	errCh chan *attestationDataError,
 	responded int,
@@ -332,7 +338,11 @@ func (*Service) attestationDataLoop2(ctx context.Context,
 				Int("responded", responded).
 				Int("errored", errored).
 				Msg("Response received")
-			attestationKey := generateAttestationKey(resp.attestationData)
+			attestationKey, err := generateAttestationKey(resp.attestationData)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to obtain hash tree root for attestation data")
+				continue
+			}
 			if _, exists := attestationDataResponses[attestationKey]; !exists {
 				attestationDataResponses[attestationKey] = make([]*attestationDataResponse, 0)
 			}
@@ -370,6 +380,11 @@ func (*Service) attestationDataLoop2(ctx context.Context,
 		Msg("Results")
 }
 
-func generateAttestationKey(attestationData *phase0.AttestationData) string {
-	return fmt.Sprintf("%s-%s-%d", attestationData.Source.Root.String(), attestationData.Target.Root.String(), attestationData.Slot)
+// Helper function to return a hashTreeRoot with proper type alias.
+func generateAttestationKey(attestationData *phase0.AttestationData) (hashTreeRoot, error) {
+	hash, err := attestationData.HashTreeRoot()
+	if err != nil {
+		return hashTreeRoot{}, err
+	}
+	return hashTreeRoot(hash), nil
 }
