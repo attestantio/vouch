@@ -83,6 +83,7 @@ import (
 	bestaggregateattestationstrategy "github.com/attestantio/vouch/strategies/aggregateattestation/best"
 	firstaggregateattestationstrategy "github.com/attestantio/vouch/strategies/aggregateattestation/first"
 	bestattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/best"
+	combinedmajorityattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/combinedmajority"
 	firstattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/first"
 	majorityattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/majority"
 	combinedattestationpoolstrategy "github.com/attestantio/vouch/strategies/attestationpool/combined"
@@ -1249,6 +1250,30 @@ func selectAttestationDataProvider(ctx context.Context,
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start majority attestation data strategy")
 		}
+	case "combinedmajority":
+		log.Info().Msg("Starting combinedmajority attestation data strategy")
+		attestationDataProviders := make(map[string]eth2client.AttestationDataProvider)
+		for _, address := range util.BeaconNodeAddresses("strategies.attestationdata.combinedmajority") {
+			client, err := fetchClient(ctx, monitor, address)
+			if err != nil {
+				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for combinedmajority attestation data strategy", address))
+			}
+			attestationDataProviders[address] = client.(eth2client.AttestationDataProvider)
+		}
+		attestationDataProvider, err = combinedmajorityattestationdatastrategy.New(ctx,
+			combinedmajorityattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			combinedmajorityattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.combinedmajority")),
+			combinedmajorityattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.combinedmajority")),
+			combinedmajorityattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
+			combinedmajorityattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.combinedmajority")),
+			combinedmajorityattestationdatastrategy.WithChainTime(chainTime),
+			combinedmajorityattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+			combinedmajorityattestationdatastrategy.WithThreshold(viper.GetInt("strategies.attestationdata.combinedmajority.threshold")),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start combinedmajority attestation data strategy")
+		}
+
 	case "first":
 		log.Info().Msg("Starting first attestation data strategy")
 		attestationDataProviders := make(map[string]eth2client.AttestationDataProvider)
