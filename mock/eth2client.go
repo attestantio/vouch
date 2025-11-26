@@ -992,8 +992,8 @@ type CustomAttestationDataProvider struct {
 }
 
 // NewFuzzingAttestationDataProvider returns a mock attestation data provider.
-// changeSlot: how much to add to the slot, 0 for no change, positive for later, negative for earlier
-// changeRoot: whether to change the root based on the slot
+// changeSlot: how much to add to the slot, 0 for no change, positive for later, negative for earlier.
+// changeRoot: whether to change the root based on the slot.
 func NewCustomAttestationDataProvider(changeSlot int, changeRoot bool) eth2client.AttestationDataProvider {
 	return &CustomAttestationDataProvider{changeSlot: changeSlot, changeRoot: changeRoot}
 }
@@ -1006,7 +1006,7 @@ func (m *CustomAttestationDataProvider) AttestationData(_ context.Context,
 	error,
 ) {
 	slot := opts.Slot + phase0.Slot(m.changeSlot)
-	// Generate a fixed block root according to the slot
+	// Generate a fixed block root according to the slot.
 	firstByte := byte(opts.Slot & 0xff)
 	if m.changeRoot {
 		firstByte = byte(slot & 0xff)
