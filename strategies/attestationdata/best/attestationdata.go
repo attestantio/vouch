@@ -174,7 +174,7 @@ func (s *Service) AttestationData(ctx context.Context,
 		Msg("Results")
 
 	if bestAttestationData == nil {
-		return nil, errors.New("no attestations received")
+		return nil, errors.New("no attestation data received")
 	}
 	log.Trace().Str("provider", bestProvider).Stringer("attestation_data", bestAttestationData).Float64("score", bestScore).Msg("Selected best attestation")
 	if bestProvider != "" {
