@@ -280,12 +280,20 @@ func (*Service) attestationDataLoop1(ctx context.Context,
 				Err(err.err).
 				Msg("Error received")
 		case <-ctx.Done():
-			log.Debug().
-				Dur("elapsed", time.Since(started)).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", requests-responded-errored).
-				Msg("Soft timeout reached")
+			// If we have any responses at this point we consider the non-responders timed out.
+			if responded > 0 {
+				log.Debug().
+					Dur("elapsed", time.Since(started)).
+					Int("responded", responded).
+					Int("errored", errored).
+					Int("timed_out", requests-responded-errored).
+					Msg("Soft timeout reached with responses")
+			} else {
+				log.Debug().
+					Dur("elapsed", time.Since(started)).
+					Int("errored", errored).
+					Msg("Soft timeout reached with no responses")
+			}
 			return responded, errored
 		}
 	}
