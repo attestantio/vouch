@@ -25,7 +25,7 @@ import (
 	"github.com/attestantio/vouch/services/cache"
 	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
-	"github.com/attestantio/vouch/strategies/attestationdata/best"
+	"github.com/attestantio/vouch/strategies/attestationdata/majority"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -48,7 +48,7 @@ func TestAttestationData(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		params         []best.Parameter
+		params         []majority.Parameter
 		slot           phase0.Slot
 		committeeIndex phase0.CommitteeIndex
 		err            string
@@ -56,59 +56,59 @@ func TestAttestationData(t *testing.T) {
 	}{
 		{
 			name: "Good",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(2 * time.Second),
-				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
+			params: []majority.Parameter{
+				majority.WithLogLevel(zerolog.TraceLevel),
+				majority.WithTimeout(2 * time.Second),
+				majority.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
 					"good": mock.NewAttestationDataProvider(),
 				}),
-				best.WithChainTime(chainTime),
-				best.WithBlockRootToSlotCache(cache),
+				majority.WithChainTime(chainTime),
+				majority.WithBlockRootToSlotCache(cache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
 		},
 		{
 			name: "Timeout",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(time.Second),
-				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
+			params: []majority.Parameter{
+				majority.WithLogLevel(zerolog.TraceLevel),
+				majority.WithTimeout(time.Second),
+				majority.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
 					"sleepy": mock.NewSleepyAttestationDataProvider(5*time.Second, mock.NewAttestationDataProvider()),
 				}),
-				best.WithChainTime(chainTime),
-				best.WithBlockRootToSlotCache(cache),
+				majority.WithChainTime(chainTime),
+				majority.WithBlockRootToSlotCache(cache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
-			err:            "no attestations received",
+			err:            "no attestation data received",
 		},
 		{
 			name: "GoodMixed",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(2 * time.Second),
-				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
+			params: []majority.Parameter{
+				majority.WithLogLevel(zerolog.TraceLevel),
+				majority.WithTimeout(2 * time.Second),
+				majority.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
 					"error":  mock.NewErroringAttestationDataProvider(),
 					"sleepy": mock.NewSleepyAttestationDataProvider(time.Second, mock.NewAttestationDataProvider()),
 				}),
-				best.WithChainTime(chainTime),
-				best.WithBlockRootToSlotCache(cache),
+				majority.WithChainTime(chainTime),
+				majority.WithBlockRootToSlotCache(cache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
 		},
 		{
 			name: "SoftTimeoutWithResponses",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(3 * time.Second),
-				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
+			params: []majority.Parameter{
+				majority.WithLogLevel(zerolog.TraceLevel),
+				majority.WithTimeout(3 * time.Second),
+				majority.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
 					"good":   mock.NewAttestationDataProvider(),
 					"sleepy": mock.NewSleepyAttestationDataProvider(2*time.Second, mock.NewAttestationDataProvider()),
 				}),
-				best.WithChainTime(chainTime),
-				best.WithBlockRootToSlotCache(cache),
+				majority.WithChainTime(chainTime),
+				majority.WithBlockRootToSlotCache(cache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -116,14 +116,14 @@ func TestAttestationData(t *testing.T) {
 		},
 		{
 			name: "SoftTimeoutWithoutResponses",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(3 * time.Second),
-				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
+			params: []majority.Parameter{
+				majority.WithLogLevel(zerolog.TraceLevel),
+				majority.WithTimeout(3 * time.Second),
+				majority.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
 					"sleepy": mock.NewSleepyAttestationDataProvider(2*time.Second, mock.NewAttestationDataProvider()),
 				}),
-				best.WithChainTime(chainTime),
-				best.WithBlockRootToSlotCache(cache),
+				majority.WithChainTime(chainTime),
+				majority.WithBlockRootToSlotCache(cache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -131,15 +131,15 @@ func TestAttestationData(t *testing.T) {
 		},
 		{
 			name: "SoftTimeoutWithError",
-			params: []best.Parameter{
-				best.WithLogLevel(zerolog.TraceLevel),
-				best.WithTimeout(3 * time.Second),
-				best.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
+			params: []majority.Parameter{
+				majority.WithLogLevel(zerolog.TraceLevel),
+				majority.WithTimeout(3 * time.Second),
+				majority.WithAttestationDataProviders(map[string]eth2client.AttestationDataProvider{
 					"error":  mock.NewErroringAttestationDataProvider(),
 					"sleepy": mock.NewSleepyAttestationDataProvider(2*time.Second, mock.NewAttestationDataProvider()),
 				}),
-				best.WithChainTime(chainTime),
-				best.WithBlockRootToSlotCache(cache),
+				majority.WithChainTime(chainTime),
+				majority.WithBlockRootToSlotCache(cache),
 			},
 			slot:           12345,
 			committeeIndex: 3,
@@ -150,7 +150,7 @@ func TestAttestationData(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			capture := logger.NewLogCapture()
-			s, err := best.New(context.Background(), test.params...)
+			s, err := majority.New(context.Background(), test.params...)
 			require.NoError(t, err)
 			attestationData, err := s.AttestationData(context.Background(), &api.AttestationDataOpts{
 				Slot:           test.slot,

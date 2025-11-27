@@ -81,7 +81,7 @@ func TestAttestationData(t *testing.T) {
 			},
 			slot:           12345,
 			committeeIndex: 3,
-			err:            "no attestations received",
+			err:            "no attestation data received",
 		},
 		{
 			name: "GoodMixed",

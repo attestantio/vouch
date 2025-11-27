@@ -1,5 +1,6 @@
 dev:
   - update majordomo to v1.1.2
+  - add combinedmajority attestationdata strategy
 
 1.12.0:
   - import fulu container specs from go-eth2-client
