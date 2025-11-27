@@ -32,6 +32,12 @@ import (
 
 type hashTreeRoot [32]byte
 
+type attestationDataHead struct {
+	sourceRoot hashTreeRoot
+	targetRoot hashTreeRoot
+	slot       phase0.Slot
+}
+
 type attestationDataResponse struct {
 	provider        string
 	attestationData *phase0.AttestationData
@@ -70,55 +76,68 @@ func (s *Service) AttestationData(ctx context.Context,
 	respCh, errCh := s.issueAttestationDataRequests(hardCtx, opts, started, requests)
 	span.AddEvent("Issued requests")
 
-	attestationDataResponses := make(map[hashTreeRoot][]*attestationDataResponse)
-	attestationDataCounts := make(map[hashTreeRoot]int)
-	attestationDataProviders := make(map[hashTreeRoot][]string)
+	attestationDataResponses := make(map[attestationDataHead][]*attestationDataResponse)
+	attestationDataCounts := make(map[attestationDataHead]int)
+	attestationDataProviders := make(map[attestationDataHead][]string)
 	responded, errored := s.attestationDataLoop1(softCtx, started, requests, attestationDataResponses, attestationDataCounts, attestationDataProviders, respCh, errCh)
 	softCancel()
 
 	s.attestationDataLoop2(hardCtx, started, requests, attestationDataResponses, attestationDataCounts, attestationDataProviders, respCh, errCh, responded, errored)
 	cancel()
 
-	var bestAttestationDataKey hashTreeRoot
+	var bestAttestationDataKey attestationDataHead
 	var bestAttestationData phase0.AttestationData
 	bestAttestationDataCount := 0
 	bestAttestationDataSlot := phase0.Slot(0)
-	for attestationKey, responses := range attestationDataResponses {
-		count := attestationDataCounts[attestationKey]
-		switch {
-		case count > bestAttestationDataCount:
-			// New majority.
-			// Iterate through the head slots to find the highest.
-			for _, response := range responses {
-				slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, response.attestationData.BeaconBlockRoot)
-				if err != nil {
-					log.Debug().Stringer("root", responses[0].attestationData.BeaconBlockRoot).Err(err).Msg("Failed to obtain attestation data head slot; assuming 0")
-					continue
-				}
-				if slot > bestAttestationDataSlot {
-					bestAttestationDataSlot = slot
-					bestAttestationData = *response.attestationData
-				}
-			}
-			bestAttestationDataCount = count
-			bestAttestationDataKey = attestationKey
-		case count == bestAttestationDataCount:
-			// Tie, take the one with the higher slot.
-			// Iterate through the head slots to find the highest.
-			for _, response := range responses {
-				slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, response.attestationData.BeaconBlockRoot)
-				if err != nil {
-					log.Debug().Stringer("root", responses[0].attestationData.BeaconBlockRoot).Err(err).Msg("Failed to obtain attestation data head slot; assuming 0")
-					continue
-				}
-				if slot > bestAttestationDataSlot {
-					bestAttestationDataSlot = slot
-					bestAttestationData = *response.attestationData
-					bestAttestationDataKey = attestationKey
-				}
-			}
-		default:
+	for key, responses := range attestationDataResponses {
+		count := attestationDataCounts[key]
+		if count < bestAttestationDataCount {
 			// Fewer votes than current; ignore.
+			continue
+		}
+
+		// Find the head with the most votes within this group.
+		headCounts := make(map[phase0.Root]int)
+		headSlots := make(map[phase0.Root]phase0.Slot)
+		for _, response := range responses {
+			head := response.attestationData.BeaconBlockRoot
+			headCounts[head]++
+			// Only look up the slot once per unique head to avoid redundant cache queries.
+			if _, exists := headSlots[head]; !exists {
+				slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, head)
+				if err != nil {
+					log.Debug().Stringer("root", head).Err(err).Msg("Failed to obtain attestation data head slot; assuming 0")
+					slot = 0
+				}
+				headSlots[head] = slot
+			}
+		}
+
+		// Select the head with the most votes, tie-breaking on highest slot.
+		bestHeadCount := 0
+		var bestHead phase0.Root
+		bestHeadSlot := phase0.Slot(0)
+		for head, headCount := range headCounts {
+			headSlot := headSlots[head]
+			if headCount > bestHeadCount || (headCount == bestHeadCount && headSlot > bestHeadSlot) {
+				bestHeadCount = headCount
+				bestHead = head
+				bestHeadSlot = headSlot
+			}
+		}
+
+		// Update best if this group is better.
+		if count > bestAttestationDataCount || (count == bestAttestationDataCount && bestHeadSlot > bestAttestationDataSlot) {
+			// Find the response with the best head.
+			for _, response := range responses {
+				if response.attestationData.BeaconBlockRoot == bestHead {
+					bestAttestationData = *response.attestationData
+					bestAttestationDataSlot = bestHeadSlot
+					bestAttestationDataCount = count
+					bestAttestationDataKey = key
+					break
+				}
+			}
 		}
 	}
 
@@ -140,14 +159,10 @@ func (s *Service) AttestationData(ctx context.Context,
 
 		return nil, fmt.Errorf("majority attestation data count of %d lower than threshold %d", bestAttestationDataCount, s.threshold)
 	}
-	slot, err := s.blockRootToSlotCache.BlockRootToSlot(ctx, bestAttestationData.BeaconBlockRoot)
-	if err != nil {
-		log.Debug().Stringer("root", bestAttestationData.BeaconBlockRoot).Err(err).Msg("Failed to obtain best attestation data head slot; assuming 0")
-	}
 	log.Trace().
 		Dur("elapsed", time.Since(started)).
 		Stringer("attestation_data", &bestAttestationData).
-		Int64("head_distance", util.SlotToInt64(bestAttestationData.Slot)-util.SlotToInt64(slot)).
+		Int64("head_distance", util.SlotToInt64(bestAttestationData.Slot)-util.SlotToInt64(bestAttestationDataSlot)).
 		Int("count", bestAttestationDataCount).
 		Msg("Selected majority attestation data")
 	for _, provider := range attestationDataProviders[bestAttestationDataKey] {
@@ -234,9 +249,9 @@ func (s *Service) attestationData(ctx context.Context,
 func (*Service) attestationDataLoop1(ctx context.Context,
 	started time.Time,
 	requests int,
-	attestationDataResponses map[hashTreeRoot][]*attestationDataResponse,
-	attestationDataCounts map[hashTreeRoot]int,
-	attestationDataProviders map[hashTreeRoot][]string,
+	attestationDataResponses map[attestationDataHead][]*attestationDataResponse,
+	attestationDataCounts map[attestationDataHead]int,
+	attestationDataProviders map[attestationDataHead][]string,
 	respCh chan *attestationDataResponse,
 	errCh chan *attestationDataError,
 ) (
@@ -261,20 +276,20 @@ func (*Service) attestationDataLoop1(ctx context.Context,
 				Int("responded", responded).
 				Int("errored", errored).
 				Msg("Response received")
-			attestationKey, err := generateAttestationKey(resp.attestationData)
+			attestationDataHead, err := generateattestationDataHead(resp.attestationData)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain hash tree root for attestation data")
 				continue
 			}
-			if _, exists := attestationDataResponses[attestationKey]; !exists {
-				attestationDataResponses[attestationKey] = make([]*attestationDataResponse, 0)
+			if _, exists := attestationDataResponses[attestationDataHead]; !exists {
+				attestationDataResponses[attestationDataHead] = make([]*attestationDataResponse, 0)
 			}
-			attestationDataResponses[attestationKey] = append(attestationDataResponses[attestationKey], resp)
-			attestationDataCounts[attestationKey]++
-			if attestationDataCounts[attestationKey] > largestCount {
-				largestCount = attestationDataCounts[attestationKey]
+			attestationDataResponses[attestationDataHead] = append(attestationDataResponses[attestationDataHead], resp)
+			attestationDataCounts[attestationDataHead]++
+			if attestationDataCounts[attestationDataHead] > largestCount {
+				largestCount = attestationDataCounts[attestationDataHead]
 			}
-			attestationDataProviders[attestationKey] = append(attestationDataProviders[attestationKey], resp.provider)
+			attestationDataProviders[attestationDataHead] = append(attestationDataProviders[attestationDataHead], resp.provider)
 
 		case err := <-errCh:
 			errored++
@@ -310,9 +325,9 @@ func (*Service) attestationDataLoop1(ctx context.Context,
 func (*Service) attestationDataLoop2(ctx context.Context,
 	started time.Time,
 	requests int,
-	attestationDataResponses map[hashTreeRoot][]*attestationDataResponse,
-	attestationDataCounts map[hashTreeRoot]int,
-	attestationDataProviders map[hashTreeRoot][]string,
+	attestationDataResponses map[attestationDataHead][]*attestationDataResponse,
+	attestationDataCounts map[attestationDataHead]int,
+	attestationDataProviders map[attestationDataHead][]string,
 	respCh chan *attestationDataResponse,
 	errCh chan *attestationDataError,
 	responded int,
@@ -338,20 +353,20 @@ func (*Service) attestationDataLoop2(ctx context.Context,
 				Int("responded", responded).
 				Int("errored", errored).
 				Msg("Response received")
-			attestationKey, err := generateAttestationKey(resp.attestationData)
+			attestationDataHead, err := generateattestationDataHead(resp.attestationData)
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to obtain hash tree root for attestation data")
 				continue
 			}
-			if _, exists := attestationDataResponses[attestationKey]; !exists {
-				attestationDataResponses[attestationKey] = make([]*attestationDataResponse, 0)
+			if _, exists := attestationDataResponses[attestationDataHead]; !exists {
+				attestationDataResponses[attestationDataHead] = make([]*attestationDataResponse, 0)
 			}
-			attestationDataResponses[attestationKey] = append(attestationDataResponses[attestationKey], resp)
-			attestationDataCounts[attestationKey]++
-			if attestationDataCounts[attestationKey] > largestCount {
-				largestCount = attestationDataCounts[attestationKey]
+			attestationDataResponses[attestationDataHead] = append(attestationDataResponses[attestationDataHead], resp)
+			attestationDataCounts[attestationDataHead]++
+			if attestationDataCounts[attestationDataHead] > largestCount {
+				largestCount = attestationDataCounts[attestationDataHead]
 			}
-			attestationDataProviders[attestationKey] = append(attestationDataProviders[attestationKey], resp.provider)
+			attestationDataProviders[attestationDataHead] = append(attestationDataProviders[attestationDataHead], resp.provider)
 		case err := <-errCh:
 			errored++
 			log.Debug().
@@ -380,11 +395,18 @@ func (*Service) attestationDataLoop2(ctx context.Context,
 		Msg("Results")
 }
 
-// Helper function to return a hashTreeRoot with proper type alias.
-func generateAttestationKey(attestationData *phase0.AttestationData) (hashTreeRoot, error) {
-	hash, err := attestationData.HashTreeRoot()
+func generateattestationDataHead(attestationData *phase0.AttestationData) (attestationDataHead, error) {
+	sourceRoot, err := attestationData.Source.HashTreeRoot()
 	if err != nil {
-		return hashTreeRoot{}, err
+		return attestationDataHead{}, err
 	}
-	return hashTreeRoot(hash), nil
+	targetRoot, err := attestationData.Target.HashTreeRoot()
+	if err != nil {
+		return attestationDataHead{}, err
+	}
+	return attestationDataHead{
+		sourceRoot: sourceRoot,
+		targetRoot: targetRoot,
+		slot:       attestationData.Slot,
+	}, nil
 }
