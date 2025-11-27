@@ -30,12 +30,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type hashTreeRoot [32]byte
-
 type attestationDataHead struct {
-	sourceRoot hashTreeRoot
-	targetRoot hashTreeRoot
-	slot       phase0.Slot
+	source phase0.Checkpoint
+	target phase0.Checkpoint
+	slot   phase0.Slot
 }
 
 type attestationDataResponse struct {
@@ -276,11 +274,7 @@ func (*Service) attestationDataLoop1(ctx context.Context,
 				Int("responded", responded).
 				Int("errored", errored).
 				Msg("Response received")
-			attestationDataHead, err := generateattestationDataHead(resp.attestationData)
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to obtain hash tree root for attestation data")
-				continue
-			}
+			attestationDataHead := generateattestationDataHead(resp.attestationData)
 			if _, exists := attestationDataResponses[attestationDataHead]; !exists {
 				attestationDataResponses[attestationDataHead] = make([]*attestationDataResponse, 0)
 			}
@@ -353,11 +347,7 @@ func (*Service) attestationDataLoop2(ctx context.Context,
 				Int("responded", responded).
 				Int("errored", errored).
 				Msg("Response received")
-			attestationDataHead, err := generateattestationDataHead(resp.attestationData)
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to obtain hash tree root for attestation data")
-				continue
-			}
+			attestationDataHead := generateattestationDataHead(resp.attestationData)
 			if _, exists := attestationDataResponses[attestationDataHead]; !exists {
 				attestationDataResponses[attestationDataHead] = make([]*attestationDataResponse, 0)
 			}
@@ -395,18 +385,10 @@ func (*Service) attestationDataLoop2(ctx context.Context,
 		Msg("Results")
 }
 
-func generateattestationDataHead(attestationData *phase0.AttestationData) (attestationDataHead, error) {
-	sourceRoot, err := attestationData.Source.HashTreeRoot()
-	if err != nil {
-		return attestationDataHead{}, err
-	}
-	targetRoot, err := attestationData.Target.HashTreeRoot()
-	if err != nil {
-		return attestationDataHead{}, err
-	}
+func generateattestationDataHead(attestationData *phase0.AttestationData) attestationDataHead {
 	return attestationDataHead{
-		sourceRoot: sourceRoot,
-		targetRoot: targetRoot,
-		slot:       attestationData.Slot,
-	}, nil
+		source: *attestationData.Source,
+		target: *attestationData.Target,
+		slot:   attestationData.Slot,
+	}
 }
