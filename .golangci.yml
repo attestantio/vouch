@@ -91,9 +91,11 @@ linters:
     - gochecknoglobals
     - gocognit
     - goconst
+    - godoclint
     - iface
     - ireturn
     - lll
+    - modernize
     - mnd
     - nestif
     - nilnil
