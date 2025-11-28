@@ -141,13 +141,14 @@ strategies:
   # The attestationdata strategy obtains attestation data from multiple sources.
   attestationdata:
     # style can be 'best', which obtains attestation data from all nodes and selects the best, 'first', which uses the first returned,
-    # or 'majority', which obtains attestation data from all nodes and selects the most common.
+    # 'majority', which obtains attestation data from all nodes and selects the most common, 'combinedmajority, which obtains attestation
+    # data from all nodes and groups data by source/target/slot, and then selects the best head within the winning group.
     style: 'best'
     # beacon-node-addresses are the addresses from which to receive attestation data.
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
     majority:
       # threshold is the minimum number of beacon nodes that have to provide the same attestation data for Vouch with the 'majority'
-      # strategy to use it.
+      # and 'combinedmajority' strategy to use it.
       threshold: 2
   # The aggregateattestation strategy obtains aggregate attestations from multiple sources.
   # Note that the list of nodes here must be a subset of those in the attestationdata strategy.  If not, the nodes will not have
