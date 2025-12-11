@@ -3,15 +3,15 @@ module github.com/attestantio/vouch
 go 1.25
 
 require (
-	github.com/attestantio/go-block-relay v0.5.2-0.20251201123338-8724e90e98aa
+	github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506
+	github.com/attestantio/go-block-relay v0.5.2-0.20251211135214-1888f2f094ef
 	github.com/attestantio/go-builder-client v0.0.0-20251201122123-100ac243d604
-	github.com/attestantio/go-eth2-client v0.27.2
+	github.com/attestantio/go-eth2-client v0.28.0
 	github.com/aws/aws-sdk-go v1.55.6
 	github.com/holiman/uint256 v1.3.2
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.21.1
-	github.com/prysmaticlabs/go-bitfield v0.0.0-20240618144021-706c95b2dd15
 	github.com/rs/zerolog v1.34.0
 	github.com/sasha-s/go-deadlock v0.3.6
 	github.com/shopspring/decimal v1.4.0

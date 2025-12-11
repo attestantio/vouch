@@ -15,10 +15,12 @@ package standard
 
 import (
 	"context"
-	"github.com/attestantio/go-eth2-client/spec"
 	"testing"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec"
+
+	"github.com/OffchainLabs/go-bitfield"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
@@ -27,7 +29,6 @@ import (
 	prometheusmetrics "github.com/attestantio/vouch/services/metrics/prometheus"
 	mocksigner "github.com/attestantio/vouch/services/signer/mock"
 	"github.com/attestantio/vouch/testing/logger"
-	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
