@@ -180,7 +180,7 @@ func (s *Service) submitProposal(ctx context.Context,
 
 			log.Trace().Msg("Block submitted")
 			// Acquire the semaphore to confirm that a block has been received.
-			// Use TryAcquire in case two providers return the block at the same time.
+			// Use TryAcquire in case two providers receive the block at the same time.
 			if sem.TryAcquire(1) {
 				ch <- 0
 			}
