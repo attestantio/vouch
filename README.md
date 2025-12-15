@@ -3,7 +3,7 @@
 [![Tag](https://img.shields.io/github/tag/attestantio/vouch.svg)](https://github.com/attestantio/vouch/releases/)
 [![License](https://img.shields.io/github/license/attestantio/vouch.svg)](LICENSE)
 [![GoDoc](https://godoc.org/github.com/attestantio/vouch?status.svg)](https://godoc.org/github.com/attestantio/vouch)
-![Lint](https://github.com/attestantio/vouch/workflows/golangci-lint/badge.svg)
+[![Lint](https://github.com/attestantio/vouch/workflows/golangci-lint/badge.svg)](https://github.com/attestantio/vouch/actions/workflows/golangci-lint.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/attestantio/vouch)](https://goreportcard.com/report/github.com/attestantio/vouch)
 
 An Ethereum 2 multi-node validator client.
