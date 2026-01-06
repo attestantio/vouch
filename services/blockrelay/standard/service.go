@@ -170,6 +170,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		restdaemon.WithBlockAuctioneer(s),
 		restdaemon.WithBlockUnblinder(s),
 		restdaemon.WithBuilderBidProvider(s),
+		restdaemon.WithBlockSubmitter(s),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create REST API daemon")

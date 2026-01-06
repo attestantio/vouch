@@ -150,6 +150,8 @@ func (s *Service) proposeBlock(ctx context.Context,
 			monitorBestBidRelayCount(len(auctionResults.Providers))
 		}
 	}
+	// What shall we do if s.blockAuctioneer is nil?
+	// if the signed proposal is blinded then we assume the are auction results.
 
 	proposalResponse, err := s.proposalProvider.Proposal(ctx, &api.ProposalOpts{
 		Slot:               duty.Slot(),
@@ -177,29 +179,15 @@ func (s *Service) proposeBlock(ctx context.Context,
 	}
 
 	if signedProposal.Blinded {
-		// Select the relays to unblind the proposal.
-		providers := make([]builderclient.UnblindedProposalProvider, 0, len(auctionResults.AllProviders))
-		unblindingCandidates := auctionResults.Providers
-		if len(unblindingCandidates) == 0 || s.unblindFromAllRelays {
-			s.log.Trace().Int("providers", len(auctionResults.AllProviders)).Msg("Unblinding from all providers")
-			unblindingCandidates = auctionResults.AllProviders
-		}
-
-		for _, provider := range unblindingCandidates {
-			unblindedProposalProvider, isProvider := provider.(builderclient.UnblindedProposalProvider)
-			if !isProvider {
-				s.log.Warn().Str("provider", provider.Name()).Msg("Auctioneer cannot unblind the proposal")
-				continue
+		if err := s.submitBlindedProposal(ctx, auctionResults, signedProposal); err != nil {
+			s.log.Error().Err(err).Msg("Failed to submit blinded block using the /eth/v2/builder/blinded_blocks endpoint. Attempting with v1...")
+			if err := s.submitAndUnblindProposal(ctx, auctionResults, signedProposal); err != nil {
+				return errors.Wrap(err, "failed to unblind block using the /eth/v1/builder/blinded_blocks endpoint")
 			}
-			providers = append(providers, unblindedProposalProvider)
 		}
-		if len(providers) == 0 {
-			return errors.New("no relays to unblind the block")
-		}
-
-		s.log.Trace().Int("providers", len(providers)).Msg("Obtained relays that can unblind the proposal")
-		if err := s.unblindProposal(ctx, signedProposal, providers); err != nil {
-			return errors.Wrap(err, "failed to unblind block")
+		if signedProposal.Blinded {
+			// v2 endpoint was successful and the relay is responsible for publishing the signed unblinded block proposal.
+			return nil
 		}
 	}
 
@@ -411,9 +399,10 @@ func (s *Service) unblindProposal(ctx context.Context,
 			retryInterval := 250 * time.Millisecond
 
 			var signedProposalResponse *builderapi.Response[*api.VersionedSignedProposal]
-			var err error
+			var lastErr error
 			for retries := 3; retries > 0; retries-- {
 				// Unblind the blinded block.
+				var err error
 				signedProposalResponse, err = provider.UnblindProposal(ctx, &builderapi.UnblindProposalOpts{
 					Proposal: &api.VersionedSignedBlindedProposal{
 						Version:   proposal.Version,
@@ -434,6 +423,7 @@ func (s *Service) unblindProposal(ctx context.Context,
 				sem.Release(1)
 
 				if err != nil {
+					lastErr = err
 					log.Debug().Err(err).Int("retries", retries).Msg("Failed to unblind block")
 					if strings.Contains(err.Error(), "POST failed with status 400") {
 						log.Debug().Msg("Responded with 400; not trying again as relay does not know of the payload")
@@ -442,10 +432,18 @@ func (s *Service) unblindProposal(ctx context.Context,
 					time.Sleep(retryInterval)
 					continue
 				}
+				// Success - break out of retry loop.
+				lastErr = nil
 				break
 			}
-			if signedProposalResponse == nil {
-				log.Debug().Msg("No signed block received")
+
+			// Only proceed if we succeeded or if nil response after retries.
+			if signedProposalResponse == nil || lastErr != nil {
+				if lastErr != nil {
+					log.Debug().Err(lastErr).Msg("All retry attempts failed")
+				} else {
+					log.Debug().Msg("No signed block received")
+				}
 				return
 			}
 
@@ -491,4 +489,152 @@ func (s *Service) unblindProposal(ctx context.Context,
 
 		return nil
 	}
+}
+
+// submitAndUnblindProposal submit the signed blinded block (proposal) to a Relay
+// and get the block unblinded in return. Assumes the Relay supports the /eth/v1/builder/blinded_blocks
+// endpoint, which should be deprecated after Fusaka.
+// This method modifies signedProposal and marks it as Blinded: false if successful.
+func (s *Service) submitAndUnblindProposal(ctx context.Context,
+	auctionResults *blockauctioneer.Results,
+	signedProposal *api.VersionedSignedProposal,
+) error {
+	// Select the relays to unblind the proposal.
+	providers := make([]builderclient.UnblindedProposalProvider, 0, len(auctionResults.AllProviders))
+	unblindingCandidates := auctionResults.Providers
+	if len(unblindingCandidates) == 0 || s.unblindFromAllRelays {
+		s.log.Trace().Int("providers", len(auctionResults.AllProviders)).Msg("Unblinding from all providers")
+		unblindingCandidates = auctionResults.AllProviders
+	}
+
+	for _, provider := range unblindingCandidates {
+		unblindedProposalProvider, isProvider := provider.(builderclient.UnblindedProposalProvider)
+		if !isProvider {
+			s.log.Warn().Str("provider", provider.Name()).Msg("Auctioneer cannot unblind the proposal")
+			continue
+		}
+		providers = append(providers, unblindedProposalProvider)
+	}
+	if len(providers) == 0 {
+		return errors.New("no relays to unblind the block")
+	}
+
+	s.log.Trace().Int("providers", len(providers)).Msg("Obtained relays that can unblind the proposal")
+	if err := s.unblindProposal(ctx, signedProposal, providers); err != nil {
+		return errors.Wrap(err, "failed to unblind block")
+	}
+	return nil
+}
+
+func (s *Service) submitProposal(ctx context.Context,
+	proposal *api.VersionedSignedProposal,
+	providers []builderclient.SubmitBlindedProposalProvider,
+) error {
+	// We do not create a cancelable context, as if we do cancel the later-returning providers they will mark themselves
+	// as failed even if they are just running a little slow, which isn't a useful thing to do.  Instead, we use a
+	// semaphore to track if a signed block has been returned by any provider.
+	sem := semaphore.NewWeighted(1)
+
+	statusCh := make(chan byte, 1)
+	for _, provider := range providers {
+		go func(ctx context.Context, provider builderclient.SubmitBlindedProposalProvider, ch chan byte) {
+			log := s.log.With().Str("provider", provider.Address()).Logger()
+			log.Trace().Msg("Submitting signed blinded block to provider")
+
+			// As we cannot fall back we move to a retry system.
+			retryInterval := 250 * time.Millisecond
+
+			var lastErr error
+			for retries := 3; retries > 0; retries-- {
+				// Unblind the blinded block.
+				err := provider.SubmitBlindedProposal(ctx, &builderapi.SubmitBlindedProposalOpts{
+					Proposal: &api.VersionedSignedBlindedProposal{
+						Version:   proposal.Version,
+						Bellatrix: proposal.BellatrixBlinded,
+						Capella:   proposal.CapellaBlinded,
+						Deneb:     proposal.DenebBlinded,
+						Electra:   proposal.ElectraBlinded,
+						Fulu:      proposal.FuluBlinded,
+					},
+				})
+
+				if !sem.TryAcquire(1) {
+					// We failed to acquire the semaphore, which means another relay has responded already.
+					// As such, we can leave without going any further.
+					log.Trace().Msg("Another relay has already responded")
+					return
+				}
+				sem.Release(1)
+
+				if err != nil {
+					lastErr = err
+					log.Debug().Err(err).Int("retries", retries).Msg("Failed to unblind block")
+					if strings.Contains(err.Error(), "POST failed with status 404") {
+						log.Debug().Msg("Responded with 404; not trying again as relay is not accepting the block or does not supports /eth/v2/builder/blinded_blocks")
+						return
+					}
+					time.Sleep(retryInterval)
+					continue
+				}
+				// Success - break out of retry loop.
+				lastErr = nil
+				break
+			}
+
+			// Only send success if the last attempt succeeded.
+			if lastErr != nil {
+				log.Debug().Err(lastErr).Msg("All retry attempts failed")
+				return
+			}
+
+			log.Trace().Msg("Submitted signed blinded block to relay")
+			// Acquire the semaphore to confirm that a block has been submitted.
+			// Use TryAcquire in case two providers receive the block at the same time.
+			sem.TryAcquire(1)
+			ch <- 0
+		}(ctx, provider, statusCh)
+	}
+
+	select {
+	case <-ctx.Done():
+		s.log.Warn().Msg("Failed to submit blinded block to relay")
+		return errors.New("failed to submit blinded block to relay")
+	case <-statusCh:
+		return nil
+	}
+}
+
+// submitBlindedProposal submit the signed blinded block (proposal) to a Relay,
+// assuming that the Relay will publish the signed unblinded block to the network.
+// Assumes the Relay supports the /eth/v2/builder/blinded_blocks endpoint, which
+// is supported since Fusaka.
+func (s *Service) submitBlindedProposal(ctx context.Context,
+	auctionResults *blockauctioneer.Results,
+	signedProposal *api.VersionedSignedProposal,
+) error {
+	// Select the relays to submit the proposal.
+	providers := make([]builderclient.SubmitBlindedProposalProvider, 0, len(auctionResults.AllProviders))
+	submittingCandidates := auctionResults.Providers
+	if len(submittingCandidates) == 0 || s.unblindFromAllRelays {
+		s.log.Trace().Int("providers", len(auctionResults.AllProviders)).Msg("Unblinding from all providers")
+		submittingCandidates = auctionResults.AllProviders
+	}
+
+	for _, provider := range submittingCandidates {
+		submittingProposalProvider, isProvider := provider.(builderclient.SubmitBlindedProposalProvider)
+		if !isProvider {
+			s.log.Warn().Str("provider", provider.Name()).Msg("Cannot submit the blinded proposal to auctioneer")
+			continue
+		}
+		providers = append(providers, submittingProposalProvider)
+	}
+	if len(providers) == 0 {
+		return errors.New("no relays to submit the blinded block to")
+	}
+
+	s.log.Trace().Int("providers", len(providers)).Msg("Obtained relays that can receive the blinded proposal")
+	if err := s.submitProposal(ctx, signedProposal, providers); err != nil {
+		return err
+	}
+	return nil
 }
