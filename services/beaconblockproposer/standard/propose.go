@@ -399,9 +399,10 @@ func (s *Service) unblindProposal(ctx context.Context,
 			retryInterval := 250 * time.Millisecond
 
 			var signedProposalResponse *builderapi.Response[*api.VersionedSignedProposal]
-			var err error
+			var lastErr error
 			for retries := 3; retries > 0; retries-- {
 				// Unblind the blinded block.
+				var err error
 				signedProposalResponse, err = provider.UnblindProposal(ctx, &builderapi.UnblindProposalOpts{
 					Proposal: &api.VersionedSignedBlindedProposal{
 						Version:   proposal.Version,
@@ -422,6 +423,7 @@ func (s *Service) unblindProposal(ctx context.Context,
 				sem.Release(1)
 
 				if err != nil {
+					lastErr = err
 					log.Debug().Err(err).Int("retries", retries).Msg("Failed to unblind block")
 					if strings.Contains(err.Error(), "POST failed with status 400") {
 						log.Debug().Msg("Responded with 400; not trying again as relay does not know of the payload")
@@ -430,10 +432,18 @@ func (s *Service) unblindProposal(ctx context.Context,
 					time.Sleep(retryInterval)
 					continue
 				}
+				// Success - break out of retry loop
+				lastErr = nil
 				break
 			}
-			if signedProposalResponse == nil {
-				log.Debug().Msg("No signed block received")
+
+			// Only proceed if we succeeded or if nil response after retries
+			if signedProposalResponse == nil || lastErr != nil {
+				if lastErr != nil {
+					log.Debug().Err(lastErr).Msg("All retry attempts failed")
+				} else {
+					log.Debug().Msg("No signed block received")
+				}
 				return
 			}
 
@@ -534,6 +544,7 @@ func (s *Service) submitProposal(ctx context.Context,
 			// As we cannot fall back we move to a retry system.
 			retryInterval := 250 * time.Millisecond
 
+			var lastErr error
 			for retries := 3; retries > 0; retries-- {
 				// Unblind the blinded block.
 				err := provider.SubmitBlindedProposal(ctx, &builderapi.SubmitBlindedProposalOpts{
@@ -556,6 +567,7 @@ func (s *Service) submitProposal(ctx context.Context,
 				sem.Release(1)
 
 				if err != nil {
+					lastErr = err
 					log.Debug().Err(err).Int("retries", retries).Msg("Failed to unblind block")
 					if strings.Contains(err.Error(), "POST failed with status 404") {
 						// TODO: Confirm real status code returned by the relay, and,
@@ -566,8 +578,17 @@ func (s *Service) submitProposal(ctx context.Context,
 					time.Sleep(retryInterval)
 					continue
 				}
+				// Success - break out of retry loop
+				lastErr = nil
 				break
 			}
+
+			// Only send success if the last attempt succeeded
+			if lastErr != nil {
+				log.Debug().Err(lastErr).Msg("All retry attempts failed")
+				return
+			}
+
 			log.Trace().Msg("Submitted signed blinded block to relay")
 			// Acquire the semaphore to confirm that a block has been submitted.
 			// Use TryAcquire in case two providers receive the block at the same time.
