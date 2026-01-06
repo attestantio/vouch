@@ -22,7 +22,6 @@ import (
 
 	builderapi "github.com/attestantio/go-builder-client/api"
 	builderspec "github.com/attestantio/go-builder-client/spec"
-	api "github.com/attestantio/go-eth2-client/api"
 	consensusapi "github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
@@ -296,6 +295,6 @@ func (c *CombinedProvider) SubmitBlindedProposal(ctx context.Context, opts *buil
 }
 
 // UnblindProposal delegates to the UnblindProvider.
-func (c *CombinedProvider) UnblindProposal(ctx context.Context, opts *builderapi.UnblindProposalOpts) (*builderapi.Response[*api.VersionedSignedProposal], error) {
+func (c *CombinedProvider) UnblindProposal(ctx context.Context, opts *builderapi.UnblindProposalOpts) (*builderapi.Response[*consensusapi.VersionedSignedProposal], error) {
 	return c.UnblindProvider.UnblindProposal(ctx, opts)
 }

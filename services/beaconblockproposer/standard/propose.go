@@ -150,7 +150,7 @@ func (s *Service) proposeBlock(ctx context.Context,
 			monitorBestBidRelayCount(len(auctionResults.Providers))
 		}
 	}
-	// TODO: What shall we do if s.blockAuctioneer is nil?
+	// What shall we do if s.blockAuctioneer is nil?
 	// if the signed proposal is blinded then we assume the are auction results.
 
 	proposalResponse, err := s.proposalProvider.Proposal(ctx, &api.ProposalOpts{
@@ -432,12 +432,12 @@ func (s *Service) unblindProposal(ctx context.Context,
 					time.Sleep(retryInterval)
 					continue
 				}
-				// Success - break out of retry loop
+				// Success - break out of retry loop.
 				lastErr = nil
 				break
 			}
 
-			// Only proceed if we succeeded or if nil response after retries
+			// Only proceed if we succeeded or if nil response after retries.
 			if signedProposalResponse == nil || lastErr != nil {
 				if lastErr != nil {
 					log.Debug().Err(lastErr).Msg("All retry attempts failed")
@@ -570,20 +570,18 @@ func (s *Service) submitProposal(ctx context.Context,
 					lastErr = err
 					log.Debug().Err(err).Int("retries", retries).Msg("Failed to unblind block")
 					if strings.Contains(err.Error(), "POST failed with status 404") {
-						// TODO: Confirm real status code returned by the relay, and,
-						// check for any possible problem apart from the relay not supporting blinded_blocks v2.
 						log.Debug().Msg("Responded with 404; not trying again as relay is not accepting the block or does not supports /eth/v2/builder/blinded_blocks")
 						return
 					}
 					time.Sleep(retryInterval)
 					continue
 				}
-				// Success - break out of retry loop
+				// Success - break out of retry loop.
 				lastErr = nil
 				break
 			}
 
-			// Only send success if the last attempt succeeded
+			// Only send success if the last attempt succeeded.
 			if lastErr != nil {
 				log.Debug().Err(lastErr).Msg("All retry attempts failed")
 				return
