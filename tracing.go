@@ -15,15 +15,14 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"fmt"
 
 	// #nosec G108
 	_ "net/http/pprof"
 	"os"
 	"time"
 
+	standardclientcert "github.com/attestantio/go-certmanager/client/standard"
+	majordomofetcher "github.com/attestantio/go-certmanager/fetcher/majordomo"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	majordomo "github.com/wealdtech/go-majordomo"
@@ -51,13 +50,34 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 	}
 	if viper.GetString("tracing.client-cert") != "" {
 		log.Trace().Msg("Using TLS tracing connection")
-		creds, err := credentialsFromCerts(ctx, majordomo, "tracing")
-		if err != nil {
-			return errors.Wrap(err, "invalid TLS credentials")
-		}
-		driverOpts = append(driverOpts,
-			otlptracegrpc.WithTLSCredentials(creds),
+
+		_, span := otel.Tracer("attestantio.vouch").Start(ctx, "loadTracingClientCertificates")
+		defer span.End()
+
+		fetcher, err := majordomofetcher.New(ctx,
+			majordomofetcher.WithMajordomo(majordomo),
 		)
+		if err != nil {
+			return errors.Wrap(err, "failed to create fetcher for tracing client certificate")
+		}
+
+		clientCertMgr, err := standardclientcert.New(ctx,
+			standardclientcert.WithFetcher(fetcher),
+			standardclientcert.WithCertPEMURI(viper.GetString("tracing.client-cert")),
+			standardclientcert.WithCertKeyURI(viper.GetString("tracing.client-key")),
+			standardclientcert.WithCACertURI(viper.GetString("tracing.ca-cert")),
+		)
+		if err != nil {
+			return errors.Wrap(err, "failed to create client certificate manager for tracing")
+		}
+
+		tlsCfg, err := clientCertMgr.GetTLSConfig(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to get TLS config for tracing")
+		}
+
+		creds := credentials.NewTLS(tlsCfg)
+		driverOpts = append(driverOpts, otlptracegrpc.WithTLSCredentials(creds))
 	} else {
 		log.Trace().Msg("Using insecure tracing connection")
 		driverOpts = append(driverOpts,
@@ -112,45 +132,4 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 	}(ctx)
 
 	return nil
-}
-
-func credentialsFromCerts(ctx context.Context, majordomo majordomo.Service, base string) (credentials.TransportCredentials, error) {
-	_, span := otel.Tracer("attestantio.vouch").Start(ctx, "credentialsFromCerts")
-	defer span.End()
-
-	clientCert, err := majordomo.Fetch(ctx, viper.GetString(fmt.Sprintf("%s.client-cert", base)))
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain server certificate")
-	}
-	clientKey, err := majordomo.Fetch(ctx, viper.GetString(fmt.Sprintf("%s.client-key", base)))
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain server key")
-	}
-	var caCert []byte
-	if viper.GetString(fmt.Sprintf("%s.ca-cert", base)) != "" {
-		caCert, err = majordomo.Fetch(ctx, viper.GetString(fmt.Sprintf("%s.ca-cert", base)))
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to obtain client CA certificate")
-		}
-	}
-
-	clientPair, err := tls.X509KeyPair(clientCert, clientKey)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to load client keypair")
-	}
-
-	tlsCfg := &tls.Config{
-		Certificates: []tls.Certificate{clientPair},
-		MinVersion:   tls.VersionTLS13,
-	}
-
-	if caCert != nil {
-		cp := x509.NewCertPool()
-		if !cp.AppendCertsFromPEM(caCert) {
-			return nil, errors.New("failed to add CA certificate")
-		}
-		tlsCfg.RootCAs = cp
-	}
-
-	return credentials.NewTLS(tlsCfg), nil
 }
