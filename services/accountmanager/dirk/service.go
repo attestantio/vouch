@@ -93,12 +93,16 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 	fetcher := mockfetcher.NewFetcher(data)
 
-	clientCertMgr, err := standardclientcert.New(ctx,
+	clientCertOpts := []standardclientcert.Parameter{
 		standardclientcert.WithFetcher(fetcher),
 		standardclientcert.WithCertPEMURI("client-cert"),
 		standardclientcert.WithCertKeyURI("client-key"),
-		standardclientcert.WithCACertURI("ca-cert"),
-	)
+	}
+	if parameters.caCert != nil {
+		clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI("ca-cert"))
+	}
+
+	clientCertMgr, err := standardclientcert.New(ctx, clientCertOpts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create client certificate manager")
 	}
