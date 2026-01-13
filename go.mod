@@ -1,11 +1,12 @@
 module github.com/attestantio/vouch
 
-go 1.25
+go 1.25.5
 
 require (
 	github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506
 	github.com/attestantio/go-block-relay v0.5.1
 	github.com/attestantio/go-builder-client v0.7.2
+	github.com/attestantio/go-certmanager v0.0.0-20260113171259-7243801727ab
 	github.com/attestantio/go-eth2-client v0.28.0
 	github.com/aws/aws-sdk-go v1.55.6
 	github.com/holiman/uint256 v1.3.2
