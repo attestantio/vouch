@@ -61,12 +61,17 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 			return errors.Wrap(err, "failed to create fetcher for tracing client certificate")
 		}
 
-		clientCertMgr, err := standardclientcert.New(ctx,
+		clientCertOpts := []standardclientcert.Parameter{
 			standardclientcert.WithFetcher(fetcher),
 			standardclientcert.WithCertPEMURI(viper.GetString("tracing.client-cert")),
 			standardclientcert.WithCertKeyURI(viper.GetString("tracing.client-key")),
-			standardclientcert.WithCACertURI(viper.GetString("tracing.ca-cert")),
-		)
+		}
+		// Should CA cert be optional?
+		if viper.GetString("tracing.ca-cert") != "" {
+			clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI(viper.GetString("tracing.ca-cert")))
+		}
+
+		clientCertMgr, err := standardclientcert.New(ctx, clientCertOpts...)
 		if err != nil {
 			return errors.Wrap(err, "failed to create client certificate manager for tracing")
 		}
