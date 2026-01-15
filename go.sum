@@ -335,9 +335,6 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/pelletier/go-toml/v2 v2.2.3 h1:YmeHyLY8mFWbdkNWwpr+qIL2bEqT0o95WSdkNHvL12M=
 github.com/pelletier/go-toml/v2 v2.2.3/go.mod h1:MfCQTFTvCcUyyvvwm1+G6H/jORL20Xlb6rzQu9GuUkc=
-github.com/petermattis/goid v0.0.0-20240813172612-4fcff4a6cae7/go.mod h1:pxMtw7cyUw6B2bRH0ZBANSPg+AoSud1I1iyJHI69jH4=
-github.com/petermattis/goid v0.0.0-20250303134427-723919f7f203 h1:E7Kmf11E4K7B5hDti2K2NqPb1nlYlGYsu02S1JNd/Bs=
-github.com/petermattis/goid v0.0.0-20250303134427-723919f7f203/go.mod h1:pxMtw7cyUw6B2bRH0ZBANSPg+AoSud1I1iyJHI69jH4=
 github.com/petermattis/goid v0.0.0-20250813065127-a731cc31b4fe h1:vHpqOnPlnkba8iSxU4j/CvDSS9J4+F4473esQsYLGoE=
 github.com/petermattis/goid v0.0.0-20250813065127-a731cc31b4fe/go.mod h1:pxMtw7cyUw6B2bRH0ZBANSPg+AoSud1I1iyJHI69jH4=
 github.com/pk910/dynamic-ssz v0.0.6 h1:Tu97LSc2TtCyqRfoSbhG9XuR/FbA7CkKeAnlkgUydFY=
@@ -375,8 +372,6 @@ github.com/sagikazarmark/locafero v0.7.0 h1:5MqpDsTGNDhY8sGp0Aowyf0qKsPrhewaLSsF
 github.com/sagikazarmark/locafero v0.7.0/go.mod h1:2za3Cg5rMaTMoG/2Ulr9AwtFaIppKXTRYnozin4aB5k=
 github.com/sagikazarmark/slog-shim v0.1.0 h1:diDBnUNK9N/354PgrxMywXnAwEr1QZcOr6gto+ugjYE=
 github.com/sagikazarmark/slog-shim v0.1.0/go.mod h1:SrcSrq8aKtyuqEI1uvTDTK1arOWRIczQRv+GVI1AkeQ=
-github.com/sasha-s/go-deadlock v0.3.5 h1:tNCOEEDG6tBqrNDOX35j/7hL5FcFViG6awUGROb2NsU=
-github.com/sasha-s/go-deadlock v0.3.5/go.mod h1:bugP6EGbdGYObIlx7pUZtWqlvo8k9H6vCBBsiChJQ5U=
 github.com/sasha-s/go-deadlock v0.3.6 h1:TR7sfOnZ7x00tWPfD397Peodt57KzMDo+9Ae9rMiUmw=
 github.com/sasha-s/go-deadlock v0.3.6/go.mod h1:CUqNyyvMxTyjFqDT7MRg9mb4Dv/btmGTqSR+rky/UXo=
 github.com/shibukawa/configdir v0.0.0-20170330084843-e180dbdc8da0 h1:Xuk8ma/ibJ1fOy4Ee11vHhUFHQNpHhrBneOCNHVXS5w=
@@ -427,8 +422,8 @@ github.com/wealdtech/go-eth2-util v1.8.2 h1:gq+JMrnadifyKadUr75wmfP7+usiqMu9t3VV
 github.com/wealdtech/go-eth2-util v1.8.2/go.mod h1:/80GAK0K/3+PqUBZHvaOPd3b1sjHeimxQh1nrJzgaPk=
 github.com/wealdtech/go-eth2-wallet v1.17.0 h1:hMjGRjvpk95gguW6UXFDkRHWjYqE0cdrO7cOClF9Ubo=
 github.com/wealdtech/go-eth2-wallet v1.17.0/go.mod h1:qMmDrx//GrdZ3q+0Jf9SNwCaLsFOxOmXgr1yptpSMIE=
-github.com/wealdtech/go-eth2-wallet-dirk v1.5.1 h1:h1wZK31yonLkwddajg+Prhhd2rrvIIxQ3HxwZ3udnaY=
-github.com/wealdtech/go-eth2-wallet-dirk v1.5.1/go.mod h1:Yz1Mc+HfbG1CODeBpAQ++/Us76OdXzI5kVs1qGvUiBM=
+github.com/wealdtech/go-eth2-wallet-dirk v1.6.0 h1:gs1zn5+aW7ZoQ+hVHa33pr2XuQDktdeXf0KW2K1bOBQ=
+github.com/wealdtech/go-eth2-wallet-dirk v1.6.0/go.mod h1:Yz1Mc+HfbG1CODeBpAQ++/Us76OdXzI5kVs1qGvUiBM=
 github.com/wealdtech/go-eth2-wallet-distributed v1.2.1 h1:+pbG9i9b5TrWd7GDRX8yq4FKA+D7k7aI6uySEvAZ+Kk=
 github.com/wealdtech/go-eth2-wallet-distributed v1.2.1/go.mod h1:jYkDax2VhUNKIct6TVlgxAagvR56/eg7y7J+JFq+gDo=
 github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.4.1 h1:9j7bpwjT9wmwBb54ZkBhTm1uNIlFFcCJXefd/YskZPw=
@@ -451,8 +446,6 @@ github.com/wealdtech/go-eth2-wallet-types/v2 v2.12.0 h1:w0OrVImtQfjN7XCqALfgVtcm
 github.com/wealdtech/go-eth2-wallet-types/v2 v2.12.0/go.mod h1:m8xsnPZLq1vt7bnMveTc4xxVJUv8mBL21iPU4kALYGE=
 github.com/wealdtech/go-indexer v1.1.0 h1:vn4gY7nSYSLe0sXVauJgyHvK4NXiDrLKBYYYKWypahk=
 github.com/wealdtech/go-indexer v1.1.0/go.mod h1:lEFTda1rul1EwWIX3QqXq/KW0tnEEhC41Lup06V7Tlo=
-github.com/wealdtech/go-majordomo v1.1.1 h1:o+vS/akiT7zuufU7H+A6Cp52qbkjzaaMZlgwm/rciDk=
-github.com/wealdtech/go-majordomo v1.1.1/go.mod h1:qEuabaXiE3bazGgcTE4WIWYUXlLjHkwh3jGLmC1NOBs=
 github.com/wealdtech/go-majordomo v1.1.2 h1:QqGi2vgtH9/L3T/vvsRj2/BaDcPi6JlAtPM+grOUcK4=
 github.com/wealdtech/go-majordomo v1.1.2/go.mod h1:qEuabaXiE3bazGgcTE4WIWYUXlLjHkwh3jGLmC1NOBs=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
