@@ -22,7 +22,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/wealdtech/go-eth2-types/v2 v2.8.2
 	github.com/wealdtech/go-eth2-wallet v1.17.0
-	github.com/wealdtech/go-eth2-wallet-dirk v1.5.1
+	github.com/wealdtech/go-eth2-wallet-dirk v1.6.0
 	github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.4.1
 	github.com/wealdtech/go-eth2-wallet-hd/v2 v2.7.1
 	github.com/wealdtech/go-eth2-wallet-nd/v2 v2.5.0
