@@ -23,7 +23,7 @@ import (
 func CreateValidatorIndexToCommitteeIndicesTestData() map[phase0.ValidatorIndex][]phase0.CommitteeIndex {
 	validatorToCommitteeIndices := make(map[phase0.ValidatorIndex][]phase0.CommitteeIndex, 10)
 	for validatorIndex := range uint64(10) {
-		var committeeIndices []phase0.CommitteeIndex
+		committeeIndices := make([]phase0.CommitteeIndex, 0, 5)
 		for committeeOffset := range uint64(5) {
 			committeeIndex := validatorIndex*10 + committeeOffset
 			committeeIndices = append(committeeIndices, phase0.CommitteeIndex(committeeIndex))
