@@ -19,12 +19,12 @@ import (
 	"testing"
 	"time"
 
+	certtesting "github.com/attestantio/go-certmanager/testing"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/testing/logger"
-	"github.com/attestantio/vouch/testing/resources"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
@@ -189,9 +189,9 @@ func setupService(ctx context.Context, t *testing.T, endpoints []string, account
 		WithProcessConcurrency(1),
 		WithEndpoints(endpoints),
 		WithAccountPaths(accountPaths),
-		WithClientCert([]byte(resources.ClientTest01Crt)),
-		WithClientKey([]byte(resources.ClientTest01Key)),
-		WithCACert([]byte(resources.CACrt)),
+		WithClientCert([]byte(certtesting.ClientTest01Crt)),
+		WithClientKey([]byte(certtesting.ClientTest01Key)),
+		WithCACert([]byte(certtesting.CACrt)),
 		WithValidatorsManager(mock.NewValidatorsManager()),
 		WithDomainProvider(mock.NewDomainProvider()),
 		WithFarFutureEpochProvider(mock.NewFarFutureEpochProvider(0xffffffffffffffff)),

@@ -15,8 +15,6 @@ package dirk
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -24,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	standardclientcert "github.com/attestantio/go-certmanager/client/standard"
+	mockfetcher "github.com/attestantio/go-certmanager/testing/mock"
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -82,10 +82,37 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("failed to register metrics")
 	}
 
-	credentials, err := credentialsFromCerts(ctx, parameters.clientCert, parameters.clientKey, parameters.caCert)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to build credentials")
+	_, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "loadClientCertificates")
+	defer span.End()
+
+	data := make(map[string][]byte)
+	data["client-cert"] = parameters.clientCert
+	data["client-key"] = parameters.clientKey
+	if parameters.caCert != nil {
+		data["ca-cert"] = parameters.caCert
 	}
+	fetcher := mockfetcher.NewFetcher(data)
+
+	clientCertOpts := []standardclientcert.Parameter{
+		standardclientcert.WithFetcher(fetcher),
+		standardclientcert.WithCertPEMURI("client-cert"),
+		standardclientcert.WithCertKeyURI("client-key"),
+	}
+	if parameters.caCert != nil {
+		clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI("ca-cert"))
+	}
+
+	clientCertMgr, err := standardclientcert.New(ctx, clientCertOpts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create client certificate manager")
+	}
+
+	tlsCfg, err := clientCertMgr.GetTLSConfig(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get TLS config")
+	}
+
+	credentials := credentials.NewTLS(tlsCfg)
 
 	endpoints := make([]*dirk.Endpoint, 0, len(parameters.endpoints))
 	for _, endpoint := range parameters.endpoints {
@@ -264,31 +291,6 @@ func (s *Service) refreshValidators(ctx context.Context) error {
 		return errors.Wrap(err, "failed to refresh validators")
 	}
 	return nil
-}
-
-func credentialsFromCerts(ctx context.Context, clientCert []byte, clientKey []byte, caCert []byte) (credentials.TransportCredentials, error) {
-	_, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "credentialsFromCerts")
-	defer span.End()
-
-	clientPair, err := tls.X509KeyPair(clientCert, clientKey)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to load client keypair")
-	}
-
-	tlsCfg := &tls.Config{
-		Certificates: []tls.Certificate{clientPair},
-		MinVersion:   tls.VersionTLS13,
-	}
-
-	if caCert != nil {
-		cp := x509.NewCertPool()
-		if !cp.AppendCertsFromPEM(caCert) {
-			return nil, errors.New("failed to add CA certificate")
-		}
-		tlsCfg.RootCAs = cp
-	}
-
-	return credentials.NewTLS(tlsCfg), nil
 }
 
 // ValidatingAccountsForEpoch obtains the validating accounts for a given epoch.

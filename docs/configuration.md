@@ -301,6 +301,7 @@ tracing:
   client-cert: 'file:///home/vouch/certs/server.crt'
   client-key: 'file:///home/vouch/certs/server.key'
   ca-cert: 'file:///home/vouch/certs/ca.crt'
+  # Vouch loads these credentials using the go-certmanager library.
 ```
 
 ## Hierarchical configuration.

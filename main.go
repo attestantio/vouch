@@ -116,7 +116,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.13.0-alpha.2"
+var ReleaseVersion = "1.13.0-alpha.2-dev-go-certmanager"
 
 func main() {
 	exitCode := main2()
