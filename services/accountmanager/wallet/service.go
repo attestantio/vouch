@@ -257,7 +257,7 @@ func (s *Service) accountsForEpochWithFilter(ctx context.Context, epoch phase0.E
 			account := s.accounts[validator.PublicKey]
 			s.log.Trace().
 				Str("name", account.Name()).
-				Str("public_key", fmt.Sprintf("%x", account.PublicKey().Marshal())).
+				Stringer("public_key", validator.PublicKey).
 				Uint64("index", uint64(index)).
 				Str("state", state.String()).
 				Msg(fmt.Sprintf("%s account", accountType))
