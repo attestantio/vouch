@@ -47,3 +47,55 @@ func (*validatorsManager) ValidatorsByPubKey(_ context.Context, _ []phase0.BLSPu
 func (*validatorsManager) ValidatorStateAtEpoch(_ context.Context, _ phase0.ValidatorIndex, _ phase0.Epoch) (api.ValidatorState, error) {
 	return api.ValidatorStateUnknown, nil
 }
+
+// ConfigurableValidatorsManager is a mock validators manager with configurable validators.
+type ConfigurableValidatorsManager struct {
+	validatorsByIndex  map[phase0.ValidatorIndex]*phase0.Validator
+	validatorsByPubKey map[phase0.BLSPubKey]phase0.ValidatorIndex
+}
+
+// NewConfigurableValidatorsManager creates a configurable validators manager.
+func NewConfigurableValidatorsManager() *ConfigurableValidatorsManager {
+	return &ConfigurableValidatorsManager{
+		validatorsByIndex:  make(map[phase0.ValidatorIndex]*phase0.Validator),
+		validatorsByPubKey: make(map[phase0.BLSPubKey]phase0.ValidatorIndex),
+	}
+}
+
+// AddValidator adds a validator to the mock.
+func (m *ConfigurableValidatorsManager) AddValidator(index phase0.ValidatorIndex, validator *phase0.Validator) {
+	m.validatorsByIndex[index] = validator
+	m.validatorsByPubKey[validator.PublicKey] = index
+}
+
+// RefreshValidatorsFromBeaconNode is a mock.
+func (*ConfigurableValidatorsManager) RefreshValidatorsFromBeaconNode(_ context.Context, _ []phase0.BLSPubKey) error {
+	return nil
+}
+
+// ValidatorsByIndex returns validators matching the given indices.
+func (m *ConfigurableValidatorsManager) ValidatorsByIndex(_ context.Context, indices []phase0.ValidatorIndex) map[phase0.ValidatorIndex]*phase0.Validator {
+	result := make(map[phase0.ValidatorIndex]*phase0.Validator)
+	for _, index := range indices {
+		if validator, ok := m.validatorsByIndex[index]; ok {
+			result[index] = validator
+		}
+	}
+	return result
+}
+
+// ValidatorsByPubKey returns validators matching the given public keys.
+func (m *ConfigurableValidatorsManager) ValidatorsByPubKey(_ context.Context, pubKeys []phase0.BLSPubKey) map[phase0.ValidatorIndex]*phase0.Validator {
+	result := make(map[phase0.ValidatorIndex]*phase0.Validator)
+	for _, pk := range pubKeys {
+		if idx, ok := m.validatorsByPubKey[pk]; ok {
+			result[idx] = m.validatorsByIndex[idx]
+		}
+	}
+	return result
+}
+
+// ValidatorStateAtEpoch is a mock.
+func (*ConfigurableValidatorsManager) ValidatorStateAtEpoch(_ context.Context, _ phase0.ValidatorIndex, _ phase0.Epoch) (api.ValidatorState, error) {
+	return api.ValidatorStateUnknown, nil
+}
