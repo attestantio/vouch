@@ -1,0 +1,48 @@
+name: Trivy Security Scan
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  trivy-scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t vouch:${{ github.sha }} .
+
+      - name: Run Trivy scan (full report)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: 'vouch:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+          vuln-type: 'os,library'
+          scanners: 'vuln,secret'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Trivy scan (fail on fixable CRITICAL/HIGH)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: 'vouch:${{ github.sha }}'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          vuln-type: 'os,library'
+          scanners: 'vuln,secret'
+          ignore-unfixed: true
+          exit-code: '1'
