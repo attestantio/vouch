@@ -58,32 +58,32 @@ docker compose -f docker-compose.test.yml down -v
 
 ## Certificate Structure
 
-The test uses existing certificates from `../resources/`:
+The test uses existing certificates from `testing/resources/`:
 
-| File | Purpose | CN/SAN |
-|------|---------|--------|
-| `Testing_certificate_authority.crt` | CA certificate | CN=Testing certificate authority |
-| `signer-test01.crt/.key` | Dirk server certificate | CN=signer-test01, SAN=DNS:signer-test01 |
-| `client-test01.crt/.key` | Vouch client certificate | CN=client-test01 |
+| File                                | Purpose                  | CN/SAN                                  |
+| ----------------------------------- | ------------------------ | --------------------------------------- |
+| `Testing_certificate_authority.crt` | CA certificate           | CN=Testing certificate authority        |
+| `signer-test01.crt/.key`            | Dirk server certificate  | CN=signer-test01, SAN=DNS:signer-test01 |
+| `client-test01.crt/.key`            | Vouch client certificate | CN=client-test01                        |
 
 ## Validation Criteria
 
 ### Build Verification
 
-| Check | Command | Expected |
-|-------|---------|----------|
-| Build succeeds | `docker compose build` | Exit 0 |
-| Nonroot user | `docker inspect --format='{{.Config.User}}' vouch:integration-test` | `nonroot:nonroot` |
-| No shell | `docker run --rm --entrypoint /bin/sh vouch:integration-test` | Fails with "not found" |
-| Help works | `docker run --rm vouch:integration-test --help` | Shows usage |
+| Check          | Command                                                             | Expected               |
+| -------------- | ------------------------------------------------------------------- | ---------------------- |
+| Build succeeds | `docker compose build`                                              | Exit 0                 |
+| Nonroot user   | `docker inspect --format='{{.Config.User}}' vouch:integration-test` | `nonroot:nonroot`      |
+| No shell       | `docker run --rm --entrypoint /bin/sh vouch:integration-test`       | Fails with "not found" |
+| Help works     | `docker run --rm vouch:integration-test --help`                     | Shows usage            |
 
 ### Integration Verification
 
-| Check | Method | Expected |
-|-------|--------|----------|
-| Dirk starts | `docker logs dirk-test` | "Listening on 0.0.0.0:9091" |
+| Check             | Method                                   | Expected                        |
+| ----------------- | ---------------------------------------- | ------------------------------- |
+| Dirk starts       | `docker logs dirk-test`                  | "Listening on 0.0.0.0:9091"     |
 | Vouch loads certs | `docker logs vouch-test \| grep -i dirk` | "Starting dirk account manager" |
-| Metrics respond | `curl localhost:8081/metrics` | HTTP 200 with metrics |
+| Metrics respond   | `curl localhost:8081/metrics`            | HTTP 200 with metrics           |
 
 ## CI/CD Integration
 
