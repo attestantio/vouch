@@ -68,8 +68,16 @@ jobs:
       # Verification: Help command works
       - name: Verify help command
         run: |
-          docker run --rm "${IMAGE_NAME}:${GITHUB_SHA}" --help
-          echo "PASS: Help command works"
+          # pflag returns exit code 2 for --help, so capture output and verify content
+          HELP_OUTPUT=$(docker run --rm "${IMAGE_NAME}:${GITHUB_SHA}" --help 2>&1 || true)
+          if echo "${HELP_OUTPUT}" | grep -q "base-dir"; then
+            echo "PASS: Help command works"
+            echo "${HELP_OUTPUT}"
+          else
+            echo "ERROR: Help output doesn't contain expected flags"
+            echo "${HELP_OUTPUT}"
+            exit 1
+          fi
         env:
           GITHUB_SHA: ${{ github.sha }}
 
