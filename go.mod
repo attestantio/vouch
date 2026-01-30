@@ -1,8 +1,8 @@
 module github.com/attestantio/vouch
 
-go 1.23.0
+go 1.24.0
 
-toolchain go1.23.2
+toolchain go1.24.11
 
 require (
 	github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506
@@ -22,21 +22,21 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/wealdtech/go-eth2-types/v2 v2.8.2
 	github.com/wealdtech/go-eth2-wallet v1.17.0
-	github.com/wealdtech/go-eth2-wallet-dirk v1.5.1
+	github.com/wealdtech/go-eth2-wallet-dirk v1.6.0
 	github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.4.1
 	github.com/wealdtech/go-eth2-wallet-hd/v2 v2.7.1
 	github.com/wealdtech/go-eth2-wallet-nd/v2 v2.5.0
 	github.com/wealdtech/go-eth2-wallet-store-filesystem v1.18.1
 	github.com/wealdtech/go-eth2-wallet-store-scratch v1.7.2
 	github.com/wealdtech/go-eth2-wallet-types/v2 v2.12.0
-	github.com/wealdtech/go-majordomo v1.1.1
+	github.com/wealdtech/go-majordomo v1.1.2
 	go.opentelemetry.io/otel v1.35.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.35.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.35.0
 	go.opentelemetry.io/otel/sdk v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
 	go.uber.org/atomic v1.11.0
-	golang.org/x/sync v0.12.0
+	golang.org/x/sync v0.19.0
 	google.golang.org/grpc v1.71.0
 	gotest.tools v2.2.0+incompatible
 )
@@ -126,12 +126,12 @@ require (
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.15.0 // indirect
-	golang.org/x/crypto v0.36.0 // indirect
+	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
-	golang.org/x/net v0.38.0 // indirect
+	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/oauth2 v0.28.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/text v0.33.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	google.golang.org/api v0.224.0 // indirect
 	google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb // indirect

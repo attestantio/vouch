@@ -1,3 +1,8 @@
+dev:
+  - update majordomo to v1.1.2
+  - add combinedmajority attestationdata strategy
+  - update go-eth2-wallet-dirk to v1.6.0
+
 1.12.0:
   - import fulu container specs from go-eth2-client
   - import fulu block handling from go-builder-client and go-block-relay

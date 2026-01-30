@@ -17,14 +17,14 @@ import (
 	"context"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
-	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	"github.com/attestantio/vouch/services/validatorsmanager"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/attestantio/vouch/testing/resources"
+	"github.com/attestantio/vouch/testutil"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
@@ -172,15 +172,7 @@ func TestAccounts(t *testing.T) {
 }
 
 func setupService(ctx context.Context, t *testing.T, endpoints []string, accountPaths []string) (*Service, error) {
-	genesisTime := time.Now()
-	genesisProvider := mock.NewGenesisProvider(genesisTime)
-	specProvider := mock.NewSpecProvider()
-	chainTime, err := standardchaintime.New(ctx,
-		standardchaintime.WithLogLevel(zerolog.Disabled),
-		standardchaintime.WithGenesisProvider(genesisProvider),
-		standardchaintime.WithSpecProvider(specProvider),
-	)
-	require.NoError(t, err)
+	chainTime, _ := testutil.NewTestChainTime(ctx, t)
 
 	return New(ctx,
 		WithLogLevel(zerolog.TraceLevel),
@@ -224,4 +216,109 @@ func setupTestWallets(ctx context.Context, t *testing.T, defs []*walletDef) []e2
 	}
 
 	return wallets
+}
+
+func setupServiceWithValidatorsManager(ctx context.Context, t *testing.T, endpoints []string, accountPaths []string, validatorsManager validatorsmanager.Service) (*Service, error) {
+	chainTime, _ := testutil.NewTestChainTime(ctx, t)
+
+	return New(ctx,
+		WithLogLevel(zerolog.TraceLevel),
+		WithMonitor(nullmetrics.New()),
+		WithClientMonitor(nullmetrics.New()),
+		WithProcessConcurrency(1),
+		WithEndpoints(endpoints),
+		WithAccountPaths(accountPaths),
+		WithClientCert([]byte(resources.ClientTest01Crt)),
+		WithClientKey([]byte(resources.ClientTest01Key)),
+		WithCACert([]byte(resources.CACrt)),
+		WithValidatorsManager(validatorsManager),
+		WithDomainProvider(mock.NewDomainProvider()),
+		WithFarFutureEpochProvider(mock.NewFarFutureEpochProvider(0xffffffffffffffff)),
+		WithCurrentEpochProvider(chainTime),
+	)
+}
+
+func TestAccountsForEpochWithFilterLogging(t *testing.T) {
+	ctx := context.Background()
+	require.NoError(t, e2types.InitBLS())
+
+	// Create a wallet and account with deterministic public key.
+	wallets := setupTestWallets(ctx, t,
+		[]*walletDef{
+			{
+				name: "wallet1",
+				seed: []byte{
+					0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+					0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+					0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+					0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+				},
+				accountNames: []string{"account1"},
+			},
+		})
+
+	// Get the account and its public key.
+	var account e2wtypes.Account
+	for a := range wallets[0].Accounts(ctx) {
+		account = a
+		break
+	}
+	require.NotNil(t, account)
+
+	// Convert account public key to phase0.BLSPubKey.
+	var pubKey phase0.BLSPubKey
+	copy(pubKey[:], account.PublicKey().Marshal())
+
+	// Create a configurable validators manager with an ActiveOngoing validator.
+	validatorsManager := mock.NewConfigurableValidatorsManager()
+	validatorsManager.AddValidator(phase0.ValidatorIndex(123), &phase0.Validator{
+		PublicKey:                  pubKey,
+		WithdrawalCredentials:      make([]byte, 32),
+		EffectiveBalance:           32000000000, // 32 ETH
+		Slashed:                    false,
+		ActivationEligibilityEpoch: 0,
+		ActivationEpoch:            0,                  // Active from epoch 0.
+		ExitEpoch:                  0xffffffffffffffff, // Far future - active ongoing.
+		WithdrawableEpoch:          0xffffffffffffffff,
+	})
+
+	// Create the service with log capture.
+	capture := logger.NewLogCapture()
+	s, err := setupServiceWithValidatorsManager(ctx, t,
+		[]string{"localhost:12345"},
+		[]string{"wallet1"},
+		validatorsManager,
+	)
+	require.NoError(t, err)
+
+	// Manually populate the service's accounts and pubKeys.
+	s.accounts = map[phase0.BLSPubKey]e2wtypes.Account{
+		pubKey: account,
+	}
+	s.pubKeys = []phase0.BLSPubKey{pubKey}
+
+	// Call ValidatingAccountsForEpoch to trigger the logging.
+	accounts, err := s.ValidatingAccountsForEpoch(ctx, phase0.Epoch(1))
+	require.NoError(t, err)
+	require.Len(t, accounts, 1)
+
+	// Find the log entry and validate the public_key field.
+	var foundEntry map[string]any
+	for _, entry := range capture.Entries() {
+		if msg, ok := entry["message"].(string); ok && msg == "Validating account" {
+			foundEntry = entry
+			break
+		}
+	}
+	require.NotNil(t, foundEntry, "Expected 'Validating account' log entry")
+
+	// Validate the public_key field.
+	pubKeyValue, ok := foundEntry["public_key"].(string)
+	require.True(t, ok, "public_key field should be a string")
+
+	// Validate it matches the expected value.
+	require.Equal(t, pubKey.String(), pubKeyValue)
+
+	// Validate it's a valid Ethereum BLS public key format.
+	testutil.AssertValidBLSPubKeyFormat(t, pubKeyValue)
 }
