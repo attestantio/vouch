@@ -1,0 +1,77 @@
+# Docker Compose for Vouch + Dirk Integration Testing
+# Uses test certificates from testing/resources/
+
+services:
+  # Dirk - Distributed Remote Keymanager
+  dirk:
+    image: attestant/dirk:latest
+    platform: linux/amd64 
+    container_name: dirk-test
+    hostname: signer-test01
+    networks:
+      test-network:
+        aliases:
+          - signer-test01
+    volumes:
+      # Dirk configuration - must be at base-dir/dirk.json
+      - ./configs/dirk.json:/config/dirk.json:ro
+      # CA certificate for validating client certs
+      - ../resources/Testing_certificate_authority.crt:/certs/ca.crt:ro
+      # Server certificates (signer-test01 has SAN DNS:signer-test01)
+      - ../resources/signer-test01.crt:/certs/server.crt:ro
+      - ../resources/signer-test01.key:/certs/server.key:ro
+      # Wallet directory (created by setup.sh)
+      - dirk-wallets:/data/wallets
+    command: ["--base-dir=/config"]
+    # Dirk is distroless - no shell/nc for healthcheck
+    # Vouch will handle retry logic if Dirk isn't ready
+
+  # Beacon Mock - Minimal beacon node mock using nginx
+  beacon-mock:
+    image: nginx:alpine
+    container_name: beacon-mock
+    networks:
+      - test-network
+    volumes:
+      - ./configs/nginx-beacon-mock.conf:/etc/nginx/nginx.conf:ro
+      - ./configs/beacon-responses:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:5052/eth/v1/node/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # Vouch - Validator Client
+  vouch:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: vouch:integration-test
+    container_name: vouch-test
+    networks:
+      - test-network
+    ports:
+      - "8081:8081"   # Prometheus metrics
+      - "18550:18550" # Block relay
+    volumes:
+      # Vouch configuration
+      - ./configs/vouch-dirk.yml:/app/vouch.yml:ro
+      # Client certificates for mTLS to Dirk (client-test01 has CN=client-test01)
+      - ../resources/client-test01.crt:/certs/client.crt:ro
+      - ../resources/client-test01.key:/certs/client.key:ro
+      - ../resources/Testing_certificate_authority.crt:/certs/ca.crt:ro
+    # VOUCH_BASE_DIR is set in Dockerfile, now properly read before config discovery
+    depends_on:
+      dirk:
+        condition: service_started
+      beacon-mock:
+        condition: service_healthy
+    # Note: Image runs as nonroot (65532:65532) by default
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  dirk-wallets:
