@@ -214,8 +214,14 @@ func fetchConfig() error {
 		return errors.Wrap(err, "failed to bind pflags to viper")
 	}
 
+	// Environment settings must be configured before checking base-dir,
+	// so that VOUCH_BASE_DIR environment variable is available for config file discovery.
+	viper.SetEnvPrefix("VOUCH")
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
+	viper.AutomaticEnv()
+
 	if viper.GetString("base-dir") != "" {
-		// User-defined base directory.
+		// User-defined base directory (from command line or VOUCH_BASE_DIR env var).
 		viper.AddConfigPath(resolvePath(""))
 		viper.SetConfigName("vouch")
 	} else {
@@ -227,11 +233,6 @@ func fetchConfig() error {
 		viper.AddConfigPath(home)
 		viper.SetConfigName(".vouch")
 	}
-
-	// Environment settings.
-	viper.SetEnvPrefix("VOUCH")
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
-	viper.AutomaticEnv()
 
 	// Defaults.
 	viper.SetDefault("logging.timestamp.format", "2006-01-02T15:04:05.000Z07:00")
