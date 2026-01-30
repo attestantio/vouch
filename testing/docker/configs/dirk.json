@@ -1,0 +1,32 @@
+{
+  "server": {
+    "id": 1,
+    "name": "signer-test01",
+    "listen-address": "0.0.0.0:9091"
+  },
+  "peers": {
+    "1": "signer-test01:9091"
+  },
+  "certificates": {
+    "ca-cert": "file:///certs/ca.crt",
+    "server-cert": "file:///certs/server.crt",
+    "server-key": "file:///certs/server.key",
+    "client-cert": "file:///certs/server.crt",
+    "client-key": "file:///certs/server.key"
+  },
+  "stores": [
+    {
+      "name": "Local",
+      "type": "filesystem",
+      "location": "/data/wallets"
+    }
+  ],
+  "permissions": {
+    "client-test01": {
+      "TestWallet": "All"
+    }
+  },
+  "process": {
+    "generation-passphrase": "test-generation-passphrase"
+  }
+}

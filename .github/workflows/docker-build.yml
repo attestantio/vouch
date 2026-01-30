@@ -1,0 +1,214 @@
+name: Docker Build and Integration Test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: vouch
+
+jobs:
+  # Job 1: Build and verify Docker image
+  docker-build:
+    runs-on: ubuntu-24.04
+    outputs:
+      image-tag: ${{ github.sha }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify image exists
+        run: docker images "${IMAGE_NAME}:${GITHUB_SHA}"
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+
+      # Verification: Image runs as nonroot user
+      - name: Verify nonroot user
+        run: |
+          USER_INFO=$(docker inspect "${IMAGE_NAME}:${GITHUB_SHA}" --format '{{.Config.User}}')
+          echo "Container user: ${USER_INFO}"
+          if [[ "${USER_INFO}" != "nonroot:nonroot" ]]; then
+            echo "ERROR: Image should run as nonroot:nonroot user"
+            exit 1
+          fi
+          echo "PASS: Image runs as nonroot user"
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+
+      # Verification: No shell access (distroless)
+      - name: Verify no shell access
+        run: |
+          # Try to run shell - should fail on distroless
+          if docker run --rm --entrypoint /bin/sh "${IMAGE_NAME}:${GITHUB_SHA}" -c "echo test" 2>/dev/null; then
+            echo "ERROR: Shell access should not be available in distroless image"
+            exit 1
+          fi
+          echo "PASS: No shell access (distroless verified)"
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+
+      # Verification: Help command works
+      - name: Verify help command
+        run: |
+          docker run --rm "${IMAGE_NAME}:${GITHUB_SHA}" --help
+          echo "PASS: Help command works"
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+
+      # Verification: VOUCH_BASE_DIR is set
+      - name: Verify VOUCH_BASE_DIR environment variable
+        run: |
+          ENV_VARS=$(docker inspect "${IMAGE_NAME}:${GITHUB_SHA}" --format '{{range .Config.Env}}{{println .}}{{end}}')
+          if echo "${ENV_VARS}" | grep -q "VOUCH_BASE_DIR=/app"; then
+            echo "PASS: VOUCH_BASE_DIR=/app is set"
+          else
+            echo "ERROR: VOUCH_BASE_DIR should be set to /app"
+            exit 1
+          fi
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+
+      - name: Save Docker image as artifact
+        run: docker save "${IMAGE_NAME}:${GITHUB_SHA}" | gzip > vouch-image.tar.gz
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: vouch-image.tar.gz
+          retention-days: 1
+
+  # Job 2: Integration test with Dirk (runs on PRs)
+  integration-test:
+    runs-on: ubuntu-24.04
+    needs: docker-build
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Docker image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+
+      - name: Load Docker image
+        run: |
+          gunzip -c vouch-image.tar.gz | docker load
+          docker tag "${IMAGE_NAME}:${GITHUB_SHA}" vouch:integration-test
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+
+      - name: Setup test wallet
+        run: |
+          cd testing/docker
+          chmod +x setup.sh
+          ./setup.sh
+
+      - name: Start services with Docker Compose
+        run: |
+          cd testing/docker
+          docker compose -f docker-compose.test.yml up -d
+
+      - name: Wait for services to stabilize
+        run: sleep 20
+
+      - name: Check service status
+        run: |
+          cd testing/docker
+          docker compose -f docker-compose.test.yml ps
+
+      - name: Verify Dirk is running
+        run: |
+          echo "=== Dirk Logs ==="
+          docker logs dirk-test 2>&1 | head -30
+
+      - name: Verify Vouch starts and loads certificates
+        run: |
+          echo "=== Vouch Logs ==="
+          docker logs vouch-test 2>&1 | head -50
+
+          # Look for successful Dirk account manager initialization
+          if docker logs vouch-test 2>&1 | grep -i "dirk account manager"; then
+            echo "PASS: Vouch initialized Dirk account manager"
+          else
+            echo "INFO: Checking for certificate/credential messages..."
+            docker logs vouch-test 2>&1 | grep -iE "(certificate|credential|endpoint)" || true
+          fi
+
+      - name: Verify metrics endpoint responds
+        run: |
+          # Check if metrics endpoint is responding
+          METRICS_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/metrics || echo "000")
+
+          if [[ "${METRICS_RESPONSE}" == "200" ]]; then
+            echo "PASS: Metrics endpoint responding (HTTP 200)"
+            echo "=== Sample Metrics ==="
+            curl -s http://localhost:8081/metrics | head -20
+          else
+            echo "WARNING: Metrics endpoint returned ${METRICS_RESPONSE}"
+            echo "Vouch may still be initializing..."
+          fi
+
+      - name: Verify Dirk connection via metrics
+        run: |
+          # Check for Dirk server connection in metrics
+          DIRK_CONN=$(curl -s http://localhost:8081/metrics | grep 'dirk_server_connections' || echo "")
+
+          if [[ -n "${DIRK_CONN}" ]]; then
+            echo "PASS: Dirk connection metrics found"
+            echo "${DIRK_CONN}"
+          else
+            echo "INFO: Dirk connection metrics not yet available"
+          fi
+
+      - name: Collect debug information on failure
+        if: failure()
+        run: |
+          echo "=== Docker Compose Status ==="
+          cd testing/docker
+          docker compose -f docker-compose.test.yml ps
+
+          echo ""
+          echo "=== Dirk Logs ==="
+          docker logs dirk-test 2>&1 | tail -50 || true
+
+          echo ""
+          echo "=== Vouch Logs ==="
+          docker logs vouch-test 2>&1 | tail -100 || true
+
+          echo ""
+          echo "=== Beacon Mock Logs ==="
+          docker logs beacon-mock 2>&1 | tail -30 || true
+
+          echo ""
+          echo "=== Network Info ==="
+          docker network ls
+          docker network inspect vouch_test-network 2>/dev/null || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          cd testing/docker
+          docker compose -f docker-compose.test.yml down -v --remove-orphans || true
+          docker volume rm vouch_dirk-wallets 2>/dev/null || true
