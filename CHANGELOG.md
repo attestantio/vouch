@@ -1,5 +1,4 @@
-1.12.1git st
-:
+1.12.1:
   - update majordomo to v1.1.2
 
 1.12.0:
