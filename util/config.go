@@ -36,7 +36,7 @@ func BeaconNodeAddressesForProposing() []string {
 			nodeAddresses[nodeAddress] = struct{}{}
 		}
 	default:
-		for _, nodeAddress := range BeaconNodeAddresses("") {
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.beaconblockproposal") {
 			nodeAddresses[nodeAddress] = struct{}{}
 		}
 	}
@@ -51,7 +51,7 @@ func BeaconNodeAddressesForProposing() []string {
 			nodeAddresses[nodeAddress] = struct{}{}
 		}
 	default:
-		for _, nodeAddress := range BeaconNodeAddresses("") {
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.blindedbeaconblockproposal") {
 			nodeAddresses[nodeAddress] = struct{}{}
 		}
 	}
