@@ -21,10 +21,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-// BeaconNodeAddressesForProposing obtains the beacon node addresses used for
-// proposing from the configuration.
+// BeaconNodeAddressesForBeaconBlockProposal obtains the beacon node addresses
+// used for beacon block proposals from the configuration.
 // This takes into account the used styles in strategies, and removes duplicates.
-func BeaconNodeAddressesForProposing() []string {
+func BeaconNodeAddressesForBeaconBlockProposal() []string {
 	nodeAddresses := make(map[string]struct{})
 	switch viper.GetString("strategies.beaconblockproposal.style") {
 	case "best":
@@ -41,6 +41,19 @@ func BeaconNodeAddressesForProposing() []string {
 		}
 	}
 
+	addresses := make([]string, 0, len(nodeAddresses))
+	for nodeAddress := range nodeAddresses {
+		addresses = append(addresses, nodeAddress)
+	}
+	sort.Strings(addresses)
+
+	return addresses
+}
+
+// beaconNodeAddressesForBlindedBeaconBlockProposal obtains the beacon node addresses
+// used for blinded beacon block proposals from the configuration.
+func beaconNodeAddressesForBlindedBeaconBlockProposal() []string {
+	nodeAddresses := make(map[string]struct{})
 	switch viper.GetString("strategies.blindedbeaconblockproposal.style") {
 	case "best":
 		for _, nodeAddress := range BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best") {
@@ -54,6 +67,27 @@ func BeaconNodeAddressesForProposing() []string {
 		for _, nodeAddress := range BeaconNodeAddresses("strategies.blindedbeaconblockproposal") {
 			nodeAddresses[nodeAddress] = struct{}{}
 		}
+	}
+
+	addresses := make([]string, 0, len(nodeAddresses))
+	for nodeAddress := range nodeAddresses {
+		addresses = append(addresses, nodeAddress)
+	}
+	sort.Strings(addresses)
+
+	return addresses
+}
+
+// BeaconNodeAddressesForProposing obtains the beacon node addresses used for
+// proposing from the configuration.
+// This takes into account the used styles in strategies, and removes duplicates.
+func BeaconNodeAddressesForProposing() []string {
+	nodeAddresses := make(map[string]struct{})
+	for _, nodeAddress := range BeaconNodeAddressesForBeaconBlockProposal() {
+		nodeAddresses[nodeAddress] = struct{}{}
+	}
+	for _, nodeAddress := range beaconNodeAddressesForBlindedBeaconBlockProposal() {
+		nodeAddresses[nodeAddress] = struct{}{}
 	}
 
 	addresses := make([]string, 0, len(nodeAddresses))
