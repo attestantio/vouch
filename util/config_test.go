@@ -149,6 +149,17 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForProposing,
 		},
 		{
+			name: "ProposingDeduplication",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESSES":                                       "1 2 1 3 2",
+				"STRATEGIES_BEACONBLOCKPROPOSAL_BEACON_NODE_ADDRESSES":        "1 2",
+				"STRATEGIES_BLINDEDBEACONBLOCKPROPOSAL_BEACON_NODE_ADDRESSES": "2 3",
+			},
+			expected:  []string{"1", "2", "3"},
+			envPrefix: "VOUCH_BEACONNODEADDRESSFORPROPOSING",
+			handler:   util.BeaconNodeAddressesForProposing,
+		},
+		{
 			name: "BeaconBlockRootNoStrategy",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":                                     "1 2",
@@ -210,6 +221,15 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForBeaconBlockRoots,
 		},
 		{
+			name: "BeaconBlockRootDeduplication",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESSES": "1 2 1 3 2",
+			},
+			expected:  []string{"1", "2", "3"},
+			envPrefix: "VOUCH_BEACONNODEADDRESSFORBEACONBLOCKROOTS",
+			handler:   util.BeaconNodeAddressesForBeaconBlockRoots,
+		},
+		{
 			name: "AttestingCombinedMajorityStrategy",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":                                             "1 2",
@@ -263,6 +283,13 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			},
 			expected: []string{"3", "4"},
 		},
+		{
+			name: "Deduplication",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESSES": "1 2 1 3 2",
+			},
+			expected: []string{"1", "2", "3"},
+		},
 	}
 
 	strategies := []struct {
@@ -271,6 +298,12 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 		envPrefix string
 		handler   func() []string
 	}{
+		{
+			name:      "BeaconBlockProposal",
+			prefix:    "STRATEGIES_BEACONBLOCKPROPOSAL",
+			envPrefix: "VOUCH_BEACONNODEADDRESSFORBEACONBLOCKPROPOSAL",
+			handler:   util.BeaconNodeAddressesForBeaconBlockProposal,
+		},
 		{
 			name:      "Attesting",
 			prefix:    "STRATEGIES_ATTESTATIONDATA",

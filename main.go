@@ -1284,7 +1284,7 @@ func selectAttestationDataProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple attestation data strategy")
-		attestationDataClient, err := fetchMultiClient(ctx, monitor, "attestationdata", util.BeaconNodeAddresses("strategies.attestationdata"))
+		attestationDataClient, err := fetchMultiClient(ctx, monitor, "attestationdata", util.BeaconNodeAddressesForAttesting())
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch clients for simple attestation data strategy")
 		}
@@ -1345,7 +1345,7 @@ func selectAggregateAttestationProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple aggregate attestation strategy")
-		aggregateAttestationClient, err := fetchMultiClient(ctx, monitor, "aggregateattestation", util.BeaconNodeAddresses("strategies.aggregateattestation"))
+		aggregateAttestationClient, err := fetchMultiClient(ctx, monitor, "aggregateattestation", util.BeaconNodeAddressesForAggregateAttestations())
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch clients for simple aggregate attestation strategy")
 		}
@@ -1413,7 +1413,7 @@ func selectProposalProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple beacon block proposal strategy")
-		beaconBlockProposalClient, err := fetchMultiClient(ctx, monitor, "beaconblockproposal", util.BeaconNodeAddresses("strategies.beaconblockproposal"))
+		beaconBlockProposalClient, err := fetchMultiClient(ctx, monitor, "beaconblockproposal", util.BeaconNodeAddressesForBeaconBlockProposal())
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch client for simple beacon block proposal strategy")
 		}
@@ -1471,7 +1471,7 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple sync committee contribution strategy")
-		syncCommitteeContributionClient, err := fetchMultiClient(ctx, monitor, "synccommitteecontribution", util.BeaconNodeAddresses("strategies.synccommitteecontribution"))
+		syncCommitteeContributionClient, err := fetchMultiClient(ctx, monitor, "synccommitteecontribution", util.BeaconNodeAddressesForSyncCommitteeContributions())
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch client for simple sync committee contribution strategy")
 		}
@@ -1552,7 +1552,7 @@ func selectBeaconBlockRootProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple beacon block root strategy")
-		beaconBlockRootClient, err := fetchMultiClient(ctx, monitor, "beaconblockroot", util.BeaconNodeAddresses("strategies.beaconblockroot"))
+		beaconBlockRootClient, err := fetchMultiClient(ctx, monitor, "beaconblockroot", util.BeaconNodeAddressesForBeaconBlockRoots())
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch client for simple beacon block root strategy")
 		}
