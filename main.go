@@ -1519,7 +1519,7 @@ func selectBeaconBlockRootProvider(ctx context.Context,
 			majoritybeaconblockrootstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
 		)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to start majority sync committee contribution strategy")
+			return nil, errors.Wrap(err, "failed to start majority beacon block root strategy")
 		}
 	case "first":
 		log.Info().Msg("Starting first beacon block root strategy")
