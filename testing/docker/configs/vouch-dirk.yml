@@ -1,0 +1,26 @@
+# Vouch configuration for Docker integration testing with Dirk
+# Uses test certificates from testing/resources/
+
+beacon-node-address: 'http://beacon-mock:5052'
+
+accountmanager:
+  dirk:
+    endpoints:
+      - signer-test01:9091
+    client-cert: file:///certs/client.crt
+    client-key: file:///certs/client.key
+    ca-cert: file:///certs/ca.crt
+    accounts:
+      - TestWallet
+    timeout: 30s
+
+blockrelay:
+  listen-address: '0.0.0.0:18550'
+  fallback-fee-recipient: '0x0000000000000000000000000000000000000001'
+
+metrics:
+  prometheus:
+    listen-address: '0.0.0.0:8081'
+
+log-level: debug
+log-format: json

@@ -4,6 +4,8 @@ dev:
   - update go-eth2-wallet-dirk to v1.6.0
   - update go-eth2-client to v0.28.0
   - update go version to 1.25
+  - fix an issue where base-dir was checked before loading ENV variables, making VOUCH_BASE_DIR not work
+  - update Dockerfile to use distroless as runtime base image
 
 1.12.0:
   - import fulu container specs from go-eth2-client
