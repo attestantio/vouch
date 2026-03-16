@@ -83,8 +83,97 @@ func BeaconNodeAddressesForAttesting() []string {
 		for _, nodeAddress := range BeaconNodeAddresses("strategies.attestationdata.majority") {
 			nodeAddresses[nodeAddress] = struct{}{}
 		}
+	case "combinedmajority":
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.attestationdata.combinedmajority") {
+			nodeAddresses[nodeAddress] = struct{}{}
+		}
 	default:
 		for _, nodeAddress := range BeaconNodeAddresses("strategies.attestationdata") {
+			nodeAddresses[nodeAddress] = struct{}{}
+		}
+	}
+
+	addresses := make([]string, 0, len(nodeAddresses))
+	for nodeAddress := range nodeAddresses {
+		addresses = append(addresses, nodeAddress)
+	}
+	sort.Strings(addresses)
+
+	return addresses
+}
+
+// BeaconNodeAddressesForAggregateAttestations obtains the beacon node addresses used for
+// aggregate attestations from the configuration.
+// This takes into account the used styles in strategies, and removes duplicates.
+func BeaconNodeAddressesForAggregateAttestations() []string {
+	nodeAddresses := make(map[string]struct{})
+	switch viper.GetString("strategies.aggregateattestation.style") {
+	case "best":
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.aggregateattestation.best") {
+			nodeAddresses[nodeAddress] = struct{}{}
+		}
+	case "first":
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.aggregateattestation.first") {
+			nodeAddresses[nodeAddress] = struct{}{}
+		}
+	default:
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.aggregateattestation") {
+			nodeAddresses[nodeAddress] = struct{}{}
+		}
+	}
+
+	addresses := make([]string, 0, len(nodeAddresses))
+	for nodeAddress := range nodeAddresses {
+		addresses = append(addresses, nodeAddress)
+	}
+	sort.Strings(addresses)
+
+	return addresses
+}
+
+func BeaconNodeAddressesForBeaconBlockRoots() []string {
+	nodeAddresses := make(map[string]struct{})
+	switch viper.GetString("strategies.beaconblockroot.style") {
+	case "majority":
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.beaconblockroot.majority") {
+			nodeAddresses[nodeAddress] = struct{}{}
+		}
+	case "first":
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.beaconblockroot.first") {
+			nodeAddresses[nodeAddress] = struct{}{}
+		}
+	case "latest":
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.beaconblockroot.latest") {
+			nodeAddresses[nodeAddress] = struct{}{}
+		}
+	default:
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.beaconblockroot") {
+			nodeAddresses[nodeAddress] = struct{}{}
+		}
+	}
+
+	addresses := make([]string, 0, len(nodeAddresses))
+	for nodeAddress := range nodeAddresses {
+		addresses = append(addresses, nodeAddress)
+	}
+	sort.Strings(addresses)
+
+	return addresses
+}
+
+func BeaconNodeAddressesForSyncCommitteeContributions() []string {
+	nodeAddresses := make(map[string]struct{})
+	switch viper.GetString("strategies.synccommitteecontribution.style") {
+	case "best":
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.synccommitteecontribution.best") {
+			nodeAddresses[nodeAddress] = struct{}{}
+		}
+	case "first":
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.synccommitteecontribution.first") {
+			nodeAddresses[nodeAddress] = struct{}{}
+		}
+	default:
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.synccommitteecontribution") {
 			nodeAddresses[nodeAddress] = struct{}{}
 		}
 	}
