@@ -40,7 +40,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 		handler   func() []string
 	}{
 		{
-			name: "ProposingNoStrategy",
+			name: "CombinedProposalNoStrategy",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES": "1 2",
 				"STRATEGIES_BEACONBLOCKPROPOSAL_BEST_BEACON_NODE_ADDRESSES":         "3 4",
@@ -53,7 +53,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForProposing,
 		},
 		{
-			name: "ProposingFirstStrategy",
+			name: "CombinedProposalFirstStrategy",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":                                             "1 2",
 				"STRATEGIES_BEACONBLOCKPROPOSAL_STYLE":                              "first",
@@ -67,7 +67,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForProposing,
 		},
 		{
-			name: "ProposingFirstStrategies",
+			name: "CombinedProposalFirstStrategies",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":                                             "1 2",
 				"STRATEGIES_BEACONBLOCKPROPOSAL_STYLE":                              "first",
@@ -82,7 +82,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForProposing,
 		},
 		{
-			name: "ProposingBestStrategy",
+			name: "CombinedProposalBestStrategy",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":                                             "1 2",
 				"STRATEGIES_BEACONBLOCKPROPOSAL_STYLE":                              "best",
@@ -96,7 +96,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForProposing,
 		},
 		{
-			name: "ProposingBestStrategies",
+			name: "CombinedProposalBestStrategies",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":                                             "1 2",
 				"STRATEGIES_BEACONBLOCKPROPOSAL_STYLE":                              "best",
@@ -111,7 +111,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForProposing,
 		},
 		{
-			name: "ProposingMixedStrategies",
+			name: "CombinedProposalMixedStrategies",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":                                             "1 2",
 				"STRATEGIES_BEACONBLOCKPROPOSAL_STYLE":                              "best",
@@ -126,7 +126,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForProposing,
 		},
 		{
-			name: "ProposingSimpleStrategyWithOverride",
+			name: "CombinedProposalSimpleStrategyWithOverride",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":                                "1 2",
 				"STRATEGIES_BEACONBLOCKPROPOSAL_BEACON_NODE_ADDRESSES": "3 4",
@@ -138,7 +138,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForProposing,
 		},
 		{
-			name: "ProposingSimpleStrategyBothOverridden",
+			name: "CombinedProposalSimpleStrategyBothOverridden",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":                                       "1 2",
 				"STRATEGIES_BEACONBLOCKPROPOSAL_BEACON_NODE_ADDRESSES":        "3 4",
@@ -149,7 +149,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForProposing,
 		},
 		{
-			name: "ProposingDeduplication",
+			name: "CombinedProposalDeduplication",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":                                       "1 2 1 3 2",
 				"STRATEGIES_BEACONBLOCKPROPOSAL_BEACON_NODE_ADDRESSES":        "1 2",
@@ -230,7 +230,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForBeaconBlockRoots,
 		},
 		{
-			name: "AttestingMajorityStrategy",
+			name: "AttestationDataMajorityStrategy",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":                                             "1 2",
 				"STRATEGIES_ATTESTATIONDATA_STYLE":                                  "majority",
@@ -244,7 +244,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForAttesting,
 		},
 		{
-			name: "AttestingCombinedMajorityStrategy",
+			name: "AttestationDataCombinedMajorityStrategy",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":                                             "1 2",
 				"STRATEGIES_ATTESTATIONDATA_STYLE":                                  "combinedmajority",
@@ -319,7 +319,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForBeaconBlockProposal,
 		},
 		{
-			name:      "Attesting",
+			name:      "AttestationData",
 			prefix:    "STRATEGIES_ATTESTATIONDATA",
 			envPrefix: "VOUCH_BEACONNODEADDRESSFORATTESTING",
 			handler:   util.BeaconNodeAddressesForAttesting,
