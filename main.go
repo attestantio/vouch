@@ -1417,7 +1417,11 @@ func selectProposalProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple beacon block proposal strategy")
-		proposalProvider = eth2Client.(eth2client.ProposalProvider)
+		beaconBlockProposalClient, err := fetchMultiClient(ctx, monitor, "beaconblockproposal", util.BeaconNodeAddresses("strategies.beaconblockproposal"))
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch client for simple beacon block proposal strategy")
+		}
+		proposalProvider = beaconBlockProposalClient.(eth2client.ProposalProvider)
 	}
 
 	return proposalProvider, nil
