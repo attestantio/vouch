@@ -199,6 +199,15 @@ func TestBeaconNodeAddressesForAttesting(t *testing.T) {
 			},
 			expected: []string{"7", "8"},
 		},
+		{
+			name: "SimpleStrategyWithOverride",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESSES":                              "1 2",
+				"STRATEGIES_ATTESTATIONDATA_BEACON_NODE_ADDRESSES":   "3 4",
+				"STRATEGIES_ATTESTATIONDATA_BEST_BEACON_NODE_ADDRESSES": "5 6",
+			},
+			expected: []string{"3", "4"},
+		},
 	}
 
 	for _, test := range tests {
