@@ -692,7 +692,7 @@ func startProviders(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting aggregate attestation provider")
-	aggregateAttestationProvider, err := selectAggregateAttestationProvider(ctx, monitor, eth2Client)
+	aggregateAttestationProvider, err := selectAggregateAttestationProvider(ctx, monitor)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to select aggregate attestation provider")
 	}
@@ -1307,7 +1307,6 @@ func selectAttestationDataProvider(ctx context.Context,
 // selectAggregateAttestationProvider selects the appropriate aggregate attestation provider given user input.
 func selectAggregateAttestationProvider(ctx context.Context,
 	monitor metrics.Service,
-	eth2Client eth2client.Service,
 ) (
 	eth2client.AggregateAttestationProvider,
 	error,
@@ -1356,7 +1355,11 @@ func selectAggregateAttestationProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple aggregate attestation strategy")
-		aggregateAttestationProvider = eth2Client.(eth2client.AggregateAttestationProvider)
+		aggregateAttestationClient, err := fetchMultiClient(ctx, monitor, "aggregateattestation", util.BeaconNodeAddresses("strategies.aggregateattestation"))
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch client for simple aggregate attestation strategy")
+		}
+		aggregateAttestationProvider = aggregateAttestationClient.(eth2client.AggregateAttestationProvider)
 	}
 
 	return aggregateAttestationProvider, nil
