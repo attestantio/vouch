@@ -111,6 +111,25 @@ func TestBeaconNodeAddressesForProposing(t *testing.T) {
 			},
 			expected: []string{"3", "4", "9", "10"},
 		},
+		{
+			name: "SimpleStrategyWithOverride",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESSES":                                "1 2",
+				"STRATEGIES_BEACONBLOCKPROPOSAL_BEACON_NODE_ADDRESSES": "3 4",
+			},
+			// beaconblockproposal resolves to "3 4" from its override;
+			// blindedbeaconblockproposal has no override, so falls back to top-level "1 2".
+			expected: []string{"1", "2", "3", "4"},
+		},
+		{
+			name: "SimpleStrategyBothOverridden",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESSES":                                       "1 2",
+				"STRATEGIES_BEACONBLOCKPROPOSAL_BEACON_NODE_ADDRESSES":        "3 4",
+				"STRATEGIES_BLINDEDBEACONBLOCKPROPOSAL_BEACON_NODE_ADDRESSES": "5 6",
+			},
+			expected: []string{"3", "4", "5", "6"},
+		},
 	}
 
 	for _, test := range tests {

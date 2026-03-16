@@ -158,9 +158,12 @@ strategies:
     style: 'best'
     # beacon-node-addresses are the addresses from which to receive aggregate attestations.
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
-  # The beaconblockproposal strategy obtains beacon block proposals from multiple beacon nodes.
+  # The beaconblockproposal strategy obtains beacon block proposals from beacon nodes.
   beaconblockproposal:
-    # style can be 'best', which obtains blocks from all nodes and selects the best, or 'first', which uses the first returned
+    # style can be 'best', which obtains blocks from all nodes and selects the best, 'first', which uses the first returned,
+    # or 'simple', which uses a single multiclient.  If not specified, defaults to 'simple'.
+    # All styles respect the beacon-node-addresses configuration below, falling back to the top-level beacon-node-addresses
+    # if not set.
     style: 'best'
     # beacon-node-addresses are the addresses from which to receive beacon block proposals.
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
