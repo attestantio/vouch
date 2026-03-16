@@ -141,8 +141,11 @@ strategies:
   # The attestationdata strategy obtains attestation data from multiple sources.
   attestationdata:
     # style can be 'best', which obtains attestation data from all nodes and selects the best, 'first', which uses the first returned,
-    # 'majority', which obtains attestation data from all nodes and selects the most common, 'combinedmajority, which obtains attestation
-    # data from all nodes and groups data by source/target/slot, and then selects the best head within the winning group.
+    # 'majority', which obtains attestation data from all nodes and selects the most common, 'combinedmajority', which obtains attestation
+    # data from all nodes and groups data by source/target/slot, and then selects the best head within the winning group,
+    # or 'simple', which uses a single multiclient.  If not specified, defaults to 'simple'.
+    # All styles respect the beacon-node-addresses configuration below, falling back to the top-level beacon-node-addresses
+    # if not set.
     style: 'best'
     # beacon-node-addresses are the addresses from which to receive attestation data.
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
@@ -154,7 +157,10 @@ strategies:
   # Note that the list of nodes here must be a subset of those in the attestationdata strategy.  If not, the nodes will not have
   # been gathering the attestations to aggregate and will error when the aggregate request is made.
   aggregateattestation:
-    # style can be 'best', which obtains aggregates from all nodes and selects the best, or 'first', which uses the first returned
+    # style can be 'best', which obtains aggregates from all nodes and selects the best, 'first', which uses the first returned,
+    # or 'simple', which uses a single multiclient.  If not specified, defaults to 'simple'.
+    # All styles respect the beacon-node-addresses configuration below, falling back to the top-level beacon-node-addresses
+    # if not set.
     style: 'best'
     # beacon-node-addresses are the addresses from which to receive aggregate attestations.
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
@@ -186,8 +192,11 @@ strategies:
       timeout: '2s'
   # The beaconblockroot strategy obtains the beacon block root from multiple beacon nodes.
   beaconblockroot:
-    # style can be 'first', which uses the first returned, 'latest', which uses the latest returned, or 'majority', which uses
-    # the one returned by most nodes (taking the latest in case of a tie).
+    # style can be 'first', which uses the first returned, 'latest', which uses the latest returned, 'majority', which uses
+    # the one returned by most nodes (taking the latest in case of a tie), or 'simple', which uses a single multiclient.
+    # If not specified, defaults to 'simple'.
+    # All styles respect the beacon-node-addresses configuration below, falling back to the top-level beacon-node-addresses
+    # if not set.
     style: 'latest'
     # beacon-node-addresses are the addresses from which to receive beacon block roots.
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
@@ -219,7 +228,10 @@ strategies:
       timeout: '2s'
   # The synccommitteecontribution strategy obtains sync committee contributions from multiple sources.
   synccommitteecontribution:
-    # style can be 'best', which obtains contributions from all nodes and selects the best, or 'first', which uses the first returned
+    # style can be 'best', which obtains contributions from all nodes and selects the best, 'first', which uses the first returned,
+    # or 'simple', which uses a single multiclient.  If not specified, defaults to 'simple'.
+    # All styles respect the beacon-node-addresses configuration below, falling back to the top-level beacon-node-addresses
+    # if not set.
     style: 'best'
     # beacon-node-addresses are the addresses from which to receive sync committee contributions.
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
