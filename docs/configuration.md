@@ -172,7 +172,7 @@ strategies:
     timeout: '2s'
   # The beaconblockheader strategy obtains the beacon block headers from multiple beacon nodes.
   beaconblockheader:
-    # style can be 'first'. If not defined 'first' style will be used.
+    # style can be 'first'. If not defined, 'first' style will be used.
     # If set to any other value Vouch will default to using the multiclient.
     style: 'first'
     first:
