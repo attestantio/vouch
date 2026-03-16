@@ -21,210 +21,121 @@ import (
 	"github.com/spf13/viper"
 )
 
+// uniqueSortedAddresses deduplicates and sorts the given address slices.
+func uniqueSortedAddresses(addressSlices ...[]string) []string {
+	nodeAddresses := make(map[string]struct{})
+	for _, addresses := range addressSlices {
+		for _, address := range addresses {
+			nodeAddresses[address] = struct{}{}
+		}
+	}
+
+	result := make([]string, 0, len(nodeAddresses))
+	for address := range nodeAddresses {
+		result = append(result, address)
+	}
+	sort.Strings(result)
+
+	return result
+}
+
 // BeaconNodeAddressesForBeaconBlockProposal obtains the beacon node addresses
 // used for beacon block proposals from the configuration.
 // This takes into account the used styles in strategies, and removes duplicates.
 func BeaconNodeAddressesForBeaconBlockProposal() []string {
-	nodeAddresses := make(map[string]struct{})
 	switch viper.GetString("strategies.beaconblockproposal.style") {
 	case "best":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.beaconblockproposal.best") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.beaconblockproposal.best"))
 	case "first":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.beaconblockproposal.first") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.beaconblockproposal.first"))
 	default:
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.beaconblockproposal") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.beaconblockproposal"))
 	}
-
-	addresses := make([]string, 0, len(nodeAddresses))
-	for nodeAddress := range nodeAddresses {
-		addresses = append(addresses, nodeAddress)
-	}
-	sort.Strings(addresses)
-
-	return addresses
 }
 
 // beaconNodeAddressesForBlindedBeaconBlockProposal obtains the beacon node addresses
 // used for blinded beacon block proposals from the configuration.
 func beaconNodeAddressesForBlindedBeaconBlockProposal() []string {
-	nodeAddresses := make(map[string]struct{})
 	switch viper.GetString("strategies.blindedbeaconblockproposal.style") {
 	case "best":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.blindedbeaconblockproposal.best"))
 	case "first":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.blindedbeaconblockproposal.first"))
 	default:
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.blindedbeaconblockproposal") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.blindedbeaconblockproposal"))
 	}
-
-	addresses := make([]string, 0, len(nodeAddresses))
-	for nodeAddress := range nodeAddresses {
-		addresses = append(addresses, nodeAddress)
-	}
-	sort.Strings(addresses)
-
-	return addresses
 }
 
 // BeaconNodeAddressesForProposing obtains the beacon node addresses used for
 // proposing from the configuration.
 // This takes into account the used styles in strategies, and removes duplicates.
 func BeaconNodeAddressesForProposing() []string {
-	nodeAddresses := make(map[string]struct{})
-	for _, nodeAddress := range BeaconNodeAddressesForBeaconBlockProposal() {
-		nodeAddresses[nodeAddress] = struct{}{}
-	}
-	for _, nodeAddress := range beaconNodeAddressesForBlindedBeaconBlockProposal() {
-		nodeAddresses[nodeAddress] = struct{}{}
-	}
-
-	addresses := make([]string, 0, len(nodeAddresses))
-	for nodeAddress := range nodeAddresses {
-		addresses = append(addresses, nodeAddress)
-	}
-	sort.Strings(addresses)
-
-	return addresses
+	return uniqueSortedAddresses(
+		BeaconNodeAddressesForBeaconBlockProposal(),
+		beaconNodeAddressesForBlindedBeaconBlockProposal(),
+	)
 }
 
 // BeaconNodeAddressesForAttesting obtains the beacon node addresses used for
 // attesting from the configuration.
 // This takes into account the used styles in strategies, and removes duplicates.
 func BeaconNodeAddressesForAttesting() []string {
-	nodeAddresses := make(map[string]struct{})
 	switch viper.GetString("strategies.attestationdata.style") {
 	case "best":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.attestationdata.best") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.attestationdata.best"))
 	case "first":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.attestationdata.first") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.attestationdata.first"))
 	case "majority":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.attestationdata.majority") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.attestationdata.majority"))
 	case "combinedmajority":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.attestationdata.combinedmajority") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.attestationdata.combinedmajority"))
 	default:
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.attestationdata") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.attestationdata"))
 	}
-
-	addresses := make([]string, 0, len(nodeAddresses))
-	for nodeAddress := range nodeAddresses {
-		addresses = append(addresses, nodeAddress)
-	}
-	sort.Strings(addresses)
-
-	return addresses
 }
 
 // BeaconNodeAddressesForAggregateAttestations obtains the beacon node addresses used for
 // aggregate attestations from the configuration.
 // This takes into account the used styles in strategies, and removes duplicates.
 func BeaconNodeAddressesForAggregateAttestations() []string {
-	nodeAddresses := make(map[string]struct{})
 	switch viper.GetString("strategies.aggregateattestation.style") {
 	case "best":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.aggregateattestation.best") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.aggregateattestation.best"))
 	case "first":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.aggregateattestation.first") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.aggregateattestation.first"))
 	default:
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.aggregateattestation") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.aggregateattestation"))
 	}
-
-	addresses := make([]string, 0, len(nodeAddresses))
-	for nodeAddress := range nodeAddresses {
-		addresses = append(addresses, nodeAddress)
-	}
-	sort.Strings(addresses)
-
-	return addresses
 }
 
 // BeaconNodeAddressesForBeaconBlockRoots obtains the beacon node addresses used for
 // beacon block roots from the configuration.
 // This takes into account the used styles in strategies, and removes duplicates.
 func BeaconNodeAddressesForBeaconBlockRoots() []string {
-	nodeAddresses := make(map[string]struct{})
 	switch viper.GetString("strategies.beaconblockroot.style") {
 	case "majority":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.beaconblockroot.majority") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.beaconblockroot.majority"))
 	case "first":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.beaconblockroot.first") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.beaconblockroot.first"))
 	case "latest":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.beaconblockroot.latest") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.beaconblockroot.latest"))
 	default:
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.beaconblockroot") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.beaconblockroot"))
 	}
-
-	addresses := make([]string, 0, len(nodeAddresses))
-	for nodeAddress := range nodeAddresses {
-		addresses = append(addresses, nodeAddress)
-	}
-	sort.Strings(addresses)
-
-	return addresses
 }
 
 // BeaconNodeAddressesForSyncCommitteeContributions obtains the beacon node addresses used for
 // sync committee contributions from the configuration.
 // This takes into account the used styles in strategies, and removes duplicates.
 func BeaconNodeAddressesForSyncCommitteeContributions() []string {
-	nodeAddresses := make(map[string]struct{})
 	switch viper.GetString("strategies.synccommitteecontribution.style") {
 	case "best":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.synccommitteecontribution.best") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.synccommitteecontribution.best"))
 	case "first":
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.synccommitteecontribution.first") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.synccommitteecontribution.first"))
 	default:
-		for _, nodeAddress := range BeaconNodeAddresses("strategies.synccommitteecontribution") {
-			nodeAddresses[nodeAddress] = struct{}{}
-		}
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.synccommitteecontribution"))
 	}
-
-	addresses := make([]string, 0, len(nodeAddresses))
-	for nodeAddress := range nodeAddresses {
-		addresses = append(addresses, nodeAddress)
-	}
-	sort.Strings(addresses)
-
-	return addresses
 }
 
 // HierarchicalBool returns the best configuration value for the path.
