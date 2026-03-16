@@ -230,6 +230,20 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForBeaconBlockRoots,
 		},
 		{
+			name: "AttestingMajorityStrategy",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESSES":                                             "1 2",
+				"STRATEGIES_ATTESTATIONDATA_STYLE":                                  "majority",
+				"STRATEGIES_ATTESTATIONDATA_BEST_BEACON_NODE_ADDRESSES":             "3 4",
+				"STRATEGIES_ATTESTATIONDATA_FIRST_BEACON_NODE_ADDRESSES":            "5 6",
+				"STRATEGIES_ATTESTATIONDATA_MAJORITY_BEACON_NODE_ADDRESSES":         "7 8",
+				"STRATEGIES_ATTESTATIONDATA_COMBINEDMAJORITY_BEACON_NODE_ADDRESSES": "9 10",
+			},
+			expected:  []string{"7", "8"},
+			envPrefix: "VOUCH_BEACONNODEADDRESSFORATTESTING",
+			handler:   util.BeaconNodeAddressesForAttesting,
+		},
+		{
 			name: "AttestingCombinedMajorityStrategy",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":                                             "1 2",
