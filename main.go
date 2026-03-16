@@ -686,7 +686,7 @@ func startProviders(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting attestation data provider")
-	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, eth2Client, chainTime, cache)
+	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, chainTime, cache)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to select attestation data provider")
 	}
@@ -1198,7 +1198,6 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 // selectAttestationDataProvider selects the appropriate attestation data provider given user input.
 func selectAttestationDataProvider(ctx context.Context,
 	monitor metrics.Service,
-	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cacheSvc cache.Service,
 ) (eth2client.AttestationDataProvider, error) {
@@ -1295,7 +1294,11 @@ func selectAttestationDataProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple attestation data strategy")
-		attestationDataProvider = eth2Client.(eth2client.AttestationDataProvider)
+		attestationDataClient, err := fetchMultiClient(ctx, monitor, "attestationdata", util.BeaconNodeAddresses("strategies.attestationdata"))
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch client for simple attestation data strategy")
+		}
+		attestationDataProvider = attestationDataClient.(eth2client.AttestationDataProvider)
 	}
 
 	return attestationDataProvider, nil

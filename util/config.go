@@ -84,7 +84,7 @@ func BeaconNodeAddressesForAttesting() []string {
 			nodeAddresses[nodeAddress] = struct{}{}
 		}
 	default:
-		for _, nodeAddress := range BeaconNodeAddresses("") {
+		for _, nodeAddress := range BeaconNodeAddresses("strategies.attestationdata") {
 			nodeAddresses[nodeAddress] = struct{}{}
 		}
 	}
