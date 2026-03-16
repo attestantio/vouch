@@ -205,7 +205,8 @@ strategies:
       bid-gap: '100ms'
   # The signedbeaconblock strategy obtains the signed beacon blocks from multiple beacon nodes.
   signedbeaconblock:
-    # style can be 'first'. If not defined or set to another value Vouch will default to using the multiclient.
+    # style can be 'first'. If not defined, the 'first' style will be used.
+    # If set to any other value Vouch will default to using the multiclient.
     style: 'first'
     first:
       # beacon-node-addresses are the addresses from which to receive signed beacon blocks.
