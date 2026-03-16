@@ -725,7 +725,7 @@ func startAltairServices(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting sync committee contribution provider")
-	syncCommitteeContributionProvider, err := selectSyncCommitteeContributionProvider(ctx, monitor, eth2Client)
+	syncCommitteeContributionProvider, err := selectSyncCommitteeContributionProvider(ctx, monitor)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "failed to select sync committee contribution provider")
 	}
@@ -1426,7 +1426,6 @@ func selectProposalProvider(ctx context.Context,
 // selectSyncCommitteeContributionProvider selects the appropriate sync committee contribution provider given user input.
 func selectSyncCommitteeContributionProvider(ctx context.Context,
 	monitor metrics.Service,
-	eth2Client eth2client.Service,
 ) (eth2client.SyncCommitteeContributionProvider, error) {
 	var syncCommitteeContributionProvider eth2client.SyncCommitteeContributionProvider
 	var err error
@@ -1472,7 +1471,11 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple sync committee contribution strategy")
-		syncCommitteeContributionProvider = eth2Client.(eth2client.SyncCommitteeContributionProvider)
+		syncCommitteeContributionClient, err := fetchMultiClient(ctx, monitor, "synccommitteecontribution", util.BeaconNodeAddresses("strategies.synccommitteecontribution"))
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch client for simple sync committee contribution strategy")
+		}
+		syncCommitteeContributionProvider = syncCommitteeContributionClient.(eth2client.SyncCommitteeContributionProvider)
 	}
 
 	return syncCommitteeContributionProvider, nil
