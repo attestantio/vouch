@@ -165,6 +165,9 @@ func BeaconNodeAddressesForAggregateAttestations() []string {
 	return addresses
 }
 
+// BeaconNodeAddressesForBeaconBlockRoots obtains the beacon node addresses used for
+// beacon block roots from the configuration.
+// This takes into account the used styles in strategies, and removes duplicates.
 func BeaconNodeAddressesForBeaconBlockRoots() []string {
 	nodeAddresses := make(map[string]struct{})
 	switch viper.GetString("strategies.beaconblockroot.style") {
@@ -195,6 +198,9 @@ func BeaconNodeAddressesForBeaconBlockRoots() []string {
 	return addresses
 }
 
+// BeaconNodeAddressesForSyncCommitteeContributions obtains the beacon node addresses used for
+// sync committee contributions from the configuration.
+// This takes into account the used styles in strategies, and removes duplicates.
 func BeaconNodeAddressesForSyncCommitteeContributions() []string {
 	nodeAddresses := make(map[string]struct{})
 	switch viper.GetString("strategies.synccommitteecontribution.style") {
