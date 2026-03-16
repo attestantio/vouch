@@ -1415,7 +1415,7 @@ func selectProposalProvider(ctx context.Context,
 		log.Info().Msg("Starting simple beacon block proposal strategy")
 		beaconBlockProposalClient, err := fetchMultiClient(ctx, monitor, "beaconblockproposal", util.BeaconNodeAddressesForBeaconBlockProposal())
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to fetch client for simple beacon block proposal strategy")
+			return nil, errors.Wrap(err, "failed to fetch clients for simple beacon block proposal strategy")
 		}
 		proposalProvider = beaconBlockProposalClient.(eth2client.ProposalProvider)
 	}
@@ -1473,7 +1473,7 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 		log.Info().Msg("Starting simple sync committee contribution strategy")
 		syncCommitteeContributionClient, err := fetchMultiClient(ctx, monitor, "synccommitteecontribution", util.BeaconNodeAddressesForSyncCommitteeContributions())
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to fetch client for simple sync committee contribution strategy")
+			return nil, errors.Wrap(err, "failed to fetch clients for simple sync committee contribution strategy")
 		}
 		syncCommitteeContributionProvider = syncCommitteeContributionClient.(eth2client.SyncCommitteeContributionProvider)
 	}
@@ -1554,7 +1554,7 @@ func selectBeaconBlockRootProvider(ctx context.Context,
 		log.Info().Msg("Starting simple beacon block root strategy")
 		beaconBlockRootClient, err := fetchMultiClient(ctx, monitor, "beaconblockroot", util.BeaconNodeAddressesForBeaconBlockRoots())
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to fetch client for simple beacon block root strategy")
+			return nil, errors.Wrap(err, "failed to fetch clients for simple beacon block root strategy")
 		}
 		beaconBlockRootProvider = beaconBlockRootClient.(eth2client.BeaconBlockRootProvider)
 	}
