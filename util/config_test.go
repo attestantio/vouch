@@ -241,7 +241,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			},
 			expected:  []string{"7", "8"},
 			envPrefix: "VOUCH_BEACONNODEADDRESSFORATTESTING",
-			handler:   util.BeaconNodeAddressesForAttesting,
+			handler:   util.BeaconNodeAddressesForAttestationData,
 		},
 		{
 			name: "AttestationDataCombinedMajorityStrategy",
@@ -255,7 +255,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			},
 			expected:  []string{"9", "10"},
 			envPrefix: "VOUCH_BEACONNODEADDRESSFORATTESTING",
-			handler:   util.BeaconNodeAddressesForAttesting,
+			handler:   util.BeaconNodeAddressesForAttestationData,
 		},
 	}
 
@@ -404,7 +404,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			name:      "AttestationData",
 			prefix:    "STRATEGIES_ATTESTATIONDATA",
 			envPrefix: "VOUCH_BEACONNODEADDRESSFORATTESTING",
-			handler:   util.BeaconNodeAddressesForAttesting,
+			handler:   util.BeaconNodeAddressesForAttestationData,
 		},
 		{
 			name:      "AggregateAttestation",

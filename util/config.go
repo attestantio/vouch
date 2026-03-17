@@ -76,10 +76,10 @@ func BeaconNodeAddressesForProposing() []string {
 	)
 }
 
-// BeaconNodeAddressesForAttesting obtains the beacon node addresses used for
-// attesting from the configuration.
+// BeaconNodeAddressesForAttestationData obtains the beacon node addresses used for
+// attestation data from the configuration.
 // This takes into account the used styles in strategies, and removes duplicates.
-func BeaconNodeAddressesForAttesting() []string {
+func BeaconNodeAddressesForAttestationData() []string {
 	switch viper.GetString("strategies.attestationdata.style") {
 	case "best":
 		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.attestationdata.best"))
