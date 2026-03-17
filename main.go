@@ -341,7 +341,7 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	signedBeaconBlockProvider, beaconBlockHeaderProvider, err := startProviderServices(ctx, monitor, eth2Client)
+	signedBeaconBlockProvider, beaconBlockHeaderProvider, err := startProviderServices(ctx, monitor)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -554,15 +554,15 @@ func waitForGenesis(ctx context.Context, chainTime chaintime.Service) (bool, err
 	return waitedForGenesis, nil
 }
 
-func startProviderServices(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (eth2client.SignedBeaconBlockProvider, eth2client.BeaconBlockHeadersProvider, error) {
+func startProviderServices(ctx context.Context, monitor metrics.Service) (eth2client.SignedBeaconBlockProvider, eth2client.BeaconBlockHeadersProvider, error) {
 	// The signed beacon block provider from the configured strategy to define how we get signed beacon blocks.
-	signedBeaconBlockProvider, err := selectSignedBeaconBlockProvider(ctx, monitor, eth2Client)
+	signedBeaconBlockProvider, err := selectSignedBeaconBlockProvider(ctx, monitor)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to fetch signed beacon block provider for controller")
 	}
 
 	// The block header provider from the configured strategy to define how we get block headers.
-	beaconBlockHeaderProvider, err := selectBeaconHeaderProvider(ctx, monitor, eth2Client)
+	beaconBlockHeaderProvider, err := selectBeaconHeaderProvider(ctx, monitor)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to fetch beacon block header provider for controller")
 	}
@@ -1990,7 +1990,6 @@ func obtainBuilderConfigsForPrivilegedBuilders(_ context.Context,
 // select the signed beacon block provider based on user input.
 func selectSignedBeaconBlockProvider(ctx context.Context,
 	monitor metrics.Service,
-	eth2Client eth2client.Service,
 ) (
 	eth2client.SignedBeaconBlockProvider,
 	error,
@@ -2021,8 +2020,12 @@ func selectSignedBeaconBlockProvider(ctx context.Context,
 			firstsignedbeaconblockstrategy.WithSignedBeaconBlockProviders(signedBeaconBlockProviders),
 		)
 	default:
-		log.Info().Msg("Starting simple signed block strategy")
-		provider = eth2Client.(eth2client.SignedBeaconBlockProvider)
+		log.Info().Msg("Starting simple signed beacon block strategy")
+		signedBeaconBlockClient, err := fetchMultiClient(ctx, monitor, "signedbeaconblock", util.BeaconNodeAddressesForSignedBeaconBlock())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch clients for simple signed beacon block strategy")
+		}
+		provider = signedBeaconBlockClient.(eth2client.SignedBeaconBlockProvider)
 	}
 
 	if err != nil {
@@ -2035,7 +2038,6 @@ func selectSignedBeaconBlockProvider(ctx context.Context,
 // select the beacon header provider based on user input.
 func selectBeaconHeaderProvider(ctx context.Context,
 	monitor metrics.Service,
-	eth2Client eth2client.Service,
 ) (
 	eth2client.BeaconBlockHeadersProvider,
 	error,
@@ -2067,7 +2069,11 @@ func selectBeaconHeaderProvider(ctx context.Context,
 		)
 	default:
 		log.Info().Msg("Starting simple beacon block header strategy")
-		provider = eth2Client.(eth2client.BeaconBlockHeadersProvider)
+		beaconBlockHeaderClient, err := fetchMultiClient(ctx, monitor, "beaconblockheader", util.BeaconNodeAddressesForBeaconBlockHeader())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch clients for simple beacon block header strategy")
+		}
+		provider = beaconBlockHeaderClient.(eth2client.BeaconBlockHeadersProvider)
 	}
 
 	if err != nil {
