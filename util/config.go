@@ -138,6 +138,30 @@ func BeaconNodeAddressesForSyncCommitteeContributions() []string {
 	}
 }
 
+// BeaconNodeAddressesForSignedBeaconBlock obtains the beacon node addresses used for
+// signed beacon blocks from the configuration.
+// This takes into account the used styles in strategies, and removes duplicates.
+func BeaconNodeAddressesForSignedBeaconBlock() []string {
+	switch viper.GetString("strategies.signedbeaconblock.style") {
+	case "first":
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.signedbeaconblock.first"))
+	default:
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.signedbeaconblock"))
+	}
+}
+
+// BeaconNodeAddressesForBeaconBlockHeader obtains the beacon node addresses used for
+// beacon block headers from the configuration.
+// This takes into account the used styles in strategies, and removes duplicates.
+func BeaconNodeAddressesForBeaconBlockHeader() []string {
+	switch viper.GetString("strategies.beaconblockheader.style") {
+	case "first":
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.beaconblockheader.first"))
+	default:
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.beaconblockheader"))
+	}
+}
+
 // HierarchicalBool returns the best configuration value for the path.
 func HierarchicalBool(variable string, path string) bool {
 	if path == "" {
