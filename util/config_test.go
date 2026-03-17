@@ -18,7 +18,6 @@ import (
 	// #nosec G108
 	"fmt"
 	_ "net/http/pprof"
-	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -448,7 +447,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			prefix := fmt.Sprintf("%s_%s", strings.ToUpper(test.envPrefix), strings.ToUpper(test.name))
 			for k, v := range test.env {
-				os.Setenv(fmt.Sprintf("%s_%s", prefix, k), v)
+				t.Setenv(fmt.Sprintf("%s_%s", prefix, k), v)
 			}
 			viper.SetEnvPrefix(prefix)
 			res := test.handler()
