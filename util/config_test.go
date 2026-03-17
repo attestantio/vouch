@@ -259,6 +259,88 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 		},
 	}
 
+	// SignedBeaconBlock and BeaconBlockHeader only support "first" style,
+	// so they are tested explicitly rather than via the generic templates.
+	firstOnlyStrategies := []struct {
+		name      string
+		prefix    string
+		envPrefix string
+		handler   func() []string
+	}{
+		{
+			name:      "SignedBeaconBlock",
+			prefix:    "STRATEGIES_SIGNEDBEACONBLOCK",
+			envPrefix: "VOUCH_BEACONNODEADDRESSFORSIGNEDBEACONBLOCK",
+			handler:   util.BeaconNodeAddressesForSignedBeaconBlock,
+		},
+		{
+			name:      "BeaconBlockHeader",
+			prefix:    "STRATEGIES_BEACONBLOCKHEADER",
+			envPrefix: "VOUCH_BEACONNODEADDRESSFORBEACONBLOCKHEADER",
+			handler:   util.BeaconNodeAddressesForBeaconBlockHeader,
+		},
+	}
+
+	firstOnlyTemplates := []struct {
+		name     string
+		env      map[string]string
+		expected []string
+	}{
+		{
+			name: "NoStrategy",
+			env: map[string]string{
+				"FIRST_BEACON_NODE_ADDRESSES": "3 4",
+			},
+			expected: []string{"1", "2"},
+		},
+		{
+			name: "FirstStrategy",
+			env: map[string]string{
+				"STYLE":                       "first",
+				"FIRST_BEACON_NODE_ADDRESSES": "5 6",
+			},
+			expected: []string{"5", "6"},
+		},
+		{
+			name: "SimpleStrategyWithOverride",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESSES": "3 4",
+			},
+			expected: []string{"3", "4"},
+		},
+		{
+			name: "Deduplication",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESSES": "1 2 1 3 2",
+			},
+			expected: []string{"1", "2", "3"},
+		},
+	}
+
+	for _, strategy := range firstOnlyStrategies {
+		for _, template := range firstOnlyTemplates {
+			env := make(map[string]string)
+			for k, v := range template.env {
+				env[fmt.Sprintf("%s_%s", strategy.prefix, k)] = v
+			}
+			env["BEACON_NODE_ADDRESSES"] = "1 2"
+
+			tests = append(tests, struct {
+				name      string
+				env       map[string]string
+				expected  []string
+				envPrefix string
+				handler   func() []string
+			}{
+				name:      fmt.Sprintf("%s%s", strategy.name, template.name),
+				env:       env,
+				expected:  template.expected,
+				envPrefix: strategy.envPrefix,
+				handler:   strategy.handler,
+			})
+		}
+	}
+
 	templates := []struct {
 		name     string
 		env      map[string]string
