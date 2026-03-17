@@ -449,7 +449,7 @@ func initController(ctx context.Context,
 	error,
 ) {
 	// The events provider for the controller should only use beacon nodes that are used for attestation data.
-	eventsConsensusClient, err := fetchMultiClient(ctx, monitor, "events", util.BeaconNodeAddressesForAttesting())
+	eventsConsensusClient, err := fetchMultiClient(ctx, monitor, "events", util.BeaconNodeAddressesForAttestationData())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch multiclient for controller")
 	}
@@ -1294,7 +1294,7 @@ func selectAttestationDataProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple attestation data strategy")
-		attestationDataClient, err := fetchMultiClient(ctx, monitor, "attestationdata", util.BeaconNodeAddressesForAttesting())
+		attestationDataClient, err := fetchMultiClient(ctx, monitor, "attestationdata", util.BeaconNodeAddressesForAttestationData())
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch clients for simple attestation data strategy")
 		}
