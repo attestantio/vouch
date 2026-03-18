@@ -89,7 +89,7 @@ func (s *Service) BuilderBid(ctx context.Context,
 	hardCtx, cancel := context.WithTimeout(ctx, s.timeout)
 	softCtx, softCancel := context.WithTimeout(hardCtx, s.timeout/2)
 
-	respCh, errCh := s.issueBuilderBidRequests(ctx, slot, parentHash, pubkey, proposerConfig, res)
+	respCh, errCh := s.issueBuilderBidRequests(hardCtx, slot, parentHash, pubkey, proposerConfig, res)
 	span.AddEvent("Issued requests")
 
 	responded, errored := s.builderBidLoop1(softCtx, started, requests, res, respCh, errCh, builderConfigs)
