@@ -3,4 +3,4 @@ name: custom-gcl
 
 plugins:
   - module: "github.com/attestantio/attgo-linter"
-    version: v0.1.0
+    version: v0.2.0
