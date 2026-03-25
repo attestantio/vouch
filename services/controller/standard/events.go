@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -50,7 +51,11 @@ func (s *Service) HandleHeadEvent(ctx context.Context, data *apiv1.HeadEvent) {
 	s.lastBlockRoot = data.Block
 	epoch := s.chainTimeService.SlotToEpoch(data.Slot)
 
-	monitorBlockDelay(uint(uint64(data.Slot)%s.slotsPerEpoch), time.Since(s.chainTimeService.StartOfSlot(data.Slot)))
+	var provider string
+	if svc, ok := s.eventsProvider.(eth2client.Service); ok {
+		provider = svc.Address()
+	}
+	monitorBlockDelay(uint(uint64(data.Slot)%s.slotsPerEpoch), time.Since(s.chainTimeService.StartOfSlot(data.Slot)), provider)
 
 	// If this block is for the prior slot and we may have a proposal waiting then kick
 	// off any proposal for this slot.

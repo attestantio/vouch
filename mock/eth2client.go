@@ -285,6 +285,34 @@ func (*EventsProvider) Events(_ context.Context, _ *api.EventsOpts) error {
 	return nil
 }
 
+// AddressableEventsProvider is a mock for eth2client.EventsProvider that also
+// implements eth2client.Service, allowing the address to be extracted.
+type AddressableEventsProvider struct {
+	address string
+}
+
+// NewAddressableEventsProvider returns a mock events provider with a known address.
+func NewAddressableEventsProvider(address string) *AddressableEventsProvider {
+	return &AddressableEventsProvider{address: address}
+}
+
+// Events is a mock.
+func (*AddressableEventsProvider) Events(_ context.Context, _ *api.EventsOpts) error {
+	return nil
+}
+
+// Name returns the name of the mock client.
+func (*AddressableEventsProvider) Name() string { return "mock" }
+
+// Address returns the address of the mock client.
+func (m *AddressableEventsProvider) Address() string { return m.address }
+
+// IsActive returns true.
+func (*AddressableEventsProvider) IsActive() bool { return true }
+
+// IsSynced returns true.
+func (*AddressableEventsProvider) IsSynced() bool { return true }
+
 // ErroringEventsProvider is a mock for eth2client.EventsProvider.
 type ErroringEventsProvider struct{}
 

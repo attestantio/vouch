@@ -113,7 +113,7 @@ There is also a companion metric `vouch_client_operation_requests_total`, which 
 
 Network metrics provide information about the network from Vouch's point of view.  Although these are not under Vouch's control, they have an impact on the performance of the validator.  The specific metrics are:
 
-  - `vouch_block_receipt_delay_seconds` the delay between the start of a slot and the arrival of the block for that slot.  This metric is provided as a histogram, with buckets in increments of 0.1 seconds up to 12 seconds.  This has a label `epoch_slot` which is the position of the slot in the epoch (0 through 31, inclusive)
+  - `vouch_block_receipt_delay_seconds` the delay between the start of a slot and the arrival of the block for that slot.  This metric is provided as a histogram, with buckets in increments of 0.1 seconds up to 12 seconds.  This has labels `epoch_slot` which is the position of the slot in the epoch (0 through 31, inclusive) and `provider` which is the address of the beacon node that delivered the block event
   - `vouch_attestationaggregation_coverage_ratio` the ratio of the number of attestations included in the aggregate to the total number of attestations for the aggregate.  This metric is provided as a histogram, with buckets in increments of 0.1 up to 1.
   - `vouch_synccommitteeaggregation_coverage_ratio` the ratio of the number of sync committee messages included in the aggregate to the total number of members of the sync committee for the aggregate.  This metric is provided as a histogram, with buckets in increments of 0.1 up to 1.
 
