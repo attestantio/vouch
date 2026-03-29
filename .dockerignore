@@ -3,6 +3,7 @@
 *.dll
 *.so
 *.dylib
+vouch
 
 # Test binary, build with `go test -c`
 *.test
@@ -19,5 +20,16 @@ coverage.html
 
 # Local TODO
 TODO.md
+
+# VCS and editor metadata
+.git
+.gitignore
+.github
+.idea
+.vscode
+.DS_Store
+
+# Logs
+*.log
 
 Dockerfile
