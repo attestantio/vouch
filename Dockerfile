@@ -39,7 +39,9 @@ RUN <<-EOF
     CGO_ENABLED=1 GOOS=$TARGETOS GOARCH=$TARGETARCH CC=$CC CXX=$CXX go build -o /app/vouch .
 EOF
 
-FROM gcr.io/distroless/base-debian12:nonroot
+FROM debian:bookworm-slim
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt install -y ca-certificates && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
