@@ -17,6 +17,7 @@ import (
 	"context"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -61,7 +62,14 @@ func (*Service) sign(ctx context.Context,
 	return signature, nil
 }
 
+// dedupKey identifies a unique (account, root) pair for deduplication.
+type dedupKey struct {
+	accountID uuid.UUID
+	root      phase0.Root
+}
+
 // signRootsMulti signs multiple roots for multiple accounts, using protected methods if possible.
+// Duplicate (account, root) pairs are deduplicated so that signing is only performed once per unique pair.
 func (*Service) signRootsMulti(ctx context.Context,
 	accounts []e2wtypes.Account,
 	roots []phase0.Root,
@@ -73,34 +81,55 @@ func (*Service) signRootsMulti(ctx context.Context,
 	if len(accounts) == 0 {
 		return []phase0.BLSSignature{}, errors.New("no accounts; cannot sign")
 	}
-	sigs := make([]phase0.BLSSignature, len(accounts))
-	data := make([][]byte, len(roots))
-	for i := range roots {
-		data[i] = roots[i][:]
+	if len(accounts) != len(roots) {
+		return []phase0.BLSSignature{}, errors.New("number of accounts and roots do not match")
 	}
 
-	if multiSigner, isMultiSigner := accounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
-		var err error
-		signatures, err := multiSigner.SignGenericMulti(ctx, accounts, data, domain[:])
+	// Deduplicate (account, root) pairs.
+	uniqueMap := make(map[dedupKey]int, len(accounts))
+	indexMapping := make([]int, len(accounts))
+	uniqueAccounts := make([]e2wtypes.Account, 0, len(accounts))
+	uniqueRoots := make([]phase0.Root, 0, len(accounts))
+	for i, acct := range accounts {
+		key := dedupKey{accountID: acct.ID(), root: roots[i]}
+		if idx, exists := uniqueMap[key]; exists {
+			indexMapping[i] = idx
+		} else {
+			uniqueMap[key] = len(uniqueAccounts)
+			indexMapping[i] = len(uniqueAccounts)
+			uniqueAccounts = append(uniqueAccounts, acct)
+			uniqueRoots = append(uniqueRoots, roots[i])
+		}
+	}
+
+	uniqueData := make([][]byte, len(uniqueRoots))
+	for i := range uniqueRoots {
+		uniqueData[i] = uniqueRoots[i][:]
+	}
+
+	uniqueSigs := make([]phase0.BLSSignature, len(uniqueAccounts))
+
+	if multiSigner, isMultiSigner := uniqueAccounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
+		signatures, err := multiSigner.SignGenericMulti(ctx, uniqueAccounts, uniqueData, domain[:])
 		if err != nil {
 			return []phase0.BLSSignature{}, err
 		}
 		for i := range signatures {
 			if signatures[i] != nil {
-				copy(sigs[i][:], signatures[i].Marshal())
+				copy(uniqueSigs[i][:], signatures[i].Marshal())
 			}
 		}
 	} else {
-		for i := range accounts {
+		for i := range uniqueAccounts {
 			container := phase0.SigningData{
-				ObjectRoot: roots[i],
+				ObjectRoot: uniqueRoots[i],
 				Domain:     domain,
 			}
 			hashTreeRoot, err := container.HashTreeRoot()
 			if err != nil {
 				return []phase0.BLSSignature{}, errors.Wrap(err, "failed to generate hash tree root")
 			}
-			signer, isAccountSigner := accounts[i].(e2wtypes.AccountSigner)
+			signer, isAccountSigner := uniqueAccounts[i].(e2wtypes.AccountSigner)
 			if !isAccountSigner {
 				return []phase0.BLSSignature{}, errors.New("unknown signer type; cannot sign")
 			}
@@ -108,9 +137,16 @@ func (*Service) signRootsMulti(ctx context.Context,
 			if err != nil {
 				return []phase0.BLSSignature{}, err
 			}
-			copy(sigs[i][:], sig.Marshal())
+			copy(uniqueSigs[i][:], sig.Marshal())
 		}
 	}
+
+	// Map unique signatures back to all original positions.
+	sigs := make([]phase0.BLSSignature, len(accounts))
+	for i := range accounts {
+		sigs[i] = uniqueSigs[indexMapping[i]]
+	}
+
 	return sigs, nil
 }
 
