@@ -1,4 +1,4 @@
-// Copyright © 2020-2026 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,6 +19,7 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -69,11 +70,216 @@ var (
 	_ e2wtypes.AccountSigner = (*mockSignerAccount)(nil)
 )
 
+// batchRecord records one SignGenericMulti call for verification.
+type batchRecord struct {
+	accountIDs []uuid.UUID
+	data       [][]byte
+}
+
+// mockMultiSignerAccount implements Account and AccountProtectingMultiSigner.
+// All instances sharing the same *batches pointer record calls to SignGenericMulti.
+type mockMultiSignerAccount struct {
+	id      uuid.UUID
+	name    string
+	pubKey  *mockPublicKey
+	batches *[]batchRecord
+}
+
+func (a *mockMultiSignerAccount) ID() uuid.UUID               { return a.id }
+func (a *mockMultiSignerAccount) Name() string                 { return a.name }
+func (a *mockMultiSignerAccount) PublicKey() e2types.PublicKey  { return a.pubKey }
+
+func (a *mockMultiSignerAccount) SignBeaconAttestations(_ context.Context,
+	_ uint64,
+	_ []e2wtypes.Account,
+	_ []uint64,
+	_ []byte,
+	_ uint64,
+	_ []byte,
+	_ uint64,
+	_ []byte,
+	_ []byte,
+) ([]e2types.Signature, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (a *mockMultiSignerAccount) SignGenericMulti(_ context.Context,
+	accounts []e2wtypes.Account,
+	data [][]byte,
+	_ []byte,
+) ([]e2types.Signature, error) {
+	ids := make([]uuid.UUID, len(accounts))
+	for i, acct := range accounts {
+		ids[i] = acct.ID()
+	}
+	dataCopy := make([][]byte, len(data))
+	for i, d := range data {
+		dataCopy[i] = make([]byte, len(d))
+		copy(dataCopy[i], d)
+	}
+	*a.batches = append(*a.batches, batchRecord{accountIDs: ids, data: dataCopy})
+
+	sigs := make([]e2types.Signature, len(accounts))
+	for i, acct := range accounts {
+		sigData := make([]byte, 96)
+		copy(sigData, append([]byte(acct.Name()+":"), data[i][:8]...))
+		sigs[i] = &mockSignature{data: sigData}
+	}
+
+	return sigs, nil
+}
+
+// Compile-time interface checks for multi-signer mock.
+var (
+	_ e2wtypes.Account                       = (*mockMultiSignerAccount)(nil)
+	_ e2wtypes.AccountProtectingMultiSigner  = (*mockMultiSignerAccount)(nil)
+)
+
+func newMockMultiSignerAccount(name string, batches *[]batchRecord) *mockMultiSignerAccount {
+	return &mockMultiSignerAccount{
+		id:      uuid.New(),
+		name:    name,
+		pubKey:  &mockPublicKey{data: []byte(name)},
+		batches: batches,
+	}
+}
+
 func newMockAccount(name string) *mockSignerAccount {
 	return &mockSignerAccount{
 		id:     uuid.New(),
 		name:   name,
 		pubKey: &mockPublicKey{data: []byte(name)},
+	}
+}
+
+func TestSignRootsMultiBatchSplitting(t *testing.T) {
+	rootA := phase0.Root{0x01}
+	rootB := phase0.Root{0x02}
+	rootC := phase0.Root{0x03}
+	domain := phase0.Domain{0xAA}
+
+	tests := []struct {
+		name            string
+		accounts        []*mockMultiSignerAccount
+		roots           []phase0.Root
+		expectedBatches int // number of SignGenericMulti calls
+	}{
+		{
+			name: "SingleAccount_NoBatchSplit",
+			accounts: func() []*mockMultiSignerAccount {
+				batches := &[]batchRecord{}
+				return []*mockMultiSignerAccount{newMockMultiSignerAccount("acct-1", batches)}
+			}(),
+			roots:           []phase0.Root{rootA},
+			expectedBatches: 1,
+		},
+		{
+			name: "AllUnique_NoBatchSplit",
+			accounts: func() []*mockMultiSignerAccount {
+				batches := &[]batchRecord{}
+				return []*mockMultiSignerAccount{
+					newMockMultiSignerAccount("acct-1", batches),
+					newMockMultiSignerAccount("acct-2", batches),
+					newMockMultiSignerAccount("acct-3", batches),
+				}
+			}(),
+			roots:           []phase0.Root{rootA, rootB, rootC},
+			expectedBatches: 1,
+		},
+		{
+			name: "SameAccountDifferentRoots_TwoBatches",
+			accounts: func() []*mockMultiSignerAccount {
+				batches := &[]batchRecord{}
+				a := newMockMultiSignerAccount("acct-1", batches)
+				return []*mockMultiSignerAccount{a, a}
+			}(),
+			roots:           []phase0.Root{rootA, rootB},
+			expectedBatches: 2,
+		},
+		{
+			name: "SameAccountThreeRoots_ThreeBatches",
+			accounts: func() []*mockMultiSignerAccount {
+				batches := &[]batchRecord{}
+				a := newMockMultiSignerAccount("acct-1", batches)
+				return []*mockMultiSignerAccount{a, a, a}
+			}(),
+			roots:           []phase0.Root{rootA, rootB, rootC},
+			expectedBatches: 3,
+		},
+		{
+			name: "MixedDuplicateAndUnique",
+			accounts: func() []*mockMultiSignerAccount {
+				batches := &[]batchRecord{}
+				a := newMockMultiSignerAccount("acct-1", batches)
+				b := newMockMultiSignerAccount("acct-2", batches)
+				// a signs rootA and rootB (2 subnets), b signs rootA (1 subnet).
+				return []*mockMultiSignerAccount{a, b, a}
+			}(),
+			roots:           []phase0.Root{rootA, rootA, rootB},
+			expectedBatches: 2,
+		},
+		{
+			name: "DedupAndSplit",
+			accounts: func() []*mockMultiSignerAccount {
+				batches := &[]batchRecord{}
+				a := newMockMultiSignerAccount("acct-1", batches)
+				// a signs rootA twice (dedup removes one), then rootB (split needed).
+				return []*mockMultiSignerAccount{a, a, a}
+			}(),
+			roots:           []phase0.Root{rootA, rootA, rootB},
+			expectedBatches: 2,
+		},
+	}
+
+	svc := &Service{}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			batches := test.accounts[0].batches
+			*batches = nil // Reset between tests.
+
+			accounts := make([]e2wtypes.Account, len(test.accounts))
+			for i, a := range test.accounts {
+				accounts[i] = a
+			}
+
+			sigs, err := svc.signRootsMulti(context.Background(), accounts, test.roots, domain)
+			require.NoError(t, err)
+			require.Len(t, sigs, len(test.accounts))
+
+			// Verify the number of SignGenericMulti calls (batches).
+			require.Len(t, *batches, test.expectedBatches,
+				"expected %d SignGenericMulti calls, got %d", test.expectedBatches, len(*batches))
+
+			// Verify each batch has unique account IDs (no duplicate pubkeys).
+			for batchIdx, batch := range *batches {
+				seen := make(map[uuid.UUID]bool)
+				for _, id := range batch.accountIDs {
+					require.False(t, seen[id],
+						"batch %d contains duplicate account ID %s", batchIdx, id)
+					seen[id] = true
+				}
+			}
+
+			// Verify signature correctness: each (account, root) pair gets the right signature.
+			type key struct {
+				name string
+				root phase0.Root
+			}
+			sigByKey := make(map[key]phase0.BLSSignature)
+			for i, a := range test.accounts {
+				k := key{name: a.name, root: test.roots[i]}
+				if prev, exists := sigByKey[k]; exists {
+					require.Equal(t, prev, sigs[i],
+						"duplicate (account, root) pairs must produce identical signatures")
+				} else {
+					// Non-zero signature.
+					require.NotEqual(t, phase0.BLSSignature{}, sigs[i],
+						"signature at index %d should not be zero", i)
+					sigByKey[k] = sigs[i]
+				}
+			}
+		})
 	}
 }
 

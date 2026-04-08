@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -109,14 +109,78 @@ func (*Service) signRootsMulti(ctx context.Context,
 
 	uniqueSigs := make([]phase0.BLSSignature, len(uniqueAccounts))
 
+	// All accounts are homogeneous (same signer type) — enforced upstream by signRootsByAccountType.
 	if multiSigner, isMultiSigner := uniqueAccounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
-		signatures, err := multiSigner.SignGenericMulti(ctx, uniqueAccounts, uniqueData, domain[:])
-		if err != nil {
-			return []phase0.BLSSignature{}, err
+		// Split into batches where each batch contains at most one entry per account.
+		// Dirk rejects Multisign batches with duplicate pubkeys, even with different signing roots.
+		// Single pass: count occurrences per account and determine number of batches needed.
+		accountOccurrences := make(map[uuid.UUID]int, len(uniqueAccounts))
+		numBatches := 0
+		for _, acct := range uniqueAccounts {
+			id := acct.ID()
+			next := accountOccurrences[id]
+			accountOccurrences[id] = next + 1
+			if next+1 > numBatches {
+				numBatches = next + 1
+			}
 		}
-		for i := range signatures {
-			if signatures[i] != nil {
-				copy(uniqueSigs[i][:], signatures[i].Marshal())
+
+		if numBatches == 1 {
+			// Fast path: all accounts are unique, single batch.
+			signatures, err := multiSigner.SignGenericMulti(ctx, uniqueAccounts, uniqueData, domain[:])
+			if err != nil {
+				return []phase0.BLSSignature{}, err
+			}
+			for i := range signatures {
+				if signatures[i] != nil {
+					copy(uniqueSigs[i][:], signatures[i].Marshal())
+				}
+			}
+		} else {
+			// Slow path: split entries into numBatches batches.
+			type batchEntry struct {
+				uniqueIdx int
+				account   e2wtypes.Account
+				data      []byte
+			}
+			batchSizes := make([]int, numBatches)
+			for _, count := range accountOccurrences {
+				for b := range count {
+					batchSizes[b]++
+				}
+			}
+			batches := make([][]batchEntry, numBatches)
+			for i := range batches {
+				batches[i] = make([]batchEntry, 0, batchSizes[i])
+			}
+			batchAssignment := make(map[uuid.UUID]int, len(uniqueAccounts))
+			for i, acct := range uniqueAccounts {
+				id := acct.ID()
+				batchIdx := batchAssignment[id]
+				batchAssignment[id] = batchIdx + 1
+				batches[batchIdx] = append(batches[batchIdx], batchEntry{
+					uniqueIdx: i,
+					account:   acct,
+					data:      uniqueData[i],
+				})
+			}
+
+			for _, batch := range batches {
+				batchAccounts := make([]e2wtypes.Account, len(batch))
+				batchData := make([][]byte, len(batch))
+				for j, entry := range batch {
+					batchAccounts[j] = entry.account
+					batchData[j] = entry.data
+				}
+				signatures, err := multiSigner.SignGenericMulti(ctx, batchAccounts, batchData, domain[:])
+				if err != nil {
+					return []phase0.BLSSignature{}, err
+				}
+				for j, entry := range batch {
+					if signatures[j] != nil {
+						copy(uniqueSigs[entry.uniqueIdx][:], signatures[j].Marshal())
+					}
+				}
 			}
 		}
 	} else {
