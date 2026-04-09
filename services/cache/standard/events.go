@@ -33,17 +33,7 @@ func (s *Service) handleBlock(_ context.Context, data *apiv1.BlockEvent) {
 func (s *Service) handleHead(ctx context.Context, data *apiv1.HeadEvent) {
 	s.log.Trace().Stringer("root", data.Block).Uint64("slot", uint64(data.Slot)).Msg("Received head event")
 
-	// Use the header endpoint which is always available, even when
-	// block bodies have been pruned by the beacon node.
-	headerResponse, err := s.beaconBlockHeadersProvider.BeaconBlockHeader(ctx, &api.BeaconBlockHeaderOpts{
-		Block: data.Block.String(),
-	})
-	if err != nil {
-		s.log.Warn().Err(err).Msg("Failed to obtain block header")
-		return
-	}
-
-	s.SetBlockRootToSlot(data.Block, headerResponse.Data.Header.Message.Slot)
+	s.SetBlockRootToSlot(data.Block, data.Slot)
 
 	// Best-effort: try to fetch the full block for execution payload data.
 	// This may fail if the beacon node has pruned the block body (e.g. Lighthouse
@@ -53,7 +43,7 @@ func (s *Service) handleHead(ctx context.Context, data *apiv1.HeadEvent) {
 		Block: data.Block.String(),
 	})
 	if err != nil {
-		s.log.Debug().Err(err).Msg("Failed to obtain full block for execution data; block body may be pruned")
+		s.log.Debug().Err(err).Msg("Failed to obtain full block for execution data")
 		return
 	}
 
