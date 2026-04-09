@@ -90,7 +90,7 @@ func (a *mockMultiSignerAccount) ID() uuid.UUID               { return a.id }
 func (a *mockMultiSignerAccount) Name() string                 { return a.name }
 func (a *mockMultiSignerAccount) PublicKey() e2types.PublicKey  { return a.pubKey }
 
-func (a *mockMultiSignerAccount) SignBeaconAttestations(_ context.Context,
+func (*mockMultiSignerAccount) SignBeaconAttestations(_ context.Context,
 	_ uint64,
 	_ []e2wtypes.Account,
 	_ []uint64,

@@ -105,12 +105,25 @@ func signMulti(ctx context.Context,
 		return sigs, nil
 	}
 
-	// Slow path: split entries into per-account-unique batches.
-	type batchEntry struct {
-		idx     int
-		account e2wtypes.Account
-		data    []byte
-	}
+	return signMultiBatched(ctx, multiSigner, accounts, data, domain, numBatches, accountOccurrences)
+}
+
+type batchEntry struct {
+	idx     int
+	account e2wtypes.Account
+	data    []byte
+}
+
+func signMultiBatched(ctx context.Context,
+	multiSigner e2wtypes.AccountProtectingMultiSigner,
+	accounts []e2wtypes.Account,
+	data [][]byte,
+	domain []byte,
+	numBatches int,
+	accountOccurrences map[uuid.UUID]int,
+) ([]phase0.BLSSignature, error) {
+	sigs := make([]phase0.BLSSignature, len(accounts))
+
 	batchSizes := make([]int, numBatches)
 	for _, count := range accountOccurrences {
 		for b := range count {
