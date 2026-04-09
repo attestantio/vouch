@@ -79,10 +79,11 @@ type batchRecord struct {
 // mockMultiSignerAccount implements Account and AccountProtectingMultiSigner.
 // All instances sharing the same *batches pointer record calls to SignGenericMulti.
 type mockMultiSignerAccount struct {
-	id      uuid.UUID
-	name    string
-	pubKey  *mockPublicKey
-	batches *[]batchRecord
+	id           uuid.UUID
+	name         string
+	pubKey       *mockPublicKey
+	batches      *[]batchRecord
+	failOnBatch  *int // if non-nil, SignGenericMulti returns error when len(*batches) == *failOnBatch
 }
 
 func (a *mockMultiSignerAccount) ID() uuid.UUID               { return a.id }
@@ -108,6 +109,10 @@ func (a *mockMultiSignerAccount) SignGenericMulti(_ context.Context,
 	data [][]byte,
 	_ []byte,
 ) ([]e2types.Signature, error) {
+	if a.failOnBatch != nil && len(*a.batches) == *a.failOnBatch {
+		return nil, errors.New("signing failed")
+	}
+
 	ids := make([]uuid.UUID, len(accounts))
 	for i, acct := range accounts {
 		ids[i] = acct.ID()
@@ -163,6 +168,7 @@ func TestSignRootsMultiBatchSplitting(t *testing.T) {
 		accounts        []*mockMultiSignerAccount
 		roots           []phase0.Root
 		expectedBatches int // number of SignGenericMulti calls
+		err             string
 	}{
 		{
 			name: "SingleAccount_NoBatchSplit",
@@ -229,6 +235,31 @@ func TestSignRootsMultiBatchSplitting(t *testing.T) {
 			roots:           []phase0.Root{rootA, rootA, rootB},
 			expectedBatches: 2,
 		},
+		{
+			name: "SingleBatchFails",
+			accounts: func() []*mockMultiSignerAccount {
+				batches := &[]batchRecord{}
+				a := newMockMultiSignerAccount("acct-1", batches)
+				failOn := 0
+				a.failOnBatch = &failOn
+				return []*mockMultiSignerAccount{a}
+			}(),
+			roots: []phase0.Root{rootA},
+			err:   "failed to sign generic multi: signing failed",
+		},
+		{
+			name: "SecondBatchFails",
+			accounts: func() []*mockMultiSignerAccount {
+				batches := &[]batchRecord{}
+				a := newMockMultiSignerAccount("acct-1", batches)
+				failOn := 1
+				a.failOnBatch = &failOn
+				// Same account, two different roots → 2 batches needed, second will fail.
+				return []*mockMultiSignerAccount{a, a}
+			}(),
+			roots: []phase0.Root{rootA, rootB},
+			err:   "failed to sign generic multi: signing failed",
+		},
 	}
 
 	svc := &Service{}
@@ -244,6 +275,11 @@ func TestSignRootsMultiBatchSplitting(t *testing.T) {
 			}
 
 			sigs, err := svc.signRootsMulti(context.Background(), accounts, test.roots, domain)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+
+				return
+			}
 			require.NoError(t, err)
 			require.Len(t, sigs, len(test.accounts))
 
