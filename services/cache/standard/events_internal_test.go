@@ -1,4 +1,4 @@
-// Copyright © 2022 - 2026 Attestant Limited.
+// Copyright © 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -27,28 +27,16 @@ import (
 
 func TestHandleHead(t *testing.T) {
 	tests := []struct {
-		name                       string
-		beaconBlockHeadersProvider consensusclient.BeaconBlockHeadersProvider
-		signedBeaconBlockProvider  consensusclient.SignedBeaconBlockProvider
-		expectSlotCached           bool
+		name                      string
+		signedBeaconBlockProvider consensusclient.SignedBeaconBlockProvider
 	}{
 		{
-			name:                       "HeaderAndBlockSuccess",
-			beaconBlockHeadersProvider: mock.NewBeaconBlockHeadersProvider(),
-			signedBeaconBlockProvider:  mock.NewSignedBeaconBlockProvider(),
-			expectSlotCached:           true,
+			name:                      "BlockSuccess",
+			signedBeaconBlockProvider: mock.NewSignedBeaconBlockProvider(),
 		},
 		{
-			name:                       "HeaderSuccessBlockPruned",
-			beaconBlockHeadersProvider: mock.NewBeaconBlockHeadersProvider(),
-			signedBeaconBlockProvider:  mock.NewErroringSignedBeaconBlockProvider(),
-			expectSlotCached:           true,
-		},
-		{
-			name:                       "HeaderFailure",
-			beaconBlockHeadersProvider: mock.NewErroringBeaconBlockHeadersProvider(),
-			signedBeaconBlockProvider:  mock.NewSignedBeaconBlockProvider(),
-			expectSlotCached:           false,
+			name:                      "BlockPruned",
+			signedBeaconBlockProvider: mock.NewErroringSignedBeaconBlockProvider(),
 		},
 	}
 
@@ -57,11 +45,10 @@ func TestHandleHead(t *testing.T) {
 			ctx := context.Background()
 
 			s := &Service{
-				log:                        zerolog.New(zerolog.NewTestWriter(t)),
-				beaconBlockHeadersProvider: test.beaconBlockHeadersProvider,
-				signedBeaconBlockProvider:  test.signedBeaconBlockProvider,
-				blockRootToSlot:            make(map[phase0.Root]phase0.Slot),
-				blockGasLimits:             make(map[uint64]uint64),
+				log:                       zerolog.New(zerolog.NewTestWriter(t)),
+				signedBeaconBlockProvider: test.signedBeaconBlockProvider,
+				blockRootToSlot:           make(map[phase0.Root]phase0.Slot),
+				blockGasLimits:            make(map[uint64]uint64),
 			}
 
 			blockRoot := phase0.Root([32]byte{0x01})
@@ -73,14 +60,11 @@ func TestHandleHead(t *testing.T) {
 			s.handleHead(ctx, headEvent)
 
 			s.blockRootToSlotMu.RLock()
-			_, cached := s.blockRootToSlot[blockRoot]
+			cachedSlot, cached := s.blockRootToSlot[blockRoot]
 			s.blockRootToSlotMu.RUnlock()
 
-			if test.expectSlotCached {
-				require.True(t, cached, "block root to slot should be cached")
-			} else {
-				require.False(t, cached, "block root to slot should not be cached")
-			}
+			require.True(t, cached, "block root to slot should always be cached from head event")
+			require.Equal(t, phase0.Slot(100), cachedSlot, "slot should come from head event")
 		})
 	}
 }
