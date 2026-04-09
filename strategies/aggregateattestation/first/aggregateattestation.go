@@ -58,7 +58,7 @@ func (s *Service) AggregateAttestation(ctx context.Context,
 			s.clientMonitor.ClientOperation(name, "aggregate attestation", err == nil, time.Since(started))
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
-					log.Warn().Err(err).Msg("Failed to obtain aggregate attestation")
+					log.Debug().Err(err).Msg("Failed to obtain aggregate attestation")
 				}
 
 				return
@@ -73,7 +73,7 @@ func (s *Service) AggregateAttestation(ctx context.Context,
 	select {
 	case <-ctx.Done():
 		cancel()
-		log.Warn().Msg("Failed to obtain aggregate attestation before timeout")
+		log.Debug().Msg("Failed to obtain aggregate attestation before timeout")
 		return nil, errors.New("failed to obtain aggregate attestation before timeout")
 	case aggregate := <-respCh:
 		cancel()
