@@ -95,7 +95,7 @@ func (s *Service) SignedBeaconBlock(ctx context.Context,
 	select {
 	case <-ctx.Done():
 		cancel()
-		log.Warn().Msg("Failed to obtain signed beacon block before timeout")
+		log.Debug().Msg("Failed to obtain signed beacon block before timeout")
 		return nil, errors.New("failed to obtain signed beacon block before timeout")
 	case resp := <-respCh:
 		cancel()
