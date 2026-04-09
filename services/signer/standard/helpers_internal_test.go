@@ -193,6 +193,16 @@ func TestSignRootsMultiBatchSplitting(t *testing.T) {
 			expectedBatches: 1,
 		},
 		{
+			name: "AllDuplicates_FastPath",
+			accounts: func() []*mockMultiSignerAccount {
+				batches := &[]batchRecord{}
+				a := newMockMultiSignerAccount("acct-1", batches)
+				return []*mockMultiSignerAccount{a, a, a}
+			}(),
+			roots:           []phase0.Root{rootA, rootA, rootA},
+			expectedBatches: 1,
+		},
+		{
 			name: "SameAccountDifferentRoots_TwoBatches",
 			accounts: func() []*mockMultiSignerAccount {
 				batches := &[]batchRecord{}
