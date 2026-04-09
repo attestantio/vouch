@@ -68,6 +68,92 @@ type dedupKey struct {
 	root      phase0.Root
 }
 
+// signMulti signs multiple roots for multiple accounts using a multi-signer, splitting entries into
+// per-account-unique batches. Dirk rejects batches with duplicate pubkeys, even with different signing roots.
+func signMulti(ctx context.Context,
+	multiSigner e2wtypes.AccountProtectingMultiSigner,
+	accounts []e2wtypes.Account,
+	data [][]byte,
+	domain []byte,
+) ([]phase0.BLSSignature, error) {
+	sigs := make([]phase0.BLSSignature, len(accounts))
+
+	// Count occurrences per account to determine number of batches needed.
+	accountOccurrences := make(map[uuid.UUID]int, len(accounts))
+	numBatches := 0
+	for _, acct := range accounts {
+		id := acct.ID()
+		next := accountOccurrences[id]
+		accountOccurrences[id] = next + 1
+		if next+1 > numBatches {
+			numBatches = next + 1
+		}
+	}
+
+	if numBatches == 1 {
+		// Fast path: all accounts are unique, single batch.
+		signatures, err := multiSigner.SignGenericMulti(ctx, accounts, data, domain)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sign generic multi")
+		}
+		for i := range signatures {
+			if signatures[i] != nil {
+				copy(sigs[i][:], signatures[i].Marshal())
+			}
+		}
+
+		return sigs, nil
+	}
+
+	// Slow path: split entries into per-account-unique batches.
+	type batchEntry struct {
+		idx     int
+		account e2wtypes.Account
+		data    []byte
+	}
+	batchSizes := make([]int, numBatches)
+	for _, count := range accountOccurrences {
+		for b := range count {
+			batchSizes[b]++
+		}
+	}
+	batches := make([][]batchEntry, numBatches)
+	for i := range batches {
+		batches[i] = make([]batchEntry, 0, batchSizes[i])
+	}
+	batchAssignment := make(map[uuid.UUID]int, len(accounts))
+	for i, acct := range accounts {
+		id := acct.ID()
+		batchIdx := batchAssignment[id]
+		batchAssignment[id] = batchIdx + 1
+		batches[batchIdx] = append(batches[batchIdx], batchEntry{
+			idx:     i,
+			account: acct,
+			data:    data[i],
+		})
+	}
+
+	for _, batch := range batches {
+		batchAccounts := make([]e2wtypes.Account, len(batch))
+		batchData := make([][]byte, len(batch))
+		for j, entry := range batch {
+			batchAccounts[j] = entry.account
+			batchData[j] = entry.data
+		}
+		signatures, err := multiSigner.SignGenericMulti(ctx, batchAccounts, batchData, domain)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sign generic multi")
+		}
+		for j, entry := range batch {
+			if signatures[j] != nil {
+				copy(sigs[entry.idx][:], signatures[j].Marshal())
+			}
+		}
+	}
+
+	return sigs, nil
+}
+
 // signRootsMulti signs multiple roots for multiple accounts, using protected methods if possible.
 // Duplicate (account, root) pairs are deduplicated so that signing is only performed once per unique pair.
 func (*Service) signRootsMulti(ctx context.Context,
@@ -88,112 +174,46 @@ func (*Service) signRootsMulti(ctx context.Context,
 	// Deduplicate (account, root) pairs.
 	uniqueMap := make(map[dedupKey]int, len(accounts))
 	indexMapping := make([]int, len(accounts))
-	uniqueAccounts := make([]e2wtypes.Account, 0, len(accounts))
-	uniqueRoots := make([]phase0.Root, 0, len(accounts))
+	uniquePairAccounts := make([]e2wtypes.Account, 0, len(accounts))
+	uniquePairRoots := make([]phase0.Root, 0, len(accounts))
 	for i, acct := range accounts {
 		key := dedupKey{accountID: acct.ID(), root: roots[i]}
 		if idx, exists := uniqueMap[key]; exists {
 			indexMapping[i] = idx
 		} else {
-			uniqueMap[key] = len(uniqueAccounts)
-			indexMapping[i] = len(uniqueAccounts)
-			uniqueAccounts = append(uniqueAccounts, acct)
-			uniqueRoots = append(uniqueRoots, roots[i])
+			uniqueMap[key] = len(uniquePairAccounts)
+			indexMapping[i] = len(uniquePairAccounts)
+			uniquePairAccounts = append(uniquePairAccounts, acct)
+			uniquePairRoots = append(uniquePairRoots, roots[i])
 		}
 	}
 
-	uniqueData := make([][]byte, len(uniqueRoots))
-	for i := range uniqueRoots {
-		uniqueData[i] = uniqueRoots[i][:]
+	uniquePairData := make([][]byte, len(uniquePairRoots))
+	for i := range uniquePairRoots {
+		uniquePairData[i] = uniquePairRoots[i][:]
 	}
 
-	uniqueSigs := make([]phase0.BLSSignature, len(uniqueAccounts))
+	var uniquePairSigs []phase0.BLSSignature
 
 	// All accounts are homogeneous (same signer type) — enforced upstream by signRootsByAccountType.
-	if multiSigner, isMultiSigner := uniqueAccounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
-		// Split into batches where each batch contains at most one entry per account.
-		// Dirk rejects Multisign batches with duplicate pubkeys, even with different signing roots.
-		// Single pass: count occurrences per account and determine number of batches needed.
-		accountOccurrences := make(map[uuid.UUID]int, len(uniqueAccounts))
-		numBatches := 0
-		for _, acct := range uniqueAccounts {
-			id := acct.ID()
-			next := accountOccurrences[id]
-			accountOccurrences[id] = next + 1
-			if next+1 > numBatches {
-				numBatches = next + 1
-			}
-		}
-
-		if numBatches == 1 {
-			// Fast path: all accounts are unique, single batch.
-			signatures, err := multiSigner.SignGenericMulti(ctx, uniqueAccounts, uniqueData, domain[:])
-			if err != nil {
-				return []phase0.BLSSignature{}, err
-			}
-			for i := range signatures {
-				if signatures[i] != nil {
-					copy(uniqueSigs[i][:], signatures[i].Marshal())
-				}
-			}
-		} else {
-			// Slow path: split entries into numBatches batches.
-			type batchEntry struct {
-				uniqueIdx int
-				account   e2wtypes.Account
-				data      []byte
-			}
-			batchSizes := make([]int, numBatches)
-			for _, count := range accountOccurrences {
-				for b := range count {
-					batchSizes[b]++
-				}
-			}
-			batches := make([][]batchEntry, numBatches)
-			for i := range batches {
-				batches[i] = make([]batchEntry, 0, batchSizes[i])
-			}
-			batchAssignment := make(map[uuid.UUID]int, len(uniqueAccounts))
-			for i, acct := range uniqueAccounts {
-				id := acct.ID()
-				batchIdx := batchAssignment[id]
-				batchAssignment[id] = batchIdx + 1
-				batches[batchIdx] = append(batches[batchIdx], batchEntry{
-					uniqueIdx: i,
-					account:   acct,
-					data:      uniqueData[i],
-				})
-			}
-
-			for _, batch := range batches {
-				batchAccounts := make([]e2wtypes.Account, len(batch))
-				batchData := make([][]byte, len(batch))
-				for j, entry := range batch {
-					batchAccounts[j] = entry.account
-					batchData[j] = entry.data
-				}
-				signatures, err := multiSigner.SignGenericMulti(ctx, batchAccounts, batchData, domain[:])
-				if err != nil {
-					return []phase0.BLSSignature{}, err
-				}
-				for j, entry := range batch {
-					if signatures[j] != nil {
-						copy(uniqueSigs[entry.uniqueIdx][:], signatures[j].Marshal())
-					}
-				}
-			}
+	if multiSigner, isMultiSigner := uniquePairAccounts[0].(e2wtypes.AccountProtectingMultiSigner); isMultiSigner {
+		var err error
+		uniquePairSigs, err = signMulti(ctx, multiSigner, uniquePairAccounts, uniquePairData, domain[:])
+		if err != nil {
+			return []phase0.BLSSignature{}, err
 		}
 	} else {
-		for i := range uniqueAccounts {
+		uniquePairSigs = make([]phase0.BLSSignature, len(uniquePairAccounts))
+		for i := range uniquePairAccounts {
 			container := phase0.SigningData{
-				ObjectRoot: uniqueRoots[i],
+				ObjectRoot: uniquePairRoots[i],
 				Domain:     domain,
 			}
 			hashTreeRoot, err := container.HashTreeRoot()
 			if err != nil {
 				return []phase0.BLSSignature{}, errors.Wrap(err, "failed to generate hash tree root")
 			}
-			signer, isAccountSigner := uniqueAccounts[i].(e2wtypes.AccountSigner)
+			signer, isAccountSigner := uniquePairAccounts[i].(e2wtypes.AccountSigner)
 			if !isAccountSigner {
 				return []phase0.BLSSignature{}, errors.New("unknown signer type; cannot sign")
 			}
@@ -201,14 +221,14 @@ func (*Service) signRootsMulti(ctx context.Context,
 			if err != nil {
 				return []phase0.BLSSignature{}, err
 			}
-			copy(uniqueSigs[i][:], sig.Marshal())
+			copy(uniquePairSigs[i][:], sig.Marshal())
 		}
 	}
 
 	// Map unique signatures back to all original positions.
 	sigs := make([]phase0.BLSSignature, len(accounts))
 	for i := range accounts {
-		sigs[i] = uniqueSigs[indexMapping[i]]
+		sigs[i] = uniquePairSigs[indexMapping[i]]
 	}
 
 	return sigs, nil

@@ -5,6 +5,7 @@ dev:
   - update go-eth2-client to v0.28.0
   - update go version to 1.25
   - cancel open http requests when strategies.builderbid.best.timeout is reached
+  - fix sync committee signing when a validator occupies multiple positions
 
 1.12.0:
   - import fulu container specs from go-eth2-client
