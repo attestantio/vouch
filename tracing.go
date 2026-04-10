@@ -99,7 +99,7 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 	))
 
 	// Shut down cleanly on exit.
-	go func(ctx context.Context) {
+	go func(ctx context.Context) { //nolint:gosec
 		<-ctx.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
