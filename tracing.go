@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -22,7 +22,6 @@ import (
 	"time"
 
 	standardclientcert "github.com/attestantio/go-certmanager/client/standard"
-	majordomofetcher "github.com/attestantio/go-certmanager/fetcher/majordomo"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	majordomo "github.com/wealdtech/go-majordomo"
@@ -54,19 +53,12 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 		_, span := otel.Tracer("attestantio.vouch").Start(ctx, "loadTracingClientCertificates")
 		defer span.End()
 
-		fetcher, err := majordomofetcher.New(ctx,
-			majordomofetcher.WithMajordomo(majordomo),
-		)
-		if err != nil {
-			return errors.Wrap(err, "failed to create fetcher for tracing client certificate")
-		}
-
 		clientCertOpts := []standardclientcert.Parameter{
-			standardclientcert.WithFetcher(fetcher),
+			standardclientcert.WithMajordomo(majordomo),
 			standardclientcert.WithCertPEMURI(viper.GetString("tracing.client-cert")),
 			standardclientcert.WithCertKeyURI(viper.GetString("tracing.client-key")),
 		}
-		// Should CA cert be optional?
+		// CA cert is optional; when omitted the system cert pool is used.
 		if viper.GetString("tracing.ca-cert") != "" {
 			clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI(viper.GetString("tracing.ca-cert")))
 		}
@@ -124,17 +116,18 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 	))
 
 	// Shut down cleanly on exit.
-	go func(ctx context.Context) {
+	//nolint:gosec // G118: context.Background is intentional — parent ctx is cancelled, need fresh context for shutdown.
+	go func() {
 		<-ctx.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
-		//nolint:contextcheck
-		if err := tp.Shutdown(ctx); err != nil {
+		//nolint:contextcheck // shutdownCtx is intentionally not derived from the cancelled parent ctx.
+		if err := tp.Shutdown(shutdownCtx); err != nil {
 			log.Error().Err(err).Msg("Failed to shut down tracing")
 		} else {
 			log.Trace().Msg("Shut down tracing")
 		}
-	}(ctx)
+	}()
 
 	return nil
 }

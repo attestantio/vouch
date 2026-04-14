@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,7 +21,7 @@ import (
 
 	standardclientcert "github.com/attestantio/go-certmanager/client/standard"
 	certtesting "github.com/attestantio/go-certmanager/testing"
-	mockfetcher "github.com/attestantio/go-certmanager/testing/mock"
+	certmock "github.com/attestantio/go-certmanager/testing/mock"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/accountmanager/dirk"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
@@ -30,6 +30,24 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
+
+// newTestMajordomo creates a mock majordomo with matching test certificates.
+func newTestMajordomo() *certmock.Majordomo {
+	return certmock.NewMajordomo(map[string][]byte{
+		"client-cert": []byte(certtesting.ClientTest01Crt),
+		"client-key":  []byte(certtesting.ClientTest01Key),
+		"ca-cert":     []byte(certtesting.CACrt),
+	})
+}
+
+// newMismatchedMajordomo creates a mock majordomo with mismatched cert/key.
+func newMismatchedMajordomo() *certmock.Majordomo {
+	return certmock.NewMajordomo(map[string][]byte{
+		"client-cert": []byte(certtesting.ClientTest01Crt),
+		"client-key":  []byte(certtesting.ClientTest02Key),
+		"ca-cert":     []byte(certtesting.CACrt),
+	})
+}
 
 func TestService(t *testing.T) {
 	ctx := context.Background()
@@ -47,6 +65,7 @@ func TestService(t *testing.T) {
 	domainProvider := mock.NewDomainProvider()
 	validatorsManager := mock.NewValidatorsManager()
 	farFutureEpochProvider := mock.NewFarFutureEpochProvider(0xffffffffffffffff)
+	mdm := newTestMajordomo()
 
 	tests := []struct {
 		name     string
@@ -62,9 +81,10 @@ func TestService(t *testing.T) {
 				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
@@ -81,9 +101,10 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
@@ -100,9 +121,10 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(0),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
@@ -118,9 +140,10 @@ func TestService(t *testing.T) {
 				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
@@ -137,9 +160,10 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
@@ -156,9 +180,10 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{""}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
@@ -176,9 +201,10 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"host:bad"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
@@ -196,9 +222,10 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"host:0"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
@@ -215,9 +242,10 @@ func TestService(t *testing.T) {
 				dirk.WithClientMonitor(nullmetrics.New()),
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
@@ -234,9 +262,10 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
@@ -245,7 +274,7 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: no account paths specified",
 		},
 		{
-			name: "ClientCertMissing",
+			name: "MajordomoMissing",
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
@@ -253,17 +282,18 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
 				dirk.WithCurrentEpochProvider(chainTime),
 			},
-			err: "problem with parameters: no client certificate specified",
+			err: "problem with parameters: no majordomo specified",
 		},
 		{
-			name: "ClientKeyMissing",
+			name: "ClientCertURIMissing",
 			params: []dirk.Parameter{
 				dirk.WithLogLevel(zerolog.TraceLevel),
 				dirk.WithMonitor(nullmetrics.New()),
@@ -271,14 +301,34 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
 				dirk.WithCurrentEpochProvider(chainTime),
 			},
-			err: "problem with parameters: no client key specified",
+			err: "problem with parameters: no client certificate URI specified",
+		},
+		{
+			name: "ClientKeyURIMissing",
+			params: []dirk.Parameter{
+				dirk.WithLogLevel(zerolog.TraceLevel),
+				dirk.WithMonitor(nullmetrics.New()),
+				dirk.WithClientMonitor(nullmetrics.New()),
+				dirk.WithProcessConcurrency(1),
+				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
+				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithCACertURI("ca-cert"),
+				dirk.WithValidatorsManager(validatorsManager),
+				dirk.WithDomainProvider(domainProvider),
+				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
+				dirk.WithCurrentEpochProvider(chainTime),
+			},
+			err: "problem with parameters: no client key URI specified",
 		},
 		{
 			name: "ClientCertKeyMismatch",
@@ -289,15 +339,16 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest02Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(newMismatchedMajordomo()),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
 				dirk.WithCurrentEpochProvider(chainTime),
 			},
-			err: "failed to get TLS config: failed to load client keypair: tls: private key does not match public key",
+			err: "failed to create client certificate manager: failed to load client keypair: tls: private key does not match public key",
 		},
 		{
 			name: "ValidatorsManagerMissing",
@@ -308,9 +359,10 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
 				dirk.WithCurrentEpochProvider(chainTime),
@@ -326,9 +378,10 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
 				dirk.WithCurrentEpochProvider(chainTime),
@@ -344,9 +397,10 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithCurrentEpochProvider(chainTime),
@@ -362,9 +416,10 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
@@ -380,9 +435,10 @@ func TestService(t *testing.T) {
 				dirk.WithProcessConcurrency(1),
 				dirk.WithEndpoints([]string{"localhost:12345", "localhost:12346"}),
 				dirk.WithAccountPaths([]string{"wallet1", "wallet2"}),
-				dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-				dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-				dirk.WithCACert([]byte(certtesting.CACrt)),
+				dirk.WithMajordomo(mdm),
+				dirk.WithClientCertURI("client-cert"),
+				dirk.WithClientKeyURI("client-key"),
+				dirk.WithCACertURI("ca-cert"),
 				dirk.WithValidatorsManager(validatorsManager),
 				dirk.WithDomainProvider(domainProvider),
 				dirk.WithFarFutureEpochProvider(farFutureEpochProvider),
@@ -427,9 +483,10 @@ func TestDirkTLSWiringHappy(t *testing.T) {
 		dirk.WithProcessConcurrency(1),
 		dirk.WithEndpoints([]string{"localhost:12345"}),
 		dirk.WithAccountPaths([]string{"wallet1"}),
-		dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-		dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-		dirk.WithCACert([]byte(certtesting.CACrt)),
+		dirk.WithMajordomo(newTestMajordomo()),
+		dirk.WithClientCertURI("client-cert"),
+		dirk.WithClientKeyURI("client-key"),
+		dirk.WithCACertURI("ca-cert"),
 		dirk.WithValidatorsManager(mock.NewValidatorsManager()),
 		dirk.WithDomainProvider(mock.NewDomainProvider()),
 		dirk.WithFarFutureEpochProvider(mock.NewFarFutureEpochProvider(0xffffffffffffffff)),
@@ -459,15 +516,16 @@ func TestDirkTLSKeypairMismatch(t *testing.T) {
 		dirk.WithProcessConcurrency(1),
 		dirk.WithEndpoints([]string{"localhost:12345"}),
 		dirk.WithAccountPaths([]string{"wallet1"}),
-		dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-		dirk.WithClientKey([]byte(certtesting.ClientTest02Key)),
-		dirk.WithCACert([]byte(certtesting.CACrt)),
+		dirk.WithMajordomo(newMismatchedMajordomo()),
+		dirk.WithClientCertURI("client-cert"),
+		dirk.WithClientKeyURI("client-key"),
+		dirk.WithCACertURI("ca-cert"),
 		dirk.WithValidatorsManager(mock.NewValidatorsManager()),
 		dirk.WithDomainProvider(mock.NewDomainProvider()),
 		dirk.WithFarFutureEpochProvider(mock.NewFarFutureEpochProvider(0xffffffffffffffff)),
 		dirk.WithCurrentEpochProvider(chainTime),
 	)
-	require.EqualError(t, err, "failed to get TLS config: failed to load client keypair: tls: private key does not match public key")
+	require.EqualError(t, err, "failed to create client certificate manager: failed to load client keypair: tls: private key does not match public key")
 }
 
 func TestDirkTLSCAOptional(t *testing.T) {
@@ -483,7 +541,7 @@ func TestDirkTLSCAOptional(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	t.Run("NilCA", func(t *testing.T) {
+	t.Run("NoCA", func(t *testing.T) {
 		svc, err := dirk.New(ctx,
 			dirk.WithLogLevel(zerolog.Disabled),
 			dirk.WithMonitor(nullmetrics.New()),
@@ -491,9 +549,9 @@ func TestDirkTLSCAOptional(t *testing.T) {
 			dirk.WithProcessConcurrency(1),
 			dirk.WithEndpoints([]string{"localhost:12345"}),
 			dirk.WithAccountPaths([]string{"wallet1"}),
-			dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-			dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-			dirk.WithCACert(nil),
+			dirk.WithMajordomo(newTestMajordomo()),
+			dirk.WithClientCertURI("client-cert"),
+			dirk.WithClientKeyURI("client-key"),
 			dirk.WithValidatorsManager(mock.NewValidatorsManager()),
 			dirk.WithDomainProvider(mock.NewDomainProvider()),
 			dirk.WithFarFutureEpochProvider(mock.NewFarFutureEpochProvider(0xffffffffffffffff)),
@@ -511,9 +569,10 @@ func TestDirkTLSCAOptional(t *testing.T) {
 			dirk.WithProcessConcurrency(1),
 			dirk.WithEndpoints([]string{"localhost:12345"}),
 			dirk.WithAccountPaths([]string{"wallet1"}),
-			dirk.WithClientCert([]byte(certtesting.ClientTest01Crt)),
-			dirk.WithClientKey([]byte(certtesting.ClientTest01Key)),
-			dirk.WithCACert([]byte(certtesting.CACrt)),
+			dirk.WithMajordomo(newTestMajordomo()),
+			dirk.WithClientCertURI("client-cert"),
+			dirk.WithClientKeyURI("client-key"),
+			dirk.WithCACertURI("ca-cert"),
 			dirk.WithValidatorsManager(mock.NewValidatorsManager()),
 			dirk.WithDomainProvider(mock.NewDomainProvider()),
 			dirk.WithFarFutureEpochProvider(mock.NewFarFutureEpochProvider(0xffffffffffffffff)),
@@ -527,14 +586,14 @@ func TestDirkTLSCAOptional(t *testing.T) {
 func TestDirkTLSMinVersion(t *testing.T) {
 	ctx := context.Background()
 
-	fetcher := mockfetcher.NewFetcher(map[string][]byte{
+	mdm := certmock.NewMajordomo(map[string][]byte{
 		"client-cert": []byte(certtesting.ClientTest01Crt),
 		"client-key":  []byte(certtesting.ClientTest01Key),
 		"ca-cert":     []byte(certtesting.CACrt),
 	})
 
 	clientCertMgr, err := standardclientcert.New(ctx,
-		standardclientcert.WithFetcher(fetcher),
+		standardclientcert.WithMajordomo(mdm),
 		standardclientcert.WithCertPEMURI("client-cert"),
 		standardclientcert.WithCertKeyURI("client-key"),
 		standardclientcert.WithCACertURI("ca-cert"),

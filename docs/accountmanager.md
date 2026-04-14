@@ -41,7 +41,7 @@ Dirk requires all clients to use certificates to identify themselves.  Creating 
 ### ca-cert
 `ca-cert` is the certificate of the certificate authority by Dirk to sign the client certificate.  This is required if Dirk is using its own certificate authority to generate client certificates (which is the usual case).
 
-Vouch manages these certificates internally using the `go-certmanager` library, which fetches and loads the configured client certificate, key, and CA material into a TLS configuration for Dirk connections.
+Vouch loads the configured certificate material at startup into a TLS configuration and uses it for all Dirk connections.
 
 ### accounts
 `accounts` is a list of accounts that Vouch will request from Dirk.  This is an account specifier, and can be supplied in various forms for example:

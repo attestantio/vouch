@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -23,7 +23,6 @@ import (
 	"time"
 
 	standardclientcert "github.com/attestantio/go-certmanager/client/standard"
-	mockfetcher "github.com/attestantio/go-certmanager/testing/mock"
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -85,21 +84,13 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	_, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "loadClientCertificates")
 	defer span.End()
 
-	data := make(map[string][]byte)
-	data["client-cert"] = parameters.clientCert
-	data["client-key"] = parameters.clientKey
-	if parameters.caCert != nil {
-		data["ca-cert"] = parameters.caCert
-	}
-	fetcher := mockfetcher.NewFetcher(data)
-
 	clientCertOpts := []standardclientcert.Parameter{
-		standardclientcert.WithFetcher(fetcher),
-		standardclientcert.WithCertPEMURI("client-cert"),
-		standardclientcert.WithCertKeyURI("client-key"),
+		standardclientcert.WithMajordomo(parameters.majordomo),
+		standardclientcert.WithCertPEMURI(parameters.clientCertURI),
+		standardclientcert.WithCertKeyURI(parameters.clientKeyURI),
 	}
-	if parameters.caCert != nil {
-		clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI("ca-cert"))
+	if parameters.caCertURI != "" {
+		clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI(parameters.caCertURI))
 	}
 
 	clientCertMgr, err := standardclientcert.New(ctx, clientCertOpts...)

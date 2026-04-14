@@ -6,14 +6,14 @@ require (
 	github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506
 	github.com/attestantio/go-block-relay v0.5.1
 	github.com/attestantio/go-builder-client v0.7.2
-	github.com/attestantio/go-certmanager v0.0.0-20260113171259-7243801727ab
+	github.com/attestantio/go-certmanager v0.1.1
 	github.com/attestantio/go-eth2-client v0.28.0
 	github.com/aws/aws-sdk-go v1.55.6
 	github.com/holiman/uint256 v1.3.2
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.21.1
-	github.com/rs/zerolog v1.34.0
+	github.com/rs/zerolog v1.35.0
 	github.com/sasha-s/go-deadlock v0.3.6
 	github.com/shopspring/decimal v1.4.0
 	github.com/spf13/pflag v1.0.6
@@ -36,7 +36,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.40.0
 	go.uber.org/atomic v1.11.0
 	golang.org/x/sync v0.19.0
-	google.golang.org/grpc v1.79.3
+	google.golang.org/grpc v1.80.0
 	gotest.tools v2.2.0+incompatible
 )
 
@@ -125,16 +125,16 @@ require (
 	golang.org/x/arch v0.15.0 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
-	golang.org/x/net v0.48.0 // indirect
+	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	google.golang.org/api v0.224.0 // indirect
 	google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
-	google.golang.org/protobuf v1.36.10 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260120221211-b8f7ae30c516 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/Knetic/govaluate.v3 v3.0.0 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect

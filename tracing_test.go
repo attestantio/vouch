@@ -71,7 +71,7 @@ func TestTracingTLSWiringHappyWithCA(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestTracingTLSFetcherError(t *testing.T) {
+func TestTracingTLSMajordomoError(t *testing.T) {
 	t.Cleanup(func() {
 		viper.Reset()
 	})
