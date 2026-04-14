@@ -72,7 +72,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		blockGasLimits:             make(map[uint64]uint64),
 	}
 
-	// Fetch the current head via header.
+	// Fetch the current head via header (always available, even with pruned blocks).
 	headerResponse, err := s.beaconBlockHeadersProvider.BeaconBlockHeader(ctx, &api.BeaconBlockHeaderOpts{
 		Block: "head",
 	})
