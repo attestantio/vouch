@@ -169,50 +169,58 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		clientMonitor: nullmetrics.New(),
 	}
 	for _, p := range params {
-		if params != nil {
+		if p != nil {
 			p.apply(&parameters)
 		}
 	}
 
-	if parameters.monitor == nil {
-		return nil, errors.New("no monitor specified")
-	}
-	if parameters.clientMonitor == nil {
-		return nil, errors.New("no client monitor specified")
-	}
-	if parameters.timeout == 0 {
-		return nil, errors.New("no timeout specified")
-	}
-	if parameters.processConcurrency < 1 {
-		return nil, errors.New("no process concurrency specified")
-	}
-	if len(parameters.endpoints) == 0 {
-		return nil, errors.New("no endpoints specified")
-	}
-	if len(parameters.accountPaths) == 0 {
-		return nil, errors.New("no account paths specified")
-	}
-	if parameters.majordomo == nil {
-		return nil, errors.New("no majordomo specified")
-	}
-	if parameters.clientCertURI == "" {
-		return nil, errors.New("no client certificate URI specified")
-	}
-	if parameters.clientKeyURI == "" {
-		return nil, errors.New("no client key URI specified")
-	}
-	if parameters.validatorsManager == nil {
-		return nil, errors.New("no validators manager specified")
-	}
-	if parameters.domainProvider == nil {
-		return nil, errors.New("no domain provider specified")
-	}
-	if parameters.farFutureEpochProvider == nil {
-		return nil, errors.New("no far future epoch provider specified")
-	}
-	if parameters.currentEpochProvider == nil {
-		return nil, errors.New("no current epoch provider specified")
+	if err := parameters.validate(); err != nil {
+		return nil, err
 	}
 
 	return &parameters, nil
+}
+
+func (p *parameters) validate() error {
+	if p.monitor == nil {
+		return errors.New("no monitor specified")
+	}
+	if p.clientMonitor == nil {
+		return errors.New("no client monitor specified")
+	}
+	if p.timeout == 0 {
+		return errors.New("no timeout specified")
+	}
+	if p.processConcurrency < 1 {
+		return errors.New("no process concurrency specified")
+	}
+	if len(p.endpoints) == 0 {
+		return errors.New("no endpoints specified")
+	}
+	if len(p.accountPaths) == 0 {
+		return errors.New("no account paths specified")
+	}
+	if p.majordomo == nil {
+		return errors.New("no majordomo specified")
+	}
+	if p.clientCertURI == "" {
+		return errors.New("no client certificate URI specified")
+	}
+	if p.clientKeyURI == "" {
+		return errors.New("no client key URI specified")
+	}
+	if p.validatorsManager == nil {
+		return errors.New("no validators manager specified")
+	}
+	if p.domainProvider == nil {
+		return errors.New("no domain provider specified")
+	}
+	if p.farFutureEpochProvider == nil {
+		return errors.New("no far future epoch provider specified")
+	}
+	if p.currentEpochProvider == nil {
+		return errors.New("no current epoch provider specified")
+	}
+
+	return nil
 }
