@@ -1,4 +1,4 @@
-// Copyright © 2020, 2021 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"testing"
 
+	certtesting "github.com/attestantio/go-certmanager/testing"
+	certmock "github.com/attestantio/go-certmanager/testing/mock"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
@@ -174,6 +176,12 @@ func TestAccounts(t *testing.T) {
 func setupService(ctx context.Context, t *testing.T, endpoints []string, accountPaths []string) (*Service, error) {
 	chainTime, _ := testutil.NewTestChainTime(ctx, t)
 
+	mdm := certmock.NewMajordomo(map[string][]byte{
+		"client-cert": []byte(certtesting.ClientTest01Crt),
+		"client-key":  []byte(certtesting.ClientTest01Key),
+		"ca-cert":     []byte(certtesting.CACrt),
+	})
+
 	return New(ctx,
 		WithLogLevel(zerolog.TraceLevel),
 		WithMonitor(nullmetrics.New()),
@@ -181,9 +189,10 @@ func setupService(ctx context.Context, t *testing.T, endpoints []string, account
 		WithProcessConcurrency(1),
 		WithEndpoints(endpoints),
 		WithAccountPaths(accountPaths),
-		WithClientCert([]byte(resources.ClientTest01Crt)),
-		WithClientKey([]byte(resources.ClientTest01Key)),
-		WithCACert([]byte(resources.CACrt)),
+		WithMajordomo(mdm),
+		WithClientCertURI("client-cert"),
+		WithClientKeyURI("client-key"),
+		WithCACertURI("ca-cert"),
 		WithValidatorsManager(mock.NewValidatorsManager()),
 		WithDomainProvider(mock.NewDomainProvider()),
 		WithFarFutureEpochProvider(mock.NewFarFutureEpochProvider(0xffffffffffffffff)),
@@ -221,6 +230,12 @@ func setupTestWallets(ctx context.Context, t *testing.T, defs []*walletDef) []e2
 func setupServiceWithValidatorsManager(ctx context.Context, t *testing.T, endpoints []string, accountPaths []string, validatorsManager validatorsmanager.Service) (*Service, error) {
 	chainTime, _ := testutil.NewTestChainTime(ctx, t)
 
+	mdm := certmock.NewMajordomo(map[string][]byte{
+		"client-cert": []byte(resources.ClientTest01Crt),
+		"client-key":  []byte(resources.ClientTest01Key),
+		"ca-cert":     []byte(resources.CACrt),
+	})
+
 	return New(ctx,
 		WithLogLevel(zerolog.TraceLevel),
 		WithMonitor(nullmetrics.New()),
@@ -228,9 +243,10 @@ func setupServiceWithValidatorsManager(ctx context.Context, t *testing.T, endpoi
 		WithProcessConcurrency(1),
 		WithEndpoints(endpoints),
 		WithAccountPaths(accountPaths),
-		WithClientCert([]byte(resources.ClientTest01Crt)),
-		WithClientKey([]byte(resources.ClientTest01Key)),
-		WithCACert([]byte(resources.CACrt)),
+		WithMajordomo(mdm),
+		WithClientCertURI("client-cert"),
+		WithClientKeyURI("client-key"),
+		WithCACertURI("ca-cert"),
 		WithValidatorsManager(validatorsManager),
 		WithDomainProvider(mock.NewDomainProvider()),
 		WithFarFutureEpochProvider(mock.NewFarFutureEpochProvider(0xffffffffffffffff)),
