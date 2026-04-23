@@ -1,4 +1,4 @@
-// Copyright © 2022 - 2025 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -33,16 +33,21 @@ func (s *Service) handleBlock(_ context.Context, data *apiv1.BlockEvent) {
 func (s *Service) handleHead(ctx context.Context, data *apiv1.HeadEvent) {
 	s.log.Trace().Stringer("root", data.Block).Uint64("slot", uint64(data.Slot)).Msg("Received head event")
 
+	s.SetBlockRootToSlot(data.Block, data.Slot)
+
+	// Best-effort: try to fetch the full block for execution payload data.
+	// This may fail if the beacon node has pruned the block body (e.g. Lighthouse
+	// default settings).  Execution data is used for builder bid gas limit
+	// verification and is not critical for core validator duties.
 	blockResponse, err := s.signedBeaconBlockProvider.SignedBeaconBlock(ctx, &api.SignedBeaconBlockOpts{
 		Block: data.Block.String(),
 	})
 	if err != nil {
-		s.log.Error().Err(err).Msg("Failed to obtain block")
+		s.log.Debug().Err(err).Msg("Failed to obtain full block for execution data")
 		return
 	}
-	block := blockResponse.Data
 
-	s.updateFromBlock(block)
+	s.updateFromBlock(blockResponse.Data)
 }
 
 func (s *Service) updateFromBlock(block *spec.VersionedSignedBeaconBlock) {
