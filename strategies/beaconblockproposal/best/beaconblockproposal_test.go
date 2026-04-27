@@ -44,7 +44,6 @@ func TestProposal(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	signedBeaconBlockProvider := mock.NewSignedBeaconBlockProvider()
 	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
 	blockToSlotCache := cacheSvc.(cache.BlockRootToSlotProvider)
 
@@ -61,11 +60,9 @@ func TestProposal(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
 				best.WithTimeout(2 * time.Second),
-				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
-				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
 					"good": mock.NewProposalProvider(),
 				}),
@@ -79,11 +76,9 @@ func TestProposal(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
 				best.WithTimeout(time.Second),
-				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
-				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
 					"sleepy": mock.NewSleepyProposalProvider(5*time.Second, mock.NewProposalProvider()),
 				}),
@@ -98,11 +93,9 @@ func TestProposal(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
 				best.WithTimeout(2 * time.Second),
-				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
-				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
 					"error":  mock.NewErroringProposalProvider(),
 					"sleepy": mock.NewSleepyProposalProvider(time.Second, mock.NewProposalProvider()),
@@ -117,11 +110,9 @@ func TestProposal(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
 				best.WithTimeout(3 * time.Second),
-				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
-				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
 					"good":   mock.NewProposalProvider(),
 					"sleepy": mock.NewSleepyProposalProvider(2*time.Second, mock.NewProposalProvider()),
@@ -137,11 +128,9 @@ func TestProposal(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
 				best.WithTimeout(3 * time.Second),
-				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
-				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
 					"sleepy": mock.NewSleepyProposalProvider(2*time.Second, mock.NewProposalProvider()),
 				}),
@@ -156,11 +145,9 @@ func TestProposal(t *testing.T) {
 			params: []best.Parameter{
 				best.WithLogLevel(zerolog.TraceLevel),
 				best.WithTimeout(3 * time.Second),
-				best.WithEventsProvider(mock.NewEventsProvider()),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
-				best.WithSignedBeaconBlockProvider(signedBeaconBlockProvider),
 				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
 					"error":  mock.NewErroringProposalProvider(),
 					"sleepy": mock.NewSleepyProposalProvider(2*time.Second, mock.NewProposalProvider()),

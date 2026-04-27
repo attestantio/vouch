@@ -7,6 +7,7 @@ dev:
   - cancel open http requests when strategies.builderbid.best.timeout is reached
   - fix sync committee signing when a validator occupies multiple positions
   - use block headers as primary fetch in cache handleHead; full blocks are best-effort
+  - remove dead priorBlocksVotes cache from beaconblockproposal/best strategy
 
 1.12.0:
   - import fulu container specs from go-eth2-client
