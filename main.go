@@ -371,7 +371,6 @@ func startServices(ctx context.Context,
 		blockRelay,
 		accountManager,
 		submitter,
-		signedBeaconBlockProvider,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -665,7 +664,6 @@ func startProviders(ctx context.Context,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cache cache.Service,
-	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider,
 ) (
 	graffitiprovider.Service,
 	eth2client.ProposalProvider,
@@ -680,7 +678,7 @@ func startProviders(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting beacon block proposal provider")
-	beaconBlockProposalProvider, err := selectProposalProvider(ctx, monitor, eth2Client, chainTime, cache, signedBeaconBlockProvider)
+	beaconBlockProposalProvider, err := selectProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to select beacon block proposal provider")
 	}
@@ -784,7 +782,6 @@ func startSigningServices(ctx context.Context,
 	blockRelay blockrelay.Service,
 	accountManager accountmanager.Service,
 	submitterStrategy submitter.Service,
-	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider,
 ) (
 	beaconblockproposer.Service,
 	attester.Service,
@@ -798,7 +795,6 @@ func startSigningServices(ctx context.Context,
 		eth2Client,
 		chainTime,
 		cacheSvc,
-		signedBeaconBlockProvider,
 	)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -1365,7 +1361,6 @@ func selectProposalProvider(ctx context.Context,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cacheSvc cache.Service,
-	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider,
 ) (eth2client.ProposalProvider, error) {
 	var proposalProvider eth2client.ProposalProvider
 	var err error
