@@ -76,6 +76,9 @@ linters:
   # Enable all available linters.
   # Default: false
   default: all
+  # Enable custom linters
+  enable:
+    - attgo
   # Disable specific linter
   # https://golangci-lint.run/usage/linters/#disabled-by-default
   disable:
@@ -186,3 +189,21 @@ linters:
         - err
         - leading-whitespace
         - trailing-whitespace
+
+    # attgo-linter: Attestant organization coding standards
+    custom:
+      attgo:
+        type: "module"
+        description: "Attestant organization style linter"
+        settings:
+          # HIGH PRIORITY
+          enable_no_pkg_logger: true
+          enable_enum_iota: true
+          enable_current_year: true
+          # MEDIUM PRIORITY
+          enable_capital_comment: true
+          enable_func_opts: true
+          enable_raw_string: true
+          # LOW PRIORITY
+          enable_struct_field_order: true
+          enable_interface_check: true
