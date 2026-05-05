@@ -6,6 +6,7 @@ dev:
   - update go version to 1.25.5
   - cancel open http requests when strategies.builderbid.best.timeout is reached
   - fix sync committee signing when a validator occupies multiple positions
+  - use block headers as primary fetch in cache handleHead; full blocks are best-effort
   - migrate Dirk and tracing TLS certificate loading to go-certmanager
 
 1.12.0:
