@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTracingTLSWiringHappy(t *testing.T) {
+func TestBuildTracingTLSCredentialsHappy(t *testing.T) {
 	t.Cleanup(func() {
 		viper.Reset()
 	})
@@ -34,15 +34,15 @@ func TestTracingTLSWiringHappy(t *testing.T) {
 		"tracing-client-key":  []byte(certtesting.ClientTest01Key),
 	})
 
-	viper.Set("tracing.address", "localhost:4317")
 	viper.Set("tracing.client-cert", "tracing-client-cert")
 	viper.Set("tracing.client-key", "tracing-client-key")
 
-	err := initTracing(ctx, majordomo)
+	creds, err := buildTracingTLSCredentials(ctx, majordomo)
 	require.NoError(t, err)
+	require.NotNil(t, creds)
 }
 
-func TestTracingTLSWiringHappyWithCA(t *testing.T) {
+func TestBuildTracingTLSCredentialsHappyWithCA(t *testing.T) {
 	t.Cleanup(func() {
 		viper.Reset()
 	})
@@ -54,16 +54,16 @@ func TestTracingTLSWiringHappyWithCA(t *testing.T) {
 		"tracing-ca-cert":     []byte(certtesting.CACrt),
 	})
 
-	viper.Set("tracing.address", "localhost:4317")
 	viper.Set("tracing.client-cert", "tracing-client-cert")
 	viper.Set("tracing.client-key", "tracing-client-key")
 	viper.Set("tracing.ca-cert", "tracing-ca-cert")
 
-	err := initTracing(ctx, majordomo)
+	creds, err := buildTracingTLSCredentials(ctx, majordomo)
 	require.NoError(t, err)
+	require.NotNil(t, creds)
 }
 
-func TestTracingTLSMajordomoError(t *testing.T) {
+func TestBuildTracingTLSCredentialsMajordomoError(t *testing.T) {
 	t.Cleanup(func() {
 		viper.Reset()
 	})
@@ -71,12 +71,12 @@ func TestTracingTLSMajordomoError(t *testing.T) {
 	ctx := context.Background()
 	majordomo := certmock.NewMajordomoWithError(errors.New("fetch failed"))
 
-	viper.Set("tracing.address", "localhost:4317")
 	viper.Set("tracing.client-cert", "tracing-client-cert")
 	viper.Set("tracing.client-key", "tracing-client-key")
 	viper.Set("tracing.ca-cert", "tracing-ca-cert")
 
-	err := initTracing(ctx, majordomo)
+	creds, err := buildTracingTLSCredentials(ctx, majordomo)
 	require.Error(t, err)
+	require.Nil(t, creds)
 	require.Contains(t, err.Error(), "fetch failed")
 }

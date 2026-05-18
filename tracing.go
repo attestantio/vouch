@@ -53,27 +53,10 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 		spanCtx, span := otel.Tracer("attestantio.vouch").Start(ctx, "loadTracingClientCertificates")
 		defer span.End()
 
-		clientCertOpts := []standardclientcert.Parameter{
-			standardclientcert.WithMajordomo(majordomo),
-			standardclientcert.WithCertPEMURI(viper.GetString("tracing.client-cert")),
-			standardclientcert.WithCertKeyURI(viper.GetString("tracing.client-key")),
-		}
-		// CA cert is optional; when omitted the system cert pool is used.
-		if viper.GetString("tracing.ca-cert") != "" {
-			clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI(viper.GetString("tracing.ca-cert")))
-		}
-
-		clientCertMgr, err := standardclientcert.New(spanCtx, clientCertOpts...)
+		creds, err := buildTracingTLSCredentials(spanCtx, majordomo)
 		if err != nil {
-			return errors.Wrap(err, "failed to create client certificate manager for tracing")
+			return err
 		}
-
-		tlsCfg, err := clientCertMgr.GetTLSConfig(spanCtx)
-		if err != nil {
-			return errors.Wrap(err, "failed to get TLS config for tracing")
-		}
-
-		creds := credentials.NewTLS(tlsCfg)
 		driverOpts = append(driverOpts, otlptracegrpc.WithTLSCredentials(creds))
 	} else {
 		log.Trace().Msg("Using insecure tracing connection")
@@ -130,4 +113,30 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 	}()
 
 	return nil
+}
+
+// buildTracingTLSCredentials builds gRPC TLS credentials for the tracing client
+// from the cert/key/CA URIs configured in viper, resolved via majordomo.
+func buildTracingTLSCredentials(ctx context.Context, majordomo majordomo.Service) (credentials.TransportCredentials, error) {
+	clientCertOpts := []standardclientcert.Parameter{
+		standardclientcert.WithMajordomo(majordomo),
+		standardclientcert.WithCertPEMURI(viper.GetString("tracing.client-cert")),
+		standardclientcert.WithCertKeyURI(viper.GetString("tracing.client-key")),
+	}
+	// CA cert is optional; when omitted the system cert pool is used.
+	if viper.GetString("tracing.ca-cert") != "" {
+		clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI(viper.GetString("tracing.ca-cert")))
+	}
+
+	clientCertMgr, err := standardclientcert.New(ctx, clientCertOpts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create client certificate manager for tracing")
+	}
+
+	tlsCfg, err := clientCertMgr.GetTLSConfig(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get TLS config for tracing")
+	}
+
+	return credentials.NewTLS(tlsCfg), nil
 }
