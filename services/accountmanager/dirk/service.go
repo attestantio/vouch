@@ -81,7 +81,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("failed to register metrics")
 	}
 
-	_, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "loadClientCertificates")
+	spanCtx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "loadClientCertificates")
 	defer span.End()
 
 	clientCertOpts := []standardclientcert.Parameter{
@@ -93,12 +93,12 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI(parameters.caCertURI))
 	}
 
-	clientCertMgr, err := standardclientcert.New(ctx, clientCertOpts...)
+	clientCertMgr, err := standardclientcert.New(spanCtx, clientCertOpts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create client certificate manager")
 	}
 
-	tlsCfg, err := clientCertMgr.GetTLSConfig(ctx)
+	tlsCfg, err := clientCertMgr.GetTLSConfig(spanCtx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get TLS config")
 	}

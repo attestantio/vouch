@@ -50,7 +50,7 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 	if viper.GetString("tracing.client-cert") != "" {
 		log.Trace().Msg("Using TLS tracing connection")
 
-		_, span := otel.Tracer("attestantio.vouch").Start(ctx, "loadTracingClientCertificates")
+		spanCtx, span := otel.Tracer("attestantio.vouch").Start(ctx, "loadTracingClientCertificates")
 		defer span.End()
 
 		clientCertOpts := []standardclientcert.Parameter{
@@ -63,12 +63,12 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 			clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI(viper.GetString("tracing.ca-cert")))
 		}
 
-		clientCertMgr, err := standardclientcert.New(ctx, clientCertOpts...)
+		clientCertMgr, err := standardclientcert.New(spanCtx, clientCertOpts...)
 		if err != nil {
 			return errors.Wrap(err, "failed to create client certificate manager for tracing")
 		}
 
-		tlsCfg, err := clientCertMgr.GetTLSConfig(ctx)
+		tlsCfg, err := clientCertMgr.GetTLSConfig(spanCtx)
 		if err != nil {
 			return errors.Wrap(err, "failed to get TLS config for tracing")
 		}
