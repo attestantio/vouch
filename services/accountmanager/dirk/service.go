@@ -81,29 +81,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("failed to register metrics")
 	}
 
-	spanCtx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "loadClientCertificates")
-	defer span.End()
-
-	clientCertOpts := []standardclientcert.Parameter{
-		standardclientcert.WithMajordomo(parameters.majordomo),
-		standardclientcert.WithCertPEMURI(parameters.clientCertURI),
-		standardclientcert.WithCertKeyURI(parameters.clientKeyURI),
-	}
-	if parameters.caCertURI != "" {
-		clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI(parameters.caCertURI))
-	}
-
-	clientCertMgr, err := standardclientcert.New(spanCtx, clientCertOpts...)
+	credentials, err := loadClientCertificates(ctx, parameters)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create client certificate manager")
+		return nil, err
 	}
-
-	tlsCfg, err := clientCertMgr.GetTLSConfig(spanCtx)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get TLS config")
-	}
-
-	credentials := credentials.NewTLS(tlsCfg)
 
 	endpoints := make([]*dirk.Endpoint, 0, len(parameters.endpoints))
 	for _, endpoint := range parameters.endpoints {
@@ -153,6 +134,33 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	s.Refresh(ctx)
 
 	return s, nil
+}
+
+// loadClientCertificates returns gRPC transport credentials built from the configured certificate URIs.
+func loadClientCertificates(ctx context.Context, parameters *parameters) (credentials.TransportCredentials, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "loadClientCertificates")
+	defer span.End()
+
+	clientCertOpts := []standardclientcert.Parameter{
+		standardclientcert.WithMajordomo(parameters.majordomo),
+		standardclientcert.WithCertPEMURI(parameters.clientCertURI),
+		standardclientcert.WithCertKeyURI(parameters.clientKeyURI),
+	}
+	if parameters.caCertURI != "" {
+		clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI(parameters.caCertURI))
+	}
+
+	clientCertMgr, err := standardclientcert.New(ctx, clientCertOpts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create client certificate manager")
+	}
+
+	tlsCfg, err := clientCertMgr.GetTLSConfig(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get TLS config")
+	}
+
+	return credentials.NewTLS(tlsCfg), nil
 }
 
 // Refresh refreshes the accounts from Dirk, and account validator state from
