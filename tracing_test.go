@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildTracingTLSCredentialsHappy(t *testing.T) {
+func TestLoadTracingClientCertificatesHappy(t *testing.T) {
 	t.Cleanup(func() {
 		viper.Reset()
 	})
@@ -37,12 +37,12 @@ func TestBuildTracingTLSCredentialsHappy(t *testing.T) {
 	viper.Set("tracing.client-cert", "tracing-client-cert")
 	viper.Set("tracing.client-key", "tracing-client-key")
 
-	creds, err := buildTracingTLSCredentials(ctx, majordomo)
+	creds, err := loadTracingClientCertificates(ctx, majordomo)
 	require.NoError(t, err)
 	require.NotNil(t, creds)
 }
 
-func TestBuildTracingTLSCredentialsHappyWithCA(t *testing.T) {
+func TestLoadTracingClientCertificatesHappyWithCA(t *testing.T) {
 	t.Cleanup(func() {
 		viper.Reset()
 	})
@@ -58,12 +58,12 @@ func TestBuildTracingTLSCredentialsHappyWithCA(t *testing.T) {
 	viper.Set("tracing.client-key", "tracing-client-key")
 	viper.Set("tracing.ca-cert", "tracing-ca-cert")
 
-	creds, err := buildTracingTLSCredentials(ctx, majordomo)
+	creds, err := loadTracingClientCertificates(ctx, majordomo)
 	require.NoError(t, err)
 	require.NotNil(t, creds)
 }
 
-func TestBuildTracingTLSCredentialsMajordomoError(t *testing.T) {
+func TestLoadTracingClientCertificatesMajordomoError(t *testing.T) {
 	t.Cleanup(func() {
 		viper.Reset()
 	})
@@ -75,7 +75,7 @@ func TestBuildTracingTLSCredentialsMajordomoError(t *testing.T) {
 	viper.Set("tracing.client-key", "tracing-client-key")
 	viper.Set("tracing.ca-cert", "tracing-ca-cert")
 
-	creds, err := buildTracingTLSCredentials(ctx, majordomo)
+	creds, err := loadTracingClientCertificates(ctx, majordomo)
 	require.Error(t, err)
 	require.Nil(t, creds)
 	require.Contains(t, err.Error(), "fetch failed")

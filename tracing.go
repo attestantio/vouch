@@ -49,11 +49,7 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 	}
 	if viper.GetString("tracing.client-cert") != "" {
 		log.Trace().Msg("Using TLS tracing connection")
-
-		spanCtx, span := otel.Tracer("attestantio.vouch").Start(ctx, "loadTracingClientCertificates")
-		defer span.End()
-
-		creds, err := buildTracingTLSCredentials(spanCtx, majordomo)
+		creds, err := loadTracingClientCertificates(ctx, majordomo)
 		if err != nil {
 			return err
 		}
@@ -115,9 +111,12 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 	return nil
 }
 
-// buildTracingTLSCredentials builds gRPC TLS credentials for the tracing client
+// loadTracingClientCertificates returns gRPC TLS credentials for the tracing client
 // from the cert/key/CA URIs configured in viper, resolved via majordomo.
-func buildTracingTLSCredentials(ctx context.Context, majordomo majordomo.Service) (credentials.TransportCredentials, error) {
+func loadTracingClientCertificates(ctx context.Context, majordomo majordomo.Service) (credentials.TransportCredentials, error) {
+	ctx, span := otel.Tracer("attestantio.vouch").Start(ctx, "loadTracingClientCertificates")
+	defer span.End()
+
 	clientCertOpts := []standardclientcert.Parameter{
 		standardclientcert.WithMajordomo(majordomo),
 		standardclientcert.WithCertPEMURI(viper.GetString("tracing.client-cert")),
