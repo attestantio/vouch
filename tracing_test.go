@@ -3,29 +3,13 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 
 	certtesting "github.com/attestantio/go-certmanager/testing"
+	certmock "github.com/attestantio/go-certmanager/testing/mock"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
-
-type mockMajordomo struct {
-	data map[string][]byte
-	err  error
-}
-
-func (m *mockMajordomo) Fetch(_ context.Context, key string) ([]byte, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	val, exists := m.data[key]
-	if !exists {
-		return nil, fmt.Errorf("no value for key %s", key)
-	}
-	return val, nil
-}
 
 func TestTracingTLSWiringHappy(t *testing.T) {
 	t.Cleanup(func() {
@@ -33,12 +17,10 @@ func TestTracingTLSWiringHappy(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	majordomo := &mockMajordomo{
-		data: map[string][]byte{
-			"tracing-client-cert": []byte(certtesting.ClientTest01Crt),
-			"tracing-client-key":  []byte(certtesting.ClientTest01Key),
-		},
-	}
+	majordomo := certmock.NewMajordomo(map[string][]byte{
+		"tracing-client-cert": []byte(certtesting.ClientTest01Crt),
+		"tracing-client-key":  []byte(certtesting.ClientTest01Key),
+	})
 
 	viper.Set("tracing.address", "localhost:4317")
 	viper.Set("tracing.client-cert", "tracing-client-cert")
@@ -54,13 +36,11 @@ func TestTracingTLSWiringHappyWithCA(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	majordomo := &mockMajordomo{
-		data: map[string][]byte{
-			"tracing-client-cert": []byte(certtesting.ClientTest01Crt),
-			"tracing-client-key":  []byte(certtesting.ClientTest01Key),
-			"tracing-ca-cert":     []byte(certtesting.CACrt),
-		},
-	}
+	majordomo := certmock.NewMajordomo(map[string][]byte{
+		"tracing-client-cert": []byte(certtesting.ClientTest01Crt),
+		"tracing-client-key":  []byte(certtesting.ClientTest01Key),
+		"tracing-ca-cert":     []byte(certtesting.CACrt),
+	})
 
 	viper.Set("tracing.address", "localhost:4317")
 	viper.Set("tracing.client-cert", "tracing-client-cert")
@@ -77,9 +57,7 @@ func TestTracingTLSMajordomoError(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	majordomo := &mockMajordomo{
-		err: errors.New("fetch failed"),
-	}
+	majordomo := certmock.NewMajordomoWithError(errors.New("fetch failed"))
 
 	viper.Set("tracing.address", "localhost:4317")
 	viper.Set("tracing.client-cert", "tracing-client-cert")

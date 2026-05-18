@@ -25,7 +25,6 @@ import (
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/validatorsmanager"
 	"github.com/attestantio/vouch/testing/logger"
-	"github.com/attestantio/vouch/testing/resources"
 	"github.com/attestantio/vouch/testutil"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -231,9 +230,9 @@ func setupServiceWithValidatorsManager(ctx context.Context, t *testing.T, endpoi
 	chainTime, _ := testutil.NewTestChainTime(ctx, t)
 
 	mdm := certmock.NewMajordomo(map[string][]byte{
-		"client-cert": []byte(resources.ClientTest01Crt),
-		"client-key":  []byte(resources.ClientTest01Key),
-		"ca-cert":     []byte(resources.CACrt),
+		"client-cert": []byte(certtesting.ClientTest01Crt),
+		"client-key":  []byte(certtesting.ClientTest01Key),
+		"ca-cert":     []byte(certtesting.CACrt),
 	})
 
 	return New(ctx,
