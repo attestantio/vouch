@@ -39,7 +39,6 @@ type Service struct {
 	executionPayloadFactor float64
 
 	// Spec values for scoring proposals.
-	slotsPerEpoch      uint64
 	timelySourceWeight uint64
 	timelyTargetWeight uint64
 	timelyHeadWeight   uint64
@@ -49,7 +48,6 @@ type Service struct {
 }
 
 type proposalScoringMetrics struct {
-	slotsPerEpoch      uint64
 	timelySourceWeight uint64
 	timelyTargetWeight uint64
 	timelyHeadWeight   uint64
@@ -90,7 +88,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		timeout:                parameters.timeout,
 		blockRootToSlotCache:   parameters.blockRootToSlotCache,
 		clientMonitor:          parameters.clientMonitor,
-		slotsPerEpoch:          scoringData.slotsPerEpoch,
 		timelySourceWeight:     scoringData.timelySourceWeight,
 		timelyTargetWeight:     scoringData.timelyTargetWeight,
 		timelyHeadWeight:       scoringData.timelyHeadWeight,
@@ -105,16 +102,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 func extractProposalScoringData(spec map[string]any) (*proposalScoringMetrics, error) {
-	tmp, exists := spec["SLOTS_PER_EPOCH"]
-	if !exists {
-		return nil, errors.New("failed to obtain SLOTS_PER_EPOCH")
-	}
-	slotsPerEpoch, ok := tmp.(uint64)
-	if !ok {
-		return nil, errors.New("SLOTS_PER_EPOCH of unexpected type")
-	}
-
-	tmp, exists = spec["TIMELY_SOURCE_WEIGHT"]
+	tmp, exists := spec["TIMELY_SOURCE_WEIGHT"]
 	if !exists {
 		// Set a default value based on the Altair spec.
 		tmp = uint64(14)
@@ -174,7 +162,6 @@ func extractProposalScoringData(spec map[string]any) (*proposalScoringMetrics, e
 		return nil, errors.New("WEIGHT_DENOMINATOR of unexpected type")
 	}
 	scoringMetrics := &proposalScoringMetrics{
-		slotsPerEpoch:      slotsPerEpoch,
 		timelySourceWeight: timelySourceWeight,
 		timelyTargetWeight: timelyTargetWeight,
 		timelyHeadWeight:   timelyHeadWeight,
