@@ -28,17 +28,15 @@ import (
 )
 
 type parameters struct {
-	logLevel                  zerolog.Level
-	clientMonitor             metrics.ClientMonitor
-	processConcurrency        int64
-	eventsProvider            eth2client.EventsProvider
-	chainTime                 chaintime.Service
-	specProvider              eth2client.SpecProvider
-	proposalProviders         map[string]eth2client.ProposalProvider
-	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider
-	timeout                   time.Duration
-	blockRootToSlotCache      cache.BlockRootToSlotProvider
-	executionPayloadFactor    float64
+	logLevel               zerolog.Level
+	clientMonitor          metrics.ClientMonitor
+	processConcurrency     int64
+	chainTime              chaintime.Service
+	specProvider           eth2client.SpecProvider
+	proposalProviders      map[string]eth2client.ProposalProvider
+	timeout                time.Duration
+	blockRootToSlotCache   cache.BlockRootToSlotProvider
+	executionPayloadFactor float64
 }
 
 // Parameter is the interface for service parameters.
@@ -80,13 +78,6 @@ func WithProcessConcurrency(concurrency int64) Parameter {
 	})
 }
 
-// WithEventsProvider sets the events provider.
-func WithEventsProvider(provider eth2client.EventsProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.eventsProvider = provider
-	})
-}
-
 // WithChainTimeService sets the chain time service.
 func WithChainTimeService(chainTime chaintime.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -105,13 +96,6 @@ func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 func WithProposalProviders(providers map[string]eth2client.ProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalProviders = providers
-	})
-}
-
-// WithSignedBeaconBlockProvider sets the signed beacon block provider.
-func WithSignedBeaconBlockProvider(provider eth2client.SignedBeaconBlockProvider) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.signedBeaconBlockProvider = provider
 	})
 }
 
@@ -150,9 +134,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if parameters.processConcurrency == 0 {
 		return nil, errors.New("no process concurrency specified")
 	}
-	if parameters.eventsProvider == nil {
-		return nil, errors.New("no events provider specified")
-	}
 	if parameters.chainTime == nil {
 		return nil, errors.New("no chain time service specified")
 	}
@@ -161,9 +142,6 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if len(parameters.proposalProviders) == 0 {
 		return nil, errors.New("no proposal providers specified")
-	}
-	if parameters.signedBeaconBlockProvider == nil {
-		return nil, errors.New("no signed beacon block provider specified")
 	}
 	if parameters.blockRootToSlotCache == nil {
 		return nil, errors.New("no block root to slot cache specified")

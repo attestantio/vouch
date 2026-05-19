@@ -15,13 +15,10 @@ package best
 
 import (
 	"context"
-	"sync"
 	"time"
 
-	"github.com/OffchainLabs/go-bitfield"
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
@@ -32,39 +29,25 @@ import (
 
 // Service is the provider for beacon block proposals.
 type Service struct {
-	log                       zerolog.Logger
-	clientMonitor             metrics.ClientMonitor
-	processConcurrency        int64
-	chainTime                 chaintime.Service
-	proposalProviders         map[string]eth2client.ProposalProvider
-	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider
-	timeout                   time.Duration
-	blockRootToSlotCache      cache.BlockRootToSlotProvider
-	executionPayloadFactor    float64
+	log                    zerolog.Logger
+	clientMonitor          metrics.ClientMonitor
+	processConcurrency     int64
+	chainTime              chaintime.Service
+	proposalProviders      map[string]eth2client.ProposalProvider
+	timeout                time.Duration
+	blockRootToSlotCache   cache.BlockRootToSlotProvider
+	executionPayloadFactor float64
 
 	// Spec values for scoring proposals.
-	slotsPerEpoch      uint64
 	timelySourceWeight uint64
 	timelyTargetWeight uint64
 	timelyHeadWeight   uint64
 	syncRewardWeight   uint64
 	proposerWeight     uint64
 	weightDenominator  uint64
-
-	priorBlocksVotes   map[phase0.Root]*priorBlockVotes
-	priorBlocksVotesMu sync.RWMutex
-}
-
-type priorBlockVotes struct {
-	root   phase0.Root
-	parent phase0.Root
-	slot   phase0.Slot
-	// votes is a map of attestation slot -> committee index -> votes.
-	votes map[phase0.Slot]map[phase0.CommitteeIndex]bitfield.Bitlist
 }
 
 type proposalScoringMetrics struct {
-	slotsPerEpoch      uint64
 	timelySourceWeight uint64
 	timelyTargetWeight uint64
 	timelyHeadWeight   uint64
@@ -98,50 +81,28 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		log:                       log,
-		processConcurrency:        parameters.processConcurrency,
-		chainTime:                 parameters.chainTime,
-		proposalProviders:         parameters.proposalProviders,
-		signedBeaconBlockProvider: parameters.signedBeaconBlockProvider,
-		timeout:                   parameters.timeout,
-		blockRootToSlotCache:      parameters.blockRootToSlotCache,
-		clientMonitor:             parameters.clientMonitor,
-		slotsPerEpoch:             scoringData.slotsPerEpoch,
-		timelySourceWeight:        scoringData.timelySourceWeight,
-		timelyTargetWeight:        scoringData.timelyTargetWeight,
-		timelyHeadWeight:          scoringData.timelyHeadWeight,
-		syncRewardWeight:          scoringData.syncRewardWeight,
-		proposerWeight:            scoringData.proposerWeight,
-		weightDenominator:         scoringData.weightDenominator,
-		priorBlocksVotes:          make(map[phase0.Root]*priorBlockVotes),
-		executionPayloadFactor:    parameters.executionPayloadFactor,
+		log:                    log,
+		processConcurrency:     parameters.processConcurrency,
+		chainTime:              parameters.chainTime,
+		proposalProviders:      parameters.proposalProviders,
+		timeout:                parameters.timeout,
+		blockRootToSlotCache:   parameters.blockRootToSlotCache,
+		clientMonitor:          parameters.clientMonitor,
+		timelySourceWeight:     scoringData.timelySourceWeight,
+		timelyTargetWeight:     scoringData.timelyTargetWeight,
+		timelyHeadWeight:       scoringData.timelyHeadWeight,
+		syncRewardWeight:       scoringData.syncRewardWeight,
+		proposerWeight:         scoringData.proposerWeight,
+		weightDenominator:      scoringData.weightDenominator,
+		executionPayloadFactor: parameters.executionPayloadFactor,
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
-
-	// Subscribe to head events.  This allows us to go early for attestations if a block arrives, as well as
-	// re-request duties if there is a change in beacon block.
-	// This also allows us to re-request duties if the dependent roots change.
-	if err := parameters.eventsProvider.Events(ctx, &api.EventsOpts{
-		Topics:      []string{"head"},
-		HeadHandler: s.HandleHeadEvent,
-	}); err != nil {
-		return nil, errors.Wrap(err, "failed to add head event handler")
-	}
 
 	return s, nil
 }
 
 func extractProposalScoringData(spec map[string]any) (*proposalScoringMetrics, error) {
-	tmp, exists := spec["SLOTS_PER_EPOCH"]
-	if !exists {
-		return nil, errors.New("failed to obtain SLOTS_PER_EPOCH")
-	}
-	slotsPerEpoch, ok := tmp.(uint64)
-	if !ok {
-		return nil, errors.New("SLOTS_PER_EPOCH of unexpected type")
-	}
-
-	tmp, exists = spec["TIMELY_SOURCE_WEIGHT"]
+	tmp, exists := spec["TIMELY_SOURCE_WEIGHT"]
 	if !exists {
 		// Set a default value based on the Altair spec.
 		tmp = uint64(14)
@@ -201,7 +162,6 @@ func extractProposalScoringData(spec map[string]any) (*proposalScoringMetrics, e
 		return nil, errors.New("WEIGHT_DENOMINATOR of unexpected type")
 	}
 	scoringMetrics := &proposalScoringMetrics{
-		slotsPerEpoch:      slotsPerEpoch,
 		timelySourceWeight: timelySourceWeight,
 		timelyTargetWeight: timelyTargetWeight,
 		timelyHeadWeight:   timelyHeadWeight,

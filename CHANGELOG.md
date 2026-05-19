@@ -8,6 +8,7 @@ dev:
   - fix sync committee signing when a validator occupies multiple positions
   - use block headers as primary fetch in cache handleHead; full blocks are best-effort
   - migrate Dirk and tracing TLS certificate loading to go-certmanager
+  - remove dead priorBlocksVotes cache from beaconblockproposal/best strategy
 
 1.12.0:
   - import fulu container specs from go-eth2-client
