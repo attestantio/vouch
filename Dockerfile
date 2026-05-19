@@ -12,7 +12,11 @@ RUN go build
 
 FROM debian:bookworm-slim
 
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt install -y ca-certificates && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade \
+ && DEBIAN_FRONTEND=noninteractive apt-get -y install ca-certificates \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

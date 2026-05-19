@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,8 +15,6 @@ package dirk
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -24,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	standardclientcert "github.com/attestantio/go-certmanager/client/standard"
 	eth2client "github.com/attestantio/go-eth2-client"
 	api "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -82,9 +81,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("failed to register metrics")
 	}
 
-	credentials, err := credentialsFromCerts(ctx, parameters.clientCert, parameters.clientKey, parameters.caCert)
+	credentials, err := loadClientCertificates(ctx, parameters)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to build credentials")
+		return nil, err
 	}
 
 	endpoints := make([]*dirk.Endpoint, 0, len(parameters.endpoints))
@@ -135,6 +134,33 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	s.Refresh(ctx)
 
 	return s, nil
+}
+
+// loadClientCertificates returns gRPC transport credentials built from the configured certificate URIs.
+func loadClientCertificates(ctx context.Context, parameters *parameters) (credentials.TransportCredentials, error) {
+	ctx, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "loadClientCertificates")
+	defer span.End()
+
+	clientCertOpts := []standardclientcert.Parameter{
+		standardclientcert.WithMajordomo(parameters.majordomo),
+		standardclientcert.WithCertPEMURI(parameters.clientCertURI),
+		standardclientcert.WithCertKeyURI(parameters.clientKeyURI),
+	}
+	if parameters.caCertURI != "" {
+		clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI(parameters.caCertURI))
+	}
+
+	clientCertMgr, err := standardclientcert.New(ctx, clientCertOpts...)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create client certificate manager")
+	}
+
+	tlsCfg, err := clientCertMgr.GetTLSConfig(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get TLS config")
+	}
+
+	return credentials.NewTLS(tlsCfg), nil
 }
 
 // Refresh refreshes the accounts from Dirk, and account validator state from
@@ -264,31 +290,6 @@ func (s *Service) refreshValidators(ctx context.Context) error {
 		return errors.Wrap(err, "failed to refresh validators")
 	}
 	return nil
-}
-
-func credentialsFromCerts(ctx context.Context, clientCert []byte, clientKey []byte, caCert []byte) (credentials.TransportCredentials, error) {
-	_, span := otel.Tracer("attestantio.vouch.services.accountmanager.dirk").Start(ctx, "credentialsFromCerts")
-	defer span.End()
-
-	clientPair, err := tls.X509KeyPair(clientCert, clientKey)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to load client keypair")
-	}
-
-	tlsCfg := &tls.Config{
-		Certificates: []tls.Certificate{clientPair},
-		MinVersion:   tls.VersionTLS13,
-	}
-
-	if caCert != nil {
-		cp := x509.NewCertPool()
-		if !cp.AppendCertsFromPEM(caCert) {
-			return nil, errors.New("failed to add CA certificate")
-		}
-		tlsCfg.RootCAs = cp
-	}
-
-	return credentials.NewTLS(tlsCfg), nil
 }
 
 // ValidatingAccountsForEpoch obtains the validating accounts for a given epoch.

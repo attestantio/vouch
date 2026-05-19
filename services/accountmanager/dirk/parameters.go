@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -23,6 +23,7 @@ import (
 	"github.com/attestantio/vouch/services/validatorsmanager"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	majordomo "github.com/wealdtech/go-majordomo"
 )
 
 type parameters struct {
@@ -33,9 +34,10 @@ type parameters struct {
 	processConcurrency     int64
 	endpoints              []string
 	accountPaths           []string
-	clientCert             []byte
-	clientKey              []byte
-	caCert                 []byte
+	majordomo              majordomo.Service
+	clientCertURI          string
+	clientKeyURI           string
+	caCertURI              string
 	domainProvider         eth2client.DomainProvider
 	validatorsManager      validatorsmanager.Service
 	farFutureEpochProvider eth2client.FarFutureEpochProvider
@@ -102,24 +104,31 @@ func WithAccountPaths(accountPaths []string) Parameter {
 	})
 }
 
-// WithClientCert sets the bytes of the client TLS certificate.
-func WithClientCert(cert []byte) Parameter {
+// WithMajordomo sets the majordomo service for fetching certificate material.
+func WithMajordomo(service majordomo.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.clientCert = cert
+		p.majordomo = service
 	})
 }
 
-// WithClientKey sets the bytes of the client TLS key.
-func WithClientKey(key []byte) Parameter {
+// WithClientCertURI sets the URI of the client TLS certificate.
+func WithClientCertURI(uri string) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.clientKey = key
+		p.clientCertURI = uri
 	})
 }
 
-// WithCACert sets the bytes of the certificate authority TLS certificate.
-func WithCACert(cert []byte) Parameter {
+// WithClientKeyURI sets the URI of the client TLS key.
+func WithClientKeyURI(uri string) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.caCert = cert
+		p.clientKeyURI = uri
+	})
+}
+
+// WithCACertURI sets the URI of the certificate authority TLS certificate.
+func WithCACertURI(uri string) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.caCertURI = uri
 	})
 }
 
@@ -160,47 +169,58 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		clientMonitor: nullmetrics.New(),
 	}
 	for _, p := range params {
-		if params != nil {
+		if p != nil {
 			p.apply(&parameters)
 		}
 	}
 
-	if parameters.monitor == nil {
-		return nil, errors.New("no monitor specified")
-	}
-	if parameters.clientMonitor == nil {
-		return nil, errors.New("no client monitor specified")
-	}
-	if parameters.timeout == 0 {
-		return nil, errors.New("no timeout specified")
-	}
-	if parameters.processConcurrency < 1 {
-		return nil, errors.New("no process concurrency specified")
-	}
-	if len(parameters.endpoints) == 0 {
-		return nil, errors.New("no endpoints specified")
-	}
-	if len(parameters.accountPaths) == 0 {
-		return nil, errors.New("no account paths specified")
-	}
-	if parameters.clientCert == nil {
-		return nil, errors.New("no client certificate specified")
-	}
-	if parameters.clientKey == nil {
-		return nil, errors.New("no client key specified")
-	}
-	if parameters.validatorsManager == nil {
-		return nil, errors.New("no validators manager specified")
-	}
-	if parameters.domainProvider == nil {
-		return nil, errors.New("no domain provider specified")
-	}
-	if parameters.farFutureEpochProvider == nil {
-		return nil, errors.New("no far future epoch provider specified")
-	}
-	if parameters.currentEpochProvider == nil {
-		return nil, errors.New("no current epoch provider specified")
+	if err := parameters.validate(); err != nil {
+		return nil, err
 	}
 
 	return &parameters, nil
+}
+
+func (p *parameters) validate() error {
+	if p.monitor == nil {
+		return errors.New("no monitor specified")
+	}
+	if p.clientMonitor == nil {
+		return errors.New("no client monitor specified")
+	}
+	if p.timeout == 0 {
+		return errors.New("no timeout specified")
+	}
+	if p.processConcurrency < 1 {
+		return errors.New("no process concurrency specified")
+	}
+	if len(p.endpoints) == 0 {
+		return errors.New("no endpoints specified")
+	}
+	if len(p.accountPaths) == 0 {
+		return errors.New("no account paths specified")
+	}
+	if p.majordomo == nil {
+		return errors.New("no majordomo specified")
+	}
+	if p.clientCertURI == "" {
+		return errors.New("no client certificate URI specified")
+	}
+	if p.clientKeyURI == "" {
+		return errors.New("no client key URI specified")
+	}
+	if p.validatorsManager == nil {
+		return errors.New("no validators manager specified")
+	}
+	if p.domainProvider == nil {
+		return errors.New("no domain provider specified")
+	}
+	if p.farFutureEpochProvider == nil {
+		return errors.New("no far future epoch provider specified")
+	}
+	if p.currentEpochProvider == nil {
+		return errors.New("no current epoch provider specified")
+	}
+
+	return nil
 }
