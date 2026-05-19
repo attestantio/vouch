@@ -3,10 +3,11 @@ dev:
   - add combinedmajority attestationdata strategy
   - update go-eth2-wallet-dirk to v1.6.0
   - update go-eth2-client to v0.28.0
-  - update go version to 1.25
+  - update go version to 1.25.5
   - cancel open http requests when strategies.builderbid.best.timeout is reached
   - fix sync committee signing when a validator occupies multiple positions
   - use block headers as primary fetch in cache handleHead; full blocks are best-effort
+  - migrate Dirk and tracing TLS certificate loading to go-certmanager
 
 1.12.0:
   - import fulu container specs from go-eth2-client
