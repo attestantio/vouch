@@ -116,7 +116,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.13.0-alpha.2"
+var ReleaseVersion = "1.13.0-alpha.3"
 
 func main() {
 	exitCode := main2()
@@ -1117,22 +1117,7 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 	var accountManager accountmanager.Service
 	if len(viper.GetStringSlice("accountmanager.dirk.accounts")) > 0 {
 		log.Info().Msg("Starting dirk account manager")
-		certPEMBlock, err := majordomo.Fetch(ctx, viper.GetString("accountmanager.dirk.client-cert"))
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to obtain server certificate")
-		}
-		keyPEMBlock, err := majordomo.Fetch(ctx, viper.GetString("accountmanager.dirk.client-key"))
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to obtain server key")
-		}
-		var caPEMBlock []byte
-		if viper.GetString("accountmanager.dirk.ca-cert") != "" {
-			caPEMBlock, err = majordomo.Fetch(ctx, viper.GetString("accountmanager.dirk.ca-cert"))
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to obtain client CA certificate")
-			}
-		}
-		accountManager, err = dirkaccountmanager.New(ctx,
+		dirkOpts := []dirkaccountmanager.Parameter{
 			dirkaccountmanager.WithLogLevel(util.LogLevel("accountmanager.dirk")),
 			dirkaccountmanager.WithMonitor(monitor),
 			dirkaccountmanager.WithTimeout(util.Timeout("accountmanager.dirk")),
@@ -1141,13 +1126,18 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 			dirkaccountmanager.WithValidatorsManager(validatorsManager),
 			dirkaccountmanager.WithEndpoints(viper.GetStringSlice("accountmanager.dirk.endpoints")),
 			dirkaccountmanager.WithAccountPaths(viper.GetStringSlice("accountmanager.dirk.accounts")),
-			dirkaccountmanager.WithClientCert(certPEMBlock),
-			dirkaccountmanager.WithClientKey(keyPEMBlock),
-			dirkaccountmanager.WithCACert(caPEMBlock),
+			dirkaccountmanager.WithMajordomo(majordomo),
+			dirkaccountmanager.WithClientCertURI(viper.GetString("accountmanager.dirk.client-cert")),
+			dirkaccountmanager.WithClientKeyURI(viper.GetString("accountmanager.dirk.client-key")),
 			dirkaccountmanager.WithDomainProvider(eth2Client.(eth2client.DomainProvider)),
 			dirkaccountmanager.WithFarFutureEpochProvider(eth2Client.(eth2client.FarFutureEpochProvider)),
 			dirkaccountmanager.WithCurrentEpochProvider(chainTime),
-		)
+		}
+		if viper.GetString("accountmanager.dirk.ca-cert") != "" {
+			dirkOpts = append(dirkOpts, dirkaccountmanager.WithCACertURI(viper.GetString("accountmanager.dirk.ca-cert")))
+		}
+		var err error
+		accountManager, err = dirkaccountmanager.New(ctx, dirkOpts...)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to start dirk account manager service")
 		}
