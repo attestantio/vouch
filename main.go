@@ -341,7 +341,7 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	signedBeaconBlockProvider, beaconBlockHeaderProvider, err := startProviderServices(ctx, monitor, eth2Client)
+	signedBeaconBlockProvider, beaconBlockHeaderProvider, err := startProviderServices(ctx, monitor)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -448,7 +448,7 @@ func initController(ctx context.Context,
 	error,
 ) {
 	// The events provider for the controller should only use beacon nodes that are used for attestation data.
-	eventsConsensusClient, err := fetchMultiClient(ctx, monitor, "events", util.BeaconNodeAddressesForAttesting())
+	eventsConsensusClient, err := fetchMultiClient(ctx, monitor, "events", util.BeaconNodeAddressesForAttestationData())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch multiclient for controller")
 	}
@@ -553,15 +553,15 @@ func waitForGenesis(ctx context.Context, chainTime chaintime.Service) (bool, err
 	return waitedForGenesis, nil
 }
 
-func startProviderServices(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (eth2client.SignedBeaconBlockProvider, eth2client.BeaconBlockHeadersProvider, error) {
+func startProviderServices(ctx context.Context, monitor metrics.Service) (eth2client.SignedBeaconBlockProvider, eth2client.BeaconBlockHeadersProvider, error) {
 	// The signed beacon block provider from the configured strategy to define how we get signed beacon blocks.
-	signedBeaconBlockProvider, err := selectSignedBeaconBlockProvider(ctx, monitor, eth2Client)
+	signedBeaconBlockProvider, err := selectSignedBeaconBlockProvider(ctx, monitor)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to fetch signed beacon block provider for controller")
 	}
 
 	// The block header provider from the configured strategy to define how we get block headers.
-	beaconBlockHeaderProvider, err := selectBeaconHeaderProvider(ctx, monitor, eth2Client)
+	beaconBlockHeaderProvider, err := selectBeaconHeaderProvider(ctx, monitor)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to fetch beacon block header provider for controller")
 	}
@@ -684,13 +684,13 @@ func startProviders(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting attestation data provider")
-	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, eth2Client, chainTime, cache)
+	attestationDataProvider, err := selectAttestationDataProvider(ctx, monitor, chainTime, cache)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to select attestation data provider")
 	}
 
 	log.Trace().Msg("Selecting aggregate attestation provider")
-	aggregateAttestationProvider, err := selectAggregateAttestationProvider(ctx, monitor, eth2Client)
+	aggregateAttestationProvider, err := selectAggregateAttestationProvider(ctx, monitor)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to select aggregate attestation provider")
 	}
@@ -723,13 +723,13 @@ func startAltairServices(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting sync committee contribution provider")
-	syncCommitteeContributionProvider, err := selectSyncCommitteeContributionProvider(ctx, monitor, eth2Client)
+	syncCommitteeContributionProvider, err := selectSyncCommitteeContributionProvider(ctx, monitor)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "failed to select sync committee contribution provider")
 	}
 
 	log.Trace().Msg("Selecting beacon block root provider")
-	beaconBlockRootProvider, err := selectBeaconBlockRootProvider(ctx, monitor, eth2Client, cacheSvc)
+	beaconBlockRootProvider, err := selectBeaconBlockRootProvider(ctx, monitor, cacheSvc)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "failed to select beacon block root provider")
 	}
@@ -1184,113 +1184,152 @@ func startAccountManager(ctx context.Context, monitor metrics.Service, eth2Clien
 // selectAttestationDataProvider selects the appropriate attestation data provider given user input.
 func selectAttestationDataProvider(ctx context.Context,
 	monitor metrics.Service,
-	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cacheSvc cache.Service,
 ) (eth2client.AttestationDataProvider, error) {
-	var attestationDataProvider eth2client.AttestationDataProvider
-	var err error
 	switch viper.GetString("strategies.attestationdata.style") {
 	case "best":
-		log.Info().Msg("Starting best attestation data strategy")
-		attestationDataProviders := make(map[string]eth2client.AttestationDataProvider)
-		for _, address := range util.BeaconNodeAddresses("strategies.attestationdata.best") {
-			client, err := fetchClient(ctx, monitor, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for attestation data strategy", address))
-			}
-			attestationDataProviders[address] = client.(eth2client.AttestationDataProvider)
-		}
-		attestationDataProvider, err = bestattestationdatastrategy.New(ctx,
-			bestattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			bestattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.best")),
-			bestattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.best")),
-			bestattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
-			bestattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.best")),
-			bestattestationdatastrategy.WithChainTime(chainTime),
-			bestattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to start best attestation data strategy")
-		}
+		return startBestAttestationDataStrategy(ctx, monitor, chainTime, cacheSvc)
 	case "majority":
-		log.Info().Msg("Starting majority attestation data strategy")
-		attestationDataProviders := make(map[string]eth2client.AttestationDataProvider)
-		for _, address := range util.BeaconNodeAddresses("strategies.attestationdata.majority") {
-			client, err := fetchClient(ctx, monitor, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for attestation data strategy", address))
-			}
-			attestationDataProviders[address] = client.(eth2client.AttestationDataProvider)
-		}
-		attestationDataProvider, err = majorityattestationdatastrategy.New(ctx,
-			majorityattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			majorityattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.majority")),
-			majorityattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.majority")),
-			majorityattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
-			majorityattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.majority")),
-			majorityattestationdatastrategy.WithChainTime(chainTime),
-			majorityattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
-			majorityattestationdatastrategy.WithThreshold(viper.GetInt("strategies.attestationdata.majority.threshold")),
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to start majority attestation data strategy")
-		}
+		return startMajorityAttestationDataStrategy(ctx, monitor, chainTime, cacheSvc)
 	case "combinedmajority":
-		log.Info().Msg("Starting combinedmajority attestation data strategy")
-		attestationDataProviders := make(map[string]eth2client.AttestationDataProvider)
-		for _, address := range util.BeaconNodeAddresses("strategies.attestationdata.combinedmajority") {
-			client, err := fetchClient(ctx, monitor, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for combinedmajority attestation data strategy", address))
-			}
-			attestationDataProviders[address] = client.(eth2client.AttestationDataProvider)
-		}
-		attestationDataProvider, err = combinedmajorityattestationdatastrategy.New(ctx,
-			combinedmajorityattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			combinedmajorityattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.combinedmajority")),
-			combinedmajorityattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.combinedmajority")),
-			combinedmajorityattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
-			combinedmajorityattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.combinedmajority")),
-			combinedmajorityattestationdatastrategy.WithChainTime(chainTime),
-			combinedmajorityattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
-			combinedmajorityattestationdatastrategy.WithThreshold(viper.GetInt("strategies.attestationdata.combinedmajority.threshold")),
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to start combinedmajority attestation data strategy")
-		}
-
+		return startCombinedMajorityAttestationDataStrategy(ctx, monitor, chainTime, cacheSvc)
 	case "first":
-		log.Info().Msg("Starting first attestation data strategy")
-		attestationDataProviders := make(map[string]eth2client.AttestationDataProvider)
-		for _, address := range util.BeaconNodeAddresses("strategies.attestationdata.first") {
-			client, err := fetchClient(ctx, monitor, address)
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for attestation data strategy", address))
-			}
-			attestationDataProviders[address] = client.(eth2client.AttestationDataProvider)
-		}
-		attestationDataProvider, err = firstattestationdatastrategy.New(ctx,
-			firstattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			firstattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.first")),
-			firstattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
-			firstattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.first")),
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to start first attestation data strategy")
-		}
+		return startFirstAttestationDataStrategy(ctx, monitor)
 	default:
-		log.Info().Msg("Starting simple attestation data strategy")
-		attestationDataProvider = eth2Client.(eth2client.AttestationDataProvider)
+		return startSimpleAttestationDataStrategy(ctx, monitor)
 	}
+}
 
+func startBestAttestationDataStrategy(ctx context.Context,
+	monitor metrics.Service,
+	chainTime chaintime.Service,
+	cacheSvc cache.Service,
+) (eth2client.AttestationDataProvider, error) {
+	log.Info().Msg("Starting best attestation data strategy")
+	attestationDataProviders, err := attestationDataProvidersForConfig(ctx, monitor, "strategies.attestationdata.best", "attestation data strategy")
+	if err != nil {
+		return nil, err
+	}
+	attestationDataProvider, err := bestattestationdatastrategy.New(ctx,
+		bestattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+		bestattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.best")),
+		bestattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.best")),
+		bestattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
+		bestattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.best")),
+		bestattestationdatastrategy.WithChainTime(chainTime),
+		bestattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start best attestation data strategy")
+	}
 	return attestationDataProvider, nil
+}
+
+func startMajorityAttestationDataStrategy(ctx context.Context,
+	monitor metrics.Service,
+	chainTime chaintime.Service,
+	cacheSvc cache.Service,
+) (eth2client.AttestationDataProvider, error) {
+	log.Info().Msg("Starting majority attestation data strategy")
+	attestationDataProviders, err := attestationDataProvidersForConfig(ctx, monitor, "strategies.attestationdata.majority", "attestation data strategy")
+	if err != nil {
+		return nil, err
+	}
+	attestationDataProvider, err := majorityattestationdatastrategy.New(ctx,
+		majorityattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+		majorityattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.majority")),
+		majorityattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.majority")),
+		majorityattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
+		majorityattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.majority")),
+		majorityattestationdatastrategy.WithChainTime(chainTime),
+		majorityattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+		majorityattestationdatastrategy.WithThreshold(viper.GetInt("strategies.attestationdata.majority.threshold")),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start majority attestation data strategy")
+	}
+	return attestationDataProvider, nil
+}
+
+func startCombinedMajorityAttestationDataStrategy(ctx context.Context,
+	monitor metrics.Service,
+	chainTime chaintime.Service,
+	cacheSvc cache.Service,
+) (eth2client.AttestationDataProvider, error) {
+	log.Info().Msg("Starting combinedmajority attestation data strategy")
+	attestationDataProviders, err := attestationDataProvidersForConfig(ctx, monitor, "strategies.attestationdata.combinedmajority", "combinedmajority attestation data strategy")
+	if err != nil {
+		return nil, err
+	}
+	attestationDataProvider, err := combinedmajorityattestationdatastrategy.New(ctx,
+		combinedmajorityattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+		combinedmajorityattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.combinedmajority")),
+		combinedmajorityattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.combinedmajority")),
+		combinedmajorityattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
+		combinedmajorityattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.combinedmajority")),
+		combinedmajorityattestationdatastrategy.WithChainTime(chainTime),
+		combinedmajorityattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+		combinedmajorityattestationdatastrategy.WithThreshold(viper.GetInt("strategies.attestationdata.combinedmajority.threshold")),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start combinedmajority attestation data strategy")
+	}
+	return attestationDataProvider, nil
+}
+
+func startFirstAttestationDataStrategy(ctx context.Context,
+	monitor metrics.Service,
+) (eth2client.AttestationDataProvider, error) {
+	log.Info().Msg("Starting first attestation data strategy")
+	attestationDataProviders, err := attestationDataProvidersForConfig(ctx, monitor, "strategies.attestationdata.first", "attestation data strategy")
+	if err != nil {
+		return nil, err
+	}
+	attestationDataProvider, err := firstattestationdatastrategy.New(ctx,
+		firstattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+		firstattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.attestationdata.first")),
+		firstattestationdatastrategy.WithAttestationDataProviders(attestationDataProviders),
+		firstattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.first")),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start first attestation data strategy")
+	}
+	return attestationDataProvider, nil
+}
+
+func startSimpleAttestationDataStrategy(ctx context.Context,
+	monitor metrics.Service,
+) (eth2client.AttestationDataProvider, error) {
+	log.Info().Msg("Starting simple attestation data strategy")
+	attestationDataClient, err := fetchMultiClient(ctx, monitor, "attestationdata", util.BeaconNodeAddressesForAttestationData())
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch clients for simple attestation data strategy")
+	}
+	return attestationDataClient.(eth2client.AttestationDataProvider), nil
+}
+
+// attestationDataProvidersForConfig builds the per-address attestation data provider map for a strategy.
+// strategyLabel appears in the "failed to fetch client" error to preserve each strategy's original wording.
+func attestationDataProvidersForConfig(ctx context.Context,
+	monitor metrics.Service,
+	configKey string,
+	strategyLabel string,
+) (map[string]eth2client.AttestationDataProvider, error) {
+	attestationDataProviders := make(map[string]eth2client.AttestationDataProvider)
+	for _, address := range util.BeaconNodeAddresses(configKey) {
+		client, err := fetchClient(ctx, monitor, address)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for %s", address, strategyLabel))
+		}
+		attestationDataProviders[address] = client.(eth2client.AttestationDataProvider)
+	}
+	return attestationDataProviders, nil
 }
 
 // selectAggregateAttestationProvider selects the appropriate aggregate attestation provider given user input.
 func selectAggregateAttestationProvider(ctx context.Context,
 	monitor metrics.Service,
-	eth2Client eth2client.Service,
 ) (
 	eth2client.AggregateAttestationProvider,
 	error,
@@ -1339,7 +1378,11 @@ func selectAggregateAttestationProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple aggregate attestation strategy")
-		aggregateAttestationProvider = eth2Client.(eth2client.AggregateAttestationProvider)
+		aggregateAttestationClient, err := fetchMultiClient(ctx, monitor, "aggregateattestation", util.BeaconNodeAddressesForAggregateAttestations())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch clients for simple aggregate attestation strategy")
+		}
+		aggregateAttestationProvider = aggregateAttestationClient.(eth2client.AggregateAttestationProvider)
 	}
 
 	return aggregateAttestationProvider, nil
@@ -1400,7 +1443,11 @@ func selectProposalProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple beacon block proposal strategy")
-		proposalProvider = eth2Client.(eth2client.ProposalProvider)
+		beaconBlockProposalClient, err := fetchMultiClient(ctx, monitor, "beaconblockproposal", util.BeaconNodeAddressesForBeaconBlockProposal())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch clients for simple beacon block proposal strategy")
+		}
+		proposalProvider = beaconBlockProposalClient.(eth2client.ProposalProvider)
 	}
 
 	return proposalProvider, nil
@@ -1409,7 +1456,6 @@ func selectProposalProvider(ctx context.Context,
 // selectSyncCommitteeContributionProvider selects the appropriate sync committee contribution provider given user input.
 func selectSyncCommitteeContributionProvider(ctx context.Context,
 	monitor metrics.Service,
-	eth2Client eth2client.Service,
 ) (eth2client.SyncCommitteeContributionProvider, error) {
 	var syncCommitteeContributionProvider eth2client.SyncCommitteeContributionProvider
 	var err error
@@ -1455,7 +1501,11 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple sync committee contribution strategy")
-		syncCommitteeContributionProvider = eth2Client.(eth2client.SyncCommitteeContributionProvider)
+		syncCommitteeContributionClient, err := fetchMultiClient(ctx, monitor, "synccommitteecontribution", util.BeaconNodeAddressesForSyncCommitteeContributions())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch clients for simple sync committee contribution strategy")
+		}
+		syncCommitteeContributionProvider = syncCommitteeContributionClient.(eth2client.SyncCommitteeContributionProvider)
 	}
 
 	return syncCommitteeContributionProvider, nil
@@ -1464,7 +1514,6 @@ func selectSyncCommitteeContributionProvider(ctx context.Context,
 // selectBeaconBlockRootProvider selects the appropriate beacon block root provider given user input.
 func selectBeaconBlockRootProvider(ctx context.Context,
 	monitor metrics.Service,
-	eth2Client eth2client.Service,
 	cacheSvc cache.Service,
 ) (eth2client.BeaconBlockRootProvider, error) {
 	var beaconBlockRootProvider eth2client.BeaconBlockRootProvider
@@ -1490,7 +1539,7 @@ func selectBeaconBlockRootProvider(ctx context.Context,
 			majoritybeaconblockrootstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
 		)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to start majority sync committee contribution strategy")
+			return nil, errors.Wrap(err, "failed to start majority beacon block root strategy")
 		}
 	case "first":
 		log.Info().Msg("Starting first beacon block root strategy")
@@ -1533,7 +1582,11 @@ func selectBeaconBlockRootProvider(ctx context.Context,
 		}
 	default:
 		log.Info().Msg("Starting simple beacon block root strategy")
-		beaconBlockRootProvider = eth2Client.(eth2client.BeaconBlockRootProvider)
+		beaconBlockRootClient, err := fetchMultiClient(ctx, monitor, "beaconblockroot", util.BeaconNodeAddressesForBeaconBlockRoots())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch clients for simple beacon block root strategy")
+		}
+		beaconBlockRootProvider = beaconBlockRootClient.(eth2client.BeaconBlockRootProvider)
 	}
 
 	return beaconBlockRootProvider, nil
@@ -1957,7 +2010,6 @@ func obtainBuilderConfigsForPrivilegedBuilders(_ context.Context,
 // select the signed beacon block provider based on user input.
 func selectSignedBeaconBlockProvider(ctx context.Context,
 	monitor metrics.Service,
-	eth2Client eth2client.Service,
 ) (
 	eth2client.SignedBeaconBlockProvider,
 	error,
@@ -1988,8 +2040,12 @@ func selectSignedBeaconBlockProvider(ctx context.Context,
 			firstsignedbeaconblockstrategy.WithSignedBeaconBlockProviders(signedBeaconBlockProviders),
 		)
 	default:
-		log.Info().Msg("Starting simple signed block strategy")
-		provider = eth2Client.(eth2client.SignedBeaconBlockProvider)
+		log.Info().Msg("Starting simple signed beacon block strategy")
+		signedBeaconBlockClient, err := fetchMultiClient(ctx, monitor, "signedbeaconblock", util.BeaconNodeAddressesForSignedBeaconBlock())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch clients for simple signed beacon block strategy")
+		}
+		provider = signedBeaconBlockClient.(eth2client.SignedBeaconBlockProvider)
 	}
 
 	if err != nil {
@@ -2002,7 +2058,6 @@ func selectSignedBeaconBlockProvider(ctx context.Context,
 // select the beacon header provider based on user input.
 func selectBeaconHeaderProvider(ctx context.Context,
 	monitor metrics.Service,
-	eth2Client eth2client.Service,
 ) (
 	eth2client.BeaconBlockHeadersProvider,
 	error,
@@ -2034,7 +2089,11 @@ func selectBeaconHeaderProvider(ctx context.Context,
 		)
 	default:
 		log.Info().Msg("Starting simple beacon block header strategy")
-		provider = eth2Client.(eth2client.BeaconBlockHeadersProvider)
+		beaconBlockHeaderClient, err := fetchMultiClient(ctx, monitor, "beaconblockheader", util.BeaconNodeAddressesForBeaconBlockHeader())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch clients for simple beacon block header strategy")
+		}
+		provider = beaconBlockHeaderClient.(eth2client.BeaconBlockHeadersProvider)
 	}
 
 	if err != nil {
