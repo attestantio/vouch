@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,15 +15,13 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"fmt"
 
 	// #nosec G108
 	_ "net/http/pprof"
 	"os"
 	"time"
 
+	standardclientcert "github.com/attestantio/go-certmanager/client/standard"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	majordomo "github.com/wealdtech/go-majordomo"
@@ -51,13 +49,11 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 	}
 	if viper.GetString("tracing.client-cert") != "" {
 		log.Trace().Msg("Using TLS tracing connection")
-		creds, err := credentialsFromCerts(ctx, majordomo, "tracing")
+		creds, err := loadTracingClientCertificates(ctx, majordomo)
 		if err != nil {
-			return errors.Wrap(err, "invalid TLS credentials")
+			return err
 		}
-		driverOpts = append(driverOpts,
-			otlptracegrpc.WithTLSCredentials(creds),
-		)
+		driverOpts = append(driverOpts, otlptracegrpc.WithTLSCredentials(creds))
 	} else {
 		log.Trace().Msg("Using insecure tracing connection")
 		driverOpts = append(driverOpts,
@@ -99,57 +95,46 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 	))
 
 	// Shut down cleanly on exit.
-	go func(ctx context.Context) { //nolint:gosec
+	//nolint:gosec // G118: context.Background is intentional — parent ctx is cancelled, need fresh context for shutdown.
+	go func() {
 		<-ctx.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
-		//nolint:contextcheck
-		if err := tp.Shutdown(ctx); err != nil {
+		//nolint:contextcheck // shutdownCtx is intentionally not derived from the cancelled parent ctx.
+		if err := tp.Shutdown(shutdownCtx); err != nil {
 			log.Error().Err(err).Msg("Failed to shut down tracing")
 		} else {
 			log.Trace().Msg("Shut down tracing")
 		}
-	}(ctx)
+	}()
 
 	return nil
 }
 
-func credentialsFromCerts(ctx context.Context, majordomo majordomo.Service, base string) (credentials.TransportCredentials, error) {
-	_, span := otel.Tracer("attestantio.vouch").Start(ctx, "credentialsFromCerts")
+// loadTracingClientCertificates returns gRPC TLS credentials for the tracing client
+// from the cert/key/CA URIs configured in viper, resolved via majordomo.
+func loadTracingClientCertificates(ctx context.Context, majordomo majordomo.Service) (credentials.TransportCredentials, error) {
+	ctx, span := otel.Tracer("attestantio.vouch").Start(ctx, "loadTracingClientCertificates")
 	defer span.End()
 
-	clientCert, err := majordomo.Fetch(ctx, viper.GetString(fmt.Sprintf("%s.client-cert", base)))
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain server certificate")
+	clientCertOpts := []standardclientcert.Parameter{
+		standardclientcert.WithMajordomo(majordomo),
+		standardclientcert.WithCertPEMURI(viper.GetString("tracing.client-cert")),
+		standardclientcert.WithCertKeyURI(viper.GetString("tracing.client-key")),
 	}
-	clientKey, err := majordomo.Fetch(ctx, viper.GetString(fmt.Sprintf("%s.client-key", base)))
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain server key")
-	}
-	var caCert []byte
-	if viper.GetString(fmt.Sprintf("%s.ca-cert", base)) != "" {
-		caCert, err = majordomo.Fetch(ctx, viper.GetString(fmt.Sprintf("%s.ca-cert", base)))
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to obtain client CA certificate")
-		}
+	// CA cert is optional; when omitted the system cert pool is used.
+	if viper.GetString("tracing.ca-cert") != "" {
+		clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI(viper.GetString("tracing.ca-cert")))
 	}
 
-	clientPair, err := tls.X509KeyPair(clientCert, clientKey)
+	clientCertMgr, err := standardclientcert.New(ctx, clientCertOpts...)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to load client keypair")
+		return nil, errors.Wrap(err, "failed to create client certificate manager for tracing")
 	}
 
-	tlsCfg := &tls.Config{
-		Certificates: []tls.Certificate{clientPair},
-		MinVersion:   tls.VersionTLS13,
-	}
-
-	if caCert != nil {
-		cp := x509.NewCertPool()
-		if !cp.AppendCertsFromPEM(caCert) {
-			return nil, errors.New("failed to add CA certificate")
-		}
-		tlsCfg.RootCAs = cp
+	tlsCfg, err := clientCertMgr.GetTLSConfig(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get TLS config for tracing")
 	}
 
 	return credentials.NewTLS(tlsCfg), nil
