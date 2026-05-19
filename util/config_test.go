@@ -408,7 +408,7 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 		{
 			name:      "AggregateAttestation",
 			prefix:    "STRATEGIES_AGGREGATEATTESTATION",
-			envPrefix: "VOUCH_BEACONNODEADDRESSESFORAGGREGATEATTESTATIONS",
+			envPrefix: "VOUCH_BEACONNODEADDRESSFORAGGREGATEATTESTATIONS",
 			handler:   util.BeaconNodeAddressesForAggregateAttestations,
 		},
 		{
