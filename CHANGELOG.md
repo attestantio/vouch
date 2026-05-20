@@ -9,7 +9,7 @@ dev:
   - use block headers as primary fetch in cache handleHead; full blocks are best-effort
   - migrate Dirk and tracing TLS certificate loading to go-certmanager
   - remove dead priorBlocksVotes cache from beaconblockproposal/best strategy
-  - reduce log noise from first strategies on timeouts and provider failures
+  - downgrade warn level log messages to debug for timeouts and provider failures on first strategies
 
 1.12.0:
   - import fulu container specs from go-eth2-client
