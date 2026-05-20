@@ -86,7 +86,7 @@ func (s *Service) Proposal(ctx context.Context,
 			s.clientMonitor.ClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
-					log.Warn().Err(err).Msg("Failed to obtain beacon block proposal")
+					log.Debug().Err(err).Msg("Failed to obtain beacon block proposal")
 				}
 
 				return
@@ -101,7 +101,7 @@ func (s *Service) Proposal(ctx context.Context,
 	select {
 	case <-ctx.Done():
 		cancel()
-		s.log.Warn().Msg("Failed to obtain beacon block proposal before timeout")
+		s.log.Debug().Msg("Failed to obtain beacon block proposal before timeout")
 		return nil, errors.New("failed to obtain beacon block proposal before timeout")
 	case proposal := <-proposalCh:
 		cancel()

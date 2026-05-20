@@ -58,7 +58,7 @@ func (s *Service) BeaconBlockRoot(ctx context.Context,
 			s.clientMonitor.ClientOperation(name, "beacon block root", err == nil, time.Since(started))
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
-					log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain beacon block root")
+					log.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain beacon block root")
 				}
 
 				return
@@ -72,7 +72,7 @@ func (s *Service) BeaconBlockRoot(ctx context.Context,
 	select {
 	case <-ctx.Done():
 		cancel()
-		log.Warn().Msg("Failed to obtain beacon block root before timeout")
+		log.Debug().Msg("Failed to obtain beacon block root before timeout")
 		return nil, errors.New("failed to obtain beacon block root before timeout")
 	case root := <-respCh:
 		cancel()

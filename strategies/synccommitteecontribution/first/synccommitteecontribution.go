@@ -62,7 +62,7 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context,
 			s.clientMonitor.ClientOperation(name, "sync committee contribution", err == nil, time.Since(started))
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
-					log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain sync committee contribution")
+					log.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain sync committee contribution")
 				}
 
 				return
@@ -77,7 +77,7 @@ func (s *Service) SyncCommitteeContribution(ctx context.Context,
 	select {
 	case <-ctx.Done():
 		cancel()
-		log.Warn().Msg("Failed to obtain sync committee contribution before timeout")
+		log.Debug().Msg("Failed to obtain sync committee contribution before timeout")
 		return nil, errors.New("failed to obtain sync committee contribution before timeout")
 	case contribution := <-respCh:
 		cancel()

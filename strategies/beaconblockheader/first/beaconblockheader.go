@@ -94,7 +94,7 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 	select {
 	case <-ctx.Done():
 		cancel()
-		log.Warn().Msg("Failed to obtain beacon block header before timeout")
+		log.Debug().Msg("Failed to obtain beacon block header before timeout")
 		return nil, errors.New("failed to obtain beacon block header before timeout")
 	case resp := <-respCh:
 		cancel()

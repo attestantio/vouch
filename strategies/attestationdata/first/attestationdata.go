@@ -54,7 +54,7 @@ func (s *Service) AttestationData(ctx context.Context,
 			s.clientMonitor.ClientOperation(name, "attestation data", err == nil, time.Since(started))
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
-					log.Warn().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain attestation data")
+					log.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain attestation data")
 				}
 
 				return
@@ -69,7 +69,7 @@ func (s *Service) AttestationData(ctx context.Context,
 	select {
 	case <-ctx.Done():
 		cancel()
-		log.Warn().Msg("Failed to obtain attestation data before timeout")
+		log.Debug().Msg("Failed to obtain attestation data before timeout")
 		return nil, errors.New("failed to obtain attestation data before timeout")
 	case attestationData := <-respCh:
 		cancel()
