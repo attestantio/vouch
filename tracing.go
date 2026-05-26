@@ -22,6 +22,7 @@ import (
 	"time"
 
 	standardclientcert "github.com/attestantio/go-certmanager/client/standard"
+	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	majordomo "github.com/wealdtech/go-majordomo"
@@ -37,7 +38,7 @@ import (
 )
 
 // initTracing initialises the tracing system.
-func initTracing(ctx context.Context, majordomo majordomo.Service) error {
+func initTracing(ctx context.Context, majordomo majordomo.Service, monitor metrics.Service) error {
 	if viper.GetString("tracing.address") == "" {
 		log.Debug().Msg("No tracing endpoint supplied; tracing not enabled")
 		return nil
@@ -49,7 +50,7 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 	}
 	if viper.GetString("tracing.client-cert") != "" {
 		log.Trace().Msg("Using TLS tracing connection")
-		creds, err := loadTracingClientCertificates(ctx, majordomo)
+		creds, err := loadTracingClientCertificates(ctx, majordomo, monitor)
 		if err != nil {
 			return err
 		}
@@ -113,7 +114,7 @@ func initTracing(ctx context.Context, majordomo majordomo.Service) error {
 
 // loadTracingClientCertificates returns gRPC TLS credentials for the tracing client
 // from the cert/key/CA URIs configured in viper, resolved via majordomo.
-func loadTracingClientCertificates(ctx context.Context, majordomo majordomo.Service) (credentials.TransportCredentials, error) {
+func loadTracingClientCertificates(ctx context.Context, majordomo majordomo.Service, monitor metrics.Service) (credentials.TransportCredentials, error) {
 	ctx, span := otel.Tracer("attestantio.vouch").Start(ctx, "loadTracingClientCertificates")
 	defer span.End()
 
@@ -121,6 +122,8 @@ func loadTracingClientCertificates(ctx context.Context, majordomo majordomo.Serv
 		standardclientcert.WithMajordomo(majordomo),
 		standardclientcert.WithCertPEMURI(viper.GetString("tracing.client-cert")),
 		standardclientcert.WithCertKeyURI(viper.GetString("tracing.client-key")),
+		standardclientcert.WithMonitor(monitor),
+		standardclientcert.WithName("tracing"),
 	}
 	// CA cert is optional; when omitted the system cert pool is used.
 	if viper.GetString("tracing.ca-cert") != "" {

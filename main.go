@@ -156,7 +156,16 @@ func main2() int {
 
 	initProfiling()
 
-	if err := initTracing(ctx, majordomo); err != nil {
+	// Start a bootstrap monitor before tracing so the tracing TLS certificate
+	// manager can register expiry metrics against it. The monitor is later
+	// upgraded inside startBasicServices to include chainTime + the HTTP server.
+	bootstrapMonitor, err := startMonitor(ctx, nil, false)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to start metrics service")
+		return 1
+	}
+
+	if err := initTracing(ctx, majordomo, bootstrapMonitor); err != nil {
 		log.Error().Err(err).Msg("Failed to initialise tracing")
 		return 1
 	}
@@ -168,7 +177,7 @@ func main2() int {
 		return 1
 	}
 
-	chainTime, controller, err := startServices(ctx, majordomo)
+	chainTime, controller, err := startServices(ctx, majordomo, bootstrapMonitor)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialise services")
 		return 1
@@ -320,12 +329,13 @@ func startClient(ctx context.Context, monitor metrics.Service) (eth2client.Servi
 
 func startServices(ctx context.Context,
 	majordomo majordomo.Service,
+	bootstrapMonitor metrics.Service,
 ) (
 	chaintime.Service,
 	*standardcontroller.Service,
 	error,
 ) {
-	eth2Client, chainTime, monitor, err := startBasicServices(ctx)
+	eth2Client, chainTime, monitor, err := startBasicServices(ctx, bootstrapMonitor)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -569,19 +579,13 @@ func startProviderServices(ctx context.Context, monitor metrics.Service) (eth2cl
 }
 
 func startBasicServices(ctx context.Context,
+	monitor metrics.Service,
 ) (
 	eth2client.Service,
 	chaintime.Service,
 	metrics.Service,
 	error,
 ) {
-	// Initialise monitor without chainTime service and server for now, so the
-	// client can provide metrics.
-	monitor, err := startMonitor(ctx, nil, false)
-	if err != nil {
-		return nil, nil, nil, errors.Wrap(err, "failed to start metrics service")
-	}
-
 	eth2Client, err := startClient(ctx, monitor)
 	if err != nil {
 		return nil, nil, nil, err

@@ -145,6 +145,8 @@ func loadClientCertificates(ctx context.Context, parameters *parameters) (creden
 		standardclientcert.WithMajordomo(parameters.majordomo),
 		standardclientcert.WithCertPEMURI(parameters.clientCertURI),
 		standardclientcert.WithCertKeyURI(parameters.clientKeyURI),
+		standardclientcert.WithMonitor(parameters.monitor),
+		standardclientcert.WithName("dirk"),
 	}
 	if parameters.caCertURI != "" {
 		clientCertOpts = append(clientCertOpts, standardclientcert.WithCACertURI(parameters.caCertURI))
