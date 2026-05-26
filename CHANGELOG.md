@@ -1,4 +1,4 @@
-dev:
+1.13.0-alpha.3:
   - update majordomo to v1.1.2
   - add combinedmajority attestationdata strategy
   - update go-eth2-wallet-dirk to v1.6.0
