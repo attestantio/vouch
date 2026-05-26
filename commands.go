@@ -42,7 +42,13 @@ func proposerConfigCheck(ctx context.Context, majordomo majordomo.Service) bool 
 
 	// Force disable metrics.
 	viper.Set("metrics.prometheus.listen-address", "")
-	consensusClient, chainTime, monitor, err := startBasicServices(ctx)
+	// Create a bootstrap monitor to satisfy the startBasicServices signature; metrics are suppressed above.
+	bootstrapMonitor, err := startMonitor(ctx, nil, false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to start metrics service: %v\n", err)
+		return true
+	}
+	consensusClient, chainTime, monitor, err := startBasicServices(ctx, bootstrapMonitor)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to start basic services: %v\n", err)
 		return true

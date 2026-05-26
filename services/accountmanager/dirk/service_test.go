@@ -16,6 +16,7 @@ package dirk_test
 import (
 	"context"
 	"crypto/tls"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,11 +26,22 @@ import (
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/accountmanager/dirk"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
+	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/testing/logger"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
+
+// stubMonitor is a monitor that reports a fixed presenter; used to opt into
+// go-certmanager metric registration during tests.
+// Mirrors tracingStubMonitor in tracing_test.go.
+type stubMonitor struct{ presenter string }
+
+func (s stubMonitor) Presenter() string { return s.presenter }
+
+var _ metrics.Service = stubMonitor{}
 
 // newTestMajordomo creates a mock majordomo with matching test certificates.
 func newTestMajordomo() *certmock.Majordomo {
@@ -581,6 +593,88 @@ func TestDirkTLSCAOptional(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, svc)
 	})
+}
+
+func TestDirkTLSWiringWithPrometheusMonitor(t *testing.T) {
+	// Passing a monitor whose presenter is "prometheus" opts into go-certmanager's
+	// metric registration. Asserts the client certificate expiry gauges are
+	// registered under name="dirk", role="client". Guards both the WithMonitor
+	// and WithName wiring — missing either would cause the series to be absent
+	// (WithMonitor) or construction to fail with ErrNoNameWithMonitor (WithName).
+	ctx := context.Background()
+
+	genesisTime := time.Now()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(genesisTime)),
+		standardchaintime.WithSpecProvider(mock.NewSpecProvider()),
+	)
+	require.NoError(t, err)
+
+	svc, err := dirk.New(ctx,
+		dirk.WithLogLevel(zerolog.Disabled),
+		dirk.WithMonitor(stubMonitor{presenter: "prometheus"}),
+		dirk.WithClientMonitor(nullmetrics.New()),
+		dirk.WithProcessConcurrency(1),
+		dirk.WithEndpoints([]string{"localhost:12345"}),
+		dirk.WithAccountPaths([]string{"wallet1"}),
+		dirk.WithMajordomo(newTestMajordomo()),
+		dirk.WithClientCertURI("client-cert"),
+		dirk.WithClientKeyURI("client-key"),
+		dirk.WithCACertURI("ca-cert"),
+		dirk.WithValidatorsManager(mock.NewValidatorsManager()),
+		dirk.WithDomainProvider(mock.NewDomainProvider()),
+		dirk.WithFarFutureEpochProvider(mock.NewFarFutureEpochProvider(0xffffffffffffffff)),
+		dirk.WithCurrentEpochProvider(chainTime),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, svc)
+
+	requireCertMetric(t, "certmanager_certificate_not_after_seconds", "dirk", "client")
+	requireCertMetric(t, "certmanager_certificate_not_before_seconds", "dirk", "client")
+}
+
+// requireCertMetric asserts the go-certmanager gauge series with the given
+// name/role labels is present in the default Prometheus registry and has a
+// positive value (i.e. SetCertificateExpiry was invoked).
+func requireCertMetric(t *testing.T, metricName, name, role string) {
+	t.Helper()
+
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+
+	for _, mf := range families {
+		if mf.GetName() != metricName {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			var matchName, matchRole bool
+			for _, l := range m.GetLabel() {
+				switch l.GetName() {
+				case "name":
+					matchName = l.GetValue() == name
+				case "role":
+					matchRole = l.GetValue() == role
+				}
+			}
+			if matchName && matchRole {
+				require.Greater(t, m.GetGauge().GetValue(), float64(0),
+					"metric %s{name=%q,role=%q} should have a positive value", metricName, name, role)
+				return
+			}
+		}
+	}
+
+	var found []string
+	for _, mf := range families {
+		if strings.HasPrefix(mf.GetName(), "certmanager_") {
+			for _, m := range mf.GetMetric() {
+				found = append(found, m.String())
+			}
+		}
+	}
+	t.Fatalf("metric %s{name=%q,role=%q} not registered (saw certmanager_ series: %v)",
+		metricName, name, role, found)
 }
 
 func TestDirkTLSMinVersion(t *testing.T) {
