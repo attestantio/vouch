@@ -1,5 +1,4 @@
-1.13.0-alpha.3:
-  - update majordomo to v1.1.2
+dev:
   - add combinedmajority attestationdata strategy
   - update go-eth2-wallet-dirk to v1.6.0
   - update go-eth2-client to v0.28.0
@@ -10,6 +9,9 @@
   - migrate Dirk and tracing TLS certificate loading to go-certmanager
   - remove dead priorBlocksVotes cache from beaconblockproposal/best strategy
   - downgrade warn level log messages to debug for timeouts and provider failures on first strategies
+
+1.12.1:
+  - update majordomo to v1.1.2
 
 1.12.0:
   - import fulu container specs from go-eth2-client
