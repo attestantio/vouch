@@ -88,6 +88,7 @@ type Service struct {
 	fastTrackSyncCommittees       bool
 	fastTrackGrace                time.Duration
 	multiInstance                 multiinstance.Service
+	eventsProvider                eth2client.EventsProvider
 
 	// Hard fork control.
 	handlingAltair     bool
@@ -169,6 +170,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		fastTrackSyncCommittees:       parameters.fastTrackSyncCommittees,
 		fastTrackGrace:                parameters.fastTrackGrace,
 		multiInstance:                 parameters.multiInstance,
+		eventsProvider:                parameters.eventsProvider,
 		subscriptionInfos:             make(map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
 		handlingAltair:                handlingAltair,
 		altairForkEpoch:               altairForkEpoch,

@@ -81,7 +81,7 @@ func registerPrometheusMetrics(_ context.Context) error {
 			10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 11.0,
 			11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 12.0,
 		},
-	}, []string{"epoch_slot"})
+	}, []string{"epoch_slot", "provider"})
 	if err := prometheus.Register(blockReceiptDelay); err != nil {
 		var alreadyRegisteredError prometheus.AlreadyRegisteredError
 		if ok := errors.As(err, &alreadyRegisteredError); ok {
@@ -180,11 +180,11 @@ func monitorNewEpoch() {
 	epochsProcessed.Inc()
 }
 
-func monitorBlockDelay(epochSlot uint, delay time.Duration) {
+func monitorBlockDelay(epochSlot uint, delay time.Duration, provider string) {
 	if blockReceiptDelay == nil {
 		return
 	}
-	blockReceiptDelay.WithLabelValues(fmt.Sprintf("%d", epochSlot)).Observe(delay.Seconds())
+	blockReceiptDelay.WithLabelValues(fmt.Sprintf("%d", epochSlot), provider).Observe(delay.Seconds())
 }
 
 func monitorSyncCommitteeSyncAggregateFoundInc() {
