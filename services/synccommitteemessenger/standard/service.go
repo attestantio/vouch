@@ -61,7 +61,7 @@ type Service struct {
 	syncCommitteeSelectionSigner      signer.SyncCommitteeSelectionSigner
 	syncCommitteeRootSigner           signer.SyncCommitteeRootSigner
 	slotDataRecords                   map[phase0.Slot]synccommitteemessenger.SlotData
-	slotDataRecordsMu                 sync.Mutex
+	slotDataRecordsMu                 sync.RWMutex
 }
 
 // New creates a new sync committee messenger.
@@ -268,22 +268,24 @@ func (s *Service) UpdateSyncCommitteeDataRecord(
 
 // GetDataUsedForSlot returns slot data recorded for the sync committee message for a given slot.
 func (s *Service) GetDataUsedForSlot(slot phase0.Slot) (synccommitteemessenger.SlotData, bool) {
+	s.slotDataRecordsMu.RLock()
 	root, found := s.slotDataRecords[slot]
+	s.slotDataRecordsMu.RUnlock()
 	return root, found
 }
 
 // RemoveHistoricDataUsedForSlotVerification goes through the sync committee data stored for each slot and removes old slots.
 func (s *Service) RemoveHistoricDataUsedForSlotVerification(currentSlot phase0.Slot) {
+	s.slotDataRecordsMu.Lock()
+	defer s.slotDataRecordsMu.Unlock()
 	// Only trigger if we have crossed threshold of max slot records to keep.
 	if len(s.slotDataRecords) > maxSlotDataRecordsBeforeCleanUp {
 		lowestSlotToKeep := currentSlot - minSlotDataRecordsToKeep
-		s.slotDataRecordsMu.Lock()
 		for slot := range s.slotDataRecords {
 			if slot < lowestSlotToKeep {
 				delete(s.slotDataRecords, slot)
 			}
 		}
-		s.slotDataRecordsMu.Unlock()
 	}
 }
 
