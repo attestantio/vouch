@@ -1,3 +1,6 @@
+1.13.1:
+  - initialise sync committee metrics with 0
+
 1.13.0:
   - add combinedmajority attestationdata strategy
   - update go-eth2-wallet-dirk to v1.6.0
