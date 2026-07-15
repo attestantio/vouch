@@ -1,4 +1,4 @@
-dev:
+1.13.0:
   - add combinedmajority attestationdata strategy
   - update go-eth2-wallet-dirk to v1.6.0
   - update go-eth2-client to v0.28.0
