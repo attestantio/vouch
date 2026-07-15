@@ -109,6 +109,7 @@ func setupSyncCommitteeVerificationMetrics(_ context.Context) error {
 			return err
 		}
 	}
+	syncCommitteeVerificationHeadMismatches.WithLabelValues().Add(0)
 
 	syncCommitteeVerificationGetHeadFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
@@ -124,6 +125,7 @@ func setupSyncCommitteeVerificationMetrics(_ context.Context) error {
 			return err
 		}
 	}
+	syncCommitteeVerificationGetHeadFailures.WithLabelValues().Add(0)
 
 	syncCommitteeVerificationAggregateFound = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
@@ -139,6 +141,7 @@ func setupSyncCommitteeVerificationMetrics(_ context.Context) error {
 			return err
 		}
 	}
+	syncCommitteeVerificationAggregateFound.WithLabelValues().Add(0)
 
 	syncCommitteeVerificationAggregateMissing = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "vouch",
@@ -154,6 +157,7 @@ func setupSyncCommitteeVerificationMetrics(_ context.Context) error {
 			return err
 		}
 	}
+	syncCommitteeVerificationAggregateMissing.WithLabelValues().Add(0)
 
 	syncCommitteeVerificationCurrentCount = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace: "vouch",
