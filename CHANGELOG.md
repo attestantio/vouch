@@ -1,5 +1,5 @@
 1.13.1:
-  - initialise sync committee metrics with 0
+  - initialise sync committee verification metrics to 0
 
 1.13.0:
   - add combinedmajority attestationdata strategy
