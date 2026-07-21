@@ -1,5 +1,6 @@
 1.13.1:
   - initialise sync committee verification metrics to 0
+  - use dynssz v1.3.2 and corresponding lib updates
 
 1.13.0:
   - add combinedmajority attestationdata strategy
