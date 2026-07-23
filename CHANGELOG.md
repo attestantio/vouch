@@ -1,5 +1,7 @@
-dev:
+1.13.1:
   - initialise sync committee verification metrics to 0
+  - use dynssz v1.3.2 and corresponding lib updates
+  - add lock around sync committee messenger slot data map access
 
 1.13.0:
   - add combinedmajority attestationdata strategy
