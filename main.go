@@ -670,7 +670,7 @@ func startProviders(ctx context.Context,
 	cache cache.Service,
 ) (
 	graffitiprovider.Service,
-	eth2client.ProposalProvider,
+	beaconblockproposer.ProposalDataProvider,
 	eth2client.AttestationDataProvider,
 	eth2client.AggregateAttestationProvider,
 	error,
@@ -814,8 +814,10 @@ func startSigningServices(ctx context.Context,
 		standardbeaconblockproposer.WithGraffitiProvider(graffitiProvider),
 		standardbeaconblockproposer.WithMonitor(monitor),
 		standardbeaconblockproposer.WithProposalSubmitter(submitterStrategy.(submitter.ProposalSubmitter)),
+		standardbeaconblockproposer.WithExecutionPayloadEnvelopeSubmitter(submitterStrategy.(submitter.ExecutionPayloadEnvelopeSubmitter)),
 		standardbeaconblockproposer.WithRANDAORevealSigner(signerSvc.(signer.RANDAORevealSigner)),
 		standardbeaconblockproposer.WithBeaconBlockSigner(signerSvc.(signer.BeaconBlockSigner)),
+		standardbeaconblockproposer.WithExecutionPayloadEnvelopeSigner(signerSvc.(signer.ExecutionPayloadEnvelopeSigner)),
 		standardbeaconblockproposer.WithBlobSidecarSigner(signerSvc.(signer.BlobSidecarSigner)),
 		standardbeaconblockproposer.WithUnblindFromAllRelays(viper.GetBool("beaconblockproposer.unblind-from-all-relays")),
 		standardbeaconblockproposer.WithBuilderBoostFactor(viper.GetUint64("beaconblockproposer.builder-boost-factor")),
@@ -1398,19 +1400,23 @@ func selectProposalProvider(ctx context.Context,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cacheSvc cache.Service,
-) (eth2client.ProposalProvider, error) {
-	var proposalProvider eth2client.ProposalProvider
+) (beaconblockproposer.ProposalDataProvider, error) {
+	var proposalProvider beaconblockproposer.ProposalDataProvider
 	var err error
 	switch viper.GetString("strategies.beaconblockproposal.style") {
 	case "best":
 		log.Info().Msg("Starting best beacon block proposal strategy")
-		proposalProviders := make(map[string]eth2client.ProposalProvider)
+		proposalProviders := make(map[string]beaconblockproposer.ProposalDataProvider)
 		for _, address := range util.BeaconNodeAddresses("strategies.beaconblockproposal.best") {
 			client, err := fetchClient(ctx, monitor, address)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block proposal strategy", address))
 			}
-			proposalProviders[address] = client.(eth2client.ProposalProvider)
+			provider, isProvider := client.(beaconblockproposer.ProposalDataProvider)
+			if !isProvider {
+				return nil, errors.New("beacon block proposal client does not support ePBS proposals")
+			}
+			proposalProviders[address] = provider
 		}
 		proposalProvider, err = bestbeaconblockproposalstrategy.New(ctx,
 			bestbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
@@ -1428,13 +1434,17 @@ func selectProposalProvider(ctx context.Context,
 		}
 	case "first":
 		log.Info().Msg("Starting first beacon block proposal strategy")
-		proposalProviders := make(map[string]eth2client.ProposalProvider)
+		proposalProviders := make(map[string]beaconblockproposer.ProposalDataProvider)
 		for _, address := range util.BeaconNodeAddresses("strategies.beaconblockproposal.first") {
 			client, err := fetchClient(ctx, monitor, address)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block proposal strategy", address))
 			}
-			proposalProviders[address] = client.(eth2client.ProposalProvider)
+			provider, isProvider := client.(beaconblockproposer.ProposalDataProvider)
+			if !isProvider {
+				return nil, errors.New("beacon block proposal client does not support ePBS proposals")
+			}
+			proposalProviders[address] = provider
 		}
 		proposalProvider, err = firstbeaconblockproposalstrategy.New(ctx,
 			firstbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
@@ -1451,7 +1461,11 @@ func selectProposalProvider(ctx context.Context,
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch clients for simple beacon block proposal strategy")
 		}
-		proposalProvider = beaconBlockProposalClient.(eth2client.ProposalProvider)
+		var isProvider bool
+		proposalProvider, isProvider = beaconBlockProposalClient.(beaconblockproposer.ProposalDataProvider)
+		if !isProvider {
+			return nil, errors.New("beacon block proposal client does not support ePBS proposals")
+		}
 	}
 
 	return proposalProvider, nil
@@ -1612,6 +1626,7 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			immediatesubmitter.WithLogLevel(util.LogLevel("submitter.immediate")),
 			immediatesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			immediatesubmitter.WithProposalSubmitter(eth2Client.(eth2client.ProposalSubmitter)),
+			immediatesubmitter.WithExecutionPayloadEnvelopeSubmitter(eth2Client.(eth2client.ExecutionPayloadEnvelopeSubmitter)),
 			immediatesubmitter.WithAttestationsSubmitter(eth2Client.(eth2client.AttestationsSubmitter)),
 			immediatesubmitter.WithSyncCommitteeMessagesSubmitter(eth2Client.(eth2client.SyncCommitteeMessagesSubmitter)),
 			immediatesubmitter.WithSyncCommitteeContributionsSubmitter(eth2Client.(eth2client.SyncCommitteeContributionsSubmitter)),
@@ -1669,6 +1684,12 @@ func startMultinodeSubmitter(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+	executionPayloadEnvelopeSubmitters, err := genericAddressToClientMapper[eth2client.ExecutionPayloadEnvelopeSubmitter](ctx, monitor,
+		"submitter.proposal.multinode",
+		"execution payload envelope submitter strategy")
+	if err != nil {
+		return nil, err
+	}
 
 	beaconCommitteeSubscriptionsSubmitters, err := genericAddressToClientMapper[eth2client.BeaconCommitteeSubscriptionsSubmitter](ctx, monitor,
 		"submitter.beaconcommitteesubscription.multinode",
@@ -1711,6 +1732,7 @@ func startMultinodeSubmitter(ctx context.Context,
 		multinodesubmitter.WithLogLevel(util.LogLevel("submitter.multinode")),
 		multinodesubmitter.WithTimeout(util.Timeout("submitter.multinode")),
 		multinodesubmitter.WithProposalSubmitters(proposalSubmitters),
+		multinodesubmitter.WithExecutionPayloadEnvelopeSubmitters(executionPayloadEnvelopeSubmitters),
 		multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),
 		multinodesubmitter.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
 		multinodesubmitter.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),

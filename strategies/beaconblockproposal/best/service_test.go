@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/cache"
 	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
@@ -60,7 +60,7 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
-				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
 					"one":   mock.NewProposalProvider(),
 					"two":   mock.NewProposalProvider(),
 					"three": mock.NewProposalProvider(),
@@ -77,7 +77,7 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
-				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
 					"one":   mock.NewProposalProvider(),
 					"two":   mock.NewProposalProvider(),
 					"three": mock.NewProposalProvider(),
@@ -95,7 +95,7 @@ func TestService(t *testing.T) {
 				best.WithSpecProvider(specProvider),
 				best.WithTimeout(0),
 				best.WithProcessConcurrency(1),
-				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
 					"one":   mock.NewProposalProvider(),
 					"two":   mock.NewProposalProvider(),
 					"three": mock.NewProposalProvider(),
@@ -112,7 +112,7 @@ func TestService(t *testing.T) {
 				best.WithClientMonitor(nullmetrics.New()),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
-				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
 					"one":   mock.NewProposalProvider(),
 					"two":   mock.NewProposalProvider(),
 					"three": mock.NewProposalProvider(),
@@ -128,7 +128,7 @@ func TestService(t *testing.T) {
 				best.WithClientMonitor(nullmetrics.New()),
 				best.WithChainTimeService(chainTime),
 				best.WithProcessConcurrency(1),
-				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
 					"one":   mock.NewProposalProvider(),
 					"two":   mock.NewProposalProvider(),
 					"three": mock.NewProposalProvider(),
@@ -146,7 +146,7 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(0),
-				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
 					"one":   mock.NewProposalProvider(),
 					"two":   mock.NewProposalProvider(),
 					"three": mock.NewProposalProvider(),
@@ -177,7 +177,7 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
-				best.WithProposalProviders(map[string]eth2client.ProposalProvider{}),
+				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
 			},
 			err: "problem with parameters: no proposal providers specified",
@@ -191,7 +191,7 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(mock.NewErroringSpecProvider()),
 				best.WithProcessConcurrency(1),
-				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
 					"one":   mock.NewProposalProvider(),
 					"two":   mock.NewProposalProvider(),
 					"three": mock.NewProposalProvider(),
@@ -209,7 +209,7 @@ func TestService(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(1),
-				best.WithProposalProviders(map[string]eth2client.ProposalProvider{
+				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
 					"one":   mock.NewProposalProvider(),
 					"two":   mock.NewProposalProvider(),
 					"three": mock.NewProposalProvider(),

@@ -26,6 +26,7 @@ type parameters struct {
 	logLevel                              zerolog.Level
 	clientMonitor                         metrics.ClientMonitor
 	proposalSubmitter                     eth2client.ProposalSubmitter
+	executionPayloadEnvelopeSubmitter     eth2client.ExecutionPayloadEnvelopeSubmitter
 	attestationsSubmitter                 eth2client.AttestationsSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
@@ -64,6 +65,13 @@ func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
 func WithProposalSubmitter(submitter eth2client.ProposalSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalSubmitter = submitter
+	})
+}
+
+// WithExecutionPayloadEnvelopeSubmitter sets the execution payload envelope submitter.
+func WithExecutionPayloadEnvelopeSubmitter(submitter eth2client.ExecutionPayloadEnvelopeSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.executionPayloadEnvelopeSubmitter = submitter
 	})
 }
 

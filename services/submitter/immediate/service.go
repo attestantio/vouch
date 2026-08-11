@@ -35,6 +35,7 @@ type Service struct {
 	clientMonitor                         metrics.ClientMonitor
 	attestationsSubmitter                 eth2client.AttestationsSubmitter
 	proposalSubmitter                     eth2client.ProposalSubmitter
+	executionPayloadEnvelopeSubmitter     eth2client.ExecutionPayloadEnvelopeSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitter         eth2client.ProposalPreparationsSubmitter
@@ -61,6 +62,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		clientMonitor:                         parameters.clientMonitor,
 		attestationsSubmitter:                 parameters.attestationsSubmitter,
 		proposalSubmitter:                     parameters.proposalSubmitter,
+		executionPayloadEnvelopeSubmitter:     parameters.executionPayloadEnvelopeSubmitter,
 		beaconCommitteeSubscriptionsSubmitter: parameters.beaconCommitteeSubscriptionsSubmitter,
 		aggregateAttestationsSubmitter:        parameters.aggregateAttestationsSubmitter,
 		proposalPreparationsSubmitter:         parameters.proposalPreparationsSubmitter,

@@ -37,6 +37,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/electra"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/util"
@@ -140,6 +141,10 @@ func (s *Service) proposeBlock(ctx context.Context,
 	duty *beaconblockproposer.Duty,
 	graffiti [32]byte,
 ) error {
+	if s.chainTime.SlotToEpoch(duty.Slot()) >= s.gloasForkEpoch {
+		return s.proposeEPBSBlock(ctx, duty, graffiti)
+	}
+
 	var auctionResults *blockauctioneer.Results
 	var err error
 	if s.blockAuctioneer != nil {
@@ -210,6 +215,91 @@ func (s *Service) proposeBlock(ctx context.Context,
 	return nil
 }
 
+// proposeEPBSBlock proposes a Gloas block.
+func (s *Service) proposeEPBSBlock(ctx context.Context,
+	duty *beaconblockproposer.Duty,
+	graffiti [32]byte,
+) error {
+	if s.executionPayloadEnvelopeSigner == nil {
+		return errors.New("no execution payload envelope signer available")
+	}
+	if s.executionPayloadEnvelopeSubmitter == nil {
+		return errors.New("no execution payload envelope submitter available")
+	}
+
+	includePayload := true
+	// Force local building and include its payload so any beacon node can publish it.
+	selfBuildBoostFactor := uint64(0)
+	proposalResponse, err := s.proposalProvider.EPBSProposal(ctx, &api.EPBSProposalOpts{
+		Slot:               duty.Slot(),
+		RandaoReveal:       duty.RANDAOReveal(),
+		Graffiti:           graffiti,
+		IncludePayload:     &includePayload,
+		BuilderBoostFactor: &selfBuildBoostFactor,
+	})
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain ePBS proposal")
+	}
+	proposal := proposalResponse.Data
+	monitorBeaconBlockProposalSource("local")
+	if !proposal.ExecutionPayloadIncluded {
+		return errors.New("ePBS proposal excludes requested execution payload")
+	}
+
+	if err := s.confirmEPBSProposalData(ctx, proposal, duty); err != nil {
+		return err
+	}
+
+	envelope, err := proposal.ExecutionPayloadEnvelope()
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain execution payload envelope")
+	}
+	blockRoot, err := proposal.GloasContents.Block.HashTreeRoot()
+	if err != nil {
+		return errors.Wrap(err, "failed to calculate hash tree root of ePBS block")
+	}
+	if blockRoot != envelope.BeaconBlockRoot {
+		return errors.New("ePBS execution payload envelope is for incorrect block")
+	}
+
+	signedProposal, err := s.signEPBSProposalData(ctx, proposal, duty)
+	if err != nil {
+		return err
+	}
+
+	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
+		return errors.Wrap(err, "failed to submit proposal")
+	}
+
+	signature, err := s.executionPayloadEnvelopeSigner.SignExecutionPayloadEnvelope(ctx, duty.Account(), duty.Slot(), envelope)
+	if err != nil {
+		return errors.Wrap(err, "failed to sign execution payload envelope")
+	}
+	kzgProofs, err := proposal.KZGProofs()
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain execution payload envelope KZG proofs")
+	}
+	blobs, err := proposal.Blobs()
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain execution payload envelope blobs")
+	}
+	if err := s.executionPayloadEnvelopeSubmitter.SubmitExecutionPayloadEnvelope(ctx, &api.SubmitExecutionPayloadEnvelopeOpts{
+		SignedExecutionPayloadEnvelope: &spec.VersionedSignedExecutionPayloadEnvelope{
+			Version: spec.DataVersionGloas,
+			Gloas: &gloas.SignedExecutionPayloadEnvelope{
+				Message:   envelope,
+				Signature: signature,
+			},
+		},
+		KZGProofs: kzgProofs,
+		Blobs:     blobs,
+	}); err != nil {
+		return errors.Wrap(err, "failed to submit execution payload envelope")
+	}
+
+	return nil
+}
+
 func (*Service) confirmProposalData(_ context.Context,
 	proposal *api.VersionedProposal,
 	duty *beaconblockproposer.Duty,
@@ -226,6 +316,21 @@ func (*Service) confirmProposalData(_ context.Context,
 	// library that obtained the proposal, which is DVT-aware.
 
 	// Graffiti can be different if the consensus nodes rewrites it, e.g. to add node version information, so do not check it.
+
+	return nil
+}
+
+func (*Service) confirmEPBSProposalData(_ context.Context,
+	proposal *api.VersionedEPBSProposal,
+	duty *beaconblockproposer.Duty,
+) error {
+	proposalSlot, err := proposal.Slot()
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain ePBS proposal slot")
+	}
+	if proposalSlot != duty.Slot() {
+		return errors.New("ePBS proposal data for incorrect slot")
+	}
 
 	return nil
 }
@@ -361,6 +466,59 @@ func (s *Service) signProposalData(ctx context.Context,
 	}
 
 	return signedProposal, nil
+}
+
+func (s *Service) signEPBSProposalData(ctx context.Context,
+	proposal *api.VersionedEPBSProposal,
+	duty *beaconblockproposer.Duty,
+) (
+	*api.VersionedSignedProposal,
+	error,
+) {
+	if proposal.Version != spec.DataVersionGloas {
+		return nil, errors.New("unhandled ePBS proposal version")
+	}
+
+	bodyRoot, err := proposal.BodyRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to calculate hash tree root of ePBS block body proposal")
+	}
+
+	parentRoot, err := proposal.ParentRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain parent root of ePBS block proposal")
+	}
+
+	stateRoot, err := proposal.StateRoot()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain state root of ePBS block proposal")
+	}
+
+	sig, err := s.beaconBlockSigner.SignBeaconBlockProposal(ctx,
+		duty.Account(),
+		duty.Slot(),
+		duty.ValidatorIndex(),
+		parentRoot,
+		stateRoot,
+		bodyRoot)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to sign ePBS beacon block proposal")
+	}
+
+	block := proposal.Gloas
+	if proposal.ExecutionPayloadIncluded {
+		block = proposal.GloasContents.Block
+	}
+
+	return &api.VersionedSignedProposal{
+		Version:        proposal.Version,
+		ExecutionValue: proposal.ExecutionValue,
+		ConsensusValue: proposal.ConsensusValue,
+		Gloas: &gloas.SignedBeaconBlock{
+			Message:   block,
+			Signature: sig,
+		},
+	}, nil
 }
 
 func (s *Service) auctionBlock(ctx context.Context,

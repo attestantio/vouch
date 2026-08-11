@@ -17,8 +17,8 @@ import (
 	"context"
 	"time"
 
-	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
@@ -33,7 +33,7 @@ type Service struct {
 	clientMonitor          metrics.ClientMonitor
 	processConcurrency     int64
 	chainTime              chaintime.Service
-	proposalProviders      map[string]eth2client.ProposalProvider
+	proposalProviders      map[string]beaconblockproposer.ProposalDataProvider
 	timeout                time.Duration
 	blockRootToSlotCache   cache.BlockRootToSlotProvider
 	executionPayloadFactor float64

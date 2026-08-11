@@ -29,6 +29,7 @@ import (
 // Service is the manager for signers.
 type Service struct {
 	monitor                               metrics.SignerMonitor
+	domainProvider                        eth2client.DomainProvider
 	clientMonitor                         metrics.ClientMonitor
 	slotsPerEpoch                         phase0.Slot
 	beaconProposerDomainType              phase0.DomainType
@@ -41,7 +42,7 @@ type Service struct {
 	contributionAndProofDomainType        *phase0.DomainType
 	applicationBuilderDomainType          *phase0.DomainType
 	blobSidecarDomainType                 *phase0.DomainType
-	domainProvider                        eth2client.DomainProvider
+	beaconBuilderDomainType               *phase0.DomainType
 }
 
 // module-wide log.
@@ -126,9 +127,15 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		blobSidecarDomainType = &tmp
 	}
 
+	var beaconBuilderDomainType *phase0.DomainType
+	if tmp, err := domainType(spec, "DOMAIN_BEACON_BUILDER"); err == nil {
+		beaconBuilderDomainType = &tmp
+	}
+
 	s := &Service{
 		monitor:                               parameters.monitor,
 		clientMonitor:                         parameters.clientMonitor,
+		domainProvider:                        parameters.domainProvider,
 		slotsPerEpoch:                         phase0.Slot(slotsPerEpoch),
 		beaconAttesterDomainType:              beaconAttesterDomainType,
 		beaconProposerDomainType:              beaconProposerDomainType,
@@ -140,7 +147,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		contributionAndProofDomainType:        contributionAndProofDomainType,
 		applicationBuilderDomainType:          applicationBuilderDomainType,
 		blobSidecarDomainType:                 blobSidecarDomainType,
-		domainProvider:                        parameters.domainProvider,
+		beaconBuilderDomainType:               beaconBuilderDomainType,
 	}
 
 	return s, nil

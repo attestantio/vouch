@@ -36,6 +36,12 @@ type ProposalSubmitter interface {
 	SubmitProposal(ctx context.Context, proposal *api.VersionedSignedProposal) error
 }
 
+// ExecutionPayloadEnvelopeSubmitter is the interface for a submitter of execution payload envelopes.
+type ExecutionPayloadEnvelopeSubmitter interface {
+	// SubmitExecutionPayloadEnvelope submits a signed execution payload envelope.
+	SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.SubmitExecutionPayloadEnvelopeOpts) error
+}
+
 // BeaconCommitteeSubscriptionsSubmitter is the interface for a submitter of beacon committee subscriptions.
 type BeaconCommitteeSubscriptionsSubmitter interface {
 	// SubmitBeaconCommitteeSubscriptions submits a batch of beacon committee subscriptions.

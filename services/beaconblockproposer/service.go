@@ -17,9 +17,16 @@ import (
 	"context"
 	"fmt"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
+
+// ProposalDataProvider provides proposals across the legacy and ePBS forks.
+type ProposalDataProvider interface {
+	eth2client.ProposalProvider
+	eth2client.EPBSProposalProvider
+}
 
 // Duty contains information about a beacon block proposal duty.
 type Duty struct {

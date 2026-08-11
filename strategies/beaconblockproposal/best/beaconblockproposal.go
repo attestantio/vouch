@@ -22,6 +22,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -39,6 +40,197 @@ type beaconBlockResponse struct {
 type beaconBlockError struct {
 	provider string
 	err      error
+}
+
+// EPBSProposal provides the best ePBS proposal from a number of beacon nodes.
+func (s *Service) EPBSProposal(ctx context.Context,
+	opts *api.EPBSProposalOpts,
+) (
+	*api.Response[*api.VersionedEPBSProposal],
+	error,
+) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.best").Start(ctx, "EPBSProposal", trace.WithAttributes(
+		attribute.Int64("slot", util.SlotToInt64(opts.Slot)),
+	))
+	defer span.End()
+
+	started := time.Now()
+	log := util.LogWithID(ctx, s.log, "strategy_id").With().Uint64("slot", uint64(opts.Slot)).Logger()
+	ctx = log.WithContext(ctx)
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
+	defer softCancel()
+
+	requests := len(s.proposalProviders)
+	respCh := make(chan *beaconBlockEPBSResponse, requests)
+	errCh := make(chan *beaconBlockError, requests)
+	for name, provider := range s.proposalProviders {
+		providerOpts := *opts
+		go s.epbsProposal(ctx, started, name, provider, respCh, errCh, &providerOpts, log)
+	}
+
+	responded := 0
+	errored := 0
+	timedOut := 0
+	softTimedOut := 0
+	var bestProposal *api.VersionedEPBSProposal
+	var bestProvider string
+	for responded+errored+timedOut+softTimedOut != requests {
+		select {
+		case response := <-respCh:
+			responded++
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", response.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Response received")
+			if opts.IncludePayload != nil && *opts.IncludePayload && !response.proposal.ExecutionPayloadIncluded {
+				log.Warn().Str("provider", response.provider).Msg("Discarding ePBS proposal without requested execution payload")
+				continue
+			}
+			if bestProposal == nil || response.proposal.Value().Cmp(bestProposal.Value()) > 0 {
+				bestProposal = response.proposal
+				bestProvider = response.provider
+			}
+		case err := <-errCh:
+			errored++
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Err(err.err).
+				Msg("Error received")
+		case <-softCtx.Done():
+			if bestProposal != nil {
+				timedOut = requests - responded - errored
+				log.Debug().
+					Dur("elapsed", time.Since(started)).
+					Int("responded", responded).
+					Int("errored", errored).
+					Int("timed_out", timedOut).
+					Msg("Soft timeout reached with responses")
+			} else {
+				log.Debug().
+					Dur("elapsed", time.Since(started)).
+					Int("errored", errored).
+					Msg("Soft timeout reached with no valid responses")
+			}
+			softTimedOut = requests - responded - errored - timedOut
+		}
+	}
+	softCancel()
+
+	for responded+errored+timedOut != requests {
+		select {
+		case response := <-respCh:
+			responded++
+			log.Trace().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", response.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Response received")
+			if opts.IncludePayload != nil && *opts.IncludePayload && !response.proposal.ExecutionPayloadIncluded {
+				log.Warn().Str("provider", response.provider).Msg("Discarding ePBS proposal without requested execution payload")
+				continue
+			}
+			if bestProposal == nil || response.proposal.Value().Cmp(bestProposal.Value()) > 0 {
+				bestProposal = response.proposal
+				bestProvider = response.provider
+			}
+		case err := <-errCh:
+			errored++
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Str("provider", err.provider).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Err(err.err).
+				Msg("Error received")
+		case <-ctx.Done():
+			timedOut = requests - responded - errored
+			log.Debug().
+				Dur("elapsed", time.Since(started)).
+				Int("responded", responded).
+				Int("errored", errored).
+				Int("timed_out", timedOut).
+				Msg("Hard timeout reached")
+		}
+	}
+
+	log.Trace().
+		Dur("elapsed", time.Since(started)).
+		Int("responded", responded).
+		Int("errored", errored).
+		Int("timed_out", timedOut).
+		Msg("Results")
+
+	if bestProposal == nil {
+		return nil, errors.New("no ePBS proposals received")
+	}
+	if bestProvider != "" {
+		s.clientMonitor.StrategyOperation("best", bestProvider, "ePBS beacon block proposal", time.Since(started))
+	}
+
+	return &api.Response[*api.VersionedEPBSProposal]{
+		Data:     bestProposal,
+		Metadata: make(map[string]any),
+	}, nil
+}
+
+type beaconBlockEPBSResponse struct {
+	provider string
+	proposal *api.VersionedEPBSProposal
+}
+
+func (s *Service) epbsProposal(ctx context.Context,
+	started time.Time,
+	name string,
+	provider beaconblockproposer.ProposalDataProvider,
+	respCh chan *beaconBlockEPBSResponse,
+	errCh chan *beaconBlockError,
+	opts *api.EPBSProposalOpts,
+	log zerolog.Logger,
+) {
+	providerGraffiti := opts.Graffiti[:]
+	if bytes.Contains(providerGraffiti, []byte("{{CLIENT}}")) {
+		if nodeClientProvider, isProvider := provider.(eth2client.NodeClientProvider); isProvider {
+			nodeClientResponse, err := nodeClientProvider.NodeClient(ctx)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
+			} else {
+				providerGraffiti = bytes.ReplaceAll(providerGraffiti, []byte("{{CLIENT}}"), []byte(nodeClientResponse.Data))
+			}
+			if len(providerGraffiti) > 32 {
+				providerGraffiti = providerGraffiti[0:32]
+			}
+			opts.Graffiti = [32]byte{}
+			copy(opts.Graffiti[:], providerGraffiti)
+		}
+	}
+
+	proposalResponse, err := provider.EPBSProposal(ctx, opts)
+	s.clientMonitor.ClientOperation(name, "ePBS beacon block proposal", err == nil, time.Since(started))
+	if err != nil {
+		errCh <- &beaconBlockError{
+			provider: name,
+			err:      err,
+		}
+
+		return
+	}
+
+	respCh <- &beaconBlockEPBSResponse{
+		provider: name,
+		proposal: proposalResponse.Data,
+	}
 }
 
 // Proposal provides the best beacon block proposal from a number of beacon nodes.
