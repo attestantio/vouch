@@ -247,6 +247,7 @@ func fetchConfig() error {
 	viper.SetDefault("process-concurrency", int64(runtime.GOMAXPROCS(-1)))
 	viper.SetDefault("timeout", 2*time.Second)
 	viper.SetDefault("eth2client.timeout", 2*time.Minute)
+	viper.SetDefault("eth2client.custom-spec-support", false)
 	viper.SetDefault("eth2client.allow-delayed-start", true)
 	viper.SetDefault("controller.max-proposal-delay", 0)
 	viper.SetDefault("controller.max-attestation-delay", 4*time.Second)

@@ -50,6 +50,7 @@ func fetchClient(ctx context.Context, monitor metrics.Service, address string) (
 			httpclient.WithMonitor(monitor),
 			httpclient.WithTimeout(util.Timeout(fmt.Sprintf("eth2client.%s", address))),
 			httpclient.WithAddress(address),
+			httpclient.WithCustomSpecSupport(viper.GetBool("eth2client.custom-spec-support")),
 			httpclient.WithAllowDelayedStart(viper.GetBool("eth2client.allow-delayed-start")),
 			httpclient.WithExtraHeaders(map[string]string{
 				"User-Agent": fmt.Sprintf("Vouch/%s", ReleaseVersion),
