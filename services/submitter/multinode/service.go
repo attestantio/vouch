@@ -31,6 +31,7 @@ type Service struct {
 	timeout                               time.Duration
 	processConcurrency                    int64
 	proposalSubmitters                    map[string]eth2client.ProposalSubmitter
+	executionPayloadEnvelopeSubmitters    map[string]eth2client.ExecutionPayloadEnvelopeSubmitter
 	attestationsSubmitters                map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters       map[string]eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitters        map[string]eth2client.ProposalPreparationsSubmitter
@@ -59,6 +60,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		timeout:                               parameters.timeout,
 		processConcurrency:                    parameters.processConcurrency,
 		proposalSubmitters:                    parameters.proposalSubmitters,
+		executionPayloadEnvelopeSubmitters:    parameters.executionPayloadEnvelopeSubmitters,
 		attestationsSubmitters:                parameters.attestationsSubmitters,
 		aggregateAttestationsSubmitters:       parameters.aggregateAttestationsSubmitters,
 		proposalPreparationsSubmitters:        parameters.proposalPreparationsSubmitters,

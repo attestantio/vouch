@@ -31,6 +31,7 @@ type parameters struct {
 	clientMonitor                          metrics.ClientMonitor
 	processConcurrency                     int64
 	proposalSubmitters                     map[string]eth2client.ProposalSubmitter
+	executionPayloadEnvelopeSubmitters     map[string]eth2client.ExecutionPayloadEnvelopeSubmitter
 	attestationsSubmitters                 map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters        map[string]eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitters         map[string]eth2client.ProposalPreparationsSubmitter
@@ -83,6 +84,13 @@ func WithProcessConcurrency(concurrency int64) Parameter {
 func WithProposalSubmitters(submitters map[string]eth2client.ProposalSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalSubmitters = submitters
+	})
+}
+
+// WithExecutionPayloadEnvelopeSubmitters sets the execution payload envelope submitters.
+func WithExecutionPayloadEnvelopeSubmitters(submitters map[string]eth2client.ExecutionPayloadEnvelopeSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.executionPayloadEnvelopeSubmitters = submitters
 	})
 }
 

@@ -19,6 +19,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
@@ -33,8 +34,61 @@ import (
 type Service struct {
 	log               zerolog.Logger
 	clientMonitor     metrics.ClientMonitor
-	proposalProviders map[string]eth2client.ProposalProvider
+	proposalProviders map[string]beaconblockproposer.ProposalDataProvider
 	timeout           time.Duration
+}
+
+// EPBSProposal provides the first ePBS proposal from a number of beacon nodes.
+func (s *Service) EPBSProposal(ctx context.Context,
+	opts *api.EPBSProposalOpts,
+) (
+	*api.Response[*api.VersionedEPBSProposal],
+	error,
+) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.first").Start(ctx, "EPBSProposal", trace.WithAttributes(
+		attribute.Int64("slot", util.SlotToInt64(opts.Slot)),
+	))
+	defer span.End()
+
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+
+	proposalCh := make(chan *api.VersionedEPBSProposal, len(s.proposalProviders))
+	for name, provider := range s.proposalProviders {
+		go func(ctx context.Context, name string, provider beaconblockproposer.ProposalDataProvider, ch chan *api.VersionedEPBSProposal) {
+			log := s.log.With().Str("provider", name).Uint64("slot", uint64(opts.Slot)).Logger()
+
+			started := time.Now()
+			proposalResponse, err := provider.EPBSProposal(ctx, opts)
+			s.clientMonitor.ClientOperation(name, "ePBS beacon block proposal", err == nil, time.Since(started))
+			if err != nil {
+				if !errors.Is(err, context.Canceled) {
+					log.Debug().Err(err).Msg("Failed to obtain ePBS beacon block proposal")
+				}
+
+				return
+			}
+			proposal := proposalResponse.Data
+			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained ePBS beacon block proposal")
+
+			select {
+			case ch <- proposal:
+			case <-ctx.Done():
+			}
+		}(ctx, name, provider, proposalCh)
+	}
+
+	select {
+	case <-ctx.Done():
+		cancel()
+		s.log.Debug().Msg("Failed to obtain ePBS beacon block proposal before timeout")
+		return nil, errors.New("failed to obtain ePBS beacon block proposal before timeout")
+	case proposal := <-proposalCh:
+		cancel()
+		return &api.Response[*api.VersionedEPBSProposal]{
+			Data:     proposal,
+			Metadata: make(map[string]any),
+		}, nil
+	}
 }
 
 // New creates a new beacon block proposal strategy.

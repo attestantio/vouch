@@ -18,6 +18,7 @@ import (
 
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -175,6 +176,18 @@ func (*Service) SignBlobSidecar(_ context.Context,
 	_ e2wtypes.Account,
 	_ phase0.Slot,
 	_ phase0.Root,
+) (
+	phase0.BLSSignature,
+	error,
+) {
+	return phase0.BLSSignature{}, nil
+}
+
+// SignExecutionPayloadEnvelope signs an execution payload envelope.
+func (*Service) SignExecutionPayloadEnvelope(_ context.Context,
+	_ e2wtypes.Account,
+	_ phase0.Slot,
+	_ *gloas.ExecutionPayloadEnvelope,
 ) (
 	phase0.BLSSignature,
 	error,
