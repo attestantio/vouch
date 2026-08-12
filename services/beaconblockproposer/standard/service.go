@@ -52,7 +52,6 @@ type Service struct {
 	blockAuctioneer                   blockauctioneer.BlockAuctioneer
 	unblindFromAllRelays              bool
 	builderBoostFactor                uint64
-	gloasForkEpoch                    phase0.Epoch
 }
 
 // New creates a new beacon block proposer.
@@ -72,7 +71,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("failed to register metrics")
 	}
 
-	gloasForkEpoch := parameters.chainTime.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH")
 	s := &Service{
 		log:                               log,
 		chainTime:                         parameters.chainTime,
@@ -89,7 +87,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		blobSidecarSigner:                 parameters.blobSidecarSigner,
 		unblindFromAllRelays:              parameters.unblindFromAllRelays,
 		builderBoostFactor:                parameters.builderBoostFactor,
-		gloasForkEpoch:                    gloasForkEpoch,
 	}
 
 	return s, nil
