@@ -54,12 +54,22 @@ func TestProposeGloas(t *testing.T) {
 		proposerIndexMismatch    bool
 		envelopeRootMismatch     bool
 		envelopeSignerErr        error
+		forkEpochAtConstruction  phase0.Epoch
+		forkEpochAtUse           phase0.Epoch
+		updateForkEpochAtUse     bool
 		err                      string
 	}{
 		{
 			name:                     "PayloadIncluded",
 			executionPayloadIncluded: true,
 			builderBoostFactor:       100,
+		},
+		{
+			name:                     "ForkEpochAvailableAfterConstruction",
+			executionPayloadIncluded: true,
+			forkEpochAtConstruction:  phase0.Epoch(^uint64(0)),
+			forkEpochAtUse:           0,
+			updateForkEpochAtUse:     true,
 		},
 		{
 			name:                     "ConfiguredAuctioneer",
@@ -136,11 +146,13 @@ func TestProposeGloas(t *testing.T) {
 			envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: envelopeSignature, err: test.envelopeSignerErr}
 			envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
 
+			chainTime := &forkChainTime{gloasForkEpoch: test.forkEpochAtConstruction}
+
 			params := []standard.Parameter{
 				standard.WithLogLevel(zerolog.TraceLevel),
 				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(proposalClient),
-				standard.WithChainTime(&forkChainTime{}),
+				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
 				standard.WithProposalSubmitter(proposalSubmitter),
 				standard.WithRANDAORevealSigner(signer),
@@ -159,6 +171,9 @@ func TestProposeGloas(t *testing.T) {
 			}
 			service, err := standard.New(ctx, params...)
 			require.NoError(t, err)
+			if test.updateForkEpochAtUse {
+				chainTime.gloasForkEpoch = test.forkEpochAtUse
+			}
 
 			duty := beaconblockproposer.NewDuty(1, 0)
 			duty.SetAccount(&testAccount{})
