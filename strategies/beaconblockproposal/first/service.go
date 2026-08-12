@@ -77,17 +77,23 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		}(ctx, name, provider, proposalCh)
 	}
 
-	select {
-	case <-ctx.Done():
-		cancel()
-		s.log.Debug().Msg("Failed to obtain ePBS beacon block proposal before timeout")
-		return nil, errors.New("failed to obtain ePBS beacon block proposal before timeout")
-	case proposal := <-proposalCh:
-		cancel()
-		return &api.Response[*api.VersionedEPBSProposal]{
-			Data:     proposal,
-			Metadata: make(map[string]any),
-		}, nil
+	for {
+		select {
+		case <-ctx.Done():
+			cancel()
+			s.log.Debug().Msg("Failed to obtain ePBS beacon block proposal before timeout")
+			return nil, errors.New("failed to obtain ePBS beacon block proposal before timeout")
+		case proposal := <-proposalCh:
+			if opts.IncludePayload != nil && *opts.IncludePayload && !proposal.ExecutionPayloadIncluded {
+				s.log.Warn().Msg("Discarding ePBS proposal without requested execution payload")
+				continue
+			}
+			cancel()
+			return &api.Response[*api.VersionedEPBSProposal]{
+				Data:     proposal,
+				Metadata: make(map[string]any),
+			}, nil
+		}
 	}
 }
 

@@ -80,6 +80,48 @@ func TestEPBSProposalDoesNotLeaveLateProvidersBlocked(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 }
 
+func TestEPBSProposalSkipsProposalWithoutRequestedPayload(t *testing.T) {
+	ctx := context.Background()
+	includePayload := true
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"excluded": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
+		}),
+		first.WithTimeout(10*time.Millisecond),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{IncludePayload: &includePayload})
+	require.Nil(t, response)
+	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+}
+
+func TestEPBSProposalWaitsForProposalWithRequestedPayload(t *testing.T) {
+	ctx := context.Background()
+	includePayload := true
+	release := make(chan struct{})
+	included := &api.VersionedEPBSProposal{ExecutionPayloadIncluded: true}
+	time.AfterFunc(20*time.Millisecond, func() {
+		close(release)
+	})
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"excluded": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
+			"included": &epbsProposalProvider{proposal: included, release: release},
+		}),
+		first.WithTimeout(time.Second),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{IncludePayload: &includePayload})
+	require.NoError(t, err)
+	require.Same(t, included, response.Data)
+}
+
 type epbsProposalProvider struct {
 	proposal *api.VersionedEPBSProposal
 	release  <-chan struct{}
