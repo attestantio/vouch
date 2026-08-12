@@ -130,6 +130,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	var beaconBuilderDomainType *phase0.DomainType
 	if tmp, err := domainType(spec, "DOMAIN_BEACON_BUILDER"); err == nil {
 		beaconBuilderDomainType = &tmp
+	} else {
+		log.Warn().Err(err).Msg("DOMAIN_BEACON_BUILDER unavailable in spec; execution payload envelope signing unavailable")
 	}
 
 	s := &Service{

@@ -39,7 +39,7 @@ func (s *Service) SignExecutionPayloadEnvelope(ctx context.Context,
 		return phase0.BLSSignature{}, errors.New("no execution payload envelope supplied")
 	}
 	if s.beaconBuilderDomainType == nil {
-		return phase0.BLSSignature{}, errors.New("no beacon builder domain type available; cannot sign")
+		return phase0.BLSSignature{}, errors.New("DOMAIN_BEACON_BUILDER unavailable in beacon node spec; cannot sign execution payload envelope")
 	}
 
 	root, err := envelope.HashTreeRoot()
