@@ -225,6 +225,20 @@ func TestProposeGloas(t *testing.T) {
 				require.NotEmpty(t, responseProposal.GloasContents.Blobs)
 				require.Equal(t, responseProposal.GloasContents.KZGProofs, envelopeSubmitter.opts.KZGProofs)
 				require.Equal(t, responseProposal.GloasContents.Blobs, envelopeSubmitter.opts.Blobs)
+				directBlockRoot, err := responseProposal.GloasContents.Block.HashTreeRoot()
+				require.NoError(t, err)
+				bodyRoot, err := responseProposal.GloasContents.Block.Body.HashTreeRoot()
+				require.NoError(t, err)
+				headerRoot, err := (&phase0.BeaconBlockHeader{
+					Slot:          responseProposal.GloasContents.Block.Slot,
+					ProposerIndex: responseProposal.GloasContents.Block.ProposerIndex,
+					ParentRoot:    responseProposal.GloasContents.Block.ParentRoot,
+					StateRoot:     responseProposal.GloasContents.Block.StateRoot,
+					BodyRoot:      bodyRoot,
+				}).HashTreeRoot()
+				require.NoError(t, err)
+				require.Equal(t, directBlockRoot, headerRoot)
+				require.Equal(t, phase0.Root(bodyRoot), blockSigner.bodyRoot)
 			}
 		})
 	}
@@ -283,6 +297,7 @@ var _ submitter.ProposalSubmitter = (*capturingProposalSubmitter)(nil)
 
 type capturingBeaconBlockSigner struct {
 	signature phase0.BLSSignature
+	bodyRoot  phase0.Root
 	calls     int
 }
 
@@ -330,9 +345,10 @@ func (s *capturingBeaconBlockSigner) SignBeaconBlockProposal(
 	_ phase0.ValidatorIndex,
 	_ phase0.Root,
 	_ phase0.Root,
-	_ phase0.Root,
+	bodyRoot phase0.Root,
 ) (phase0.BLSSignature, error) {
 	s.calls++
+	s.bodyRoot = bodyRoot
 	return s.signature, nil
 }
 

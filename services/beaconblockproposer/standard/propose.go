@@ -260,7 +260,18 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain execution payload envelope")
 	}
-	blockRoot, err := proposal.GloasContents.Block.HashTreeRoot()
+	bodyRoot, err := proposal.BodyRoot()
+	if err != nil {
+		return errors.Wrap(err, "failed to calculate hash tree root of ePBS block body")
+	}
+	block := proposal.GloasContents.Block
+	blockRoot, err := (&phase0.BeaconBlockHeader{
+		Slot:          block.Slot,
+		ProposerIndex: block.ProposerIndex,
+		ParentRoot:    block.ParentRoot,
+		StateRoot:     block.StateRoot,
+		BodyRoot:      bodyRoot,
+	}).HashTreeRoot()
 	if err != nil {
 		return errors.Wrap(err, "failed to calculate hash tree root of ePBS block")
 	}
@@ -268,7 +279,7 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		return errors.New("ePBS execution payload envelope is for incorrect block")
 	}
 
-	signedProposal, err := s.signEPBSProposalData(ctx, proposal, duty)
+	signedProposal, err := s.signEPBSProposalData(ctx, proposal, duty, bodyRoot)
 	if err != nil {
 		return err
 	}
@@ -485,17 +496,13 @@ func (s *Service) signProposalData(ctx context.Context,
 func (s *Service) signEPBSProposalData(ctx context.Context,
 	proposal *api.VersionedEPBSProposal,
 	duty *beaconblockproposer.Duty,
+	bodyRoot phase0.Root,
 ) (
 	*api.VersionedSignedProposal,
 	error,
 ) {
 	if proposal.Version != spec.DataVersionGloas {
 		return nil, errors.New("unhandled ePBS proposal version")
-	}
-
-	bodyRoot, err := proposal.BodyRoot()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to calculate hash tree root of ePBS block body proposal")
 	}
 
 	parentRoot, err := proposal.ParentRoot()
