@@ -177,6 +177,64 @@ func TestSubmitExecutionPayloadEnvelopeCancelsOnDeadline(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 }
 
+func TestSubmitExecutionPayloadEnvelopeLetsSlowSubmitterCompleteAfterFirstSuccess(t *testing.T) {
+	ctx := context.Background()
+	completed := make(chan struct{}, 1)
+	cancelled := make(chan struct{}, 1)
+	fast := &capturingExecutionPayloadEnvelopeSubmitter{}
+	slow := &slowExecutionPayloadEnvelopeSubmitter{
+		delay:     100 * time.Millisecond,
+		completed: completed,
+		cancelled: cancelled,
+	}
+	service, err := multinode.New(ctx,
+		multinode.WithLogLevel(zerolog.Disabled),
+		multinode.WithTimeout(time.Second),
+		multinode.WithProcessConcurrency(2),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"one": mock.NewProposalSubmitter(),
+		}),
+		multinode.WithExecutionPayloadEnvelopeSubmitters(map[string]eth2client.ExecutionPayloadEnvelopeSubmitter{
+			"fast": fast,
+			"slow": slow,
+		}),
+		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
+			"one": mock.NewAttestationsSubmitter(),
+		}),
+		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
+			"one": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
+		}),
+		multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{
+			"one": mock.NewAggregateAttestationsSubmitter(),
+		}),
+		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{
+			"one": mock.NewProposalPreparationsSubmitter(),
+		}),
+		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{
+			"one": mock.NewSyncCommitteeMessagesSubmitter(),
+		}),
+		multinode.WithSyncCommitteeSubscriptionsSubmitters(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter{
+			"one": mock.NewSyncCommitteeSubscriptionsSubmitter(),
+		}),
+		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
+			"one": mock.NewSyncCommitteeContributionsSubmitter(),
+		}),
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, service.SubmitExecutionPayloadEnvelope(ctx, &api.SubmitExecutionPayloadEnvelopeOpts{}))
+
+	select {
+	case <-completed:
+		// The slow submitter finished its own submission, as required: the fast peer's
+		// success must not abort it.
+	case <-cancelled:
+		t.Fatal("slow submitter was cancelled instead of completing its submission")
+	case <-time.After(time.Second):
+		t.Fatal("slow submitter did not finish its submission")
+	}
+}
+
 type capturingExecutionPayloadEnvelopeSubmitter struct {
 	opts *api.SubmitExecutionPayloadEnvelopeOpts
 }
@@ -237,7 +295,27 @@ func (s *nodeVersionBlockingExecutionPayloadEnvelopeSubmitter) NodeVersion(
 	return &api.Response[string]{Data: "test"}, nil
 }
 
+type slowExecutionPayloadEnvelopeSubmitter struct {
+	delay     time.Duration
+	completed chan<- struct{}
+	cancelled chan<- struct{}
+}
+
+func (s *slowExecutionPayloadEnvelopeSubmitter) SubmitExecutionPayloadEnvelope(ctx context.Context,
+	_ *api.SubmitExecutionPayloadEnvelopeOpts,
+) error {
+	select {
+	case <-time.After(s.delay):
+		s.completed <- struct{}{}
+		return nil
+	case <-ctx.Done():
+		s.cancelled <- struct{}{}
+		return ctx.Err()
+	}
+}
+
 var _ eth2client.ExecutionPayloadEnvelopeSubmitter = (*capturingExecutionPayloadEnvelopeSubmitter)(nil)
+var _ eth2client.ExecutionPayloadEnvelopeSubmitter = (*slowExecutionPayloadEnvelopeSubmitter)(nil)
 var _ eth2client.ExecutionPayloadEnvelopeSubmitter = (*nodeVersionBlockingExecutionPayloadEnvelopeSubmitter)(nil)
 var _ eth2client.NodeVersionProvider = (*nodeVersionBlockingExecutionPayloadEnvelopeSubmitter)(nil)
 var _ eth2client.Service = (*nodeVersionBlockingExecutionPayloadEnvelopeSubmitter)(nil)
