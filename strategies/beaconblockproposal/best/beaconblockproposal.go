@@ -227,6 +227,21 @@ func (s *Service) epbsProposal(ctx context.Context,
 		return
 	}
 
+	if proposalResponse.Data != nil && proposalResponse.Data.Version == spec.DataVersionGloas {
+		block := proposalResponse.Data.Gloas
+		if proposalResponse.Data.ExecutionPayloadIncluded {
+			block = proposalResponse.Data.GloasContents.Block
+		}
+		if block.Body.SignedExecutionPayloadBid.Message.FeeRecipient.IsZero() {
+			errCh <- &beaconBlockError{
+				provider: name,
+				err:      errors.New("beacon block obtained with 0 fee recipient"),
+			}
+
+			return
+		}
+	}
+
 	respCh <- &beaconBlockEPBSResponse{
 		provider: name,
 		proposal: proposalResponse.Data,
