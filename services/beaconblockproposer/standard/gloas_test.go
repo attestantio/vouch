@@ -51,6 +51,7 @@ func TestProposeGloas(t *testing.T) {
 		executionPayloadIncluded bool
 		blockAuctioneer          bool
 		builderBoostFactor       uint64
+		proposerIndexMismatch    bool
 		envelopeRootMismatch     bool
 		envelopeSignerErr        error
 		err                      string
@@ -64,6 +65,12 @@ func TestProposeGloas(t *testing.T) {
 			name:                     "ConfiguredAuctioneer",
 			executionPayloadIncluded: true,
 			blockAuctioneer:          true,
+		},
+		{
+			name:                     "MismatchedProposerIndex",
+			executionPayloadIncluded: true,
+			proposerIndexMismatch:    true,
+			err:                      "failed to propose block: ePBS proposal data for incorrect proposer index",
 		},
 		{
 			name:                     "PayloadExcluded",
@@ -103,6 +110,9 @@ func TestProposeGloas(t *testing.T) {
 
 				response, err := responseClient.EPBSProposal(ctx, &responseOpts)
 				if err == nil && response.Data.ExecutionPayloadIncluded {
+					if test.proposerIndexMismatch {
+						response.Data.GloasContents.Block.ProposerIndex++
+					}
 					response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
 					response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
 					blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
@@ -150,7 +160,7 @@ func TestProposeGloas(t *testing.T) {
 			service, err := standard.New(ctx, params...)
 			require.NoError(t, err)
 
-			duty := beaconblockproposer.NewDuty(1, 2)
+			duty := beaconblockproposer.NewDuty(1, 0)
 			duty.SetAccount(&testAccount{})
 			duty.SetRandaoReveal(phase0.BLSSignature{0x02})
 
@@ -171,6 +181,11 @@ func TestProposeGloas(t *testing.T) {
 				require.Nil(t, proposalSubmitter.proposal)
 				require.Zero(t, proposalSubmitter.calls)
 				if test.envelopeRootMismatch {
+					require.Zero(t, blockSigner.calls)
+					require.Zero(t, envelopeSigner.calls)
+					require.Nil(t, envelopeSubmitter.opts)
+				}
+				if test.proposerIndexMismatch {
 					require.Zero(t, blockSigner.calls)
 					require.Zero(t, envelopeSigner.calls)
 					require.Nil(t, envelopeSubmitter.opts)
