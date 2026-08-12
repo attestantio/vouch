@@ -226,6 +226,12 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if s.executionPayloadEnvelopeSubmitter == nil {
 		return errors.New("no execution payload envelope submitter available")
 	}
+	if s.blockAuctioneer != nil {
+		s.log.Warn().Msg("Ignoring configured block auctioneer on Gloas proposal path")
+	}
+	if s.builderBoostFactor != 0 {
+		s.log.Warn().Msg("Ignoring non-default builder boost factor on Gloas proposal path")
+	}
 
 	includePayload := true
 	// Force local building and include its payload so any beacon node can publish it.

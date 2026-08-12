@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	mockblockauctioneer "github.com/attestantio/go-block-relay/services/blockauctioneer/mock"
 	consensusapi "github.com/attestantio/go-eth2-client/api"
 	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
@@ -27,11 +28,14 @@ import (
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/beaconblockproposer/standard"
+	"github.com/attestantio/vouch/services/cache"
+	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	"github.com/attestantio/vouch/services/chaintime"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/signer"
 	mocksigner "github.com/attestantio/vouch/services/signer/mock"
 	"github.com/attestantio/vouch/services/submitter"
+	"github.com/attestantio/vouch/testing/logger"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -45,6 +49,8 @@ func TestProposeGloas(t *testing.T) {
 	tests := []struct {
 		name                     string
 		executionPayloadIncluded bool
+		blockAuctioneer          bool
+		builderBoostFactor       uint64
 		envelopeRootMismatch     bool
 		envelopeSignerErr        error
 		err                      string
@@ -52,6 +58,12 @@ func TestProposeGloas(t *testing.T) {
 		{
 			name:                     "PayloadIncluded",
 			executionPayloadIncluded: true,
+			builderBoostFactor:       100,
+		},
+		{
+			name:                     "ConfiguredAuctioneer",
+			executionPayloadIncluded: true,
+			blockAuctioneer:          true,
 		},
 		{
 			name:                     "PayloadExcluded",
@@ -74,6 +86,7 @@ func TestProposeGloas(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			capture := logger.NewLogCapture()
 			proposalClient, err := mockconsensusclient.New(ctx)
 			require.NoError(t, err)
 			proposalClient.ProposalFunc = func(context.Context, *consensusapi.ProposalOpts) (*consensusapi.Response[*consensusapi.VersionedProposal], error) {
@@ -113,8 +126,8 @@ func TestProposeGloas(t *testing.T) {
 			envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: envelopeSignature, err: test.envelopeSignerErr}
 			envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
 
-			service, err := standard.New(ctx,
-				standard.WithLogLevel(zerolog.Disabled),
+			params := []standard.Parameter{
+				standard.WithLogLevel(zerolog.TraceLevel),
 				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(proposalClient),
 				standard.WithChainTime(&forkChainTime{}),
@@ -125,8 +138,16 @@ func TestProposeGloas(t *testing.T) {
 				standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
 				standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
 				standard.WithBlobSidecarSigner(signer),
-				standard.WithBuilderBoostFactor(100),
-			)
+				standard.WithBuilderBoostFactor(test.builderBoostFactor),
+			}
+			if test.blockAuctioneer {
+				cacheService := mockcache.New(map[phase0.Root]phase0.Slot{})
+				params = append(params,
+					standard.WithBlockAuctioneer(mockblockauctioneer.New()),
+					standard.WithExecutionChainHeadProvider(cacheService.(cache.ExecutionChainHeadProvider)),
+				)
+			}
+			service, err := standard.New(ctx, params...)
 			require.NoError(t, err)
 
 			duty := beaconblockproposer.NewDuty(1, 2)
@@ -134,6 +155,12 @@ func TestProposeGloas(t *testing.T) {
 			duty.SetRandaoReveal(phase0.BLSSignature{0x02})
 
 			err = service.Propose(ctx, duty)
+			if test.builderBoostFactor != 0 {
+				capture.AssertHasEntry(t, "Ignoring non-default builder boost factor on Gloas proposal path")
+			}
+			if test.blockAuctioneer {
+				capture.AssertHasEntry(t, "Ignoring configured block auctioneer on Gloas proposal path")
+			}
 			require.NotNil(t, epbsOpts)
 			require.NotNil(t, epbsOpts.IncludePayload)
 			require.True(t, *epbsOpts.IncludePayload)
