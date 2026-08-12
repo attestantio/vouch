@@ -23,7 +23,10 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
+	apiv1gloas "github.com/attestantio/go-eth2-client/api/v1/gloas"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
@@ -45,8 +48,6 @@ func TestEPBSProposal(t *testing.T) {
 		standardchaintime.WithSpecProvider(specProvider),
 	)
 	require.NoError(t, err)
-	provider, err := mockconsensusclient.New(ctx)
-	require.NoError(t, err)
 	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
 
 	service, err := best.New(ctx,
@@ -56,7 +57,7 @@ func TestEPBSProposal(t *testing.T) {
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
 		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
-			"one": provider,
+			"one": &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x01})},
 		}),
 		best.WithTimeout(time.Second),
 		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
@@ -143,6 +144,96 @@ func TestEPBSProposalPrefersIncludedCandidate(t *testing.T) {
 	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{IncludePayload: &includePayload})
 	require.NoError(t, err)
 	require.Same(t, includedCandidate, response.Data)
+}
+
+func TestEPBSProposalRejectsZeroFeeRecipient(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	zeroFeeCandidate := testGloasProposal(100, bellatrix.ExecutionAddress{})
+	validCandidate := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(2),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"zero-fee": &testEPBSProposalProvider{proposal: zeroFeeCandidate},
+			"valid":    &testEPBSProposalProvider{proposal: validCandidate},
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.NoError(t, err)
+	require.Same(t, validCandidate, response.Data)
+}
+
+func TestEPBSProposalRejectsZeroFeeRecipientWithoutPayload(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	zeroFeeCandidate := testGloasProposalWithoutPayload(100, bellatrix.ExecutionAddress{})
+	validCandidate := testGloasProposalWithoutPayload(1, bellatrix.ExecutionAddress{0x01})
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(2),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"zero-fee": &testEPBSProposalProvider{proposal: zeroFeeCandidate},
+			"valid":    &testEPBSProposalProvider{proposal: validCandidate},
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.NoError(t, err)
+	require.Same(t, validCandidate, response.Data)
+}
+
+func testGloasProposal(value int64, feeRecipient bellatrix.ExecutionAddress) *api.VersionedEPBSProposal {
+	return &api.VersionedEPBSProposal{
+		Version:                  spec.DataVersionGloas,
+		ExecutionPayloadIncluded: true,
+		ConsensusValue:           big.NewInt(value),
+		GloasContents: &apiv1gloas.BlockContents{
+			Block: &gloas.BeaconBlock{
+				Body: &gloas.BeaconBlockBody{
+					SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{
+						Message: &gloas.ExecutionPayloadBid{FeeRecipient: feeRecipient},
+					},
+				},
+			},
+		},
+	}
+}
+
+func testGloasProposalWithoutPayload(value int64, feeRecipient bellatrix.ExecutionAddress) *api.VersionedEPBSProposal {
+	proposal := testGloasProposal(value, feeRecipient)
+	proposal.Gloas = proposal.GloasContents.Block
+	proposal.GloasContents = nil
+	proposal.ExecutionPayloadIncluded = false
+
+	return proposal
 }
 
 func TestEPBSProposalExpandsClientGraffitiPerProvider(t *testing.T) {
