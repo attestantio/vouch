@@ -282,6 +282,41 @@ func TestEPBSProposalExpandsClientGraffitiPerProvider(t *testing.T) {
 	require.Equal(t, expectedSecond, <-secondProvider.graffiti)
 }
 
+func TestEPBSProposalPreservesGraffitiWhenClientLookupFails(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	provider := &clientGraffitiEPBSProposalProvider{
+		nodeClientErr: errors.New("node client unavailable"),
+		graffiti:      make(chan [32]byte, 1),
+	}
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"provider": provider,
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	var graffiti [32]byte
+	copy(graffiti[:], "configured {{CLIENT}}")
+	_, err = service.EPBSProposal(ctx, &api.EPBSProposalOpts{Graffiti: graffiti})
+	require.NoError(t, err)
+	require.Equal(t, graffiti, <-provider.graffiti)
+}
+
 func TestEPBSProposalStartsProvidersWhileGraffitiClientLookupIsSlow(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -353,8 +388,9 @@ type testEPBSProposalProvider struct {
 }
 
 type clientGraffitiEPBSProposalProvider struct {
-	client   string
-	graffiti chan [32]byte
+	client        string
+	nodeClientErr error
+	graffiti      chan [32]byte
 }
 
 func (*clientGraffitiEPBSProposalProvider) Proposal(
@@ -375,6 +411,9 @@ func (p *clientGraffitiEPBSProposalProvider) EPBSProposal(
 func (p *clientGraffitiEPBSProposalProvider) NodeClient(
 	_ context.Context,
 ) (*api.Response[string], error) {
+	if p.nodeClientErr != nil {
+		return nil, p.nodeClientErr
+	}
 	return &api.Response[string]{Data: p.client}, nil
 }
 
