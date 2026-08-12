@@ -23,6 +23,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
@@ -85,8 +86,22 @@ func TestSignExecutionPayloadEnvelopeUnavailableBeforeGloas(t *testing.T) {
 	require.NotEqual(t, phase0.BLSSignature{}, signature)
 
 	_, err = service.SignExecutionPayloadEnvelope(ctx, account, 32, &gloas.ExecutionPayloadEnvelope{})
-	require.EqualError(t, err, "no beacon builder domain type available; cannot sign")
+	require.EqualError(t, err, "DOMAIN_BEACON_BUILDER unavailable in beacon node spec; cannot sign execution payload envelope")
 	require.Equal(t, 1, account.signCount)
+}
+
+func TestNewWarnsWhenBeaconBuilderDomainUnavailable(t *testing.T) {
+	capture := logger.NewLogCapture()
+
+	_, err := New(context.Background(),
+		WithLogLevel(zerolog.WarnLevel),
+		WithMonitor(nullmetrics.New()),
+		WithClientMonitor(nullmetrics.New()),
+		WithSpecProvider(&preGloasSpecProvider{}),
+		WithDomainProvider(&recordingDomainProvider{}),
+	)
+	require.NoError(t, err)
+	capture.AssertHasEntry(t, "DOMAIN_BEACON_BUILDER unavailable in spec; execution payload envelope signing unavailable")
 }
 
 type preGloasSpecProvider struct{}
