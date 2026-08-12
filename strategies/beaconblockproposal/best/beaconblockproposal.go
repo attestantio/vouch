@@ -211,8 +211,9 @@ func (s *Service) epbsProposal(ctx context.Context,
 			if len(providerGraffiti) > 32 {
 				providerGraffiti = providerGraffiti[0:32]
 			}
-			opts.Graffiti = [32]byte{}
-			copy(opts.Graffiti[:], providerGraffiti)
+			var graffiti [32]byte
+			copy(graffiti[:], providerGraffiti)
+			opts.Graffiti = graffiti
 		}
 	}
 
