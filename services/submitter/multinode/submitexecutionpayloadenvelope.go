@@ -15,6 +15,8 @@ package multinode
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -41,25 +43,43 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
-	defer cancel()
 
 	sem := semaphore.NewWeighted(s.processConcurrency)
 	submissionCompleted := make(chan struct{}, 1)
+	submissionSucceeded := &atomic.Bool{}
+	var wg sync.WaitGroup
 	for name, submitter := range s.executionPayloadEnvelopeSubmitters {
-		go s.submitExecutionPayloadEnvelope(ctx, sem, submissionCompleted, name, opts, submitter)
+		wg.Go(func() {
+			s.submitExecutionPayloadEnvelope(ctx, sem, submissionCompleted, submissionSucceeded, name, opts, submitter)
+		})
 	}
+	// Release the timeout context once every submission has finished, rather than as soon as
+	// the first one succeeds, so that one node's success does not abort the others' in-flight
+	// submissions.
+	go func() {
+		wg.Wait()
+		cancel()
+	}()
 
 	select {
 	case <-submissionCompleted:
-		return nil
 	case <-ctx.Done():
+	}
+
+	// The context is released once every submission has finished, so both cases above can be
+	// ready at once and select picks between them at random.  Consult the success flag rather
+	// than the chosen case, otherwise a successful submission can report a timeout.
+	if !submissionSucceeded.Load() {
 		return errors.New("no successful submissions before timeout")
 	}
+
+	return nil
 }
 
 func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	sem *semaphore.Weighted,
 	submissionCompleted chan<- struct{},
+	submissionSucceeded *atomic.Bool,
 	name string,
 	opts *api.SubmitExecutionPayloadEnvelopeOpts,
 	submitter eth2client.ExecutionPayloadEnvelopeSubmitter,
@@ -87,6 +107,7 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 		return
 	}
 
+	submissionSucceeded.Store(true)
 	select {
 	case submissionCompleted <- struct{}{}:
 	default:
