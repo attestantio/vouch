@@ -267,10 +267,6 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		return err
 	}
 
-	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
-		return errors.Wrap(err, "failed to submit proposal")
-	}
-
 	signature, err := s.executionPayloadEnvelopeSigner.SignExecutionPayloadEnvelope(ctx, duty.Account(), duty.Slot(), envelope)
 	if err != nil {
 		return errors.Wrap(err, "failed to sign execution payload envelope")
@@ -283,6 +279,11 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain execution payload envelope blobs")
 	}
+
+	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
+		return errors.Wrap(err, "failed to submit proposal")
+	}
+
 	if err := s.executionPayloadEnvelopeSubmitter.SubmitExecutionPayloadEnvelope(ctx, &api.SubmitExecutionPayloadEnvelopeOpts{
 		SignedExecutionPayloadEnvelope: &spec.VersionedSignedExecutionPayloadEnvelope{
 			Version: spec.DataVersionGloas,

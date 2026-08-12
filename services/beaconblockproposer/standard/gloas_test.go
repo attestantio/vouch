@@ -46,6 +46,7 @@ func TestProposeGloas(t *testing.T) {
 		name                     string
 		executionPayloadIncluded bool
 		envelopeRootMismatch     bool
+		envelopeSignerErr        error
 		err                      string
 	}{
 		{
@@ -62,6 +63,12 @@ func TestProposeGloas(t *testing.T) {
 			executionPayloadIncluded: true,
 			envelopeRootMismatch:     true,
 			err:                      "failed to propose block: ePBS execution payload envelope is for incorrect block",
+		},
+		{
+			name:                     "EnvelopeSigningFailure",
+			executionPayloadIncluded: true,
+			envelopeSignerErr:        errors.New("envelope signing failed"),
+			err:                      "failed to propose block: failed to sign execution payload envelope: envelope signing failed",
 		},
 	}
 
@@ -103,7 +110,7 @@ func TestProposeGloas(t *testing.T) {
 			signature := phase0.BLSSignature{0x01}
 			blockSigner := &capturingBeaconBlockSigner{signature: signature}
 			envelopeSignature := phase0.BLSSignature{0x03}
-			envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: envelopeSignature}
+			envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: envelopeSignature, err: test.envelopeSignerErr}
 			envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
 
 			service, err := standard.New(ctx,
@@ -135,9 +142,16 @@ func TestProposeGloas(t *testing.T) {
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 				require.Nil(t, proposalSubmitter.proposal)
+				require.Zero(t, proposalSubmitter.calls)
 				if test.envelopeRootMismatch {
 					require.Zero(t, blockSigner.calls)
 					require.Zero(t, envelopeSigner.calls)
+					require.Nil(t, envelopeSubmitter.opts)
+				}
+				if test.envelopeSignerErr != nil {
+					require.Equal(t, 1, blockSigner.calls)
+					require.Equal(t, 1, envelopeSigner.calls)
+					require.Same(t, responseProposal.GloasContents.ExecutionPayloadEnvelope, envelopeSigner.envelope)
 					require.Nil(t, envelopeSubmitter.opts)
 				}
 			} else {
@@ -198,9 +212,11 @@ func TestProposePreGloas(t *testing.T) {
 
 type capturingProposalSubmitter struct {
 	proposal *consensusapi.VersionedSignedProposal
+	calls    int
 }
 
 func (s *capturingProposalSubmitter) SubmitProposal(_ context.Context, proposal *consensusapi.VersionedSignedProposal) error {
+	s.calls++
 	s.proposal = proposal
 
 	return nil
@@ -217,6 +233,7 @@ type capturingExecutionPayloadEnvelopeSigner struct {
 	signature phase0.BLSSignature
 	envelope  *gloas.ExecutionPayloadEnvelope
 	calls     int
+	err       error
 }
 
 func (s *capturingExecutionPayloadEnvelopeSigner) SignExecutionPayloadEnvelope(
@@ -227,6 +244,9 @@ func (s *capturingExecutionPayloadEnvelopeSigner) SignExecutionPayloadEnvelope(
 ) (phase0.BLSSignature, error) {
 	s.calls++
 	s.envelope = envelope
+	if s.err != nil {
+		return phase0.BLSSignature{}, s.err
+	}
 	return s.signature, nil
 }
 
