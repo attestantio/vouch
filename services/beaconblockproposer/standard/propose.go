@@ -265,14 +265,12 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if err != nil {
 		return errors.Wrap(err, "failed to calculate hash tree root of ePBS block body")
 	}
-	block := proposal.GloasContents.Block
-	blockRoot, err := (&phase0.BeaconBlockHeader{
-		Slot:          block.Slot,
-		ProposerIndex: block.ProposerIndex,
-		ParentRoot:    block.ParentRoot,
-		StateRoot:     block.StateRoot,
-		BodyRoot:      bodyRoot,
-	}).HashTreeRoot()
+	// Use proposal.Root() rather than hashing GloasContents.Block ourselves: the
+	// generated block hasher inlines mainnet preset sizes, so it is wrong on any
+	// other preset.  Root() derives the block root from the same body root that
+	// is signed below, and is the same derivation the beacon node client used to
+	// check the envelope, so this guard and the signature cannot disagree.
+	blockRoot, err := proposal.Root()
 	if err != nil {
 		return errors.Wrap(err, "failed to calculate hash tree root of ePBS block")
 	}
