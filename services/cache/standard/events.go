@@ -102,6 +102,8 @@ func (s *Service) updateFromBlock(block *spec.VersionedSignedBeaconBlock) {
 			s.log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
 			s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
 		}
+	case spec.DataVersionGloas:
+		// Gloas blocks contain an execution payload bid, which has no execution block number.
 	default:
 		s.log.Error().Msg("Unhandled block version")
 	}
