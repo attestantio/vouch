@@ -1,4 +1,4 @@
-// Copyright © 2022, 2023 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -33,8 +33,12 @@ import (
 )
 
 type parameters struct {
-	logLevel                                  zerolog.Level
 	monitor                                   metrics.Service
+	accountsProvider                          accountmanager.AccountsProvider
+	validatorsProvider                        consensusclient.ValidatorsProvider
+	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
+	builderBidProvider                        builderbid.Provider
+	logLevel                                  zerolog.Level
 	majordomo                                 majordomo.Service
 	scheduler                                 scheduler.Service
 	listenAddress                             string
@@ -45,14 +49,10 @@ type parameters struct {
 	clientCertURL                             string
 	clientKeyURL                              string
 	caCertURL                                 string
-	accountsProvider                          accountmanager.AccountsProvider
-	validatorsProvider                        consensusclient.ValidatorsProvider
-	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 	logResults                                bool
 	releaseVersion                            string
-	builderBidProvider                        builderbid.Provider
 	builderConfigs                            map[phase0.BLSPubKey]*blockrelay.BuilderConfig
 }
 
@@ -263,7 +263,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	if _, _, err := net.SplitHostPort(parameters.listenAddress); err != nil {
 		return nil, errors.New("listen address malformed")
 	}
-	// config URL can be empty.
+	// Config URL can be empty.
 	if parameters.releaseVersion == "" {
 		return nil, errors.New("no release version specified")
 	}

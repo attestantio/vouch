@@ -1,4 +1,4 @@
-// Copyright © 2020, 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -27,16 +27,15 @@ import (
 
 // Service is the manager for validators.
 type Service struct {
-	log                zerolog.Logger
-	monitor            metrics.ValidatorsManagerMonitor
-	clientMonitor      metrics.ClientMonitor
-	validatorsProvider eth2client.ValidatorsProvider
-	farFutureEpoch     phase0.Epoch
-
-	validatorsMutex        sync.RWMutex
+	log                    zerolog.Logger
+	monitor                metrics.ValidatorsManagerMonitor
+	validatorsProvider     eth2client.ValidatorsProvider
+	clientMonitor          metrics.ClientMonitor
+	farFutureEpoch         phase0.Epoch
 	validatorsByIndex      map[phase0.ValidatorIndex]*phase0.Validator
 	validatorsByPubKey     map[phase0.BLSPubKey]*phase0.Validator
 	validatorPubKeyToIndex map[phase0.BLSPubKey]phase0.ValidatorIndex
+	validatorsMutex        sync.RWMutex
 }
 
 // New creates a new validator provider.

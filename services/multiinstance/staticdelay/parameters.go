@@ -1,4 +1,4 @@
-// Copyright © 2024, 2025 Attestant Limited.
+// Copyright © 2024 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -25,11 +25,11 @@ import (
 )
 
 type parameters struct {
-	logLevel                   zerolog.Level
 	monitor                    metrics.Service
 	specProvider               consensusclient.SpecProvider
 	attestationPoolProvider    consensusclient.AttestationPoolProvider
 	beaconBlockHeadersProvider consensusclient.BeaconBlockHeadersProvider
+	logLevel                   zerolog.Level
 	chainTime                  chaintime.Service
 	attesterDelay              time.Duration
 	proposerDelay              time.Duration

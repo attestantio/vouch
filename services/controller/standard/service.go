@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -53,15 +53,17 @@ var syncCommitteePreparationEpochs = uint64(5)
 type Service struct {
 	log                           zerolog.Logger
 	monitor                       metrics.Service
-	slotDuration                  time.Duration
-	slotsPerEpoch                 uint64
-	epochsPerSyncCommitteePeriod  uint64
 	chainTimeService              chaintime.Service
-	waitedForGenesis              bool
 	proposerDutiesProvider        eth2client.ProposerDutiesProvider
 	attesterDutiesProvider        eth2client.AttesterDutiesProvider
 	syncCommitteeDutiesProvider   eth2client.SyncCommitteeDutiesProvider
 	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
+	beaconBlockHeadersProvider    eth2client.BeaconBlockHeadersProvider
+	signedBeaconBlockProvider     eth2client.SignedBeaconBlockProvider
+	slotDuration                  time.Duration
+	slotsPerEpoch                 uint64
+	epochsPerSyncCommitteePeriod  uint64
+	waitedForGenesis              bool
 	proposalsPreparer             proposalpreparer.Service
 	scheduler                     scheduler.Service
 	attester                      attester.Service
@@ -69,13 +71,10 @@ type Service struct {
 	syncCommitteeAggregator       synccommitteeaggregator.Service
 	syncCommitteesSubscriber      synccommitteesubscriber.Service
 	beaconBlockProposer           beaconblockproposer.Service
-	beaconBlockHeadersProvider    eth2client.BeaconBlockHeadersProvider
-	signedBeaconBlockProvider     eth2client.SignedBeaconBlockProvider
 	attestationAggregator         attestationaggregator.Service
 	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
 	activeValidators              int
 	subscriptionInfos             map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription
-	subscriptionInfosMutex        sync.Mutex
 	accountsRefresher             accountmanager.Refresher
 	blockToSlotSetter             cache.BlockRootToSlotSetter
 	maxProposalDelay              time.Duration
@@ -88,7 +87,6 @@ type Service struct {
 	fastTrackSyncCommittees       bool
 	fastTrackGrace                time.Duration
 	multiInstance                 multiinstance.Service
-
 	// Hard fork control.
 	handlingAltair     bool
 	altairForkEpoch    phase0.Epoch
@@ -97,15 +95,14 @@ type Service struct {
 	capellaForkEpoch   phase0.Epoch
 	handlingElectra    bool
 	electraForkEpoch   phase0.Epoch
-
 	// Tracking for reorgs.
 	lastBlockRoot             phase0.Root
 	lastBlockEpoch            phase0.Epoch
 	currentDutyDependentRoot  phase0.Root
 	previousDutyDependentRoot phase0.Root
-
 	// Tracking for attestations.
 	pendingAttestations      map[phase0.Slot]bool
+	subscriptionInfosMutex   sync.Mutex
 	pendingAttestationsMutex sync.RWMutex
 }
 
@@ -273,9 +270,9 @@ func (s *Service) startTickers(ctx context.Context,
 }
 
 type epochTickerData struct {
-	mutex          sync.Mutex
 	latestEpochRan int64
 	atGenesis      bool
+	mutex          sync.Mutex
 }
 
 // startEpochTicker starts a ticker that ticks at the beginning of each epoch.
