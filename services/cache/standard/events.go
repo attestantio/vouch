@@ -52,8 +52,9 @@ func (s *Service) handleHead(ctx context.Context, data *apiv1.HeadEvent) {
 
 func (s *Service) updateFromBlock(block *spec.VersionedSignedBeaconBlock) {
 	switch block.Version {
-	case spec.DataVersionPhase0, spec.DataVersionAltair:
-		// No execution information available, nothing to do.
+	case spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionGloas:
+		// Phase 0 and Altair carry no execution payload.
+		// A Gloas block carries an execution payload bid, which has no execution block number.
 	case spec.DataVersionBellatrix:
 		// Potentially execution information available.
 		if block.Bellatrix != nil && block.Bellatrix.Message != nil && block.Bellatrix.Message.Body != nil {
@@ -102,8 +103,6 @@ func (s *Service) updateFromBlock(block *spec.VersionedSignedBeaconBlock) {
 			s.log.Trace().Uint64("height", executionPayload.BlockNumber).Stringer("hash", executionPayload.BlockHash).Msg("Updating execution chain head")
 			s.setExecutionChainHead(executionPayload.BlockHash, executionPayload.BlockNumber)
 		}
-	case spec.DataVersionGloas:
-		// Gloas blocks contain an execution payload bid, which has no execution block number.
 	default:
 		s.log.Error().Msg("Unhandled block version")
 	}

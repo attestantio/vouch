@@ -642,7 +642,7 @@ func (p *waitingClientGraffitiEPBSProposalProvider) NodeClient(
 
 var _ eth2client.NodeClientProvider = (*waitingClientGraffitiEPBSProposalProvider)(nil)
 
-func (p *testEPBSProposalProvider) Proposal(_ context.Context, _ *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
+func (*testEPBSProposalProvider) Proposal(_ context.Context, _ *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
 	return nil, nil
 }
 

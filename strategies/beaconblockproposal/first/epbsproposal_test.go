@@ -257,7 +257,7 @@ type epbsProposalProvider struct {
 	nilResponse bool
 }
 
-func (p *epbsProposalProvider) Proposal(_ context.Context, _ *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
+func (*epbsProposalProvider) Proposal(_ context.Context, _ *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
 	return nil, nil
 }
 
