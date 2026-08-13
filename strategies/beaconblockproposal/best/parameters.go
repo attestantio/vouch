@@ -29,11 +29,11 @@ import (
 )
 
 type parameters struct {
+	specProvider           eth2client.SpecProvider
 	logLevel               zerolog.Level
 	clientMonitor          metrics.ClientMonitor
 	processConcurrency     int64
 	chainTime              chaintime.Service
-	specProvider           eth2client.SpecProvider
 	proposalProviders      map[string]beaconblockproposer.ProposalDataProvider
 	timeout                time.Duration
 	blockRootToSlotCache   cache.BlockRootToSlotProvider

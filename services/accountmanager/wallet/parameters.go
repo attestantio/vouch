@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -23,17 +23,17 @@ import (
 )
 
 type parameters struct {
-	logLevel               zerolog.Level
 	monitor                metrics.Service
+	specProvider           eth2client.SpecProvider
+	domainProvider         eth2client.DomainProvider
+	farFutureEpochProvider eth2client.FarFutureEpochProvider
+	currentEpochProvider   chaintime.Service
+	logLevel               zerolog.Level
 	processConcurrency     int64
 	locations              []string
 	accountPaths           []string
 	passphrases            [][]byte
 	validatorsManager      validatorsmanager.Service
-	specProvider           eth2client.SpecProvider
-	domainProvider         eth2client.DomainProvider
-	farFutureEpochProvider eth2client.FarFutureEpochProvider
-	currentEpochProvider   chaintime.Service
 }
 
 // Parameter is the interface for service parameters.
