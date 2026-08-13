@@ -228,10 +228,35 @@ func (s *Service) epbsProposal(ctx context.Context,
 		return
 	}
 
+	if proposalResponse == nil || proposalResponse.Data == nil {
+		errCh <- &beaconBlockError{
+			provider: name,
+			err:      errors.New("beacon node returned no ePBS proposal"),
+		}
+
+		return
+	}
+
 	if proposalResponse.Data != nil && proposalResponse.Data.Version == spec.DataVersionGloas {
 		block := proposalResponse.Data.Gloas
 		if proposalResponse.Data.ExecutionPayloadIncluded {
+			if proposalResponse.Data.GloasContents == nil {
+				errCh <- &beaconBlockError{
+					provider: name,
+					err:      errors.New("beacon node returned malformed ePBS proposal"),
+				}
+
+				return
+			}
 			block = proposalResponse.Data.GloasContents.Block
+		}
+		if block == nil || block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
+			errCh <- &beaconBlockError{
+				provider: name,
+				err:      errors.New("beacon node returned malformed ePBS proposal"),
+			}
+
+			return
 		}
 		if block.Body.SignedExecutionPayloadBid.Message.FeeRecipient.IsZero() {
 			errCh <- &beaconBlockError{

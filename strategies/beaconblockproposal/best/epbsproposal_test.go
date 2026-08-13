@@ -210,6 +210,157 @@ func TestEPBSProposalRejectsZeroFeeRecipientWithoutPayload(t *testing.T) {
 	require.Same(t, validCandidate, response.Data)
 }
 
+func TestEPBSProposalRejectsNilData(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	validCandidate := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(2),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"nil":   &testEPBSProposalProvider{},
+			"valid": &testEPBSProposalProvider{proposal: validCandidate},
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	includePayload := true
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{IncludePayload: &includePayload})
+	require.NoError(t, err)
+	require.Same(t, validCandidate, response.Data)
+}
+
+func TestEPBSProposalRejectsMalformedIncludedGloasProposal(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	tests := []struct {
+		name     string
+		proposal *api.VersionedEPBSProposal
+	}{
+		{
+			name: "MissingGloasContents",
+			proposal: &api.VersionedEPBSProposal{
+				Version:                  spec.DataVersionGloas,
+				ExecutionPayloadIncluded: true,
+			},
+		},
+		{
+			name: "MissingBlock",
+			proposal: &api.VersionedEPBSProposal{
+				Version:                  spec.DataVersionGloas,
+				ExecutionPayloadIncluded: true,
+				GloasContents:            &apiv1gloas.BlockContents{},
+			},
+		},
+		{
+			name: "MissingBody",
+			proposal: &api.VersionedEPBSProposal{
+				Version:                  spec.DataVersionGloas,
+				ExecutionPayloadIncluded: true,
+				GloasContents:            &apiv1gloas.BlockContents{Block: &gloas.BeaconBlock{}},
+			},
+		},
+		{
+			name: "MissingSignedExecutionPayloadBid",
+			proposal: &api.VersionedEPBSProposal{
+				Version:                  spec.DataVersionGloas,
+				ExecutionPayloadIncluded: true,
+				GloasContents: &apiv1gloas.BlockContents{Block: &gloas.BeaconBlock{
+					Body: &gloas.BeaconBlockBody{},
+				}},
+			},
+		},
+		{
+			name: "MissingExecutionPayloadBidMessage",
+			proposal: &api.VersionedEPBSProposal{
+				Version:                  spec.DataVersionGloas,
+				ExecutionPayloadIncluded: true,
+				GloasContents: &apiv1gloas.BlockContents{Block: &gloas.BeaconBlock{
+					Body: &gloas.BeaconBlockBody{
+						SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{},
+					},
+				}},
+			},
+		},
+		{
+			name: "CachedMissingBlock",
+			proposal: &api.VersionedEPBSProposal{
+				Version: spec.DataVersionGloas,
+			},
+		},
+		{
+			name: "CachedMissingBody",
+			proposal: &api.VersionedEPBSProposal{
+				Version: spec.DataVersionGloas,
+				Gloas:   &gloas.BeaconBlock{},
+			},
+		},
+		{
+			name: "CachedMissingSignedExecutionPayloadBid",
+			proposal: &api.VersionedEPBSProposal{
+				Version: spec.DataVersionGloas,
+				Gloas: &gloas.BeaconBlock{
+					Body: &gloas.BeaconBlockBody{},
+				},
+			},
+		},
+		{
+			name: "CachedMissingExecutionPayloadBidMessage",
+			proposal: &api.VersionedEPBSProposal{
+				Version: spec.DataVersionGloas,
+				Gloas: &gloas.BeaconBlock{
+					Body: &gloas.BeaconBlockBody{
+						SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			validCandidate := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
+			service, err := best.New(ctx,
+				best.WithLogLevel(zerolog.Disabled),
+				best.WithClientMonitor(nullmetrics.New()),
+				best.WithProcessConcurrency(2),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
+				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+					"malformed": &testEPBSProposalProvider{proposal: test.proposal},
+					"valid":     &testEPBSProposalProvider{proposal: validCandidate},
+				}),
+				best.WithTimeout(time.Second),
+				best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+			)
+			require.NoError(t, err)
+
+			response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+			require.NoError(t, err)
+			require.Same(t, validCandidate, response.Data)
+		})
+	}
+}
+
 func testGloasProposal(value int64, feeRecipient bellatrix.ExecutionAddress) *api.VersionedEPBSProposal {
 	return &api.VersionedEPBSProposal{
 		Version:                  spec.DataVersionGloas,

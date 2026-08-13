@@ -1,4 +1,4 @@
-// Copyright © 2026 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,7 +21,10 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/api"
-	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
+	apiv1gloas "github.com/attestantio/go-eth2-client/api/v1/gloas"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
@@ -32,14 +35,12 @@ import (
 
 func TestEPBSProposal(t *testing.T) {
 	ctx := context.Background()
-	provider, err := mockconsensusclient.New(ctx)
-	require.NoError(t, err)
 
 	service, err := first.New(ctx,
 		first.WithLogLevel(zerolog.Disabled),
 		first.WithClientMonitor(nullmetrics.New()),
 		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
-			"one": provider,
+			"one": &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})},
 		}),
 		first.WithTimeout(time.Second),
 	)
@@ -98,6 +99,118 @@ func TestEPBSProposalSkipsProposalWithoutRequestedPayload(t *testing.T) {
 	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
 }
 
+func TestEPBSProposalSkipsZeroFeeRecipient(t *testing.T) {
+	ctx := context.Background()
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"zero-fee": &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{})},
+		}),
+		first.WithTimeout(10*time.Millisecond),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.Nil(t, response)
+	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+}
+
+func TestEPBSProposalSkipsNilResponse(t *testing.T) {
+	ctx := context.Background()
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"nil": &epbsProposalProvider{nilResponse: true},
+		}),
+		first.WithTimeout(10*time.Millisecond),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.Nil(t, response)
+	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+}
+
+func TestEPBSProposalSkipsMalformedGloasProposal(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name     string
+		proposal *api.VersionedEPBSProposal
+	}{
+		{
+			name: "Nil",
+		},
+		{
+			name: "GloasWithoutBlock",
+			proposal: &api.VersionedEPBSProposal{
+				Version: spec.DataVersionGloas,
+			},
+		},
+		{
+			name: "GloasContentsWithoutBlock",
+			proposal: &api.VersionedEPBSProposal{
+				Version:                  spec.DataVersionGloas,
+				ExecutionPayloadIncluded: true,
+				GloasContents:            &apiv1gloas.BlockContents{},
+			},
+		},
+		{
+			name: "GloasContentsNil",
+			proposal: &api.VersionedEPBSProposal{
+				Version:                  spec.DataVersionGloas,
+				ExecutionPayloadIncluded: true,
+			},
+		},
+		{
+			name: "BlockWithoutBody",
+			proposal: &api.VersionedEPBSProposal{
+				Version: spec.DataVersionGloas,
+				Gloas:   &gloas.BeaconBlock{},
+			},
+		},
+		{
+			name: "BodyWithoutBid",
+			proposal: &api.VersionedEPBSProposal{
+				Version: spec.DataVersionGloas,
+				Gloas: &gloas.BeaconBlock{
+					Body: &gloas.BeaconBlockBody{},
+				},
+			},
+		},
+		{
+			name: "BidWithoutMessage",
+			proposal: &api.VersionedEPBSProposal{
+				Version: spec.DataVersionGloas,
+				Gloas: &gloas.BeaconBlock{
+					Body: &gloas.BeaconBlockBody{
+						SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service, err := first.New(ctx,
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithClientMonitor(nullmetrics.New()),
+				first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+					"malformed": &epbsProposalProvider{proposal: test.proposal},
+				}),
+				first.WithTimeout(10*time.Millisecond),
+			)
+			require.NoError(t, err)
+
+			response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+			require.Nil(t, response)
+			require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+		})
+	}
+}
+
 func TestEPBSProposalWaitsForProposalWithRequestedPayload(t *testing.T) {
 	ctx := context.Background()
 	includePayload := true
@@ -122,9 +235,26 @@ func TestEPBSProposalWaitsForProposalWithRequestedPayload(t *testing.T) {
 	require.Same(t, included, response.Data)
 }
 
+func gloasEPBSProposal(feeRecipient bellatrix.ExecutionAddress) *api.VersionedEPBSProposal {
+	return &api.VersionedEPBSProposal{
+		Version:                  spec.DataVersionGloas,
+		ExecutionPayloadIncluded: true,
+		GloasContents: &apiv1gloas.BlockContents{
+			Block: &gloas.BeaconBlock{
+				Body: &gloas.BeaconBlockBody{
+					SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{
+						Message: &gloas.ExecutionPayloadBid{FeeRecipient: feeRecipient},
+					},
+				},
+			},
+		},
+	}
+}
+
 type epbsProposalProvider struct {
-	proposal *api.VersionedEPBSProposal
-	release  <-chan struct{}
+	proposal    *api.VersionedEPBSProposal
+	release     <-chan struct{}
+	nilResponse bool
 }
 
 func (p *epbsProposalProvider) Proposal(_ context.Context, _ *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
@@ -139,6 +269,9 @@ func (p *epbsProposalProvider) EPBSProposal(_ context.Context,
 ) {
 	if p.release != nil {
 		<-p.release
+	}
+	if p.nilResponse {
+		return nil, nil
 	}
 
 	return &api.Response[*api.VersionedEPBSProposal]{Data: p.proposal}, nil

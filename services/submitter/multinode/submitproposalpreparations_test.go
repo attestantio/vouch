@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -31,7 +31,7 @@ import (
 func TestSubmitProposalPreparationsEmpty(t *testing.T) {
 	ctx := context.Background()
 
-	s, err := multinode.New(context.Background(),
+	s, err := newTestService(context.Background(),
 		multinode.WithLogLevel(zerolog.Disabled),
 		multinode.WithTimeout(2*time.Second),
 		multinode.WithProcessConcurrency(2),
@@ -71,7 +71,7 @@ func TestSubmitProposalPreparations(t *testing.T) {
 
 	capture := logger.NewLogCapture()
 
-	s, err := multinode.New(context.Background(),
+	s, err := newTestService(context.Background(),
 		multinode.WithLogLevel(zerolog.TraceLevel),
 		multinode.WithTimeout(100*time.Millisecond),
 		multinode.WithProcessConcurrency(2),
@@ -118,7 +118,7 @@ func TestSubmitProposalPreparations(t *testing.T) {
 func TestSubmitProposalPreparationsErroring(t *testing.T) {
 	ctx := context.Background()
 
-	s, err := multinode.New(context.Background(),
+	s, err := newTestService(context.Background(),
 		multinode.WithLogLevel(zerolog.Disabled),
 		multinode.WithTimeout(100*time.Millisecond),
 		multinode.WithProcessConcurrency(2),
@@ -161,7 +161,7 @@ func TestSubmitProposalPreparationsErroring(t *testing.T) {
 func TestSubmitProposalPreparationsSleepy(t *testing.T) {
 	ctx := context.Background()
 
-	s, err := multinode.New(context.Background(),
+	s, err := newTestService(context.Background(),
 		multinode.WithLogLevel(zerolog.Disabled),
 		multinode.WithTimeout(100*time.Millisecond),
 		multinode.WithProcessConcurrency(2),
@@ -204,7 +204,7 @@ func TestSubmitProposalPreparationsSleepy(t *testing.T) {
 func TestSubmitProposalPreparationsSleepySuccess(t *testing.T) {
 	ctx := context.Background()
 
-	s, err := multinode.New(context.Background(),
+	s, err := newTestService(context.Background(),
 		multinode.WithLogLevel(zerolog.Disabled),
 		multinode.WithTimeout(200*time.Millisecond),
 		multinode.WithProcessConcurrency(2),
