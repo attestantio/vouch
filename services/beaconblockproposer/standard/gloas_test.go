@@ -31,12 +31,15 @@ import (
 	"github.com/attestantio/vouch/services/cache"
 	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	"github.com/attestantio/vouch/services/chaintime"
+	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	prometheusmetrics "github.com/attestantio/vouch/services/metrics/prometheus"
 	"github.com/attestantio/vouch/services/signer"
 	mocksigner "github.com/attestantio/vouch/services/signer/mock"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
@@ -57,12 +60,14 @@ func TestProposeGloas(t *testing.T) {
 		forkEpochAtConstruction  phase0.Epoch
 		forkEpochAtUse           phase0.Epoch
 		updateForkEpochAtUse     bool
+		proposalSource           string
 		err                      string
 	}{
 		{
 			name:                     "PayloadIncluded",
 			executionPayloadIncluded: true,
 			builderBoostFactor:       100,
+			proposalSource:           "local",
 		},
 		{
 			name:                     "ForkEpochAvailableAfterConstruction",
@@ -85,6 +90,7 @@ func TestProposeGloas(t *testing.T) {
 		{
 			name:                     "PayloadExcluded",
 			executionPayloadIncluded: false,
+			proposalSource:           "builder",
 			err:                      "failed to propose block: ePBS proposal excludes requested execution payload",
 		},
 		{
@@ -147,10 +153,18 @@ func TestProposeGloas(t *testing.T) {
 			envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
 
 			chainTime := &forkChainTime{gloasForkEpoch: test.forkEpochAtConstruction}
+			var monitor metrics.Service = nullmetrics.New()
+			if test.proposalSource != "" {
+				monitor, err = prometheusmetrics.New(ctx,
+					prometheusmetrics.WithLogLevel(zerolog.Disabled),
+					prometheusmetrics.WithAddress("localhost:0"),
+				)
+				require.NoError(t, err)
+			}
 
 			params := []standard.Parameter{
 				standard.WithLogLevel(zerolog.TraceLevel),
-				standard.WithMonitor(nullmetrics.New()),
+				standard.WithMonitor(monitor),
 				standard.WithProposalDataProvider(proposalClient),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
@@ -171,6 +185,10 @@ func TestProposeGloas(t *testing.T) {
 			}
 			service, err := standard.New(ctx, params...)
 			require.NoError(t, err)
+			var proposalSourceCountBefore float64
+			if test.proposalSource != "" {
+				proposalSourceCountBefore = beaconBlockProposalSourceCount(t, test.proposalSource)
+			}
 			if test.updateForkEpochAtUse {
 				chainTime.gloasForkEpoch = test.forkEpochAtUse
 			}
@@ -180,6 +198,9 @@ func TestProposeGloas(t *testing.T) {
 			duty.SetRandaoReveal(phase0.BLSSignature{0x02})
 
 			err = service.Propose(ctx, duty)
+			if test.proposalSource != "" {
+				require.Equal(t, proposalSourceCountBefore+1, beaconBlockProposalSourceCount(t, test.proposalSource))
+			}
 			if test.builderBoostFactor != 0 {
 				capture.AssertHasEntry(t, "Ignoring non-default builder boost factor on Gloas proposal path")
 			}
@@ -242,6 +263,27 @@ func TestProposeGloas(t *testing.T) {
 			}
 		})
 	}
+}
+
+func beaconBlockProposalSourceCount(t *testing.T, source string) float64 {
+	t.Helper()
+
+	metricFamilies, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, metricFamily := range metricFamilies {
+		if metricFamily.GetName() != "vouch_beaconblockproposal_process_blocks_total" {
+			continue
+		}
+		for _, metric := range metricFamily.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "method" && label.GetValue() == source {
+					return metric.GetCounter().GetValue()
+				}
+			}
+		}
+	}
+
+	return 0
 }
 
 // TestProposeGloasSignsRetainedBodyRoot proves that Propose signs and submits the

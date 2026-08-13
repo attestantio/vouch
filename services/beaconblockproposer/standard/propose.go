@@ -259,7 +259,11 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		return errors.Wrap(err, "failed to obtain ePBS proposal")
 	}
 	proposal := proposalResponse.Data
-	monitorBeaconBlockProposalSource("local")
+	if proposal.ExecutionPayloadIncluded {
+		monitorBeaconBlockProposalSource("local")
+	} else {
+		monitorBeaconBlockProposalSource("builder")
+	}
 	if !proposal.ExecutionPayloadIncluded {
 		return errors.New("ePBS proposal excludes requested execution payload")
 	}

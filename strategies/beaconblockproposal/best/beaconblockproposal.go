@@ -206,6 +206,11 @@ func (s *Service) epbsProposal(ctx context.Context,
 	opts *api.EPBSProposalOpts,
 	log zerolog.Logger,
 ) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.best").Start(ctx, "ePBSBeaconBlockProposal", trace.WithAttributes(
+		attribute.String("provider", name),
+	))
+	defer span.End()
+
 	providerGraffiti := opts.Graffiti[:]
 	if bytes.Contains(providerGraffiti, []byte("{{CLIENT}}")) {
 		if nodeClientProvider, isProvider := provider.(eth2client.NodeClientProvider); isProvider {

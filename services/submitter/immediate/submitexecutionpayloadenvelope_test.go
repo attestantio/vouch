@@ -23,10 +23,22 @@ import (
 	"github.com/attestantio/vouch/services/submitter/immediate"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestSubmitExecutionPayloadEnvelope(t *testing.T) {
 	ctx := context.Background()
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+	previousTracerProvider := otel.GetTracerProvider()
+	otel.SetTracerProvider(tracerProvider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		require.NoError(t, tracerProvider.Shutdown(ctx))
+	})
 	capture := &capturingExecutionPayloadEnvelopeSubmitter{}
 	service, err := immediate.New(ctx,
 		immediate.WithLogLevel(zerolog.Disabled),
@@ -45,13 +57,26 @@ func TestSubmitExecutionPayloadEnvelope(t *testing.T) {
 	opts := &api.SubmitExecutionPayloadEnvelopeOpts{}
 	require.NoError(t, service.SubmitExecutionPayloadEnvelope(ctx, opts))
 	require.Same(t, opts, capture.opts)
+
+	var envelopeSubmissionSpan sdktrace.ReadOnlySpan
+	for _, span := range spanRecorder.Ended() {
+		if span.Name() == "SubmitExecutionPayloadEnvelope" {
+			envelopeSubmissionSpan = span
+			break
+		}
+	}
+	require.NotNil(t, envelopeSubmissionSpan, "submission should create an execution payload envelope span")
+	require.Equal(t, "attestantio.vouch.services.submitter.immediate", envelopeSubmissionSpan.InstrumentationScope().Name)
+	require.Equal(t, envelopeSubmissionSpan.SpanContext(), trace.SpanFromContext(capture.ctx).SpanContext())
 }
 
 type capturingExecutionPayloadEnvelopeSubmitter struct {
+	ctx  context.Context
 	opts *api.SubmitExecutionPayloadEnvelopeOpts
 }
 
-func (s *capturingExecutionPayloadEnvelopeSubmitter) SubmitExecutionPayloadEnvelope(_ context.Context, opts *api.SubmitExecutionPayloadEnvelopeOpts) error {
+func (s *capturingExecutionPayloadEnvelopeSubmitter) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.SubmitExecutionPayloadEnvelopeOpts) error {
+	s.ctx = ctx
 	s.opts = opts
 	return nil
 }
