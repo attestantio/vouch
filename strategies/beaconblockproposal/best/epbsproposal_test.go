@@ -37,10 +37,21 @@ import (
 	"github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 func TestEPBSProposal(t *testing.T) {
 	ctx := context.Background()
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+	previousTracerProvider := otel.GetTracerProvider()
+	otel.SetTracerProvider(tracerProvider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		require.NoError(t, tracerProvider.Shutdown(ctx))
+	})
 	specProvider := mock.NewSpecProvider()
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithLogLevel(zerolog.Disabled),
@@ -58,6 +69,7 @@ func TestEPBSProposal(t *testing.T) {
 		best.WithSpecProvider(specProvider),
 		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
 			"one": &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x01})},
+			"two": &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x02})},
 		}),
 		best.WithTimeout(time.Second),
 		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
@@ -70,6 +82,27 @@ func TestEPBSProposal(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, response)
 	require.NotNil(t, response.Data)
+
+	var epbsProposalSpan sdktrace.ReadOnlySpan
+	providerSpans := make(map[string]sdktrace.ReadOnlySpan)
+	for _, span := range spanRecorder.Ended() {
+		switch span.Name() {
+		case "EPBSProposal":
+			epbsProposalSpan = span
+		case "ePBSBeaconBlockProposal":
+			for _, attribute := range span.Attributes() {
+				if string(attribute.Key) == "provider" {
+					providerSpans[attribute.Value.AsString()] = span
+				}
+			}
+		}
+	}
+	require.NotNil(t, epbsProposalSpan)
+	for _, provider := range []string{"one", "two"} {
+		span, exists := providerSpans[provider]
+		require.True(t, exists, "provider %q should create a span", provider)
+		require.Equal(t, epbsProposalSpan.SpanContext(), span.Parent())
+	}
 }
 
 func TestEPBSProposalReturnsIncludedCandidateAtSoftTimeout(t *testing.T) {

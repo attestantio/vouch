@@ -20,10 +20,14 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
 )
 
 // SubmitExecutionPayloadEnvelope submits a signed execution payload envelope.
 func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.SubmitExecutionPayloadEnvelopeOpts) error {
+	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitExecutionPayloadEnvelope")
+	defer span.End()
+
 	if opts == nil {
 		return errors.New("no execution payload envelope supplied")
 	}
