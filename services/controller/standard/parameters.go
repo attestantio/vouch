@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -38,25 +38,25 @@ import (
 )
 
 type parameters struct {
-	logLevel                      zerolog.Level
 	monitor                       metrics.Service
 	specProvider                  eth2client.SpecProvider
 	chainTimeService              chaintime.Service
-	waitedForGenesis              bool
 	proposerDutiesProvider        eth2client.ProposerDutiesProvider
 	attesterDutiesProvider        eth2client.AttesterDutiesProvider
 	syncCommitteeDutiesProvider   eth2client.SyncCommitteeDutiesProvider
-	syncCommitteesSubscriber      synccommitteesubscriber.Service
 	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
+	eventsProvider                eth2client.EventsProvider
+	beaconBlockHeadersProvider    eth2client.BeaconBlockHeadersProvider
+	signedBeaconBlockProvider     eth2client.SignedBeaconBlockProvider
+	logLevel                      zerolog.Level
+	waitedForGenesis              bool
+	syncCommitteesSubscriber      synccommitteesubscriber.Service
 	proposalsPreparer             proposalpreparer.Service
 	scheduler                     scheduler.Service
-	eventsProvider                eth2client.EventsProvider
 	attester                      attester.Service
 	syncCommitteeMessenger        synccommitteemessenger.Service
 	syncCommitteeAggregator       synccommitteeaggregator.Service
 	beaconBlockProposer           beaconblockproposer.Service
-	beaconBlockHeadersProvider    eth2client.BeaconBlockHeadersProvider
-	signedBeaconBlockProvider     eth2client.SignedBeaconBlockProvider
 	attestationAggregator         attestationaggregator.Service
 	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
 	accountsRefresher             accountmanager.Refresher

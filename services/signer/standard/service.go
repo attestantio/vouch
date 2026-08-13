@@ -45,7 +45,7 @@ type Service struct {
 	beaconBuilderDomainType               *phase0.DomainType
 }
 
-// module-wide log.
+// Module-wide log.
 var log zerolog.Logger
 
 // New creates a new dirk account manager.

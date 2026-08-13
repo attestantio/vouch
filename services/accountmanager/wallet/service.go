@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2025 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -44,8 +44,9 @@ import (
 // Service is the manager for wallet accounts.
 type Service struct {
 	log                  zerolog.Logger
-	mutex                sync.RWMutex
 	monitor              metrics.Service
+	domainProvider       eth2client.DomainProvider
+	currentEpochProvider chaintime.Service
 	processConcurrency   int64
 	stores               []e2wtypes.Store
 	accountPaths         []string
@@ -53,9 +54,8 @@ type Service struct {
 	accounts             map[phase0.BLSPubKey]e2wtypes.Account
 	validatorsManager    validatorsmanager.Service
 	slotsPerEpoch        phase0.Slot
-	domainProvider       eth2client.DomainProvider
 	farFutureEpoch       phase0.Epoch
-	currentEpochProvider chaintime.Service
+	mutex                sync.RWMutex
 }
 
 // New creates a new wallet account manager.

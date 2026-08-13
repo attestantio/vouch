@@ -29,21 +29,17 @@ import (
 
 // Service provides cached information.
 type Service struct {
-	log zerolog.Logger
-
-	chainTime                  chaintime.Service
+	log                        zerolog.Logger
 	signedBeaconBlockProvider  consensusclient.SignedBeaconBlockProvider
 	beaconBlockHeadersProvider consensusclient.BeaconBlockHeadersProvider
-
-	blockRootToSlotMu sync.RWMutex
-	blockRootToSlot   map[phase0.Root]phase0.Slot
-
-	executionChainHeadMu     sync.RWMutex
-	executionChainHeadHeight uint64
-	executionChainHeadRoot   phase0.Hash32
-
-	blockGasLimitMu sync.RWMutex
-	blockGasLimits  map[uint64]uint64
+	chainTime                  chaintime.Service
+	blockRootToSlot            map[phase0.Root]phase0.Slot
+	executionChainHeadHeight   uint64
+	executionChainHeadRoot     phase0.Hash32
+	blockGasLimits             map[uint64]uint64
+	blockRootToSlotMu          sync.RWMutex
+	executionChainHeadMu       sync.RWMutex
+	blockGasLimitMu            sync.RWMutex
 }
 
 // New creates a new cache.

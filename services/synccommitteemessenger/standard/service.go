@@ -1,4 +1,4 @@
-// Copyright © 2021, 2024 Attestant Limited.
+// Copyright © 2021 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -48,15 +48,15 @@ const (
 type Service struct {
 	log                               zerolog.Logger
 	monitor                           metrics.Service
+	chainTimeService                  chaintime.Service
+	validatingAccountsProvider        accountmanager.ValidatingAccountsProvider
+	beaconBlockRootProvider           eth2client.BeaconBlockRootProvider
 	processConcurrency                int64
 	slotsPerEpoch                     uint64
 	syncCommitteeSize                 uint64
 	syncCommitteeSubnetCount          uint64
 	targetAggregatorsPerSyncCommittee uint64
-	chainTimeService                  chaintime.Service
 	syncCommitteeAggregator           synccommitteeaggregator.Service
-	validatingAccountsProvider        accountmanager.ValidatingAccountsProvider
-	beaconBlockRootProvider           eth2client.BeaconBlockRootProvider
 	syncCommitteeMessagesSubmitter    submitter.SyncCommitteeMessagesSubmitter
 	syncCommitteeSelectionSigner      signer.SyncCommitteeSelectionSigner
 	syncCommitteeRootSigner           signer.SyncCommitteeRootSigner
