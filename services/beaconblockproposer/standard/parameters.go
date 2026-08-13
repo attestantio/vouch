@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -208,6 +208,12 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.beaconBlockSigner == nil {
 		return nil, errors.New("no beacon block signer specified")
+	}
+	if parameters.executionPayloadEnvelopeSigner == nil {
+		return nil, errors.New("no execution payload envelope signer specified")
+	}
+	if parameters.executionPayloadEnvelopeSubmitter == nil {
+		return nil, errors.New("no execution payload envelope submitter specified")
 	}
 	if parameters.blobSidecarSigner == nil {
 		return nil, errors.New("no blob sidecar signer specified")

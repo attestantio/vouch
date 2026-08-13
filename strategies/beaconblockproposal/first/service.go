@@ -1,4 +1,4 @@
-// Copyright © 2020, 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,6 +19,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/util"
@@ -67,6 +68,11 @@ func (s *Service) EPBSProposal(ctx context.Context,
 
 				return
 			}
+			if proposalResponse == nil {
+				log.Warn().Msg("Discarding empty ePBS proposal response")
+
+				return
+			}
 			proposal := proposalResponse.Data
 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained ePBS beacon block proposal")
 
@@ -84,9 +90,31 @@ func (s *Service) EPBSProposal(ctx context.Context,
 			s.log.Debug().Msg("Failed to obtain ePBS beacon block proposal before timeout")
 			return nil, errors.New("failed to obtain ePBS beacon block proposal before timeout")
 		case proposal := <-proposalCh:
+			if proposal == nil {
+				s.log.Warn().Msg("Discarding empty ePBS proposal")
+				continue
+			}
 			if opts.IncludePayload != nil && *opts.IncludePayload && !proposal.ExecutionPayloadIncluded {
 				s.log.Warn().Msg("Discarding ePBS proposal without requested execution payload")
 				continue
+			}
+			if proposal.Version == spec.DataVersionGloas {
+				block := proposal.Gloas
+				if proposal.ExecutionPayloadIncluded {
+					if proposal.GloasContents == nil {
+						s.log.Warn().Msg("Discarding malformed ePBS proposal")
+						continue
+					}
+					block = proposal.GloasContents.Block
+				}
+				if block == nil || block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
+					s.log.Warn().Msg("Discarding malformed ePBS proposal")
+					continue
+				}
+				if block.Body.SignedExecutionPayloadBid.Message.FeeRecipient.IsZero() {
+					s.log.Warn().Msg("Discarding ePBS proposal with 0 fee recipient")
+					continue
+				}
 			}
 			cancel()
 			return &api.Response[*api.VersionedEPBSProposal]{

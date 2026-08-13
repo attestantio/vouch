@@ -244,6 +244,270 @@ func TestProposeGloas(t *testing.T) {
 	}
 }
 
+func TestProposeGloasStartsBothSignaturesBeforePublication(t *testing.T) {
+	ctx := context.Background()
+	proposalClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	responseClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	proposalClient.EPBSProposalFunc = func(ctx context.Context, opts *consensusapi.EPBSProposalOpts) (*consensusapi.Response[*consensusapi.VersionedEPBSProposal], error) {
+		includePayload := true
+		responseOpts := *opts
+		responseOpts.IncludePayload = &includePayload
+		response, err := responseClient.EPBSProposal(ctx, &responseOpts)
+		if err != nil {
+			return nil, err
+		}
+		response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
+		response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
+		blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
+		require.NoError(t, err)
+		response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
+
+		return response, nil
+	}
+
+	blockSigningStarted := make(chan struct{}, 1)
+	envelopeSigningStarted := make(chan struct{}, 1)
+	releaseSignatures := make(chan struct{})
+	defer func() {
+		select {
+		case <-releaseSignatures:
+		default:
+			close(releaseSignatures)
+		}
+	}()
+	proposalSubmitter := &capturingProposalSubmitter{}
+	envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
+	blockSigner := &capturingBeaconBlockSigner{
+		signature: phase0.BLSSignature{0x01},
+		started:   blockSigningStarted,
+		release:   releaseSignatures,
+	}
+	envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{
+		signature: phase0.BLSSignature{0x03},
+		started:   envelopeSigningStarted,
+		release:   releaseSignatures,
+	}
+	signer := mocksigner.New()
+	service, err := standard.New(ctx,
+		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithProposalDataProvider(proposalClient),
+		standard.WithChainTime(&forkChainTime{}),
+		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
+		standard.WithProposalSubmitter(proposalSubmitter),
+		standard.WithRANDAORevealSigner(signer),
+		standard.WithBeaconBlockSigner(blockSigner),
+		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
+		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
+		standard.WithBlobSidecarSigner(signer),
+	)
+	require.NoError(t, err)
+
+	duty := beaconblockproposer.NewDuty(1, 0)
+	duty.SetAccount(&testAccount{})
+	duty.SetRandaoReveal(phase0.BLSSignature{0x02})
+	result := make(chan error, 1)
+	go func() {
+		result <- service.Propose(ctx, duty)
+	}()
+
+	select {
+	case <-blockSigningStarted:
+	case <-time.After(time.Second):
+		t.Fatal("block signing did not start")
+	}
+	select {
+	case <-envelopeSigningStarted:
+	case <-time.After(time.Second):
+		t.Fatal("execution payload envelope signing did not start")
+	}
+	require.Nil(t, proposalSubmitter.proposal)
+	require.Nil(t, envelopeSubmitter.opts)
+
+	close(releaseSignatures)
+	require.NoError(t, <-result)
+	require.NotNil(t, proposalSubmitter.proposal)
+	require.NotNil(t, envelopeSubmitter.opts)
+}
+
+func TestProposeGloasCancelsPeerSigningAfterFailure(t *testing.T) {
+	ctx := context.Background()
+	proposalClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	responseClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	proposalClient.EPBSProposalFunc = func(ctx context.Context, opts *consensusapi.EPBSProposalOpts) (*consensusapi.Response[*consensusapi.VersionedEPBSProposal], error) {
+		includePayload := true
+		responseOpts := *opts
+		responseOpts.IncludePayload = &includePayload
+		response, err := responseClient.EPBSProposal(ctx, &responseOpts)
+		if err != nil {
+			return nil, err
+		}
+		response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
+		response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
+		blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
+		require.NoError(t, err)
+		response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
+
+		return response, nil
+	}
+
+	blockSigningStarted := make(chan struct{}, 1)
+	envelopeSigningStarted := make(chan struct{}, 1)
+	envelopeSigningCancelled := make(chan struct{}, 1)
+	releaseBlockSigning := make(chan struct{})
+	proposalSubmitter := &capturingProposalSubmitter{}
+	envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
+	blockSigner := &capturingBeaconBlockSigner{
+		err:     errors.New("block signing failed"),
+		started: blockSigningStarted,
+		release: releaseBlockSigning,
+	}
+	envelopeSigner := &contextBlockingExecutionPayloadEnvelopeSigner{
+		started:   envelopeSigningStarted,
+		cancelled: envelopeSigningCancelled,
+	}
+	signer := mocksigner.New()
+	service, err := standard.New(ctx,
+		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithProposalDataProvider(proposalClient),
+		standard.WithChainTime(&forkChainTime{}),
+		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
+		standard.WithProposalSubmitter(proposalSubmitter),
+		standard.WithRANDAORevealSigner(signer),
+		standard.WithBeaconBlockSigner(blockSigner),
+		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
+		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
+		standard.WithBlobSidecarSigner(signer),
+	)
+	require.NoError(t, err)
+
+	duty := beaconblockproposer.NewDuty(1, 0)
+	duty.SetAccount(&testAccount{})
+	duty.SetRandaoReveal(phase0.BLSSignature{0x02})
+	result := make(chan error, 1)
+	go func() {
+		result <- service.Propose(ctx, duty)
+	}()
+
+	select {
+	case <-blockSigningStarted:
+	case <-time.After(time.Second):
+		t.Fatal("block signing did not start")
+	}
+	select {
+	case <-envelopeSigningStarted:
+	case <-time.After(time.Second):
+		t.Fatal("execution payload envelope signing did not start")
+	}
+	close(releaseBlockSigning)
+
+	select {
+	case err := <-result:
+		require.EqualError(t, err, "failed to propose block: failed to sign ePBS beacon block proposal: block signing failed")
+	case <-time.After(time.Second):
+		t.Fatal("proposal did not return after block signing failure")
+	}
+	select {
+	case <-envelopeSigningCancelled:
+	case <-time.After(time.Second):
+		t.Fatal("execution payload envelope signing was not cancelled")
+	}
+	require.Nil(t, proposalSubmitter.proposal)
+	require.Nil(t, envelopeSubmitter.opts)
+}
+
+func TestProposeGloasCancelsBlockedBlockSigningAfterEnvelopeFailure(t *testing.T) {
+	ctx := context.Background()
+	proposalClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	responseClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	proposalClient.EPBSProposalFunc = func(ctx context.Context, opts *consensusapi.EPBSProposalOpts) (*consensusapi.Response[*consensusapi.VersionedEPBSProposal], error) {
+		includePayload := true
+		responseOpts := *opts
+		responseOpts.IncludePayload = &includePayload
+		response, err := responseClient.EPBSProposal(ctx, &responseOpts)
+		if err != nil {
+			return nil, err
+		}
+		response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
+		response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
+		blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
+		require.NoError(t, err)
+		response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
+
+		return response, nil
+	}
+
+	blockSigningStarted := make(chan struct{}, 1)
+	blockSigningCancelled := make(chan struct{}, 1)
+	envelopeSigningStarted := make(chan struct{}, 1)
+	proposalSubmitter := &capturingProposalSubmitter{}
+	envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
+	signingErr := errors.New("signing failed")
+	blockSigner := &contextBlockingBeaconBlockSigner{
+		started:   blockSigningStarted,
+		cancelled: blockSigningCancelled,
+		err:       signingErr,
+	}
+	envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{
+		err:     signingErr,
+		started: envelopeSigningStarted,
+	}
+	signer := mocksigner.New()
+	service, err := standard.New(ctx,
+		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithProposalDataProvider(proposalClient),
+		standard.WithChainTime(&forkChainTime{}),
+		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
+		standard.WithProposalSubmitter(proposalSubmitter),
+		standard.WithRANDAORevealSigner(signer),
+		standard.WithBeaconBlockSigner(blockSigner),
+		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
+		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
+		standard.WithBlobSidecarSigner(signer),
+	)
+	require.NoError(t, err)
+
+	duty := beaconblockproposer.NewDuty(1, 0)
+	duty.SetAccount(&testAccount{})
+	duty.SetRandaoReveal(phase0.BLSSignature{0x02})
+	result := make(chan error, 1)
+	go func() {
+		result <- service.Propose(ctx, duty)
+	}()
+
+	select {
+	case <-blockSigningStarted:
+	case <-time.After(time.Second):
+		t.Fatal("block signing did not start")
+	}
+	select {
+	case <-envelopeSigningStarted:
+	case <-time.After(time.Second):
+		t.Fatal("execution payload envelope signing did not start")
+	}
+	select {
+	case err := <-result:
+		require.EqualError(t, err, "failed to propose block: failed to sign execution payload envelope: signing failed")
+	case <-time.After(time.Second):
+		t.Fatal("proposal did not return after execution payload envelope signing failure")
+	}
+	select {
+	case <-blockSigningCancelled:
+	case <-time.After(time.Second):
+		t.Fatal("block signing was not cancelled")
+	}
+	require.Nil(t, proposalSubmitter.proposal)
+	require.Nil(t, envelopeSubmitter.opts)
+}
+
 func TestProposePreGloas(t *testing.T) {
 	ctx := context.Background()
 
@@ -266,8 +530,10 @@ func TestProposePreGloas(t *testing.T) {
 		standard.WithChainTime(&forkChainTime{gloasForkEpoch: 1}),
 		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
 		standard.WithProposalSubmitter(proposalSubmitter),
+		standard.WithExecutionPayloadEnvelopeSubmitter(responseClient),
 		standard.WithRANDAORevealSigner(signer),
 		standard.WithBeaconBlockSigner(blockSigner),
+		standard.WithExecutionPayloadEnvelopeSigner(signer),
 		standard.WithBlobSidecarSigner(signer),
 	)
 	require.NoError(t, err)
@@ -299,6 +565,9 @@ type capturingBeaconBlockSigner struct {
 	signature phase0.BLSSignature
 	bodyRoot  phase0.Root
 	calls     int
+	err       error
+	started   chan<- struct{}
+	release   <-chan struct{}
 }
 
 type capturingExecutionPayloadEnvelopeSigner struct {
@@ -306,6 +575,8 @@ type capturingExecutionPayloadEnvelopeSigner struct {
 	envelope  *gloas.ExecutionPayloadEnvelope
 	calls     int
 	err       error
+	started   chan<- struct{}
+	release   <-chan struct{}
 }
 
 func (s *capturingExecutionPayloadEnvelopeSigner) SignExecutionPayloadEnvelope(
@@ -316,6 +587,12 @@ func (s *capturingExecutionPayloadEnvelopeSigner) SignExecutionPayloadEnvelope(
 ) (phase0.BLSSignature, error) {
 	s.calls++
 	s.envelope = envelope
+	if s.started != nil {
+		s.started <- struct{}{}
+	}
+	if s.release != nil {
+		<-s.release
+	}
 	if s.err != nil {
 		return phase0.BLSSignature{}, s.err
 	}
@@ -323,6 +600,54 @@ func (s *capturingExecutionPayloadEnvelopeSigner) SignExecutionPayloadEnvelope(
 }
 
 var _ signer.ExecutionPayloadEnvelopeSigner = (*capturingExecutionPayloadEnvelopeSigner)(nil)
+
+type contextBlockingExecutionPayloadEnvelopeSigner struct {
+	started   chan<- struct{}
+	cancelled chan<- struct{}
+}
+
+func (s *contextBlockingExecutionPayloadEnvelopeSigner) SignExecutionPayloadEnvelope(
+	ctx context.Context,
+	_ e2wtypes.Account,
+	_ phase0.Slot,
+	_ *gloas.ExecutionPayloadEnvelope,
+) (phase0.BLSSignature, error) {
+	s.started <- struct{}{}
+	<-ctx.Done()
+	s.cancelled <- struct{}{}
+
+	return phase0.BLSSignature{}, ctx.Err()
+}
+
+var _ signer.ExecutionPayloadEnvelopeSigner = (*contextBlockingExecutionPayloadEnvelopeSigner)(nil)
+
+type contextBlockingBeaconBlockSigner struct {
+	started   chan<- struct{}
+	cancelled chan<- struct{}
+	err       error
+}
+
+func (s *contextBlockingBeaconBlockSigner) SignBeaconBlockProposal(
+	ctx context.Context,
+	_ e2wtypes.Account,
+	_ phase0.Slot,
+	_ phase0.ValidatorIndex,
+	_ phase0.Root,
+	_ phase0.Root,
+	_ phase0.Root,
+) (phase0.BLSSignature, error) {
+	s.started <- struct{}{}
+	<-ctx.Done()
+	s.cancelled <- struct{}{}
+
+	if s.err != nil {
+		return phase0.BLSSignature{}, s.err
+	}
+
+	return phase0.BLSSignature{}, ctx.Err()
+}
+
+var _ signer.BeaconBlockSigner = (*contextBlockingBeaconBlockSigner)(nil)
 
 type capturingExecutionPayloadEnvelopeSubmitter struct {
 	opts *consensusapi.SubmitExecutionPayloadEnvelopeOpts
@@ -349,6 +674,15 @@ func (s *capturingBeaconBlockSigner) SignBeaconBlockProposal(
 ) (phase0.BLSSignature, error) {
 	s.calls++
 	s.bodyRoot = bodyRoot
+	if s.started != nil {
+		s.started <- struct{}{}
+	}
+	if s.release != nil {
+		<-s.release
+	}
+	if s.err != nil {
+		return phase0.BLSSignature{}, s.err
+	}
 	return s.signature, nil
 }
 

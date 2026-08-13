@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -166,6 +166,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if len(parameters.proposalSubmitters) == 0 {
 		return nil, errors.New("no proposal submitters specified")
+	}
+	if len(parameters.executionPayloadEnvelopeSubmitters) == 0 {
+		return nil, errors.New("no execution payload envelope submitters specified")
 	}
 	if len(parameters.attestationsSubmitters) == 0 {
 		return nil, errors.New("no attestations submitters specified")

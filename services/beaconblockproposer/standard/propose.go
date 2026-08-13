@@ -44,6 +44,7 @@ import (
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -279,14 +280,26 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		return errors.New("ePBS execution payload envelope is for incorrect block")
 	}
 
-	signedProposal, err := s.signEPBSProposalData(ctx, proposal, duty, bodyRoot)
-	if err != nil {
-		return err
-	}
+	var signedProposal *api.VersionedSignedProposal
+	var signature phase0.BLSSignature
+	signingGroup, signingCtx := errgroup.WithContext(ctx)
+	signingGroup.Go(func() error {
+		var err error
+		signedProposal, err = s.signEPBSProposalData(signingCtx, proposal, duty, bodyRoot)
 
-	signature, err := s.executionPayloadEnvelopeSigner.SignExecutionPayloadEnvelope(ctx, duty.Account(), duty.Slot(), envelope)
-	if err != nil {
-		return errors.Wrap(err, "failed to sign execution payload envelope")
+		return err
+	})
+	signingGroup.Go(func() error {
+		var err error
+		signature, err = s.executionPayloadEnvelopeSigner.SignExecutionPayloadEnvelope(signingCtx, duty.Account(), duty.Slot(), envelope)
+		if err != nil {
+			return errors.Wrap(err, "failed to sign execution payload envelope")
+		}
+
+		return nil
+	})
+	if err := signingGroup.Wait(); err != nil {
+		return err
 	}
 	kzgProofs, err := proposal.KZGProofs()
 	if err != nil {
