@@ -60,14 +60,12 @@ func TestProposeGloas(t *testing.T) {
 		forkEpochAtConstruction  phase0.Epoch
 		forkEpochAtUse           phase0.Epoch
 		updateForkEpochAtUse     bool
-		proposalSource           string
 		err                      string
 	}{
 		{
 			name:                     "PayloadIncluded",
 			executionPayloadIncluded: true,
 			builderBoostFactor:       100,
-			proposalSource:           "local",
 		},
 		{
 			name:                     "ForkEpochAvailableAfterConstruction",
@@ -90,7 +88,6 @@ func TestProposeGloas(t *testing.T) {
 		{
 			name:                     "PayloadExcluded",
 			executionPayloadIncluded: false,
-			proposalSource:           "builder",
 			err:                      "failed to propose block: ePBS proposal excludes requested execution payload",
 		},
 		{
@@ -154,13 +151,6 @@ func TestProposeGloas(t *testing.T) {
 
 			chainTime := &forkChainTime{gloasForkEpoch: test.forkEpochAtConstruction}
 			var monitor metrics.Service = nullmetrics.New()
-			if test.proposalSource != "" {
-				monitor, err = prometheusmetrics.New(ctx,
-					prometheusmetrics.WithLogLevel(zerolog.Disabled),
-					prometheusmetrics.WithAddress("localhost:0"),
-				)
-				require.NoError(t, err)
-			}
 
 			params := []standard.Parameter{
 				standard.WithLogLevel(zerolog.TraceLevel),
@@ -185,10 +175,6 @@ func TestProposeGloas(t *testing.T) {
 			}
 			service, err := standard.New(ctx, params...)
 			require.NoError(t, err)
-			var proposalSourceCountBefore float64
-			if test.proposalSource != "" {
-				proposalSourceCountBefore = beaconBlockProposalSourceCount(t, test.proposalSource)
-			}
 			if test.updateForkEpochAtUse {
 				chainTime.gloasForkEpoch = test.forkEpochAtUse
 			}
@@ -198,9 +184,6 @@ func TestProposeGloas(t *testing.T) {
 			duty.SetRandaoReveal(phase0.BLSSignature{0x02})
 
 			err = service.Propose(ctx, duty)
-			if test.proposalSource != "" {
-				require.Equal(t, proposalSourceCountBefore+1, beaconBlockProposalSourceCount(t, test.proposalSource))
-			}
 			if test.builderBoostFactor != 0 {
 				capture.AssertHasEntry(t, "Ignoring non-default builder boost factor on Gloas proposal path")
 			}
@@ -263,6 +246,113 @@ func TestProposeGloas(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProposeGloasProposalSource(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name                     string
+		executionPayloadIncluded bool
+		source                   string
+		err                      string
+	}{
+		{
+			name:                     "SelfBuiltPayload",
+			executionPayloadIncluded: true,
+			source:                   "local",
+		},
+		{
+			name:                     "ProtocolBuilderPayload",
+			executionPayloadIncluded: false,
+			source:                   "builder",
+			err:                      "failed to propose block: ePBS proposal excludes requested execution payload",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			monitor, err := prometheusmetrics.New(ctx,
+				prometheusmetrics.WithLogLevel(zerolog.Disabled),
+				prometheusmetrics.WithAddress("localhost:0"),
+			)
+			require.NoError(t, err)
+			proposalSourceCountBefore := beaconBlockProposalSourceCount(t, test.source)
+			service, duty, blockSigner, envelopeSigner, envelopeSubmitter := newGloasProposerForProposalSource(t, ctx, test.executionPayloadIncluded, monitor)
+
+			err = service.Propose(ctx, duty)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, proposalSourceCountBefore+1, beaconBlockProposalSourceCount(t, test.source))
+			if !test.executionPayloadIncluded {
+				require.Zero(t, blockSigner.calls)
+				require.Zero(t, envelopeSigner.calls)
+				require.Nil(t, envelopeSubmitter.opts)
+			}
+		})
+	}
+}
+
+func newGloasProposerForProposalSource(t *testing.T,
+	ctx context.Context,
+	executionPayloadIncluded bool,
+	monitor metrics.Service,
+) (*standard.Service,
+	*beaconblockproposer.Duty,
+	*capturingBeaconBlockSigner,
+	*capturingExecutionPayloadEnvelopeSigner,
+	*capturingExecutionPayloadEnvelopeSubmitter,
+) {
+	t.Helper()
+
+	proposalClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	responseClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	proposalClient.EPBSProposalFunc = func(ctx context.Context, opts *consensusapi.EPBSProposalOpts) (*consensusapi.Response[*consensusapi.VersionedEPBSProposal], error) {
+		responseOpts := *opts
+		responseOpts.IncludePayload = &executionPayloadIncluded
+		response, err := responseClient.EPBSProposal(ctx, &responseOpts)
+		require.NoError(t, err)
+		if response.Data.ExecutionPayloadIncluded {
+			response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
+			response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
+			blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
+			require.NoError(t, err)
+			response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
+		}
+
+		return response, nil
+	}
+
+	proposalSubmitter := &capturingProposalSubmitter{}
+	signer := mocksigner.New()
+	blockSigner := &capturingBeaconBlockSigner{signature: phase0.BLSSignature{0x01}}
+	envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: phase0.BLSSignature{0x03}}
+	envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
+	service, err := standard.New(ctx,
+		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithMonitor(monitor),
+		standard.WithProposalDataProvider(proposalClient),
+		standard.WithChainTime(&forkChainTime{gloasForkEpoch: 0}),
+		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
+		standard.WithProposalSubmitter(proposalSubmitter),
+		standard.WithRANDAORevealSigner(signer),
+		standard.WithBeaconBlockSigner(blockSigner),
+		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
+		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
+		standard.WithBlobSidecarSigner(signer),
+	)
+	require.NoError(t, err)
+
+	duty := beaconblockproposer.NewDuty(1, 0)
+	duty.SetAccount(&testAccount{})
+	duty.SetRandaoReveal(phase0.BLSSignature{0x02})
+
+	return service, duty, blockSigner, envelopeSigner, envelopeSubmitter
 }
 
 func beaconBlockProposalSourceCount(t *testing.T, source string) float64 {
