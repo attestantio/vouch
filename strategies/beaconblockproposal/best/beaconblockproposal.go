@@ -87,14 +87,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 				Int("errored", errored).
 				Int("timed_out", timedOut).
 				Msg("Response received")
-			if opts.IncludePayload != nil && *opts.IncludePayload && !response.proposal.ExecutionPayloadIncluded {
-				log.Warn().Str("provider", response.provider).Msg("Discarding ePBS proposal without requested execution payload")
-				continue
-			}
-			if bestProposal == nil || response.proposal.Value().Cmp(bestProposal.Value()) > 0 {
-				bestProposal = response.proposal
-				bestProvider = response.provider
-			}
+			bestProposal, bestProvider = considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
 		case err := <-errCh:
 			errored++
 			log.Debug().
@@ -136,14 +129,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 				Int("errored", errored).
 				Int("timed_out", timedOut).
 				Msg("Response received")
-			if opts.IncludePayload != nil && *opts.IncludePayload && !response.proposal.ExecutionPayloadIncluded {
-				log.Warn().Str("provider", response.provider).Msg("Discarding ePBS proposal without requested execution payload")
-				continue
-			}
-			if bestProposal == nil || response.proposal.Value().Cmp(bestProposal.Value()) > 0 {
-				bestProposal = response.proposal
-				bestProvider = response.provider
-			}
+			bestProposal, bestProvider = considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
 		case err := <-errCh:
 			errored++
 			log.Debug().
@@ -183,6 +169,27 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		Data:     bestProposal,
 		Metadata: make(map[string]any),
 	}, nil
+}
+
+// considerEPBSProposal updates the best proposal seen so far, ignoring proposals that lack a
+// requested execution payload.
+func considerEPBSProposal(opts *api.EPBSProposalOpts,
+	response *beaconBlockEPBSResponse,
+	bestProposal *api.VersionedEPBSProposal,
+	bestProvider string,
+	log zerolog.Logger,
+) (*api.VersionedEPBSProposal, string) {
+	if opts.IncludePayload != nil && *opts.IncludePayload && !response.proposal.ExecutionPayloadIncluded {
+		log.Warn().Str("provider", response.provider).Msg("Discarding ePBS proposal without requested execution payload")
+
+		return bestProposal, bestProvider
+	}
+
+	if bestProposal == nil || response.proposal.Value().Cmp(bestProposal.Value()) > 0 {
+		return response.proposal, response.provider
+	}
+
+	return bestProposal, bestProvider
 }
 
 type beaconBlockEPBSResponse struct {
@@ -237,41 +244,45 @@ func (s *Service) epbsProposal(ctx context.Context,
 		return
 	}
 
-	if proposalResponse.Data != nil && proposalResponse.Data.Version == spec.DataVersionGloas {
-		block := proposalResponse.Data.Gloas
-		if proposalResponse.Data.ExecutionPayloadIncluded {
-			if proposalResponse.Data.GloasContents == nil {
-				errCh <- &beaconBlockError{
-					provider: name,
-					err:      errors.New("beacon node returned malformed ePBS proposal"),
-				}
-
-				return
-			}
-			block = proposalResponse.Data.GloasContents.Block
+	if err := validateEPBSProposal(proposalResponse.Data); err != nil {
+		errCh <- &beaconBlockError{
+			provider: name,
+			err:      err,
 		}
-		if block == nil || block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
-			errCh <- &beaconBlockError{
-				provider: name,
-				err:      errors.New("beacon node returned malformed ePBS proposal"),
-			}
 
-			return
-		}
-		if block.Body.SignedExecutionPayloadBid.Message.FeeRecipient.IsZero() {
-			errCh <- &beaconBlockError{
-				provider: name,
-				err:      errors.New("beacon block obtained with 0 fee recipient"),
-			}
-
-			return
-		}
+		return
 	}
 
 	respCh <- &beaconBlockEPBSResponse{
 		provider: name,
 		proposal: proposalResponse.Data,
 	}
+}
+
+// validateEPBSProposal confirms that an ePBS proposal is structurally sound and pays a fee recipient.
+// The caller must have already excluded a nil proposal.
+func validateEPBSProposal(proposal *api.VersionedEPBSProposal) error {
+	if proposal.Version != spec.DataVersionGloas {
+		return nil
+	}
+
+	block := proposal.Gloas
+	if proposal.ExecutionPayloadIncluded {
+		if proposal.GloasContents == nil {
+			return errors.New("beacon node returned malformed ePBS proposal")
+		}
+		block = proposal.GloasContents.Block
+	}
+
+	if block == nil || block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
+		return errors.New("beacon node returned malformed ePBS proposal")
+	}
+
+	if block.Body.SignedExecutionPayloadBid.Message.FeeRecipient.IsZero() {
+		return errors.New("beacon block obtained with 0 fee recipient")
+	}
+
+	return nil
 }
 
 // Proposal provides the best beacon block proposal from a number of beacon nodes.
