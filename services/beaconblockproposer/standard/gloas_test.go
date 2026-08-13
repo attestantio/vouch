@@ -244,6 +244,161 @@ func TestProposeGloas(t *testing.T) {
 	}
 }
 
+// TestProposeGloasSignsRetainedBodyRoot proves that Propose signs and submits the
+// body root retained on the proposal (BeaconBlockBodyRoot), not the body root the
+// generated Body.HashTreeRoot() would compute.  On a custom preset those two roots
+// differ, because the generated hasher inlines mainnet sizes; the mainnet fixtures
+// used elsewhere in this file have the two coincide, so they cannot tell a correct
+// implementation from one that silently falls back to the wrong root.  This test
+// makes them deliberately differ.
+func TestProposeGloasSignsRetainedBodyRoot(t *testing.T) {
+	ctx := context.Background()
+
+	proposalClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	responseClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+
+	var generatedBodyRoot, retainedBodyRoot phase0.Root
+	proposalClient.EPBSProposalFunc = func(ctx context.Context, opts *consensusapi.EPBSProposalOpts) (*consensusapi.Response[*consensusapi.VersionedEPBSProposal], error) {
+		includePayload := true
+		responseOpts := *opts
+		responseOpts.IncludePayload = &includePayload
+		response, err := responseClient.EPBSProposal(ctx, &responseOpts)
+		if err != nil {
+			return nil, err
+		}
+		response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
+		response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
+
+		block := response.Data.GloasContents.Block
+		generatedRoot, err := block.Body.HashTreeRoot()
+		require.NoError(t, err)
+		generatedBodyRoot = generatedRoot
+
+		// Simulate a minimal-preset node: the transport's spec-aware retained
+		// root deliberately differs from what the generated hasher computes.
+		retainedBodyRoot = generatedBodyRoot
+		retainedBodyRoot[0] ^= 0xff
+		response.Data.BeaconBlockBodyRoot = &retainedBodyRoot
+
+		blockRoot, err := (&phase0.BeaconBlockHeader{
+			Slot:          block.Slot,
+			ProposerIndex: block.ProposerIndex,
+			ParentRoot:    block.ParentRoot,
+			StateRoot:     block.StateRoot,
+			BodyRoot:      retainedBodyRoot,
+		}).HashTreeRoot()
+		require.NoError(t, err)
+		response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
+
+		return response, nil
+	}
+
+	proposalSubmitter := &capturingProposalSubmitter{}
+	signer := mocksigner.New()
+	blockSigner := &capturingBeaconBlockSigner{signature: phase0.BLSSignature{0x01}}
+	envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: phase0.BLSSignature{0x03}}
+	envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
+
+	service, err := standard.New(ctx,
+		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithProposalDataProvider(proposalClient),
+		standard.WithChainTime(&forkChainTime{}),
+		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
+		standard.WithProposalSubmitter(proposalSubmitter),
+		standard.WithRANDAORevealSigner(signer),
+		standard.WithBeaconBlockSigner(blockSigner),
+		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
+		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
+		standard.WithBlobSidecarSigner(signer),
+	)
+	require.NoError(t, err)
+
+	duty := beaconblockproposer.NewDuty(1, 0)
+	duty.SetAccount(&testAccount{})
+	duty.SetRandaoReveal(phase0.BLSSignature{0x02})
+
+	require.NoError(t, service.Propose(ctx, duty))
+
+	require.Equal(t, retainedBodyRoot, blockSigner.bodyRoot)
+	require.NotEqual(t, generatedBodyRoot, blockSigner.bodyRoot)
+
+	require.NotNil(t, proposalSubmitter.proposal)
+	require.NotNil(t, proposalSubmitter.proposal.Gloas)
+	require.NotNil(t, proposalSubmitter.proposal.Gloas.Message)
+	require.Equal(t, duty.Slot(), proposalSubmitter.proposal.Gloas.Message.Slot)
+	require.NotNil(t, envelopeSubmitter.opts)
+	require.NotNil(t, envelopeSubmitter.opts.SignedExecutionPayloadEnvelope)
+	require.NotNil(t, envelopeSubmitter.opts.SignedExecutionPayloadEnvelope.Gloas)
+}
+
+// TestProposeGloasMissingBodyRootFails proves that a proposal missing its
+// retained body root -- as a provider that never set BeaconBlockBodyRoot would
+// produce -- fails the duty outright rather than falling back to the generated,
+// potentially-wrong Body.HashTreeRoot().  Nothing may be signed or submitted:
+// signing over the wrong root would be worse than not proposing at all.
+func TestProposeGloasMissingBodyRootFails(t *testing.T) {
+	ctx := context.Background()
+
+	proposalClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	responseClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	proposalClient.EPBSProposalFunc = func(ctx context.Context, opts *consensusapi.EPBSProposalOpts) (*consensusapi.Response[*consensusapi.VersionedEPBSProposal], error) {
+		includePayload := true
+		responseOpts := *opts
+		responseOpts.IncludePayload = &includePayload
+		response, err := responseClient.EPBSProposal(ctx, &responseOpts)
+		if err != nil {
+			return nil, err
+		}
+		response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
+		response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
+		blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
+		require.NoError(t, err)
+		response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
+		// Simulate a provider that never populated the retained root.
+		response.Data.BeaconBlockBodyRoot = nil
+
+		return response, nil
+	}
+
+	proposalSubmitter := &capturingProposalSubmitter{}
+	signer := mocksigner.New()
+	blockSigner := &capturingBeaconBlockSigner{signature: phase0.BLSSignature{0x01}}
+	envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: phase0.BLSSignature{0x03}}
+	envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
+
+	service, err := standard.New(ctx,
+		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithProposalDataProvider(proposalClient),
+		standard.WithChainTime(&forkChainTime{}),
+		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
+		standard.WithProposalSubmitter(proposalSubmitter),
+		standard.WithRANDAORevealSigner(signer),
+		standard.WithBeaconBlockSigner(blockSigner),
+		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
+		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
+		standard.WithBlobSidecarSigner(signer),
+	)
+	require.NoError(t, err)
+
+	duty := beaconblockproposer.NewDuty(1, 0)
+	duty.SetAccount(&testAccount{})
+	duty.SetRandaoReveal(phase0.BLSSignature{0x02})
+
+	err = service.Propose(ctx, duty)
+	require.EqualError(t, err, "failed to propose block: failed to calculate hash tree root of ePBS block body: no beacon block body root")
+	require.Zero(t, blockSigner.calls)
+	require.Zero(t, envelopeSigner.calls)
+	require.Nil(t, proposalSubmitter.proposal)
+	require.Zero(t, proposalSubmitter.calls)
+	require.Nil(t, envelopeSubmitter.opts)
+}
+
 func TestProposeGloasStartsBothSignaturesBeforePublication(t *testing.T) {
 	ctx := context.Background()
 	proposalClient, err := mockconsensusclient.New(ctx)
