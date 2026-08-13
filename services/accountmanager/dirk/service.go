@@ -46,8 +46,9 @@ import (
 // Service is the manager for dirk accounts.
 type Service struct {
 	log                  zerolog.Logger
-	mutex                sync.RWMutex
 	monitor              metrics.Service
+	domainProvider       eth2client.DomainProvider
+	currentEpochProvider chaintime.Service
 	clientMonitor        metrics.ClientMonitor
 	timeout              time.Duration
 	processConcurrency   int64
@@ -57,10 +58,9 @@ type Service struct {
 	accounts             map[phase0.BLSPubKey]e2wtypes.Account
 	pubKeys              []phase0.BLSPubKey
 	validatorsManager    validatorsmanager.Service
-	domainProvider       eth2client.DomainProvider
 	farFutureEpoch       phase0.Epoch
-	currentEpochProvider chaintime.Service
 	wallets              map[string]e2wtypes.Wallet
+	mutex                sync.RWMutex
 	walletsMutex         sync.RWMutex
 }
 

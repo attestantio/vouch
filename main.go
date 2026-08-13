@@ -2044,7 +2044,7 @@ func obtainBuilderConfigsForPrivilegedBuilders(_ context.Context,
 	return nil
 }
 
-// select the signed beacon block provider based on user input.
+// Select the signed beacon block provider based on user input.
 func selectSignedBeaconBlockProvider(ctx context.Context,
 	monitor metrics.Service,
 ) (
@@ -2092,7 +2092,7 @@ func selectSignedBeaconBlockProvider(ctx context.Context,
 	return provider, nil
 }
 
-// select the beacon header provider based on user input.
+// Select the beacon header provider based on user input.
 func selectBeaconHeaderProvider(ctx context.Context,
 	monitor metrics.Service,
 ) (

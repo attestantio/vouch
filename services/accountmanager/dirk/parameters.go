@@ -27,8 +27,11 @@ import (
 )
 
 type parameters struct {
-	logLevel               zerolog.Level
 	monitor                metrics.Service
+	domainProvider         eth2client.DomainProvider
+	farFutureEpochProvider eth2client.FarFutureEpochProvider
+	currentEpochProvider   chaintime.Service
+	logLevel               zerolog.Level
 	timeout                time.Duration
 	clientMonitor          metrics.ClientMonitor
 	processConcurrency     int64
@@ -38,10 +41,7 @@ type parameters struct {
 	clientCertURI          string
 	clientKeyURI           string
 	caCertURI              string
-	domainProvider         eth2client.DomainProvider
 	validatorsManager      validatorsmanager.Service
-	farFutureEpochProvider eth2client.FarFutureEpochProvider
-	currentEpochProvider   chaintime.Service
 }
 
 // Parameter is the interface for service parameters.

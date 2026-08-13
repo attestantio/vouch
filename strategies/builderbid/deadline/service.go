@@ -1,4 +1,4 @@
-// Copyright © 2024 Attestant Limited.
+// Copyright © 2024 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -33,14 +33,14 @@ import (
 type Service struct {
 	log                      zerolog.Logger
 	monitor                  metrics.Service
-	chainTime                chaintime.Service
 	blockGasLimitProvider    cache.BlockGasLimitProvider
+	chainTime                chaintime.Service
 	deadline                 time.Duration
 	bidGap                   time.Duration
 	releaseVersion           string
 	relayPubkeys             map[phase0.BLSPubKey]*e2types.BLSPublicKey
-	relayPubkeysMu           sync.RWMutex
 	applicationBuilderDomain phase0.Domain
+	relayPubkeysMu           sync.RWMutex
 }
 
 // New creates a new builder bid strategy.
