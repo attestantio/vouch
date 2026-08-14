@@ -307,7 +307,6 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
 		return errors.Wrap(err, "failed to submit proposal")
 	}
-	monitorBeaconBlockProposalSource("local")
 
 	envelopeSubmissionOpts := &api.SubmitExecutionPayloadEnvelopeOpts{
 		SignedExecutionPayloadEnvelope: &spec.VersionedSignedExecutionPayloadEnvelope{
@@ -338,6 +337,7 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if envelopeSubmissionErr != nil {
 		return errors.Wrap(envelopeSubmissionErr, "failed to submit execution payload envelope after block publication")
 	}
+	monitorBeaconBlockProposalSource("local")
 
 	return nil
 }

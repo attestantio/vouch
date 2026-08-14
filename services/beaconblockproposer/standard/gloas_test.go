@@ -311,6 +311,7 @@ func TestProposeGloasProposalSource(t *testing.T) {
 	tests := []struct {
 		name                     string
 		executionPayloadIncluded bool
+		envelopeSubmissionErr    error
 		source                   string
 		expectedCountDelta       float64
 		err                      string
@@ -328,6 +329,14 @@ func TestProposeGloasProposalSource(t *testing.T) {
 			expectedCountDelta:       0,
 			err:                      "failed to propose block: ePBS proposal excludes requested execution payload",
 		},
+		{
+			name:                     "EnvelopeSubmissionFailure",
+			executionPayloadIncluded: true,
+			envelopeSubmissionErr:    errors.New("submit failed"),
+			source:                   "local",
+			expectedCountDelta:       0,
+			err:                      "failed to propose block: failed to submit execution payload envelope after block publication: submit failed",
+		},
 	}
 
 	for _, test := range tests {
@@ -339,6 +348,7 @@ func TestProposeGloasProposalSource(t *testing.T) {
 			require.NoError(t, err)
 			proposalSourceCountBefore := beaconBlockProposalSourceCount(t, test.source)
 			service, duty, blockSigner, envelopeSigner, envelopeSubmitter, _ := newGloasProposerForProposalSource(ctx, t, test.executionPayloadIncluded, monitor)
+			envelopeSubmitter.err = test.envelopeSubmissionErr
 
 			err = service.Propose(ctx, duty)
 			if test.err != "" {
