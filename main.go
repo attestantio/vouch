@@ -1462,10 +1462,20 @@ func selectProposalProvider(ctx context.Context,
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch clients for simple beacon block proposal strategy")
 		}
-		var isProvider bool
-		proposalProvider, isProvider = beaconBlockProposalClient.(beaconblockproposer.ProposalDataProvider)
+		provider, isProvider := beaconBlockProposalClient.(beaconblockproposer.ProposalDataProvider)
 		if !isProvider {
 			return nil, errors.New("beacon block proposal client does not support ePBS proposals")
+		}
+		proposalProvider, err = firstbeaconblockproposalstrategy.New(ctx,
+			firstbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			firstbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.first")),
+			firstbeaconblockproposalstrategy.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+				"simple": provider,
+			}),
+			firstbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.first")),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start simple beacon block proposal strategy")
 		}
 	}
 

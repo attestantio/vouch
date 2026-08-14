@@ -19,13 +19,18 @@ import (
 	nethttp "net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	bitfield "github.com/OffchainLabs/go-bitfield"
 	client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	apiv1gloas "github.com/attestantio/go-eth2-client/api/v1/gloas"
+	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/gloas"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics/null"
 	dynssz "github.com/pk910/dynamic-ssz"
 	"github.com/spf13/viper"
@@ -94,4 +99,47 @@ func TestFetchClientCustomSpecSupport(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, spec.DataVersionGloas, response.Data.Version)
 	require.Equal(t, block.Slot, response.Data.Gloas.Slot)
+}
+
+func TestSimpleProposalProviderRejectsZeroFeeRecipient(t *testing.T) {
+	ctx := context.Background()
+	const address = "http://proposal.test"
+	proposalClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	proposalClient.EPBSProposalFunc = func(context.Context, *api.EPBSProposalOpts) (*api.Response[*api.VersionedEPBSProposal], error) {
+		return &api.Response[*api.VersionedEPBSProposal]{
+			Data: &api.VersionedEPBSProposal{
+				Version:                  spec.DataVersionGloas,
+				ExecutionPayloadIncluded: true,
+				GloasContents: &apiv1gloas.BlockContents{Block: &gloas.BeaconBlock{Body: &gloas.BeaconBlockBody{
+					SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{Message: &gloas.ExecutionPayloadBid{
+						FeeRecipient: bellatrix.ExecutionAddress{},
+					}},
+				}}},
+			},
+		}, nil
+	}
+	viper.Set("strategies.beaconblockproposal.style", "simple")
+	viper.Set("strategies.beaconblockproposal.beacon-node-addresses", []string{address})
+	viper.Set("strategies.beaconblockproposal.first.timeout", 10*time.Millisecond)
+	knownClientsMu.Lock()
+	knownClients[address] = proposalClient
+	knownClientsMu.Unlock()
+	t.Cleanup(func() {
+		viper.Reset()
+		knownClientsMu.Lock()
+		delete(knownClients, address)
+		delete(knownClients, "multi:"+address)
+		knownClientsMu.Unlock()
+	})
+
+	provider, err := selectProposalProvider(ctx, null.New(), nil, nil, nil)
+	require.NoError(t, err)
+	includePayload := true
+	response, err := provider.EPBSProposal(ctx, &api.EPBSProposalOpts{
+		Slot:           phase0.Slot(1),
+		IncludePayload: &includePayload,
+	})
+	require.Nil(t, response)
+	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
 }

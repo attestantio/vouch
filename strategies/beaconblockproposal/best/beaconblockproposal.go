@@ -87,7 +87,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 				Int("errored", errored).
 				Int("timed_out", timedOut).
 				Msg("Response received")
-			bestProposal, bestProvider = considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
+			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
 		case err := <-errCh:
 			errored++
 			log.Debug().
@@ -129,7 +129,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 				Int("errored", errored).
 				Int("timed_out", timedOut).
 				Msg("Response received")
-			bestProposal, bestProvider = considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
+			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
 		case err := <-errCh:
 			errored++
 			log.Debug().
@@ -173,7 +173,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 
 // considerEPBSProposal updates the best proposal seen so far, ignoring proposals that lack a
 // requested execution payload.
-func considerEPBSProposal(opts *api.EPBSProposalOpts,
+func (s *Service) considerEPBSProposal(opts *api.EPBSProposalOpts,
 	response *beaconBlockEPBSResponse,
 	bestProposal *api.VersionedEPBSProposal,
 	bestProvider string,
@@ -185,11 +185,28 @@ func considerEPBSProposal(opts *api.EPBSProposalOpts,
 		return bestProposal, bestProvider
 	}
 
-	if bestProposal == nil || response.proposal.Value().Cmp(bestProposal.Value()) > 0 {
+	if bestProposal == nil || s.scoreEPBSProposal(response.proposal).Cmp(s.scoreEPBSProposal(bestProposal)) > 0 {
 		return response.proposal, response.provider
 	}
 
 	return bestProposal, bestProvider
+}
+
+func (s *Service) scoreEPBSProposal(proposal *api.VersionedEPBSProposal) *big.Rat {
+	score := new(big.Rat).SetInt(proposal.Value())
+	if proposal.ConsensusValue == nil && proposal.ExecutionValue == nil {
+		s.log.Warn().Msg("ePBS proposal has no value headers; scoring execution payload gas only")
+	}
+	if proposal.ExecutionPayloadIncluded && proposal.GloasContents != nil && proposal.GloasContents.ExecutionPayloadEnvelope != nil && proposal.GloasContents.ExecutionPayloadEnvelope.Payload != nil {
+		payload := proposal.GloasContents.ExecutionPayloadEnvelope.Payload
+		if factor := new(big.Rat).SetFloat64(s.executionPayloadFactor); factor != nil {
+			gasUsed := new(big.Int).SetUint64(payload.GasUsed)
+			gasUsed.Add(gasUsed, new(big.Int).SetUint64(payload.BlobGasUsed))
+			score.Add(score, new(big.Rat).Mul(new(big.Rat).SetInt(gasUsed), factor))
+		}
+	}
+
+	return score
 }
 
 type beaconBlockEPBSResponse struct {
@@ -319,7 +336,8 @@ func (s *Service) Proposal(ctx context.Context,
 	errCh := make(chan *beaconBlockError, requests)
 	// Kick off the requests.
 	for name, provider := range s.proposalProviders {
-		providerGraffiti := opts.Graffiti[:]
+		providerOpts := *opts
+		providerGraffiti := providerOpts.Graffiti[:]
 		if bytes.Contains(providerGraffiti, []byte("{{CLIENT}}")) {
 			if nodeClientProvider, isProvider := provider.(eth2client.NodeClientProvider); isProvider {
 				nodeClientResponse, err := nodeClientProvider.NodeClient(ctx)
@@ -331,16 +349,12 @@ func (s *Service) Proposal(ctx context.Context,
 				if len(providerGraffiti) > 32 {
 					providerGraffiti = providerGraffiti[0:32]
 				}
-				// Replace entire opts structure so the mutated graffiti does not leak to other providers.
-				opts = &api.ProposalOpts{
-					Slot:                   opts.Slot,
-					RandaoReveal:           opts.RandaoReveal,
-					Graffiti:               [32]byte(providerGraffiti),
-					SkipRandaoVerification: opts.SkipRandaoVerification,
-				}
+				var graffiti [32]byte
+				copy(graffiti[:], providerGraffiti)
+				providerOpts.Graffiti = graffiti
 			}
 		}
-		go s.beaconBlockProposal(ctx, started, name, provider, respCh, errCh, opts)
+		go s.beaconBlockProposal(ctx, started, name, provider, respCh, errCh, &providerOpts)
 	}
 
 	// Wait for all responses (or context done).

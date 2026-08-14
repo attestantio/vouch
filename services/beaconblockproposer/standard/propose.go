@@ -308,7 +308,7 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		return errors.Wrap(err, "failed to submit proposal")
 	}
 
-	if err := s.executionPayloadEnvelopeSubmitter.SubmitExecutionPayloadEnvelope(ctx, &api.SubmitExecutionPayloadEnvelopeOpts{
+	envelopeSubmissionOpts := &api.SubmitExecutionPayloadEnvelopeOpts{
 		SignedExecutionPayloadEnvelope: &spec.VersionedSignedExecutionPayloadEnvelope{
 			Version: spec.DataVersionGloas,
 			Gloas: &gloas.SignedExecutionPayloadEnvelope{
@@ -318,8 +318,24 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		},
 		KZGProofs: kzgProofs,
 		Blobs:     blobs,
-	}); err != nil {
-		return errors.Wrap(err, "failed to submit execution payload envelope")
+	}
+	var envelopeSubmissionErr error
+	for attempts := 3; attempts > 0; attempts-- {
+		envelopeSubmissionErr = s.executionPayloadEnvelopeSubmitter.SubmitExecutionPayloadEnvelope(ctx, envelopeSubmissionOpts)
+		if envelopeSubmissionErr == nil {
+			break
+		}
+		s.log.Warn().Err(envelopeSubmissionErr).Int("attempts_remaining", attempts-1).Msg("Failed to submit execution payload envelope after block publication")
+		if attempts > 1 {
+			select {
+			case <-ctx.Done():
+				return errors.Wrap(ctx.Err(), "failed to submit execution payload envelope after block publication")
+			case <-time.After(250 * time.Millisecond):
+			}
+		}
+	}
+	if envelopeSubmissionErr != nil {
+		return errors.Wrap(envelopeSubmissionErr, "failed to submit execution payload envelope after block publication")
 	}
 
 	return nil
@@ -331,6 +347,15 @@ func (*Service) epbsProposalEnvelope(proposal *api.VersionedEPBSProposal) (*gloa
 	envelope, err := proposal.ExecutionPayloadEnvelope()
 	if err != nil {
 		return nil, phase0.Root{}, errors.Wrap(err, "failed to obtain execution payload envelope")
+	}
+	if envelope.Payload == nil {
+		return nil, phase0.Root{}, errors.New("ePBS execution payload envelope has no payload")
+	}
+	if proposal.GloasContents == nil || proposal.GloasContents.Block == nil || proposal.GloasContents.Block.Body == nil || proposal.GloasContents.Block.Body.SignedExecutionPayloadBid == nil || proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message == nil {
+		return nil, phase0.Root{}, errors.New("ePBS proposal has no execution payload bid")
+	}
+	if envelope.BuilderIndex != proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex {
+		return nil, phase0.Root{}, errors.New("ePBS execution payload envelope is for incorrect builder index")
 	}
 	bodyRoot, err := proposal.BodyRoot()
 	if err != nil {

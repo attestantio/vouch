@@ -50,17 +50,21 @@ func TestProposeGloas(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name                     string
-		executionPayloadIncluded bool
-		blockAuctioneer          bool
-		builderBoostFactor       uint64
-		proposerIndexMismatch    bool
-		envelopeRootMismatch     bool
-		envelopeSignerErr        error
-		forkEpochAtConstruction  phase0.Epoch
-		forkEpochAtUse           phase0.Epoch
-		updateForkEpochAtUse     bool
-		err                      string
+		name                       string
+		executionPayloadIncluded   bool
+		blockAuctioneer            bool
+		builderBoostFactor         uint64
+		proposerIndexMismatch      bool
+		builderIndexMismatch       bool
+		envelopeRootMismatch       bool
+		envelopePayloadMissing     bool
+		executionPayloadBidMissing bool
+		envelopeSignerErr          error
+		envelopeSubmitterErr       error
+		forkEpochAtConstruction    phase0.Epoch
+		forkEpochAtUse             phase0.Epoch
+		updateForkEpochAtUse       bool
+		err                        string
 	}{
 		{
 			name:                     "PayloadIncluded",
@@ -86,6 +90,24 @@ func TestProposeGloas(t *testing.T) {
 			err:                      "failed to propose block: ePBS proposal data for incorrect proposer index",
 		},
 		{
+			name:                     "MismatchedEnvelopeBuilderIndex",
+			executionPayloadIncluded: true,
+			builderIndexMismatch:     true,
+			err:                      "failed to propose block: ePBS execution payload envelope is for incorrect builder index",
+		},
+		{
+			name:                     "MissingEnvelopePayload",
+			executionPayloadIncluded: true,
+			envelopePayloadMissing:   true,
+			err:                      "failed to propose block: ePBS execution payload envelope has no payload",
+		},
+		{
+			name:                       "MissingExecutionPayloadBid",
+			executionPayloadIncluded:   true,
+			executionPayloadBidMissing: true,
+			err:                        "failed to propose block: ePBS proposal has no execution payload bid",
+		},
+		{
 			name:                     "PayloadExcluded",
 			executionPayloadIncluded: false,
 			err:                      "failed to propose block: ePBS proposal excludes requested execution payload",
@@ -101,6 +123,12 @@ func TestProposeGloas(t *testing.T) {
 			executionPayloadIncluded: true,
 			envelopeSignerErr:        errors.New("envelope signing failed"),
 			err:                      "failed to propose block: failed to sign execution payload envelope: envelope signing failed",
+		},
+		{
+			name:                     "EnvelopeSubmissionFailure",
+			executionPayloadIncluded: true,
+			envelopeSubmitterErr:     errors.New("envelope submission failed"),
+			err:                      "failed to propose block: failed to submit execution payload envelope after block publication: envelope submission failed",
 		},
 	}
 
@@ -134,6 +162,15 @@ func TestProposeGloas(t *testing.T) {
 					if test.envelopeRootMismatch {
 						response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot[0] ^= 0xff
 					}
+					if test.builderIndexMismatch {
+						response.Data.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex++
+					}
+					if test.envelopePayloadMissing {
+						response.Data.GloasContents.ExecutionPayloadEnvelope.Payload = nil
+					}
+					if test.executionPayloadBidMissing {
+						response.Data.GloasContents.Block.Body.SignedExecutionPayloadBid = nil
+					}
 				}
 				if err == nil {
 					responseProposal = response.Data
@@ -147,7 +184,7 @@ func TestProposeGloas(t *testing.T) {
 			blockSigner := &capturingBeaconBlockSigner{signature: signature}
 			envelopeSignature := phase0.BLSSignature{0x03}
 			envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: envelopeSignature, err: test.envelopeSignerErr}
-			envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
+			envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{err: test.envelopeSubmitterErr}
 
 			chainTime := &forkChainTime{gloasForkEpoch: test.forkEpochAtConstruction}
 			var monitor metrics.Service = nullmetrics.New()
@@ -197,9 +234,15 @@ func TestProposeGloas(t *testing.T) {
 			require.Equal(t, uint64(0), *epbsOpts.BuilderBoostFactor)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
-				require.Nil(t, proposalSubmitter.proposal)
-				require.Zero(t, proposalSubmitter.calls)
-				if test.envelopeRootMismatch {
+				if test.envelopeSubmitterErr == nil {
+					require.Nil(t, proposalSubmitter.proposal)
+					require.Zero(t, proposalSubmitter.calls)
+				} else {
+					require.NotNil(t, proposalSubmitter.proposal)
+					require.Equal(t, 1, proposalSubmitter.calls)
+					require.Equal(t, 3, envelopeSubmitter.calls)
+				}
+				if test.envelopeRootMismatch || test.builderIndexMismatch || test.envelopePayloadMissing || test.executionPayloadBidMissing {
 					require.Zero(t, blockSigner.calls)
 					require.Zero(t, envelopeSigner.calls)
 					require.Nil(t, envelopeSubmitter.opts)
@@ -938,15 +981,19 @@ func (s *contextBlockingBeaconBlockSigner) SignBeaconBlockProposal(
 var _ signer.BeaconBlockSigner = (*contextBlockingBeaconBlockSigner)(nil)
 
 type capturingExecutionPayloadEnvelopeSubmitter struct {
-	opts *consensusapi.SubmitExecutionPayloadEnvelopeOpts
+	opts  *consensusapi.SubmitExecutionPayloadEnvelopeOpts
+	calls int
+	err   error
 }
 
 func (s *capturingExecutionPayloadEnvelopeSubmitter) SubmitExecutionPayloadEnvelope(
 	_ context.Context,
 	opts *consensusapi.SubmitExecutionPayloadEnvelopeOpts,
 ) error {
+	s.calls++
 	s.opts = opts
-	return nil
+
+	return s.err
 }
 
 var _ submitter.ExecutionPayloadEnvelopeSubmitter = (*capturingExecutionPayloadEnvelopeSubmitter)(nil)
