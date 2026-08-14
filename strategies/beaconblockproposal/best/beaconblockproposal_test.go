@@ -25,6 +25,7 @@ import (
 	"github.com/attestantio/vouch/services/cache"
 	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
+	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
@@ -187,4 +188,49 @@ func TestProposal(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProposalExpandsShortClientGraffiti(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	provider := &clientGraffitiEPBSProposalProvider{
+		client:   "prysm",
+		graffiti: make(chan [32]byte, 1),
+	}
+	secondProvider := &clientGraffitiEPBSProposalProvider{
+		client:   "nimbus",
+		graffiti: make(chan [32]byte, 1),
+	}
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(2),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"prysm":  provider,
+			"nimbus": secondProvider,
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+	var graffiti [32]byte
+	copy(graffiti[:], "configured {{CLIENT}}")
+
+	_, err = service.Proposal(ctx, &api.ProposalOpts{Slot: 1, Graffiti: graffiti})
+	require.NoError(t, err)
+	var expected [32]byte
+	copy(expected[:], "configured prysm")
+	require.Equal(t, expected, <-provider.graffiti)
+	var secondExpected [32]byte
+	copy(secondExpected[:], "configured nimbus")
+	require.Equal(t, secondExpected, <-secondProvider.graffiti)
 }
