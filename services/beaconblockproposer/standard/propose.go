@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -260,10 +261,8 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	}
 	proposal := proposalResponse.Data
 	if !proposal.ExecutionPayloadIncluded {
-		monitorBeaconBlockProposalSource("builder")
 		return errors.New("ePBS proposal excludes requested execution payload")
 	}
-	monitorBeaconBlockProposalSource("local")
 
 	if err := s.confirmEPBSProposalData(ctx, proposal, duty); err != nil {
 		return err
@@ -307,6 +306,7 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
 		return errors.Wrap(err, "failed to submit proposal")
 	}
+	monitorBeaconBlockProposalSource("local")
 
 	envelopeSubmissionOpts := &api.SubmitExecutionPayloadEnvelopeOpts{
 		SignedExecutionPayloadEnvelope: &spec.VersionedSignedExecutionPayloadEnvelope{
@@ -353,6 +353,9 @@ func (*Service) epbsProposalEnvelope(proposal *api.VersionedEPBSProposal) (*gloa
 	}
 	if proposal.GloasContents == nil || proposal.GloasContents.Block == nil || proposal.GloasContents.Block.Body == nil || proposal.GloasContents.Block.Body.SignedExecutionPayloadBid == nil || proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message == nil {
 		return nil, phase0.Root{}, errors.New("ePBS proposal has no execution payload bid")
+	}
+	if proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex != gloas.BuilderIndex(math.MaxUint64) {
+		return nil, phase0.Root{}, errors.New("ePBS execution payload bid is not self-built")
 	}
 	if envelope.BuilderIndex != proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex {
 		return nil, phase0.Root{}, errors.New("ePBS execution payload envelope is for incorrect builder index")

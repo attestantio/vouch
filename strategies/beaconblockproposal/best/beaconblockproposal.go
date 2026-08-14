@@ -185,28 +185,11 @@ func (s *Service) considerEPBSProposal(opts *api.EPBSProposalOpts,
 		return bestProposal, bestProvider
 	}
 
-	if bestProposal == nil || s.scoreEPBSProposal(response.proposal).Cmp(s.scoreEPBSProposal(bestProposal)) > 0 {
+	if bestProposal == nil || response.proposal.Value().Cmp(bestProposal.Value()) > 0 {
 		return response.proposal, response.provider
 	}
 
 	return bestProposal, bestProvider
-}
-
-func (s *Service) scoreEPBSProposal(proposal *api.VersionedEPBSProposal) *big.Rat {
-	score := new(big.Rat).SetInt(proposal.Value())
-	if proposal.ConsensusValue == nil && proposal.ExecutionValue == nil {
-		s.log.Warn().Msg("ePBS proposal has no value headers; scoring execution payload gas only")
-	}
-	if proposal.ExecutionPayloadIncluded && proposal.GloasContents != nil && proposal.GloasContents.ExecutionPayloadEnvelope != nil && proposal.GloasContents.ExecutionPayloadEnvelope.Payload != nil {
-		payload := proposal.GloasContents.ExecutionPayloadEnvelope.Payload
-		if factor := new(big.Rat).SetFloat64(s.executionPayloadFactor); factor != nil {
-			gasUsed := new(big.Int).SetUint64(payload.GasUsed)
-			gasUsed.Add(gasUsed, new(big.Int).SetUint64(payload.BlobGasUsed))
-			score.Add(score, new(big.Rat).Mul(new(big.Rat).SetInt(gasUsed), factor))
-		}
-	}
-
-	return score
 }
 
 type beaconBlockEPBSResponse struct {
