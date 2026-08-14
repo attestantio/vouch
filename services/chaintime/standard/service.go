@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -168,6 +168,7 @@ func (s *Service) HardForkEpoch(ctx context.Context, hardForkName string) phase0
 	}
 
 	generation := s.forkScheduleGeneration.Load()
+	// A concurrent refresh may have published the requested fork before we captured its generation.
 	forkSchedule = s.forkSchedule.Load()
 	if forkEpoch, exists := forkSchedule.epochs[hardForkName]; exists {
 		return forkEpoch
@@ -214,6 +215,7 @@ func forkScheduleFromSpec(spec map[string]any) forkSchedule {
 }
 
 func (s *Service) refreshForkSchedule(ctx context.Context, generation *forkScheduleGeneration) error {
+	// Each generation admits one provider request; other callers reuse its result.
 	if generation == nil {
 		generation = &forkScheduleGeneration{}
 		if !s.forkScheduleGeneration.CompareAndSwap(nil, generation) {
@@ -246,47 +248,59 @@ func (s *Service) refreshForkSchedule(ctx context.Context, generation *forkSched
 	} else {
 		current := s.forkSchedule.Load()
 		incoming := forkScheduleFromSpec(specResponse.Data)
-		var next *forkSchedule
-		cloneCurrent := func() {
-			if next == nil {
-				next = &forkSchedule{
-					epochs:    maps.Clone(current.epochs),
-					malformed: maps.Clone(current.malformed),
-				}
-			}
-		}
-		for name, epoch := range incoming.epochs {
-			if currentEpoch, exists := current.epochs[name]; exists {
-				if currentEpoch == epoch {
-					continue
-				}
-				now := s.CurrentEpoch()
-				if currentEpoch <= now || epoch <= now {
-					continue
-				}
-			}
-			cloneCurrent()
-			next.epochs[name] = epoch
-			delete(next.malformed, name)
-		}
-		for name := range incoming.malformed {
-			if _, exists := current.epochs[name]; exists {
-				continue
-			}
-			if _, exists := current.malformed[name]; exists {
-				continue
-			}
-			cloneCurrent()
-			next.malformed[name] = struct{}{}
-		}
+		next := mergeForkSchedule(current, incoming, s.CurrentEpoch())
 		if next != nil {
 			s.forkSchedule.Store(next)
 		}
 	}
 
 	refresh.err = err
+	// Advance the generation before waking waiters so a later miss can refresh again.
 	s.forkScheduleGeneration.CompareAndSwap(generation, &forkScheduleGeneration{})
 	close(refresh.done)
 
 	return err
+}
+
+func mergeForkSchedule(current *forkSchedule,
+	incoming forkSchedule,
+	currentEpoch phase0.Epoch,
+) *forkSchedule {
+	var next *forkSchedule
+	cloneCurrent := func() {
+		if next == nil {
+			next = &forkSchedule{
+				epochs:    maps.Clone(current.epochs),
+				malformed: maps.Clone(current.malformed),
+			}
+		}
+	}
+
+	for name, epoch := range incoming.epochs {
+		if existingEpoch, exists := current.epochs[name]; exists {
+			if existingEpoch == epoch {
+				continue
+			}
+			// Once either schedule activates a fork, retain the last-known-good boundary.
+			if existingEpoch <= currentEpoch || epoch <= currentEpoch {
+				continue
+			}
+		}
+		cloneCurrent()
+		next.epochs[name] = epoch
+		delete(next.malformed, name)
+	}
+
+	for name := range incoming.malformed {
+		if _, exists := current.epochs[name]; exists {
+			continue
+		}
+		if _, exists := current.malformed[name]; exists {
+			continue
+		}
+		cloneCurrent()
+		next.malformed[name] = struct{}{}
+	}
+
+	return next
 }
