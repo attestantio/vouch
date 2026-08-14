@@ -35,7 +35,6 @@ import (
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/strategies/beaconblockproposal/best"
-	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
@@ -244,9 +243,8 @@ func TestEPBSProposalRejectsZeroFeeRecipientWithoutPayload(t *testing.T) {
 	require.Same(t, validCandidate, response.Data)
 }
 
-func TestEPBSProposalWeightsExecutionPayloadGas(t *testing.T) {
+func TestEPBSProposalDoesNotWeightExecutionPayloadGas(t *testing.T) {
 	ctx := context.Background()
-	capture := logger.NewLogCapture()
 	specProvider := mock.NewSpecProvider()
 	chainTime, err := standardchaintime.New(ctx,
 		standardchaintime.WithLogLevel(zerolog.Disabled),
@@ -279,8 +277,7 @@ func TestEPBSProposalWeightsExecutionPayloadGas(t *testing.T) {
 
 	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
 	require.NoError(t, err)
-	require.Same(t, executionCandidate, response.Data)
-	capture.AssertHasEntry(t, "ePBS proposal has no value headers; scoring execution payload gas only")
+	require.Same(t, consensusCandidate, response.Data)
 }
 
 func TestEPBSProposalComparesLargeValuesExactly(t *testing.T) {

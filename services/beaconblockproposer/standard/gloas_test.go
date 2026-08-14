@@ -16,6 +16,7 @@ package standard_test
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -56,6 +57,7 @@ func TestProposeGloas(t *testing.T) {
 		builderBoostFactor         uint64
 		proposerIndexMismatch      bool
 		builderIndexMismatch       bool
+		foreignBuilderIndex        bool
 		envelopeRootMismatch       bool
 		envelopePayloadMissing     bool
 		executionPayloadBidMissing bool
@@ -94,6 +96,12 @@ func TestProposeGloas(t *testing.T) {
 			executionPayloadIncluded: true,
 			builderIndexMismatch:     true,
 			err:                      "failed to propose block: ePBS execution payload envelope is for incorrect builder index",
+		},
+		{
+			name:                     "ForeignBuilderIndex",
+			executionPayloadIncluded: true,
+			foreignBuilderIndex:      true,
+			err:                      "failed to propose block: ePBS execution payload bid is not self-built",
 		},
 		{
 			name:                     "MissingEnvelopePayload",
@@ -156,6 +164,7 @@ func TestProposeGloas(t *testing.T) {
 					}
 					response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
 					response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
+					setSelfBuildBuilderIndex(t, response.Data)
 					blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
 					require.NoError(t, err)
 					response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
@@ -163,7 +172,11 @@ func TestProposeGloas(t *testing.T) {
 						response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot[0] ^= 0xff
 					}
 					if test.builderIndexMismatch {
+						response.Data.GloasContents.ExecutionPayloadEnvelope.BuilderIndex++
+					}
+					if test.foreignBuilderIndex {
 						response.Data.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex++
+						response.Data.GloasContents.ExecutionPayloadEnvelope.BuilderIndex = response.Data.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex
 					}
 					if test.envelopePayloadMissing {
 						response.Data.GloasContents.ExecutionPayloadEnvelope.Payload = nil
@@ -242,7 +255,7 @@ func TestProposeGloas(t *testing.T) {
 					require.Equal(t, 1, proposalSubmitter.calls)
 					require.Equal(t, 3, envelopeSubmitter.calls)
 				}
-				if test.envelopeRootMismatch || test.builderIndexMismatch || test.envelopePayloadMissing || test.executionPayloadBidMissing {
+				if test.envelopeRootMismatch || test.builderIndexMismatch || test.foreignBuilderIndex || test.envelopePayloadMissing || test.executionPayloadBidMissing {
 					require.Zero(t, blockSigner.calls)
 					require.Zero(t, envelopeSigner.calls)
 					require.Nil(t, envelopeSubmitter.opts)
@@ -298,17 +311,20 @@ func TestProposeGloasProposalSource(t *testing.T) {
 		name                     string
 		executionPayloadIncluded bool
 		source                   string
+		expectedCountDelta       float64
 		err                      string
 	}{
 		{
 			name:                     "SelfBuiltPayload",
 			executionPayloadIncluded: true,
 			source:                   "local",
+			expectedCountDelta:       1,
 		},
 		{
 			name:                     "ProtocolBuilderPayload",
 			executionPayloadIncluded: false,
 			source:                   "builder",
+			expectedCountDelta:       0,
 			err:                      "failed to propose block: ePBS proposal excludes requested execution payload",
 		},
 	}
@@ -321,7 +337,7 @@ func TestProposeGloasProposalSource(t *testing.T) {
 			)
 			require.NoError(t, err)
 			proposalSourceCountBefore := beaconBlockProposalSourceCount(t, test.source)
-			service, duty, blockSigner, envelopeSigner, envelopeSubmitter := newGloasProposerForProposalSource(ctx, t, test.executionPayloadIncluded, monitor)
+			service, duty, blockSigner, envelopeSigner, envelopeSubmitter, _ := newGloasProposerForProposalSource(ctx, t, test.executionPayloadIncluded, monitor)
 
 			err = service.Propose(ctx, duty)
 			if test.err != "" {
@@ -329,7 +345,7 @@ func TestProposeGloasProposalSource(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			require.Equal(t, proposalSourceCountBefore+1, beaconBlockProposalSourceCount(t, test.source))
+			require.Equal(t, proposalSourceCountBefore+test.expectedCountDelta, beaconBlockProposalSourceCount(t, test.source))
 			if !test.executionPayloadIncluded {
 				require.Zero(t, blockSigner.calls)
 				require.Zero(t, envelopeSigner.calls)
@@ -337,6 +353,35 @@ func TestProposeGloasProposalSource(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProposeGloasProposalSourceSubmissionFailure(t *testing.T) {
+	ctx := context.Background()
+
+	monitor, err := prometheusmetrics.New(ctx,
+		prometheusmetrics.WithLogLevel(zerolog.Disabled),
+		prometheusmetrics.WithAddress("localhost:0"),
+	)
+	require.NoError(t, err)
+	proposalSourceCountBefore := beaconBlockProposalSourceCount(t, "local")
+	service, duty, _, _, envelopeSubmitter, proposalSubmitter := newGloasProposerForProposalSource(ctx, t, true, monitor)
+	proposalSubmitter.err = errors.New("submit failed")
+
+	err = service.Propose(ctx, duty)
+	require.EqualError(t, err, "failed to propose block: failed to submit proposal: submit failed")
+	require.Equal(t, proposalSourceCountBefore, beaconBlockProposalSourceCount(t, "local"))
+	require.Nil(t, envelopeSubmitter.opts)
+}
+
+func setSelfBuildBuilderIndex(t *testing.T, proposal *consensusapi.VersionedEPBSProposal) {
+	t.Helper()
+
+	proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = gloas.BuilderIndex(math.MaxUint64)
+	proposal.GloasContents.ExecutionPayloadEnvelope.BuilderIndex = gloas.BuilderIndex(math.MaxUint64)
+	bodyRoot, err := proposal.GloasContents.Block.Body.HashTreeRoot()
+	require.NoError(t, err)
+	convertedBodyRoot := phase0.Root(bodyRoot)
+	proposal.BeaconBlockBodyRoot = &convertedBodyRoot
 }
 
 func newGloasProposerForProposalSource(
@@ -349,6 +394,7 @@ func newGloasProposerForProposalSource(
 	*capturingBeaconBlockSigner,
 	*capturingExecutionPayloadEnvelopeSigner,
 	*capturingExecutionPayloadEnvelopeSubmitter,
+	*capturingProposalSubmitter,
 ) {
 	t.Helper()
 
@@ -364,6 +410,7 @@ func newGloasProposerForProposalSource(
 		if response.Data.ExecutionPayloadIncluded {
 			response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
 			response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
+			setSelfBuildBuilderIndex(t, response.Data)
 			blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
 			require.NoError(t, err)
 			response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
@@ -396,7 +443,7 @@ func newGloasProposerForProposalSource(
 	duty.SetAccount(&testAccount{})
 	duty.SetRandaoReveal(phase0.BLSSignature{0x02})
 
-	return service, duty, blockSigner, envelopeSigner, envelopeSubmitter
+	return service, duty, blockSigner, envelopeSigner, envelopeSubmitter, proposalSubmitter
 }
 
 func beaconBlockProposalSourceCount(t *testing.T, source string) float64 {
@@ -446,6 +493,7 @@ func TestProposeGloasSignsRetainedBodyRoot(t *testing.T) {
 		}
 		response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
 		response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
+		setSelfBuildBuilderIndex(t, response.Data)
 
 		block := response.Data.GloasContents.Block
 		generatedRoot, err := block.Body.HashTreeRoot()
@@ -532,6 +580,7 @@ func TestProposeGloasMissingBodyRootFails(t *testing.T) {
 		}
 		response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
 		response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
+		setSelfBuildBuilderIndex(t, response.Data)
 		blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
 		require.NoError(t, err)
 		response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
@@ -591,6 +640,7 @@ func TestProposeGloasStartsBothSignaturesBeforePublication(t *testing.T) {
 		}
 		response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
 		response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
+		setSelfBuildBuilderIndex(t, response.Data)
 		blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
 		require.NoError(t, err)
 		response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
@@ -679,6 +729,7 @@ func TestProposeGloasCancelsPeerSigningAfterFailure(t *testing.T) {
 		}
 		response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
 		response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
+		setSelfBuildBuilderIndex(t, response.Data)
 		blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
 		require.NoError(t, err)
 		response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
@@ -768,6 +819,7 @@ func TestProposeGloasCancelsBlockedBlockSigningAfterEnvelopeFailure(t *testing.T
 		}
 		response.Data.GloasContents.KZGProofs = []deneb.KZGProof{{0x04}}
 		response.Data.GloasContents.Blobs = []deneb.Blob{{0x05}}
+		setSelfBuildBuilderIndex(t, response.Data)
 		blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
 		require.NoError(t, err)
 		response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
@@ -881,13 +933,14 @@ func TestProposePreGloas(t *testing.T) {
 type capturingProposalSubmitter struct {
 	proposal *consensusapi.VersionedSignedProposal
 	calls    int
+	err      error
 }
 
 func (s *capturingProposalSubmitter) SubmitProposal(_ context.Context, proposal *consensusapi.VersionedSignedProposal) error {
 	s.calls++
 	s.proposal = proposal
 
-	return nil
+	return s.err
 }
 
 var _ submitter.ProposalSubmitter = (*capturingProposalSubmitter)(nil)
