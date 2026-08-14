@@ -278,7 +278,7 @@ func TestProposeGloasProposalSource(t *testing.T) {
 			)
 			require.NoError(t, err)
 			proposalSourceCountBefore := beaconBlockProposalSourceCount(t, test.source)
-			service, duty, blockSigner, envelopeSigner, envelopeSubmitter := newGloasProposerForProposalSource(t, ctx, test.executionPayloadIncluded, monitor)
+			service, duty, blockSigner, envelopeSigner, envelopeSubmitter := newGloasProposerForProposalSource(ctx, t, test.executionPayloadIncluded, monitor)
 
 			err = service.Propose(ctx, duty)
 			if test.err != "" {
@@ -296,8 +296,9 @@ func TestProposeGloasProposalSource(t *testing.T) {
 	}
 }
 
-func newGloasProposerForProposalSource(t *testing.T,
+func newGloasProposerForProposalSource(
 	ctx context.Context,
+	t *testing.T,
 	executionPayloadIncluded bool,
 	monitor metrics.Service,
 ) (*standard.Service,
