@@ -87,7 +87,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 				Int("errored", errored).
 				Int("timed_out", timedOut).
 				Msg("Response received")
-			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
+			bestProposal, bestProvider = considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
 		case err := <-errCh:
 			errored++
 			log.Debug().
@@ -129,7 +129,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 				Int("errored", errored).
 				Int("timed_out", timedOut).
 				Msg("Response received")
-			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
+			bestProposal, bestProvider = considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
 		case err := <-errCh:
 			errored++
 			log.Debug().
@@ -173,7 +173,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 
 // considerEPBSProposal updates the best proposal seen so far, ignoring proposals that lack a
 // requested execution payload.
-func (s *Service) considerEPBSProposal(opts *api.EPBSProposalOpts,
+func considerEPBSProposal(opts *api.EPBSProposalOpts,
 	response *beaconBlockEPBSResponse,
 	bestProposal *api.VersionedEPBSProposal,
 	bestProvider string,
