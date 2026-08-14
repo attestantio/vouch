@@ -229,6 +229,7 @@ func (s *Service) unblindingProviders(auctionResults *blockauctioneer.Results) (
 }
 
 // proposeEPBSBlock proposes a Gloas block.
+// skipcq: GO-R1005
 func (s *Service) proposeEPBSBlock(ctx context.Context,
 	duty *beaconblockproposer.Duty,
 	graffiti [32]byte,

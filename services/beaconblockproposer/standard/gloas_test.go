@@ -47,6 +47,7 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
+// skipcq: GO-R1005
 func TestProposeGloas(t *testing.T) {
 	ctx := context.Background()
 
