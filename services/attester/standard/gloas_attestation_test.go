@@ -24,6 +24,7 @@ import (
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
 	"github.com/attestantio/vouch/services/attester"
 	"github.com/attestantio/vouch/services/attester/standard"
+	"github.com/attestantio/vouch/services/chaintime"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
@@ -44,7 +45,7 @@ func TestAttestGloasPreservesAttestationIndex(t *testing.T) {
 		},
 		slotsPerEpoch: 1,
 	}
-	accounts := mockAccountProvider()
+	accounts := mockaccountmanager.NewValidatingAccountsProvider()
 	accounts.AddAccount(1, testAccount{})
 	signer := &capturingBeaconAttestationsSigner{signatures: []phase0.BLSSignature{{0x01}}}
 	submitter := &capturingAttestationsSubmitter{}
@@ -81,6 +82,9 @@ func TestAttestGloasPreservesAttestationIndex(t *testing.T) {
 	require.Len(t, submitter.opts.Attestations, 1)
 	require.Equal(t, spec.DataVersionGloas, submitter.opts.Attestations[0].Version)
 	require.NotNil(t, submitter.opts.Attestations[0].Gloas)
+	// Required for the SingleAttestation conversion carried out on submission.
+	require.NotNil(t, submitter.opts.Attestations[0].ValidatorIndex)
+	require.Equal(t, phase0.ValidatorIndex(1), *submitter.opts.Attestations[0].ValidatorIndex)
 	committeeIndex, err := submitter.opts.Attestations[0].CommitteeIndex()
 	require.NoError(t, err)
 	require.Equal(t, phase0.CommitteeIndex(0), committeeIndex)
@@ -98,7 +102,7 @@ func TestAttestRejectsInvalidGloasAttestationIndex(t *testing.T) {
 		},
 		slotsPerEpoch: 1,
 	}
-	accounts := mockAccountProvider()
+	accounts := mockaccountmanager.NewValidatingAccountsProvider()
 	accounts.AddAccount(1, testAccount{})
 	signer := &capturingBeaconAttestationsSigner{signatures: []phase0.BLSSignature{{0x01}}}
 	submitter := &capturingAttestationsSubmitter{}
@@ -153,7 +157,7 @@ func TestAttestElectraAndFuluKeepZeroAttestationIndex(t *testing.T) {
 				},
 				slotsPerEpoch: 1,
 			}
-			accounts := mockAccountProvider()
+			accounts := mockaccountmanager.NewValidatingAccountsProvider()
 			accounts.AddAccount(1, testAccount{})
 			signer := &capturingBeaconAttestationsSigner{signatures: []phase0.BLSSignature{{0x01}}}
 			submitter := &capturingAttestationsSubmitter{}
@@ -191,10 +195,6 @@ func TestAttestElectraAndFuluKeepZeroAttestationIndex(t *testing.T) {
 			require.Equal(t, phase0.CommitteeIndex(0), data.Index)
 		})
 	}
-}
-
-func mockAccountProvider() *mockaccountmanager.ValidatingAccountsProvider {
-	return mockaccountmanager.NewValidatingAccountsProvider()
 }
 
 type testAccount struct{}
@@ -285,13 +285,4 @@ func (s *attesterTestChainTime) HardForkEpoch(_ context.Context, name string) ph
 	return s.hardForkEpochs[name]
 }
 
-var _ interface {
-	GenesisTime() time.Time
-	StartOfSlot(phase0.Slot) time.Time
-	StartOfEpoch(phase0.Epoch) time.Time
-	CurrentSlot() phase0.Slot
-	CurrentEpoch() phase0.Epoch
-	SlotToEpoch(phase0.Slot) phase0.Epoch
-	FirstSlotOfEpoch(phase0.Epoch) phase0.Slot
-	HardForkEpoch(context.Context, string) phase0.Epoch
-} = (*attesterTestChainTime)(nil)
+var _ chaintime.Service = (*attesterTestChainTime)(nil)

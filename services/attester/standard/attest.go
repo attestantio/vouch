@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2025 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -165,13 +165,15 @@ func (s *Service) attest(
 	s.log.Trace().Dur("elapsed", time.Since(started)).Msg("Signed")
 	var attestations []*spec.VersionedAttestation
 
+	// This ladder must mirror the signing committee index ladder above, otherwise the
+	// attestation we publish would not match the attestation data that was signed.
 	switch {
-	case epoch < s.electraForkEpoch:
-		attestations = s.createAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
 	case epoch >= s.gloasForkEpoch:
-		attestations = s.createGloasAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
-	default:
+		attestations = s.createGloasAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, validatorIndices, data, sigs)
+	case epoch >= s.electraForkEpoch:
 		attestations = s.createElectraAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, validatorIndices, data, sigs, epoch)
+	default:
+		attestations = s.createAttestations(ctx, duty, accounts, committeeIndices, validatorCommitteeIndices, committeeSizes, data, sigs)
 	}
 	if len(attestations) == 0 {
 		s.log.Info().Msg("No signed attestations; not submitting")
@@ -194,6 +196,7 @@ func (s *Service) createGloasAttestations(_ context.Context,
 	committeeIndices []phase0.CommitteeIndex,
 	validatorCommitteeIndices []phase0.ValidatorIndex,
 	committeeSizes []uint64,
+	validatorIndices []phase0.ValidatorIndex,
 	data *phase0.AttestationData,
 	sigs []phase0.BLSSignature,
 ) []*spec.VersionedAttestation {
@@ -205,6 +208,12 @@ func (s *Service) createGloasAttestations(_ context.Context,
 				Msg("No signature for validator; not creating attestation")
 			continue
 		}
+		if i >= len(validatorIndices) {
+			s.log.Warn().Str("validator_pubkey", fmt.Sprintf("%#x", accounts[i].PublicKey().Marshal())).
+				Msg("Validator indices array smaller than requested index; not creating attestation")
+			continue
+		}
+		validatorIndex := validatorIndices[i]
 
 		aggregationBits := bitfield.NewBitlist(committeeSizes[i])
 		aggregationBits.SetBitAt(uint64(validatorCommitteeIndices[i]), true)
@@ -230,9 +239,12 @@ func (s *Service) createGloasAttestations(_ context.Context,
 		}
 		copy(attestation.Signature[:], sigs[i][:])
 
+		// ValidatorIndex is required: the beacon API submits Electra and later attestations
+		// as SingleAttestation, and the conversion fails without it.
 		attestations = append(attestations, &spec.VersionedAttestation{
-			Version: spec.DataVersionGloas,
-			Gloas:   attestation,
+			Version:        spec.DataVersionGloas,
+			Gloas:          attestation,
+			ValidatorIndex: &validatorIndex,
 		})
 	}
 
