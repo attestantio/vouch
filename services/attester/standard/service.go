@@ -46,6 +46,7 @@ type Service struct {
 	attested                   map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}
 	electraForkEpoch           phase0.Epoch
 	fuluForkEpoch              phase0.Epoch
+	gloasForkEpoch             phase0.Epoch
 	attestedMu                 sync.Mutex
 }
 
@@ -83,6 +84,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	electraForkEpoch := parameters.chainTime.HardForkEpoch(ctx, "ELECTRA_FORK_EPOCH")
 	fuluForkEpoch := parameters.chainTime.HardForkEpoch(ctx, "FULU_FORK_EPOCH")
+	gloasForkEpoch := parameters.chainTime.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH")
 	s := &Service{
 		log:                        log,
 		monitor:                    parameters.monitor,
@@ -97,6 +99,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		attested:                   make(map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}),
 		electraForkEpoch:           electraForkEpoch,
 		fuluForkEpoch:              fuluForkEpoch,
+		gloasForkEpoch:             gloasForkEpoch,
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
