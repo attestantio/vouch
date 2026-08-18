@@ -63,6 +63,8 @@ import (
 	"github.com/attestantio/vouch/services/multiinstance"
 	alwaysmultiinstance "github.com/attestantio/vouch/services/multiinstance/always"
 	staticdelaymultiinstance "github.com/attestantio/vouch/services/multiinstance/staticdelay"
+	"github.com/attestantio/vouch/services/payloadattester"
+	standardpayloadattester "github.com/attestantio/vouch/services/payloadattester/standard"
 	"github.com/attestantio/vouch/services/proposalpreparer"
 	standardproposalpreparer "github.com/attestantio/vouch/services/proposalpreparer/standard"
 	"github.com/attestantio/vouch/services/scheduler"
@@ -373,6 +375,11 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to select submitter")
 	}
 
+	payloadAttester, err := startPayloadAttester(ctx, monitor, eth2Client, signerSvc, submitter)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to start payload attester")
+	}
+
 	blockRelay, err := startBlockRelay(ctx, majordomo, monitor, eth2Client, schedulerSvc, chainTime, accountManager, signerSvc, cacheSvc)
 	if err != nil {
 		return nil, nil, err
@@ -433,6 +440,7 @@ func startServices(ctx context.Context,
 		syncCommitteeSubscriber,
 		beaconBlockHeaderProvider,
 		multiInstance,
+		payloadAttester,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -460,6 +468,7 @@ func initController(ctx context.Context,
 	syncCommitteeSubscriber synccommitteesubscriber.Service,
 	beaconBlockHeaderProvider eth2client.BeaconBlockHeadersProvider,
 	multiInstance multiinstance.Service,
+	payloadAttester payloadattester.Service,
 ) (
 	*standardcontroller.Service,
 	error,
@@ -471,7 +480,7 @@ func initController(ctx context.Context,
 	}
 
 	log.Trace().Msg("Starting controller")
-	controller, err := standardcontroller.New(ctx,
+	controllerParams := []standardcontroller.Parameter{
 		standardcontroller.WithLogLevel(util.LogLevel("controller")),
 		standardcontroller.WithMonitor(monitor),
 		standardcontroller.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
@@ -505,7 +514,14 @@ func initController(ctx context.Context,
 		standardcontroller.WithFastTrackSyncCommittees(viper.GetBool("controller.fast-track.sync-committees")),
 		standardcontroller.WithFastTrackGrace(viper.GetDuration("controller.fast-track.grace")),
 		standardcontroller.WithMultiInstance(multiInstance),
-	)
+	}
+	if ptcDutiesProvider, ok := eth2Client.(eth2client.PTCDutiesProvider); ok && payloadAttester != nil {
+		controllerParams = append(controllerParams,
+			standardcontroller.WithPTCDutiesProvider(ptcDutiesProvider),
+			standardcontroller.WithPayloadAttester(payloadAttester),
+		)
+	}
+	controller, err := standardcontroller.New(ctx, controllerParams...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start controller service")
 	}
@@ -1636,10 +1652,10 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 	switch viper.GetString("submitter.style") {
 	case "multinode", "all":
 		log.Info().Msg("Starting multinode submitter strategy")
-		submitter, err = startMultinodeSubmitter(ctx, monitor)
+		submitter, err = startMultinodeSubmitter(ctx, monitor, eth2Client)
 	default:
 		log.Info().Msg("Starting standard submitter strategy")
-		submitter, err = immediatesubmitter.New(ctx,
+		params := []immediatesubmitter.Parameter{
 			immediatesubmitter.WithLogLevel(util.LogLevel("submitter.immediate")),
 			immediatesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			immediatesubmitter.WithProposalSubmitter(eth2Client.(eth2client.ProposalSubmitter)),
@@ -1651,12 +1667,53 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			immediatesubmitter.WithBeaconCommitteeSubscriptionsSubmitter(eth2Client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)),
 			immediatesubmitter.WithAggregateAttestationsSubmitter(eth2Client.(eth2client.AggregateAttestationsSubmitter)),
 			immediatesubmitter.WithProposalPreparationsSubmitter(eth2Client.(eth2client.ProposalPreparationsSubmitter)),
-		)
+		}
+		if payloadAttestationMessagesSubmitter, ok := eth2Client.(eth2client.PayloadAttestationMessagesSubmitter); ok {
+			params = append(params, immediatesubmitter.WithPayloadAttestationMessagesSubmitter(payloadAttestationMessagesSubmitter))
+		}
+		submitter, err = immediatesubmitter.New(ctx, params...)
 	}
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start submitter service")
 	}
 	return submitter, nil
+}
+
+// startPayloadAttester starts the payload attester when all of its post-Gloas capabilities are
+// available.  Older beacon nodes do not expose these capabilities, so the service remains
+// disabled without making startup fail.
+func startPayloadAttester(ctx context.Context,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+	signerSvc signer.Service,
+	submitterStrategy submitter.Service,
+) (payloadattester.Service, error) {
+	payloadAttestationDataProvider, ok := eth2Client.(eth2client.PayloadAttestationDataProvider)
+	if !ok {
+		return nil, nil
+	}
+	payloadAttestationDataSigner, ok := signerSvc.(signer.PayloadAttestationDataSigner)
+	if !ok {
+		return nil, nil
+	}
+	payloadAttestationMessagesSubmitter, ok := submitterStrategy.(submitter.PayloadAttestationMessagesSubmitter)
+	if !ok {
+		return nil, nil
+	}
+
+	log.Trace().Msg("Starting payload attester")
+	service, err := standardpayloadattester.New(ctx,
+		standardpayloadattester.WithLogLevel(util.LogLevel("payloadattester")),
+		standardpayloadattester.WithMonitor(monitor),
+		standardpayloadattester.WithPayloadAttestationDataProvider(payloadAttestationDataProvider),
+		standardpayloadattester.WithPayloadAttestationDataSigner(payloadAttestationDataSigner),
+		standardpayloadattester.WithPayloadAttestationMessagesSubmitter(payloadAttestationMessagesSubmitter),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start standard payload attester service")
+	}
+
+	return service, nil
 }
 
 func genericAddressToClientMapper[T any](ctx context.Context, monitor metrics.Service, path, description string) (map[string]T, error) {
@@ -1677,6 +1734,7 @@ func genericAddressToClientMapper[T any](ctx context.Context, monitor metrics.Se
 
 func startMultinodeSubmitter(ctx context.Context,
 	monitor metrics.Service,
+	eth2Client eth2client.Service,
 ) (
 	submitter.Service,
 	error,
@@ -1743,7 +1801,17 @@ func startMultinodeSubmitter(ctx context.Context,
 		return nil, err
 	}
 
-	submitterService, err := multinodesubmitter.New(ctx,
+	var payloadAttestationMessagesSubmitters map[string]submitter.PayloadAttestationMessagesSubmitter
+	if _, ok := eth2Client.(eth2client.PayloadAttestationMessagesSubmitter); ok {
+		payloadAttestationMessagesSubmitters, err = genericAddressToClientMapper[submitter.PayloadAttestationMessagesSubmitter](ctx, monitor,
+			"submitter.payloadattestation.multinode",
+			"payload attestation message submitter strategy")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	params := []multinodesubmitter.Parameter{
 		multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 		multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
 		multinodesubmitter.WithLogLevel(util.LogLevel("submitter.multinode")),
@@ -1757,7 +1825,11 @@ func startMultinodeSubmitter(ctx context.Context,
 		multinodesubmitter.WithAggregateAttestationsSubmitters(aggregateAttestationSubmitters),
 		multinodesubmitter.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
 		multinodesubmitter.WithProposalPreparationsSubmitters(proposalPreparationSubmitters),
-	)
+	}
+	if payloadAttestationMessagesSubmitters != nil {
+		params = append(params, multinodesubmitter.WithPayloadAttestationMessagesSubmitters(payloadAttestationMessagesSubmitters))
+	}
+	submitterService, err := multinodesubmitter.New(ctx, params...)
 	if err != nil {
 		return nil, err
 	}

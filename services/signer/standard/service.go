@@ -43,6 +43,7 @@ type Service struct {
 	applicationBuilderDomainType          *phase0.DomainType
 	blobSidecarDomainType                 *phase0.DomainType
 	beaconBuilderDomainType               *phase0.DomainType
+	ptcAttesterDomainType                 *phase0.DomainType
 }
 
 // Module-wide log.
@@ -115,6 +116,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log.Warn().Err(err).Msg("DOMAIN_BEACON_BUILDER unavailable in spec; execution payload envelope signing unavailable")
 	}
 
+	var ptcAttesterDomainType *phase0.DomainType
+	if tmp, err := domainType(spec, "DOMAIN_PTC_ATTESTER"); err == nil {
+		ptcAttesterDomainType = &tmp
+	}
+
 	s := &Service{
 		monitor:                               parameters.monitor,
 		clientMonitor:                         parameters.clientMonitor,
@@ -131,6 +137,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		applicationBuilderDomainType:          applicationBuilderDomainType,
 		blobSidecarDomainType:                 blobSidecarDomainType,
 		beaconBuilderDomainType:               beaconBuilderDomainType,
+		ptcAttesterDomainType:                 ptcAttesterDomainType,
 	}
 
 	return s, nil
