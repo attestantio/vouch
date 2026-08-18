@@ -418,18 +418,20 @@ This can be configured using the environment variables `VOUCH_<MODULE>_LOG_LEVEL
 
 Advanced options can change the performance of Vouch to be severely detrimental to its operation. It is strongly recommended that these options are not changed unless the user understands completely what they do and their possible performance impact.
 
+The duty timing options below are derived from the chain specification when they are not set. Setting one explicitly overrides that derivation for the lifetime of the process, including across hard forks that change the slot duration or the duty deadlines, so an explicit value that is valid today can schedule duties after the end of the slot on a future fork.
+
 ### controller.max-attestation-delay
 
-This is a duration parameter, that defaults to `4s`. It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
+This is a duration parameter, that defaults to a third of the slot duration reported by the chain (`4s` on a 12-second slot). It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
 
 ### controller.attestation-aggregation-delay
 
-This is a duration parameter, that defaults to `8s`. It defines the time that Vouch will wait from the start of a slot before aggregating existing attestations.
+This is a duration parameter, that defaults to two thirds of the slot duration reported by the chain (`8s` on a 12-second slot). It defines the time that Vouch will wait from the start of a slot before aggregating existing attestations.
 
 ### controller.max-sync-committee-message-delay
 
-This is a duration parameter, that defaults to `4s`. It defines the maximum time that Vouch will wait from the start of a slot for a block before generating sync committee messages on the basis that the slot is empty.
+This is a duration parameter, that defaults to a third of the slot duration reported by the chain (`4s` on a 12-second slot). It defines the maximum time that Vouch will wait from the start of a slot for a block before generating sync committee messages on the basis that the slot is empty.
 
 ### controller.sync-committee-aggregation-delay
 
-This is a duration parameter, that defaults to `8s`. It defines the time that Vouch will wait from the start of a slot before aggregating existing sync committee messages.
+This is a duration parameter, that defaults to two thirds of the slot duration reported by the chain (`8s` on a 12-second slot). It defines the time that Vouch will wait from the start of a slot before aggregating existing sync committee messages.

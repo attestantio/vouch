@@ -107,7 +107,7 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 		s.pendingAttestationsMutex.Unlock()
 
 		go func(duty *attester.Duty) {
-			jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxAttestationDelay)
+			jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.timingsForSlot(duty.Slot()).maxAttestationDelay)
 			if err := s.scheduler.ScheduleJob(ctx,
 				"Attest",
 				fmt.Sprintf("Attestations for slot %d", duty.Slot()),
@@ -232,7 +232,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester
 			if err := s.scheduler.ScheduleJob(ctx,
 				"Aggregate attestations",
 				fmt.Sprintf("Beacon block attestation aggregation for slot %d committee %d", attestationData.Slot, committeeIndex),
-				s.chainTimeService.StartOfSlot(attestationData.Slot).Add(s.attestationAggregationDelay),
+				s.chainTimeService.StartOfSlot(attestationData.Slot).Add(s.timingsForSlot(attestationData.Slot).attestationAggregationDelay),
 				func(ctx context.Context) { s.attestationAggregator.Aggregate(ctx, aggregatorDuty) },
 			); err != nil {
 				// Don't return here; we want to try to set up as many aggregator jobs as possible.

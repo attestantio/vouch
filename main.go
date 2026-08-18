@@ -250,10 +250,15 @@ func fetchConfig() error {
 	viper.SetDefault("eth2client.custom-spec-support", false)
 	viper.SetDefault("eth2client.allow-delayed-start", true)
 	viper.SetDefault("controller.max-proposal-delay", 0)
-	viper.SetDefault("controller.max-attestation-delay", 4*time.Second)
-	viper.SetDefault("controller.max-sync-committee-message-delay", 4*time.Second)
-	viper.SetDefault("controller.attestation-aggregation-delay", 8*time.Second)
-	viper.SetDefault("controller.sync-committee-aggregation-delay", 8*time.Second)
+	// The duty delays below default to 0, which the controller reads as "derive from the
+	// chain specification".  On a 12-second slot the derived values are the 4s/8s that were
+	// previously hardcoded here; on a chain that serves a different slot duration, or that
+	// serves explicit basis-point deadlines, the derived values follow the chain rather than
+	// silently scheduling duties past the end of the slot.
+	viper.SetDefault("controller.max-attestation-delay", 0)
+	viper.SetDefault("controller.max-sync-committee-message-delay", 0)
+	viper.SetDefault("controller.attestation-aggregation-delay", 0)
+	viper.SetDefault("controller.sync-committee-aggregation-delay", 0)
 	viper.SetDefault("controller.verify-sync-committee-inclusion", false)
 	viper.SetDefault("controller.fast-track.attestations", true)
 	viper.SetDefault("controller.fast-track.sync-committees", true)
