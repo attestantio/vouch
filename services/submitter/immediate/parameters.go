@@ -18,6 +18,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -34,6 +35,7 @@ type parameters struct {
 	syncCommitteeMessagesSubmitter        eth2client.SyncCommitteeMessagesSubmitter
 	syncCommitteeSubscriptionsSubmitter   eth2client.SyncCommitteeSubscriptionsSubmitter
 	syncCommitteeContributionsSubmitter   eth2client.SyncCommitteeContributionsSubmitter
+	payloadAttestationMessagesSubmitter   submitter.PayloadAttestationMessagesSubmitter
 }
 
 // Parameter is the interface for service parameters.
@@ -121,6 +123,13 @@ func WithAggregateAttestationsSubmitter(submitter eth2client.AggregateAttestatio
 func WithProposalPreparationsSubmitter(submitter eth2client.ProposalPreparationsSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalPreparationsSubmitter = submitter
+	})
+}
+
+// WithPayloadAttestationMessagesSubmitter sets the payload attestation messages submitter.
+func WithPayloadAttestationMessagesSubmitter(submitter submitter.PayloadAttestationMessagesSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.payloadAttestationMessagesSubmitter = submitter
 	})
 }
 

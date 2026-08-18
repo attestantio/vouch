@@ -31,6 +31,7 @@ import (
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/multiinstance"
+	"github.com/attestantio/vouch/services/payloadattester"
 	"github.com/attestantio/vouch/services/proposalpreparer"
 	"github.com/attestantio/vouch/services/scheduler"
 	"github.com/attestantio/vouch/services/synccommitteeaggregator"
@@ -67,6 +68,8 @@ type Service struct {
 	proposalsPreparer            proposalpreparer.Service
 	scheduler                    scheduler.Service
 	attester                     attester.Service
+	ptcDutiesProvider            eth2client.PTCDutiesProvider
+	payloadAttester              payloadattester.Service
 	syncCommitteeMessenger       synccommitteemessenger.Service
 	syncCommitteeAggregator      synccommitteeaggregator.Service
 	syncCommitteesSubscriber     synccommitteesubscriber.Service
@@ -78,6 +81,8 @@ type Service struct {
 	accountsRefresher            accountmanager.Refresher
 	blockToSlotSetter            cache.BlockRootToSlotSetter
 	maxProposalDelay             time.Duration
+	payloadDueDelay              time.Duration
+	payloadAttestationDelay      time.Duration
 	preGloasTimings              dutyTimings
 	gloasTimings                 dutyTimings
 	verifySyncCommitteeInclusion bool
@@ -147,6 +152,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		proposalsPreparer:            parameters.proposalsPreparer,
 		scheduler:                    parameters.scheduler,
 		attester:                     parameters.attester,
+		ptcDutiesProvider:            parameters.ptcDutiesProvider,
+		payloadAttester:              parameters.payloadAttester,
 		syncCommitteeMessenger:       parameters.syncCommitteeMessenger,
 		syncCommitteeAggregator:      parameters.syncCommitteeAggregator,
 		beaconBlockProposer:          parameters.beaconBlockProposer,
@@ -157,6 +164,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		accountsRefresher:            parameters.accountsRefresher,
 		blockToSlotSetter:            parameters.blockToSlotSetter,
 		maxProposalDelay:             parameters.maxProposalDelay,
+		payloadDueDelay:              parameters.payloadDueDelay,
+		payloadAttestationDelay:      parameters.payloadAttestationDelay,
 		preGloasTimings:              parameters.preGloasTimings,
 		gloasTimings:                 parameters.gloasTimings,
 		verifySyncCommitteeInclusion: parameters.verifySyncCommitteeInclusion,
@@ -219,6 +228,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	go s.scheduleProposals(ctx, epoch, validatorIndices, !s.waitedForGenesis)
 	go s.scheduleAttestations(ctx, epoch, validatorIndices, !s.waitedForGenesis)
+	go s.schedulePayloadAttestations(ctx, epoch, validatorIndices, !s.waitedForGenesis)
 	if handlingAltair {
 		thisSyncCommitteePeriodStartEpoch := s.firstEpochOfSyncPeriod(uint64(epoch) / s.epochsPerSyncCommitteePeriod)
 		go s.scheduleSyncCommitteeMessages(ctx, thisSyncCommitteePeriodStartEpoch, syncCommitteeValidatorIndices, true /* notCurrentSlot. */)
@@ -228,6 +238,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		}
 	}
 	go s.scheduleAttestations(ctx, epoch+1, nextEpochValidatorIndices, true /* notCurrentSlot. */)
+	go s.schedulePayloadAttestations(ctx, epoch+1, nextEpochValidatorIndices, true /* notCurrentSlot. */)
 
 	// Update beacon committee subscriptions for this and the next epoch.
 	go s.subscribeToBeaconCommittees(ctx, epoch, accounts)
@@ -333,6 +344,7 @@ func (s *Service) epochTicker(ctx context.Context, data *epochTickerData) {
 	cancel()
 
 	go s.scheduleProposals(ctx, currentEpoch, validatorIndices, false /* notCurrentSlot. */)
+	go s.schedulePayloadAttestations(ctx, currentEpoch, validatorIndices, false /* notCurrentSlot. */)
 	if s.handlingAltair {
 		// Handle the Altair hard fork transition epoch.
 		if currentEpoch == s.altairForkEpoch {
@@ -400,6 +412,7 @@ func (s *Service) prepareForEpoch(ctx context.Context, preparationData *prepareF
 	}
 
 	go s.scheduleAttestations(ctx, preparationData.epoch, validatorIndices, false /* notCurrentSlot. */)
+	go s.schedulePayloadAttestations(ctx, preparationData.epoch, validatorIndices, false /* notCurrentSlot. */)
 	go s.subscribeToBeaconCommittees(ctx, preparationData.epoch, accounts)
 }
 

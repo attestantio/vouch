@@ -27,6 +27,14 @@ import (
 // Service is the generic signer service.
 type Service interface{}
 
+// PayloadAttestationDataSigner provides methods to sign payload attestation data.
+type PayloadAttestationDataSigner interface {
+	SignPayloadAttestationData(ctx context.Context,
+		accounts []e2wtypes.Account,
+		data *gloas.PayloadAttestationData,
+	) ([]phase0.BLSSignature, error)
+}
+
 // AggregateAndProofSigner provides methods to sign aggregate and proofs.
 type AggregateAndProofSigner interface {
 	// SignAggregateAndProof signs an aggregate attestation for given slot and root.
