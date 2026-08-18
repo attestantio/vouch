@@ -315,7 +315,7 @@ func (s *Service) createElectraAttestations(_ context.Context,
 				Msg("No signature for validator; not creating attestation")
 			continue
 		}
-		if len(validatorIndices) < i {
+		if i >= len(validatorIndices) {
 			s.log.Warn().Str("validator_pubkey", fmt.Sprintf("%#x", accounts[i].PublicKey().Marshal())).
 				Msg("Validator indices array smaller than requested index; not creating attestation")
 			continue
