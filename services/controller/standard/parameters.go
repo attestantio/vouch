@@ -45,6 +45,7 @@ type parameters struct {
 	proposerDutiesProvider        eth2client.ProposerDutiesProvider
 	attesterDutiesProvider        eth2client.AttesterDutiesProvider
 	syncCommitteeDutiesProvider   eth2client.SyncCommitteeDutiesProvider
+	ptcDutiesProvider             eth2client.PTCDutiesProvider
 	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
 	eventsProvider                eth2client.EventsProvider
 	beaconBlockHeadersProvider    eth2client.BeaconBlockHeadersProvider
@@ -55,10 +56,9 @@ type parameters struct {
 	proposalsPreparer             proposalpreparer.Service
 	scheduler                     scheduler.Service
 	attester                      attester.Service
-	ptcDutiesProvider             eth2client.PTCDutiesProvider
-	payloadAttester               payloadattester.Service
 	syncCommitteeMessenger        synccommitteemessenger.Service
 	syncCommitteeAggregator       synccommitteeaggregator.Service
+	payloadAttester               payloadattester.Service
 	beaconBlockProposer           beaconblockproposer.Service
 	attestationAggregator         attestationaggregator.Service
 	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
