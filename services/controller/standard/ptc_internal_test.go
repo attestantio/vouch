@@ -113,6 +113,30 @@ func TestSchedulePayloadAttestationsDoesNotRefetchScheduledEpoch(t *testing.T) {
 	require.Empty(t, schedulerService.jobs)
 }
 
+func TestSchedulePayloadAttestationsSkipsPastAndCurrentSlotWhenRequested(t *testing.T) {
+	provider := &recordingPTCDutiesProvider{duties: []*apiv1.PTCDuty{
+		{Slot: 31, ValidatorIndex: 1},
+		{Slot: 32, ValidatorIndex: 2},
+		{Slot: 33, ValidatorIndex: 3},
+	}}
+	schedulerService := &recordingScheduler{}
+	service := &Service{
+		chainTimeService:           &recordingChainTime{currentEpoch: 1, slotsPerEpoch: 32},
+		ptcDutiesProvider:          provider,
+		validatingAccountsProvider: &recordingAccountsProvider{},
+		scheduler:                  schedulerService,
+		payloadAttester:            &recordingPayloadAttester{},
+		gloasForkEpoch:             0,
+	}
+
+	service.schedulePayloadAttestations(context.Background(), 1, []phase0.ValidatorIndex{1, 2, 3}, true)
+
+	require.Len(t, schedulerService.jobs, 1)
+	schedulerService.jobs[0].job(context.Background())
+	require.Len(t, service.payloadAttester.(*recordingPayloadAttester).duties, 1)
+	require.Equal(t, phase0.Slot(33), service.payloadAttester.(*recordingPayloadAttester).duties[0].Slot())
+}
+
 type recordingPTCDutiesProvider struct {
 	duties []*apiv1.PTCDuty
 	calls  int
@@ -205,7 +229,7 @@ type recordingChainTime struct {
 	slotsPerEpoch uint64
 }
 
-func (s *recordingChainTime) GenesisTime() time.Time { return time.Unix(0, 0) }
+func (*recordingChainTime) GenesisTime() time.Time { return time.Unix(0, 0) }
 func (s *recordingChainTime) StartOfSlot(slot phase0.Slot) time.Time {
 	return time.Unix(0, 0).Add(time.Duration(slot) * s.slotDuration)
 }
