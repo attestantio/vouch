@@ -66,6 +66,8 @@ type parameters struct {
 	attestationAggregationDelay   time.Duration
 	maxSyncCommitteeMessageDelay  time.Duration
 	syncCommitteeAggregationDelay time.Duration
+	preGloasTimings               dutyTimings
+	gloasTimings                  dutyTimings
 	verifySyncCommitteeInclusion  bool
 	fastTrackAttestations         bool
 	fastTrackSyncCommittees       bool
@@ -332,8 +334,7 @@ func parseAndCheckParameters(ctx context.Context, params ...Parameter) (*paramet
 		return nil, err
 	}
 	// maxProposalDelay can be 0, so no check for it here.
-	gloasActive := parameters.chainTimeService.CurrentEpoch() >= parameters.chainTimeService.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH")
-	parameters.setDefaultDelays(spec, slotDuration, gloasActive)
+	parameters.setDefaultDelays(spec, slotDuration)
 	// Sync committee duties provider/messenger/aggregator/subscriber are optional so no checks here.
 
 	return &parameters, nil
@@ -389,52 +390,83 @@ func (p *parameters) slotDuration(ctx context.Context) (map[string]any, time.Dur
 	return specResponse.Data, slotDuration, nil
 }
 
-func (p *parameters) setDefaultDelays(spec map[string]any, slotDuration time.Duration, gloasActive bool) {
-	attestationDue, aggregationDue, syncMessageDue, contributionDue := obtainAttestationTimings(spec, slotDuration, gloasActive)
-	if p.maxAttestationDelay == 0 {
-		p.maxAttestationDelay = attestationDue
+// dutyTimings holds the duty scheduling deadlines, as offsets in to the slot.
+type dutyTimings struct {
+	maxAttestationDelay           time.Duration
+	attestationAggregationDelay   time.Duration
+	maxSyncCommitteeMessageDelay  time.Duration
+	syncCommitteeAggregationDelay time.Duration
+}
+
+// applyOverrides replaces each deadline for which the operator supplied an explicit value.  An
+// explicit value is absolute: it applies on both sides of the Gloas fork, as documented for these
+// options.
+func (t *dutyTimings) applyOverrides(overrides dutyTimings) {
+	if overrides.maxAttestationDelay != 0 {
+		t.maxAttestationDelay = overrides.maxAttestationDelay
 	}
-	if p.attestationAggregationDelay == 0 {
-		p.attestationAggregationDelay = aggregationDue
+	if overrides.attestationAggregationDelay != 0 {
+		t.attestationAggregationDelay = overrides.attestationAggregationDelay
 	}
-	if p.maxSyncCommitteeMessageDelay == 0 {
-		p.maxSyncCommitteeMessageDelay = syncMessageDue
+	if overrides.maxSyncCommitteeMessageDelay != 0 {
+		t.maxSyncCommitteeMessageDelay = overrides.maxSyncCommitteeMessageDelay
 	}
-	if p.syncCommitteeAggregationDelay == 0 {
-		p.syncCommitteeAggregationDelay = contributionDue
+	if overrides.syncCommitteeAggregationDelay != 0 {
+		t.syncCommitteeAggregationDelay = overrides.syncCommitteeAggregationDelay
 	}
 }
 
-func obtainAttestationTimings(spec map[string]any, slotDuration time.Duration, gloasActive bool) (time.Duration, time.Duration, time.Duration, time.Duration) {
-	attestationDue := slotDuration / 3
-	aggregationDue := slotDuration * 2 / 3
-	syncMessageDue := slotDuration / 3
-	contributionDue := slotDuration * 2 / 3
-	if !gloasActive {
-		return attestationDue, aggregationDue, syncMessageDue, contributionDue
-	}
-	if durationMS, ok := spec["SLOT_DURATION_MS"].(uint64); ok {
-		slotDuration = time.Duration(durationMS) * time.Millisecond
-	}
-	dueBPS := func(name string) (uint64, bool) {
-		if bps, ok := spec[name+"_GLOAS"].(uint64); ok {
-			return bps, true
-		}
-		bps, ok := spec[name].(uint64)
-		return bps, ok
-	}
-	if bps, ok := dueBPS("ATTESTATION_DUE_BPS"); ok {
-		attestationDue = slotDuration * time.Duration(bps) / 10000
-	}
-	if bps, ok := dueBPS("AGGREGATE_DUE_BPS"); ok {
-		aggregationDue = slotDuration * time.Duration(bps) / 10000
-	}
-	if bps, ok := dueBPS("SYNC_MESSAGE_DUE_BPS"); ok {
-		syncMessageDue = slotDuration * time.Duration(bps) / 10000
-	}
-	if bps, ok := dueBPS("CONTRIBUTION_DUE_BPS"); ok {
-		contributionDue = slotDuration * time.Duration(bps) / 10000
+// setDefaultDelays derives both the pre-Gloas and the Gloas duty timings.  Both are derived here,
+// at construction, but which of them applies is decided per duty from that duty's slot; deciding it
+// here would freeze the process on whichever side of the fork it happened to start.
+func (p *parameters) setDefaultDelays(spec map[string]any, slotDuration time.Duration) {
+	overrides := dutyTimings{
+		maxAttestationDelay:           p.maxAttestationDelay,
+		attestationAggregationDelay:   p.attestationAggregationDelay,
+		maxSyncCommitteeMessageDelay:  p.maxSyncCommitteeMessageDelay,
+		syncCommitteeAggregationDelay: p.syncCommitteeAggregationDelay,
 	}
 
-	return attestationDue, aggregationDue, syncMessageDue, contributionDue
+	p.preGloasTimings = obtainAttestationTimings(spec, slotDuration, false)
+	p.preGloasTimings.applyOverrides(overrides)
+	p.gloasTimings = obtainAttestationTimings(spec, slotDuration, true)
+	p.gloasTimings.applyOverrides(overrides)
+}
+
+func obtainAttestationTimings(spec map[string]any, slotDuration time.Duration, gloasActive bool) dutyTimings {
+	if !gloasActive {
+		return dutyTimings{
+			maxAttestationDelay:           slotDuration / 3,
+			attestationAggregationDelay:   slotDuration * 2 / 3,
+			maxSyncCommitteeMessageDelay:  slotDuration / 3,
+			syncCommitteeAggregationDelay: slotDuration * 2 / 3,
+		}
+	}
+
+	// Gloas serves the slot duration in milliseconds, and it can differ from SECONDS_PER_SLOT.
+	// All Gloas-derived deadlines must be fractions of this value rather than of SECONDS_PER_SLOT.
+	if durationMS, ok := spec["SLOT_DURATION_MS"].(uint64); ok && durationMS != 0 {
+		slotDuration = time.Duration(durationMS) * time.Millisecond
+	}
+
+	// dueBPS provides the deadline for the given spec value, in basis points of the slot duration,
+	// falling back to the supplied default if the value is not served or is out of range.
+	dueBPS := func(name string, fallback time.Duration) time.Duration {
+		bps, ok := spec[name+"_GLOAS"].(uint64)
+		if !ok {
+			bps, ok = spec[name].(uint64)
+		}
+		if !ok || bps == 0 || bps > 10000 {
+			return fallback
+		}
+
+		return slotDuration * time.Duration(bps) / 10000
+	}
+
+	return dutyTimings{
+		maxAttestationDelay:           dueBPS("ATTESTATION_DUE_BPS", slotDuration/3),
+		attestationAggregationDelay:   dueBPS("AGGREGATE_DUE_BPS", slotDuration*2/3),
+		maxSyncCommitteeMessageDelay:  dueBPS("SYNC_MESSAGE_DUE_BPS", slotDuration/3),
+		syncCommitteeAggregationDelay: dueBPS("CONTRIBUTION_DUE_BPS", slotDuration*2/3),
+	}
 }
