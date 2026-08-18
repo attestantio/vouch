@@ -327,12 +327,13 @@ func parseAndCheckParameters(ctx context.Context, params ...Parameter) (*paramet
 	if err := parameters.validate(); err != nil {
 		return nil, err
 	}
-	slotDuration, err := parameters.slotDuration(ctx)
+	spec, slotDuration, err := parameters.slotDuration(ctx)
 	if err != nil {
 		return nil, err
 	}
 	// maxProposalDelay can be 0, so no check for it here.
-	parameters.setDefaultDelays(slotDuration)
+	gloasActive := parameters.chainTimeService.CurrentEpoch() >= parameters.chainTimeService.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH")
+	parameters.setDefaultDelays(spec, slotDuration, gloasActive)
 	// Sync committee duties provider/messenger/aggregator/subscriber are optional so no checks here.
 
 	return &parameters, nil
@@ -371,34 +372,69 @@ func (p *parameters) validate() error {
 	return nil
 }
 
-func (p *parameters) slotDuration(ctx context.Context) (time.Duration, error) {
+func (p *parameters) slotDuration(ctx context.Context) (map[string]any, time.Duration, error) {
 	specResponse, err := p.specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to obtain spec")
+		return nil, 0, errors.Wrap(err, "failed to obtain spec")
 	}
 	secondsPerSlot, exists := specResponse.Data["SECONDS_PER_SLOT"]
 	if !exists {
-		return 0, errors.New("SECONDS_PER_SLOT not found in spec")
+		return nil, 0, errors.New("SECONDS_PER_SLOT not found in spec")
 	}
 	slotDuration, ok := secondsPerSlot.(time.Duration)
 	if !ok {
-		return 0, errors.New("SECONDS_PER_SLOT of unexpected type")
+		return nil, 0, errors.New("SECONDS_PER_SLOT of unexpected type")
 	}
 
-	return slotDuration, nil
+	return specResponse.Data, slotDuration, nil
 }
 
-func (p *parameters) setDefaultDelays(slotDuration time.Duration) {
+func (p *parameters) setDefaultDelays(spec map[string]any, slotDuration time.Duration, gloasActive bool) {
+	attestationDue, aggregationDue, syncMessageDue, contributionDue := obtainAttestationTimings(spec, slotDuration, gloasActive)
 	if p.maxAttestationDelay == 0 {
-		p.maxAttestationDelay = slotDuration / 3
+		p.maxAttestationDelay = attestationDue
 	}
 	if p.attestationAggregationDelay == 0 {
-		p.attestationAggregationDelay = slotDuration * 2 / 3
+		p.attestationAggregationDelay = aggregationDue
 	}
 	if p.maxSyncCommitteeMessageDelay == 0 {
-		p.maxSyncCommitteeMessageDelay = slotDuration / 3
+		p.maxSyncCommitteeMessageDelay = syncMessageDue
 	}
 	if p.syncCommitteeAggregationDelay == 0 {
-		p.syncCommitteeAggregationDelay = slotDuration * 2 / 3
+		p.syncCommitteeAggregationDelay = contributionDue
 	}
+}
+
+func obtainAttestationTimings(spec map[string]any, slotDuration time.Duration, gloasActive bool) (time.Duration, time.Duration, time.Duration, time.Duration) {
+	attestationDue := slotDuration / 3
+	aggregationDue := slotDuration * 2 / 3
+	syncMessageDue := slotDuration / 3
+	contributionDue := slotDuration * 2 / 3
+	if !gloasActive {
+		return attestationDue, aggregationDue, syncMessageDue, contributionDue
+	}
+	if durationMS, ok := spec["SLOT_DURATION_MS"].(uint64); ok {
+		slotDuration = time.Duration(durationMS) * time.Millisecond
+	}
+	dueBPS := func(name string) (uint64, bool) {
+		if bps, ok := spec[name+"_GLOAS"].(uint64); ok {
+			return bps, true
+		}
+		bps, ok := spec[name].(uint64)
+		return bps, ok
+	}
+	if bps, ok := dueBPS("ATTESTATION_DUE_BPS"); ok {
+		attestationDue = slotDuration * time.Duration(bps) / 10000
+	}
+	if bps, ok := dueBPS("AGGREGATE_DUE_BPS"); ok {
+		aggregationDue = slotDuration * time.Duration(bps) / 10000
+	}
+	if bps, ok := dueBPS("SYNC_MESSAGE_DUE_BPS"); ok {
+		syncMessageDue = slotDuration * time.Duration(bps) / 10000
+	}
+	if bps, ok := dueBPS("CONTRIBUTION_DUE_BPS"); ok {
+		contributionDue = slotDuration * time.Duration(bps) / 10000
+	}
+
+	return attestationDue, aggregationDue, syncMessageDue, contributionDue
 }
