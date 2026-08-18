@@ -266,15 +266,15 @@ type attesterTestChainTime struct {
 	slotsPerEpoch  uint64
 }
 
-func (s *attesterTestChainTime) GenesisTime() time.Time { return time.Unix(0, 0) }
+func (*attesterTestChainTime) GenesisTime() time.Time { return time.Unix(0, 0) }
 func (s *attesterTestChainTime) StartOfSlot(slot phase0.Slot) time.Time {
 	return s.GenesisTime().Add(time.Duration(slot) * time.Second)
 }
 func (s *attesterTestChainTime) StartOfEpoch(epoch phase0.Epoch) time.Time {
 	return s.StartOfSlot(phase0.Slot(uint64(epoch) * s.slotsPerEpoch))
 }
-func (s *attesterTestChainTime) CurrentSlot() phase0.Slot   { return 0 }
-func (s *attesterTestChainTime) CurrentEpoch() phase0.Epoch { return 0 }
+func (*attesterTestChainTime) CurrentSlot() phase0.Slot   { return 0 }
+func (*attesterTestChainTime) CurrentEpoch() phase0.Epoch { return 0 }
 func (s *attesterTestChainTime) SlotToEpoch(slot phase0.Slot) phase0.Epoch {
 	return phase0.Epoch(uint64(slot) / s.slotsPerEpoch)
 }
