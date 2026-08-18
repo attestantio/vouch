@@ -212,19 +212,19 @@ func (s *Service) Aggregate(ctx context.Context, duty *attestationaggregator.Dut
 func createVersionedAggregateAndProof(duty *attestationaggregator.Duty, aggregateAttestation *spec.VersionedAttestation) (*spec.VersionedAggregateAndProof, error) {
 	switch aggregateAttestation.Version {
 	case spec.DataVersionPhase0:
-		return createVersionedPhase0AggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Phase0, "phase0")
+		return createVersionedPhase0AggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Phase0)
 	case spec.DataVersionAltair:
-		return createVersionedPhase0AggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Altair, "altair")
+		return createVersionedPhase0AggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Altair)
 	case spec.DataVersionBellatrix:
-		return createVersionedPhase0AggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Bellatrix, "bellatrix")
+		return createVersionedPhase0AggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Bellatrix)
 	case spec.DataVersionCapella:
-		return createVersionedPhase0AggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Capella, "capella")
+		return createVersionedPhase0AggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Capella)
 	case spec.DataVersionDeneb:
-		return createVersionedPhase0AggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Deneb, "deneb")
+		return createVersionedPhase0AggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Deneb)
 	case spec.DataVersionElectra:
-		return createVersionedElectraAggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Electra, "electra")
+		return createVersionedElectraAggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Electra)
 	case spec.DataVersionFulu:
-		return createVersionedElectraAggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Fulu, "fulu")
+		return createVersionedElectraAggregateAndProof(duty, aggregateAttestation.Version, aggregateAttestation.Fulu)
 	case spec.DataVersionGloas:
 		if aggregateAttestation.Gloas == nil {
 			return nil, errors.New("no gloas attestation")
@@ -238,26 +238,26 @@ func createVersionedAggregateAndProof(duty *attestationaggregator.Duty, aggregat
 			},
 		}, nil
 	default:
-		return &spec.VersionedAggregateAndProof{}, errors.New("unknown version")
+		return nil, errors.New("unknown version")
 	}
 }
 
 func createVersionedSignedAggregateAndProof(aggregateAndProof *spec.VersionedAggregateAndProof, sig phase0.BLSSignature) (*spec.VersionedSignedAggregateAndProof, error) {
 	switch aggregateAndProof.Version {
 	case spec.DataVersionPhase0:
-		return createVersionedPhase0SignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Phase0, sig, "phase0")
+		return createVersionedPhase0SignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Phase0, sig)
 	case spec.DataVersionAltair:
-		return createVersionedPhase0SignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Altair, sig, "altair")
+		return createVersionedPhase0SignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Altair, sig)
 	case spec.DataVersionBellatrix:
-		return createVersionedPhase0SignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Bellatrix, sig, "bellatrix")
+		return createVersionedPhase0SignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Bellatrix, sig)
 	case spec.DataVersionCapella:
-		return createVersionedPhase0SignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Capella, sig, "capella")
+		return createVersionedPhase0SignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Capella, sig)
 	case spec.DataVersionDeneb:
-		return createVersionedPhase0SignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Deneb, sig, "deneb")
+		return createVersionedPhase0SignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Deneb, sig)
 	case spec.DataVersionElectra:
-		return createVersionedElectraSignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Electra, sig, "electra")
+		return createVersionedElectraSignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Electra, sig)
 	case spec.DataVersionFulu:
-		return createVersionedElectraSignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Fulu, sig, "fulu")
+		return createVersionedElectraSignedAggregateAndProof(aggregateAndProof.Version, aggregateAndProof.Fulu, sig)
 	case spec.DataVersionGloas:
 		if aggregateAndProof.Gloas == nil {
 			return nil, errors.New("no gloas aggregate and proof")
@@ -270,17 +270,16 @@ func createVersionedSignedAggregateAndProof(aggregateAndProof *spec.VersionedAgg
 			},
 		}, nil
 	default:
-		return &spec.VersionedSignedAggregateAndProof{}, errors.New("unknown version")
+		return nil, errors.New("unknown version")
 	}
 }
 
 func createVersionedPhase0AggregateAndProof(duty *attestationaggregator.Duty,
 	version spec.DataVersion,
 	aggregateAttestation *phase0.Attestation,
-	name string,
 ) (*spec.VersionedAggregateAndProof, error) {
 	if aggregateAttestation == nil {
-		return nil, errors.New("no " + name + " attestation")
+		return nil, errors.New("no " + version.String() + " attestation")
 	}
 	aggregateAndProof := &phase0.AggregateAndProof{
 		AggregatorIndex: duty.ValidatorIndex,
@@ -308,10 +307,9 @@ func createVersionedPhase0AggregateAndProof(duty *attestationaggregator.Duty,
 func createVersionedElectraAggregateAndProof(duty *attestationaggregator.Duty,
 	version spec.DataVersion,
 	aggregateAttestation *electra.Attestation,
-	name string,
 ) (*spec.VersionedAggregateAndProof, error) {
 	if aggregateAttestation == nil {
-		return nil, errors.New("no " + name + " attestation")
+		return nil, errors.New("no " + version.String() + " attestation")
 	}
 	aggregateAndProof := &electra.AggregateAndProof{
 		AggregatorIndex: duty.ValidatorIndex,
@@ -333,10 +331,9 @@ func createVersionedElectraAggregateAndProof(duty *attestationaggregator.Duty,
 func createVersionedPhase0SignedAggregateAndProof(version spec.DataVersion,
 	aggregateAndProof *phase0.AggregateAndProof,
 	sig phase0.BLSSignature,
-	name string,
 ) (*spec.VersionedSignedAggregateAndProof, error) {
 	if aggregateAndProof == nil {
-		return nil, errors.New("no " + name + " aggregate and proof")
+		return nil, errors.New("no " + version.String() + " aggregate and proof")
 	}
 	signedAggregateAndProof := &phase0.SignedAggregateAndProof{
 		Message:   aggregateAndProof,
@@ -363,10 +360,9 @@ func createVersionedPhase0SignedAggregateAndProof(version spec.DataVersion,
 func createVersionedElectraSignedAggregateAndProof(version spec.DataVersion,
 	aggregateAndProof *electra.AggregateAndProof,
 	sig phase0.BLSSignature,
-	name string,
 ) (*spec.VersionedSignedAggregateAndProof, error) {
 	if aggregateAndProof == nil {
-		return nil, errors.New("no " + name + " aggregate and proof")
+		return nil, errors.New("no " + version.String() + " aggregate and proof")
 	}
 	signedAggregateAndProof := &electra.SignedAggregateAndProof{
 		Message:   aggregateAndProof,
