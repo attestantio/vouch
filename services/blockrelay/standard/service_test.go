@@ -183,6 +183,26 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: listen address malformed",
 		},
 		{
+			name: "ListenAddressMalformedBeforeReleaseVersion",
+			params: []standard.Parameter{
+				standard.WithLogLevel(zerolog.Disabled),
+				standard.WithMonitor(monitor),
+				standard.WithMajordomo(majordomoSvc),
+				standard.WithScheduler(mockScheduler),
+				standard.WithListenAddress("abc"),
+				standard.WithChainTime(chainTime),
+				standard.WithConfigURL(configURL),
+				standard.WithFallbackFeeRecipient(fallbackFeeRecipient),
+				standard.WithFallbackGasLimit(fallbackGasLimit),
+				standard.WithAccountsProvider(mockAccountsProvider),
+				standard.WithValidatorsProvider(mockValidatorsProvider),
+				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithValidatorRegistrationSigner(mockSigner),
+				standard.WithBuilderBidProvider(builderBidProvider),
+			},
+			err: "problem with parameters: listen address malformed",
+		},
+		{
 			name: "ChainTimeMissing",
 			params: []standard.Parameter{
 				standard.WithLogLevel(zerolog.Disabled),
