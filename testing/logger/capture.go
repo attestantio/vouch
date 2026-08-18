@@ -15,6 +15,7 @@ package logger
 
 import (
 	"encoding/json"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -87,45 +88,32 @@ func (c *LogCapture) HasLog(fields map[string]any) bool {
 
 // hasField returns true if the entry has a matching field.
 func (*LogCapture) hasField(entry map[string]any, key string, value any) bool {
-	for entryKey, entryValue := range entry {
-		if entryKey != key {
-			continue
-		}
-		switch v := value.(type) {
-		case bool:
-			return entryValue == v
-		case string:
-			return entryValue == value.(string)
-		case int:
-			return int(entryValue.(float64)) == v
-		case int8:
-			return int8(entryValue.(float64)) == v
-		case int16:
-			return int16(entryValue.(float64)) == v
-		case int32:
-			return int32(entryValue.(float64)) == v
-		case int64:
-			return int64(entryValue.(float64)) == v
-		case uint:
-			return uint(entryValue.(float64)) == v
-		case uint8:
-			return uint8(entryValue.(float64)) == v
-		case uint16:
-			return uint16(entryValue.(float64)) == v
-		case uint32:
-			return uint32(entryValue.(float64)) == v
-		case uint64:
-			return uint64(entryValue.(float64)) == v
-		case float32:
-			return float32(entryValue.(float64)) == v
-		case float64:
-			return entryValue.(float64) == v
-		default:
-			panic("unhandled type")
-		}
+	entryValue, exists := entry[key]
+	if !exists {
+		return false
 	}
 
-	return false
+	return fieldsMatch(entryValue, value)
+}
+
+func fieldsMatch(entryValue any, value any) bool {
+	expected := reflect.ValueOf(value)
+	if expected.CanInt() {
+		return int64(entryValue.(float64)) == expected.Int()
+	}
+	if expected.CanUint() {
+		return uint64(entryValue.(float64)) == expected.Uint()
+	}
+	if expected.CanFloat() {
+		return entryValue.(float64) == expected.Float()
+	}
+
+	switch value.(type) {
+	case bool, string:
+		return entryValue == value
+	default:
+		panic("unhandled type")
+	}
 }
 
 // Entries returns all captures log entries.
