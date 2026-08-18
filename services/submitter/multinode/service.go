@@ -19,6 +19,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -39,6 +40,7 @@ type Service struct {
 	syncCommitteeMessagesSubmitter        map[string]eth2client.SyncCommitteeMessagesSubmitter
 	syncCommitteeSubscriptionSubmitters   map[string]eth2client.SyncCommitteeSubscriptionsSubmitter
 	syncCommitteeContributionsSubmitters  map[string]eth2client.SyncCommitteeContributionsSubmitter
+	payloadAttestationMessagesSubmitters  map[string]submitter.PayloadAttestationMessagesSubmitter
 }
 
 // New creates a new multinode submitter.
@@ -68,6 +70,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeMessagesSubmitter:        parameters.syncCommitteeMessagesSubmitter,
 		syncCommitteeSubscriptionSubmitters:   parameters.syncCommitteeSubscriptionsSubmitters,
 		syncCommitteeContributionsSubmitters:  parameters.syncCommitteeContributionsSubmitters,
+		payloadAttestationMessagesSubmitters:  parameters.payloadAttestationMessagesSubmitters,
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 

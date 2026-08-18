@@ -23,6 +23,7 @@ import (
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -42,6 +43,7 @@ type Service struct {
 	syncCommitteeMessagesSubmitter        eth2client.SyncCommitteeMessagesSubmitter
 	syncCommitteeSubscriptionsSubmitter   eth2client.SyncCommitteeSubscriptionsSubmitter
 	syncCommitteeContributionsSubmitter   eth2client.SyncCommitteeContributionsSubmitter
+	payloadAttestationMessagesSubmitter   submitter.PayloadAttestationMessagesSubmitter
 }
 
 // New creates a new submitter.
@@ -69,6 +71,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeMessagesSubmitter:        parameters.syncCommitteeMessagesSubmitter,
 		syncCommitteeSubscriptionsSubmitter:   parameters.syncCommitteeSubscriptionsSubmitter,
 		syncCommitteeContributionsSubmitter:   parameters.syncCommitteeContributionsSubmitter,
+		payloadAttestationMessagesSubmitter:   parameters.payloadAttestationMessagesSubmitter,
 	}
 
 	return s, nil
