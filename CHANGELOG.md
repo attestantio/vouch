@@ -3,6 +3,7 @@ dev:
   - refuse to start static-delay multi-instance when the attestation deadline plus multiinstance.static-delay.attester-delay reaches the end of the slot, where a takeover attestation would always be late
   - update golang.org/x/net to v0.62.0 to pick up the golang.org/x/net/html denial-of-service fix (CVE-2026-78661)
   - build with Go 1.26.11 to pick up the net/http denial-of-service fix (CVE-2026-97054)
+  - update proposal preparations as soon as a consensus client becomes synced, in addition to the once-per-epoch update
 
 1.14.0-alpha.2:
   - update golang.org/x/net to v0.60.0 and build the Docker image with Go 1.26.10 to pick up HTTP/2, Range header and TLS denial-of-service fixes and a crypto/x509 fix; building now requires Go 1.26

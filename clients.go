@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -34,6 +35,36 @@ var (
 	knownClients   = make(map[string]eth2client.Service)
 	knownClientsMu sync.Mutex
 )
+
+// clientSyncedHandler is called with a consensus client's address when that client becomes
+// synced.  It is set after the clients are constructed, and read each time the hook fires.
+var clientSyncedHandler atomic.Pointer[func(address string)]
+
+// setClientSyncedHandler sets the function called when a consensus client becomes synced.
+//
+// http.New checks a client's connection state before it returns, so a client constructed
+// before the handler is set becomes synced for the first time with no handler to call, and
+// that transition is not reported.  Later transitions, such as a node becoming synced again
+// after a restart, are reported.
+//
+// The client calls its hooks in a goroutine of their own, one per transition, so the handler
+// can run concurrently with itself and must be safe to do so.
+func setClientSyncedHandler(handler func(address string)) {
+	clientSyncedHandler.Store(&handler)
+}
+
+// clientHooks are the hooks provided to each consensus client, allowing vouch to react to
+// changes in the client's connection state.
+//
+// The context passed to a hook is not used.  It can be the context of the request that
+// triggered the connection state check, which may already be cancelled.
+var clientHooks = &httpclient.Hooks{
+	OnSynced: func(_ context.Context, s *httpclient.Service) {
+		if handler := clientSyncedHandler.Load(); handler != nil && *handler != nil {
+			(*handler)(s.Address())
+		}
+	},
+}
 
 // fetchClient fetches a client service, instantiating it if required.
 func fetchClient(ctx context.Context, monitor metrics.Service, address string) (eth2client.Service, error) {
@@ -58,6 +89,7 @@ func fetchClient(ctx context.Context, monitor metrics.Service, address string) (
 				"User-Agent": fmt.Sprintf("Vouch/%s", ReleaseVersion),
 			}),
 			httpclient.WithReducedMemoryUsage(util.HierarchicalBool("reduced-memory-usage", fmt.Sprintf("eth2client.%s", address))),
+			httpclient.WithHooks(clientHooks),
 		)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to initiate consensus client")
