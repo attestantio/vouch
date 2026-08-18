@@ -20,9 +20,12 @@ import (
 
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
+	"github.com/attestantio/vouch/services/beaconcommitteesubscriber"
+	"github.com/rs/zerolog"
 )
 
 // scheduleAttestations schedules attestations for the given epoch and validator indices.
@@ -172,6 +175,15 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester
 		return
 	}
 
+	s.scheduleAttestationAggregations(ctx, log, epoch, subscriptionInfoMap, attestations)
+}
+
+func (s *Service) scheduleAttestationAggregations(ctx context.Context,
+	log zerolog.Logger,
+	epoch phase0.Epoch,
+	subscriptionInfoMap map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription,
+	attestations []*spec.VersionedAttestation,
+) {
 	for _, attestation := range attestations {
 		attestationData, err := attestation.Data()
 		if err != nil {
