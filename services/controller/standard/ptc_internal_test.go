@@ -169,11 +169,11 @@ func (p *recordingAccountsProvider) ValidatingAccountsForEpochByIndex(_ context.
 	return accounts, nil
 }
 
-func (p *recordingAccountsProvider) SyncCommitteeAccountsForEpoch(_ context.Context, _ phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+func (*recordingAccountsProvider) SyncCommitteeAccountsForEpoch(_ context.Context, _ phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
 	return nil, nil
 }
 
-func (p *recordingAccountsProvider) SyncCommitteeAccountsForEpochByIndex(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
+func (*recordingAccountsProvider) SyncCommitteeAccountsForEpochByIndex(_ context.Context, _ phase0.Epoch, _ []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
 	return nil, nil
 }
 
