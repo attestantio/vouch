@@ -24,6 +24,7 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/electra"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
@@ -308,6 +309,20 @@ func createVersionedAggregateAndProof(duty *attestationaggregator.Duty, aggregat
 			Fulu:    aggregateAndProof,
 		}
 		return versionedAggregateAndProof, nil
+	case spec.DataVersionGloas:
+		if aggregateAttestation.Gloas == nil {
+			return nil, errors.New("no gloas attestation")
+		}
+		aggregateAndProof := &gloas.AggregateAndProof{
+			AggregatorIndex: duty.ValidatorIndex,
+			Aggregate:       aggregateAttestation.Gloas,
+			SelectionProof:  duty.SlotSignature,
+		}
+		versionedAggregateAndProof := &spec.VersionedAggregateAndProof{
+			Version: aggregateAttestation.Version,
+			Gloas:   aggregateAndProof,
+		}
+		return versionedAggregateAndProof, nil
 	default:
 		return &spec.VersionedAggregateAndProof{}, errors.New("unknown version")
 	}
@@ -404,6 +419,19 @@ func createVersionedSignedAggregateAndProof(aggregateAndProof *spec.VersionedAgg
 		signedVersionedAggregateAndProof := &spec.VersionedSignedAggregateAndProof{
 			Version: aggregateAndProof.Version,
 			Fulu:    signedAggregateAndProof,
+		}
+		return signedVersionedAggregateAndProof, nil
+	case spec.DataVersionGloas:
+		if aggregateAndProof.Gloas == nil {
+			return nil, errors.New("no gloas aggregate and proof")
+		}
+		signedAggregateAndProof := &gloas.SignedAggregateAndProof{
+			Message:   aggregateAndProof.Gloas,
+			Signature: sig,
+		}
+		signedVersionedAggregateAndProof := &spec.VersionedSignedAggregateAndProof{
+			Version: aggregateAndProof.Version,
+			Gloas:   signedAggregateAndProof,
 		}
 		return signedVersionedAggregateAndProof, nil
 	default:
