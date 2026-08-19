@@ -401,6 +401,7 @@ func startServices(ctx context.Context,
 	if err != nil {
 		return nil, nil, err
 	}
+	registerProposalPreparationsUpdater(ctx, proposalPreparer)
 
 	multiInstance, err := startMultiInstance(ctx, monitor, chainTime, eth2Client, beaconBlockHeaderProvider)
 	if err != nil {
@@ -503,6 +504,28 @@ func initController(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to start controller service")
 	}
 	return controller, nil
+}
+
+// registerProposalPreparationsUpdater updates proposal preparations whenever a consensus client
+// becomes active.  Beacon nodes hold proposal preparations in memory, so a node that has restarted
+// has none until the next scheduled update; this keeps that window as short as possible.
+//
+// The supplied context is used for the updates, rather than the context provided to the callback.
+// A client checks its connection state on the way in to a request that finds it inactive, so the
+// callback's context can be that request's, which is cancelled as soon as the request completes;
+// using it here cancels the preparations mid-flight.
+func registerProposalPreparationsUpdater(ctx context.Context, proposalPreparer proposalpreparer.Service) {
+	if proposalPreparer == nil {
+		// Not bellatrix-capable, so there are no preparations to provide.
+		return
+	}
+
+	addReconnectCallback(func(_ context.Context, address string) {
+		log.Debug().Str("address", address).Msg("Consensus client active; updating proposal preparations")
+		if err := proposalPreparer.UpdatePreparations(ctx); err != nil {
+			log.Error().Str("address", address).Err(err).Msg("Failed to update proposal preparations on client activation")
+		}
+	})
 }
 
 func initProposalPreparer(ctx context.Context, monitor metrics.Service, chainTime chaintime.Service, bellatrixCapable bool, accountManager accountmanager.Service, blockRelay blockrelay.Service) (proposalpreparer.Service, error) {
