@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
@@ -24,6 +25,13 @@ import (
 	"github.com/attestantio/vouch/services/payloadattester"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
+
+// payloadAttestationGrace is added to the payload attestation deadline before the vote is cast.  A
+// beacon node does not serve payload attestation data it does not yet consider final, and one whose
+// clock trails ours has not reached the deadline when we do, so firing exactly on the deadline can
+// return nothing at all.  This covers that skew and still leaves the rest of the slot for the vote
+// to propagate.
+const payloadAttestationGrace = 250 * time.Millisecond
 
 // payloadAttestationJobName provides the scheduler job name for a slot's payload attestations.
 func payloadAttestationJobName(slot phase0.Slot) string {
@@ -127,6 +135,7 @@ func payloadAttestationDuties(data []*apiv1.PTCDuty,
 	return dutiesBySlot, indices
 }
 
+//nolint:godox // The TODO below is tracked as follow-up work, not left as a loose end.
 func (s *Service) schedulePayloadAttestation(ctx context.Context,
 	duty *payloadattester.Duty,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
@@ -140,8 +149,15 @@ func (s *Service) schedulePayloadAttestation(ctx context.Context,
 		duty.SetAccount(index, account)
 	}
 
-	jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.payloadDueDelay)
-	deadline := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.payloadAttestationDelay)
+	// TODO: take the payload-available event once go-eth2-client exposes the SSE topic.
+	// The vote would then be cast as soon as the beacon node reports the payload available, keeping
+	// this deadline as the backstop.  Prysm's validator waits on that event or this deadline,
+	// whichever comes first, which votes earlier in the common case without ever asking before the
+	// answer is final.
+	jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.payloadAttestationDelay).Add(payloadAttestationGrace)
+	// The vote is cast at the attestation deadline, so its context runs to the end of the slot:
+	// bounding it at that deadline would cut off the signing and submission the vote depends on.
+	deadline := s.chainTimeService.StartOfSlot(duty.Slot() + 1)
 	if err := s.scheduler.ScheduleJob(ctx,
 		"Payload attestation",
 		payloadAttestationJobName(duty.Slot()),
