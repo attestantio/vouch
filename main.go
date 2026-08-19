@@ -1679,9 +1679,10 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 	return submitter, nil
 }
 
-// startPayloadAttester starts the payload attester when all of its post-Gloas capabilities are
-// available.  Older beacon nodes do not expose these capabilities, so the service remains
-// disabled without making startup fail.
+// startPayloadAttester starts the payload attester when the consensus client, signer and submitter
+// all provide their side of the payload attestation flow.  Anything missing leaves the service
+// disabled rather than making startup fail.  Whether the network is at Gloas is not decided here:
+// the controller schedules no payload attestation duty before GLOAS_FORK_EPOCH.
 func startPayloadAttester(ctx context.Context,
 	monitor metrics.Service,
 	eth2Client eth2client.Service,
