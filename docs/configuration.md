@@ -418,20 +418,20 @@ This can be configured using the environment variables `VOUCH_<MODULE>_LOG_LEVEL
 
 Advanced options can change the performance of Vouch to be severely detrimental to its operation. It is strongly recommended that these options are not changed unless the user understands completely what they do and their possible performance impact.
 
-The duty timing options below are derived from the chain specification when they are not set. Before the Gloas fork the derived value is a fixed fraction of `SECONDS_PER_SLOT`. From Gloas onwards it is the deadline that the chain serves for that duty, in basis points of `SLOT_DURATION_MS`, falling back to the same fraction if the chain serves no value for it. Which of the two applies is decided per duty, from that duty's slot, so a Vouch that runs across the fork uses each side's deadlines for the duties on that side. Setting an option explicitly overrides the derivation on both sides of the fork for the lifetime of the process, so an explicit value that is valid today can schedule duties after the end of the slot on a future fork that shortens it.
+The duty timing options below are derived from the chain specification when they are not set. Before the Gloas fork the derived value is a fixed fraction of `SECONDS_PER_SLOT`. From Gloas onwards it is the deadline that the chain serves for that duty, in basis points of `SLOT_DURATION_MS`, falling back to the equivalent Gloas fraction if the chain serves no value for it. Gloas moves all four deadlines earlier, and its values are served under `_GLOAS`-suffixed keys; the unsuffixed keys continue to carry the pre-Gloas deadlines and are not used after the fork. Which of the two applies is decided per duty, from that duty's slot, so a Vouch that runs across the fork uses each side's deadlines for the duties on that side. Setting an option explicitly overrides the derivation on both sides of the fork for the lifetime of the process, so an explicit value that is valid today can schedule duties after the end of the slot on a future fork that shortens it.
 
 ### controller.max-attestation-delay
 
-This is a duration parameter, that defaults to a third of the slot duration (`4s` on a 12-second slot), or from Gloas onwards to `ATTESTATION_DUE_BPS` if the chain serves it. It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
+This is a duration parameter, that defaults to a third of the slot duration before the Gloas fork and to `ATTESTATION_DUE_BPS_GLOAS` from Gloas onwards; on a 12-second slot that is `4s` before Gloas and `3s` from Gloas. It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
 
 ### controller.attestation-aggregation-delay
 
-This is a duration parameter, that defaults to two thirds of the slot duration (`8s` on a 12-second slot), or from Gloas onwards to `AGGREGATE_DUE_BPS` if the chain serves it. It defines the time that Vouch will wait from the start of a slot before aggregating existing attestations.
+This is a duration parameter, that defaults to two thirds of the slot duration before the Gloas fork and to `AGGREGATE_DUE_BPS_GLOAS` from Gloas onwards; on a 12-second slot that is `8s` before Gloas and `6s` from Gloas. It defines the time that Vouch will wait from the start of a slot before aggregating existing attestations.
 
 ### controller.max-sync-committee-message-delay
 
-This is a duration parameter, that defaults to a third of the slot duration (`4s` on a 12-second slot), or from Gloas onwards to `SYNC_MESSAGE_DUE_BPS` if the chain serves it. It defines the maximum time that Vouch will wait from the start of a slot for a block before generating sync committee messages on the basis that the slot is empty.
+This is a duration parameter, that defaults to a third of the slot duration before the Gloas fork and to `SYNC_MESSAGE_DUE_BPS_GLOAS` from Gloas onwards; on a 12-second slot that is `4s` before Gloas and `3s` from Gloas. It defines the maximum time that Vouch will wait from the start of a slot for a block before generating sync committee messages on the basis that the slot is empty.
 
 ### controller.sync-committee-aggregation-delay
 
-This is a duration parameter, that defaults to two thirds of the slot duration (`8s` on a 12-second slot), or from Gloas onwards to `CONTRIBUTION_DUE_BPS` if the chain serves it. It defines the time that Vouch will wait from the start of a slot before aggregating existing sync committee messages.
+This is a duration parameter, that defaults to two thirds of the slot duration before the Gloas fork and to `CONTRIBUTION_DUE_BPS_GLOAS` from Gloas onwards; on a 12-second slot that is `8s` before Gloas and `6s` from Gloas. It defines the time that Vouch will wait from the start of a slot before aggregating existing sync committee messages.

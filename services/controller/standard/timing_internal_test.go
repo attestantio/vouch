@@ -12,6 +12,59 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// gloasDevnet8Spec is the Glamsterdam devnet-8 configuration, as served by
+// https://beacon.glamsterdam-devnet-8.ethpandaops.io/eth/v1/config/spec.  It matches the
+// consensus-specs v1.7.0-alpha.13 mainnet configuration for every value used here.
+func gloasDevnet8Spec() map[string]any {
+	return map[string]any{
+		"SLOT_DURATION_MS":            uint64(12000),
+		"ATTESTATION_DUE_BPS":         uint64(3333),
+		"ATTESTATION_DUE_BPS_GLOAS":   uint64(2500),
+		"AGGREGATE_DUE_BPS":           uint64(6667),
+		"AGGREGATE_DUE_BPS_GLOAS":     uint64(5000),
+		"SYNC_MESSAGE_DUE_BPS":        uint64(3333),
+		"SYNC_MESSAGE_DUE_BPS_GLOAS":  uint64(2500),
+		"CONTRIBUTION_DUE_BPS":        uint64(6667),
+		"CONTRIBUTION_DUE_BPS_GLOAS":  uint64(5000),
+		"PAYLOAD_DUE_BPS":             uint64(5000),
+		"PAYLOAD_ATTESTATION_DUE_BPS": uint64(7500),
+	}
+}
+
+// TestGloasSpecConformance pins the derived deadlines to the values the Gloas specification
+// mandates, rather than to the formula the derivation itself uses.  The slot anatomy at mainnet
+// parameters is propose at 0s, attest at 3s, reveal the payload at 6s, and vote on it at 9s.
+func TestGloasSpecConformance(t *testing.T) {
+	timings := obtainAttestationTimings(gloasDevnet8Spec(), 12*time.Second, true)
+
+	require.Equal(t, 3*time.Second, timings.maxAttestationDelay)
+	require.Equal(t, 6*time.Second, timings.attestationAggregationDelay)
+	require.Equal(t, 3*time.Second, timings.maxSyncCommitteeMessageDelay)
+	require.Equal(t, 6*time.Second, timings.syncCommitteeAggregationDelay)
+}
+
+// TestObtainAttestationTimingsIgnoresPreGloasKeys confirms that the unsuffixed keys do not reach the
+// Gloas deadlines.  Devnet-7 served ATTESTATION_DUE_BPS_GLOAS but none of the other three suffixed
+// keys, so reading the unsuffixed key as a fallback scheduled aggregation at the pre-Gloas 8.0004s
+// rather than at the 6s that Gloas requires.
+func TestObtainAttestationTimingsIgnoresPreGloasKeys(t *testing.T) {
+	devnet7 := map[string]any{
+		"SLOT_DURATION_MS":          uint64(12000),
+		"ATTESTATION_DUE_BPS":       uint64(3333),
+		"ATTESTATION_DUE_BPS_GLOAS": uint64(2500),
+		"AGGREGATE_DUE_BPS":         uint64(6667),
+		"SYNC_MESSAGE_DUE_BPS":      uint64(3333),
+		"CONTRIBUTION_DUE_BPS":      uint64(6667),
+	}
+
+	timings := obtainAttestationTimings(devnet7, 12*time.Second, true)
+
+	require.Equal(t, 3*time.Second, timings.maxAttestationDelay)
+	require.Equal(t, 6*time.Second, timings.attestationAggregationDelay)
+	require.Equal(t, 3*time.Second, timings.maxSyncCommitteeMessageDelay)
+	require.Equal(t, 6*time.Second, timings.syncCommitteeAggregationDelay)
+}
+
 func TestObtainAttestationTimings(t *testing.T) {
 	slotDuration := 12 * time.Second
 
@@ -25,10 +78,8 @@ func TestObtainAttestationTimings(t *testing.T) {
 		gloasActive          bool
 	}{
 		{
-			// The plain key names are what /eth/v1/config/spec serves for values introduced at
-			// Gloas, so they are the branch exercised against a real beacon node.
 			name:                 "served values",
-			spec:                 map[string]any{"SLOT_DURATION_MS": uint64(12000), "ATTESTATION_DUE_BPS": uint64(2500), "AGGREGATE_DUE_BPS": uint64(5000), "SYNC_MESSAGE_DUE_BPS": uint64(1250), "CONTRIBUTION_DUE_BPS": uint64(8750)},
+			spec:                 map[string]any{"SLOT_DURATION_MS": uint64(12000), "ATTESTATION_DUE_BPS_GLOAS": uint64(2500), "AGGREGATE_DUE_BPS_GLOAS": uint64(5000), "SYNC_MESSAGE_DUE_BPS_GLOAS": uint64(1250), "CONTRIBUTION_DUE_BPS_GLOAS": uint64(8750)},
 			expectedAttestation:  3 * time.Second,
 			expectedAggregation:  6 * time.Second,
 			expectedSyncMessage:  1500 * time.Millisecond,
@@ -36,50 +87,45 @@ func TestObtainAttestationTimings(t *testing.T) {
 			gloasActive:          true,
 		},
 		{
-			name:                 "fork-suffixed values take precedence",
-			spec:                 map[string]any{"ATTESTATION_DUE_BPS": uint64(2500), "ATTESTATION_DUE_BPS_GLOAS": uint64(5000)},
-			expectedAttestation:  6 * time.Second,
-			expectedAggregation:  8 * time.Second,
-			expectedSyncMessage:  4 * time.Second,
-			expectedContribution: 8 * time.Second,
-			gloasActive:          true,
-		},
-		{
-			name:                 "attestation fallback",
-			spec:                 map[string]any{"AGGREGATE_DUE_BPS": uint64(7500)},
-			expectedAttestation:  4 * time.Second,
-			expectedAggregation:  9 * time.Second,
-			expectedSyncMessage:  4 * time.Second,
-			expectedContribution: 8 * time.Second,
+			// A served value that is not a whole number of milliseconds of the slot is used as-is,
+			// rather than being rounded to the nearest ratio.
+			name:                 "served values need not be round",
+			spec:                 map[string]any{"ATTESTATION_DUE_BPS_GLOAS": uint64(3333)},
+			expectedAttestation:  3999600 * time.Microsecond,
+			expectedAggregation:  6 * time.Second,
+			expectedSyncMessage:  3 * time.Second,
+			expectedContribution: 6 * time.Second,
 			gloasActive:          true,
 		},
 		{
 			name:                 "aggregation fallback",
-			spec:                 map[string]any{"ATTESTATION_DUE_BPS": uint64(2500)},
-			expectedAttestation:  3 * time.Second,
-			expectedAggregation:  8 * time.Second,
-			expectedSyncMessage:  4 * time.Second,
-			expectedContribution: 8 * time.Second,
+			spec:                 map[string]any{"ATTESTATION_DUE_BPS_GLOAS": uint64(1250)},
+			expectedAttestation:  1500 * time.Millisecond,
+			expectedAggregation:  6 * time.Second,
+			expectedSyncMessage:  3 * time.Second,
+			expectedContribution: 6 * time.Second,
 			gloasActive:          true,
 		},
 		{
+			// The fallbacks are the Gloas deadlines, not the pre-Gloas ones, so a node that serves
+			// none of the values still schedules to this fork's timings.
 			name:                 "all fallbacks",
 			spec:                 map[string]any{},
-			expectedAttestation:  4 * time.Second,
-			expectedAggregation:  8 * time.Second,
-			expectedSyncMessage:  4 * time.Second,
-			expectedContribution: 8 * time.Second,
+			expectedAttestation:  3 * time.Second,
+			expectedAggregation:  6 * time.Second,
+			expectedSyncMessage:  3 * time.Second,
+			expectedContribution: 6 * time.Second,
 			gloasActive:          true,
 		},
 		{
 			// A zero or above-range basis-point value would otherwise schedule the duty at the
 			// start of the slot, or after the slot has ended.
 			name:                 "out of range values ignored",
-			spec:                 map[string]any{"ATTESTATION_DUE_BPS": uint64(0), "AGGREGATE_DUE_BPS": uint64(10001)},
-			expectedAttestation:  4 * time.Second,
-			expectedAggregation:  8 * time.Second,
-			expectedSyncMessage:  4 * time.Second,
-			expectedContribution: 8 * time.Second,
+			spec:                 map[string]any{"ATTESTATION_DUE_BPS_GLOAS": uint64(0), "AGGREGATE_DUE_BPS_GLOAS": uint64(10001)},
+			expectedAttestation:  3 * time.Second,
+			expectedAggregation:  6 * time.Second,
+			expectedSyncMessage:  3 * time.Second,
+			expectedContribution: 6 * time.Second,
 			gloasActive:          true,
 		},
 		{
@@ -87,15 +133,15 @@ func TestObtainAttestationTimings(t *testing.T) {
 			// SECONDS_PER_SLOT, or they land after the end of a shortened slot.
 			name:                 "gloas slot duration drives fallbacks",
 			spec:                 map[string]any{"SLOT_DURATION_MS": uint64(6000)},
-			expectedAttestation:  2 * time.Second,
-			expectedAggregation:  4 * time.Second,
-			expectedSyncMessage:  2 * time.Second,
-			expectedContribution: 4 * time.Second,
+			expectedAttestation:  1500 * time.Millisecond,
+			expectedAggregation:  3 * time.Second,
+			expectedSyncMessage:  1500 * time.Millisecond,
+			expectedContribution: 3 * time.Second,
 			gloasActive:          true,
 		},
 		{
 			name:                 "pre-Gloas ignores served values",
-			spec:                 map[string]any{"SLOT_DURATION_MS": uint64(6000), "ATTESTATION_DUE_BPS": uint64(5000), "AGGREGATE_DUE_BPS": uint64(5000)},
+			spec:                 gloasDevnet8Spec(),
 			expectedAttestation:  4 * time.Second,
 			expectedAggregation:  8 * time.Second,
 			expectedSyncMessage:  4 * time.Second,
@@ -130,7 +176,7 @@ func TestObtainAttestationTimings(t *testing.T) {
 // TestSetDefaultDelaysOverrides confirms that an explicit operator value replaces the derived
 // deadline on both sides of the fork, and that an unset value leaves each side its own derivation.
 func TestSetDefaultDelaysOverrides(t *testing.T) {
-	spec := map[string]any{"SLOT_DURATION_MS": uint64(6000), "ATTESTATION_DUE_BPS": uint64(2500)}
+	spec := map[string]any{"SLOT_DURATION_MS": uint64(6000), "ATTESTATION_DUE_BPS_GLOAS": uint64(2500)}
 
 	t.Run("derived", func(t *testing.T) {
 		p := &parameters{}
@@ -144,9 +190,11 @@ func TestSetDefaultDelaysOverrides(t *testing.T) {
 		p.setDefaultDelays(spec, 12*time.Second)
 		require.Equal(t, 5*time.Second, p.preGloasTimings.maxAttestationDelay)
 		require.Equal(t, 5*time.Second, p.gloasTimings.maxAttestationDelay)
-		// Deadlines the operator did not set still follow their own side's derivation.
+		// Deadlines the operator did not set still follow their own side's derivation: two thirds
+		// of the 12-second SECONDS_PER_SLOT before the fork, and half of the 6-second
+		// SLOT_DURATION_MS after it.
 		require.Equal(t, 8*time.Second, p.preGloasTimings.attestationAggregationDelay)
-		require.Equal(t, 4*time.Second, p.gloasTimings.attestationAggregationDelay)
+		require.Equal(t, 3*time.Second, p.gloasTimings.attestationAggregationDelay)
 	})
 }
 
