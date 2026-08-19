@@ -65,7 +65,9 @@ func TestProposeGloas(t *testing.T) {
 		envelopeZeroFeeRecipient   bool
 		executionPayloadBidMissing bool
 		envelopeSignerErr          error
+		proposalSubmitterErr       error
 		envelopeSubmitterErr       error
+		cancelEnvelopeSubmission   bool
 		forkEpochAtConstruction    phase0.Epoch
 		forkEpochAtUse             phase0.Epoch
 		updateForkEpochAtUse       bool
@@ -142,10 +144,23 @@ func TestProposeGloas(t *testing.T) {
 			err:                      "failed to propose block: failed to sign execution payload envelope: envelope signing failed",
 		},
 		{
+			name:                     "ProposalSubmissionFailure",
+			executionPayloadIncluded: true,
+			proposalSubmitterErr:     errors.New("proposal submission failed"),
+			err:                      "failed to propose block: failed to submit proposal: proposal submission failed",
+		},
+		{
 			name:                     "EnvelopeSubmissionFailure",
 			executionPayloadIncluded: true,
 			envelopeSubmitterErr:     errors.New("envelope submission failed"),
 			err:                      "failed to propose block: failed to submit execution payload envelope after block publication: envelope submission failed",
+		},
+		{
+			name:                     "CanceledEnvelopeSubmissionBackoff",
+			executionPayloadIncluded: true,
+			envelopeSubmitterErr:     errors.New("envelope submission failed"),
+			cancelEnvelopeSubmission: true,
+			err:                      "failed to propose block: failed to submit execution payload envelope after block publication: context canceled",
 		},
 	}
 
@@ -203,13 +218,14 @@ func TestProposeGloas(t *testing.T) {
 				return response, err
 			}
 
-			proposalSubmitter := &capturingProposalSubmitter{}
+			proposalSubmitter := &capturingProposalSubmitter{err: test.proposalSubmitterErr}
 			signer := mocksigner.New()
 			signature := phase0.BLSSignature{0x01}
 			blockSigner := &capturingBeaconBlockSigner{signature: signature}
 			envelopeSignature := phase0.BLSSignature{0x03}
 			envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: envelopeSignature, err: test.envelopeSignerErr}
 			envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{err: test.envelopeSubmitterErr}
+			proposeCtx := ctx
 
 			chainTime := &forkChainTime{gloasForkEpoch: test.forkEpochAtConstruction}
 			var monitor metrics.Service = nullmetrics.New()
@@ -224,9 +240,19 @@ func TestProposeGloas(t *testing.T) {
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithBeaconBlockSigner(blockSigner),
 				standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
-				standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
 				standard.WithBlobSidecarSigner(signer),
 				standard.WithBuilderBoostFactor(test.builderBoostFactor),
+			}
+			if test.cancelEnvelopeSubmission {
+				var cancel context.CancelFunc
+				proposeCtx, cancel = context.WithCancel(ctx)
+				defer cancel()
+				params = append(params, standard.WithExecutionPayloadEnvelopeSubmitter(&cancelingExecutionPayloadEnvelopeSubmitter{
+					cancel: cancel,
+					err:    test.envelopeSubmitterErr,
+				}))
+			} else {
+				params = append(params, standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter))
 			}
 			if test.blockAuctioneer {
 				cacheService := mockcache.New(map[phase0.Root]phase0.Slot{})
@@ -245,7 +271,7 @@ func TestProposeGloas(t *testing.T) {
 			duty.SetAccount(&testAccount{})
 			duty.SetRandaoReveal(phase0.BLSSignature{0x02})
 
-			err = service.Propose(ctx, duty)
+			err = service.Propose(proposeCtx, duty)
 			if test.builderBoostFactor != 0 {
 				capture.AssertHasEntry(t, "Ignoring non-default builder boost factor on Gloas proposal path")
 			}
@@ -259,13 +285,53 @@ func TestProposeGloas(t *testing.T) {
 			require.Equal(t, uint64(0), *epbsOpts.BuilderBoostFactor)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
-				if test.envelopeSubmitterErr == nil {
-					require.Nil(t, proposalSubmitter.proposal)
-					require.Zero(t, proposalSubmitter.calls)
-				} else {
+				if test.proposalSubmitterErr != nil {
+					beaconBlockRoot := responseProposal.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot.String()
+					require.True(t, hasProposalSubmissionCompletedAt(capture, "Failed to submit ePBS beacon block proposal", beaconBlockRoot))
+					require.NotNil(t, proposalSubmitter.proposal)
+					require.Equal(t, 1, proposalSubmitter.calls)
+					require.Nil(t, envelopeSubmitter.opts)
+				}
+				if test.name == "EnvelopeSubmissionFailure" {
+					beaconBlockRoot := responseProposal.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot.String()
+					for attempt := uint64(1); attempt <= 3; attempt++ {
+						require.True(t, capture.HasLog(map[string]any{
+							"message":           "Submitting execution payload envelope",
+							"beacon_block_root": beaconBlockRoot,
+							"attempt":           attempt,
+						}))
+						require.True(t, capture.HasLog(map[string]any{
+							"message":                       "Execution payload envelope submission attempt completed",
+							"beacon_block_root":             beaconBlockRoot,
+							"attempt":                       attempt,
+							"envelope_submission_succeeded": false,
+							"error":                         "envelope submission failed",
+						}))
+					}
+					require.True(t, capture.HasLog(map[string]any{
+						"message":                       "Execution payload envelope submission completed",
+						"beacon_block_root":             beaconBlockRoot,
+						"envelope_submission_succeeded": false,
+					}))
+				}
+				if test.cancelEnvelopeSubmission {
+					beaconBlockRoot := responseProposal.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot.String()
+					require.True(t, capture.HasLog(map[string]any{
+						"message":                       "Execution payload envelope submission completed",
+						"beacon_block_root":             beaconBlockRoot,
+						"status":                        "failed",
+						"envelope_submission_succeeded": false,
+					}))
+				}
+				if test.cancelEnvelopeSubmission {
+					require.Zero(t, envelopeSubmitter.calls)
+				} else if test.envelopeSubmitterErr != nil {
 					require.NotNil(t, proposalSubmitter.proposal)
 					require.Equal(t, 1, proposalSubmitter.calls)
 					require.Equal(t, 3, envelopeSubmitter.calls)
+				} else if test.proposalSubmitterErr == nil {
+					require.Nil(t, proposalSubmitter.proposal)
+					require.Zero(t, proposalSubmitter.calls)
 				}
 				if test.envelopeRootMismatch || test.builderIndexMismatch || test.foreignBuilderIndex || test.envelopePayloadMissing || test.executionPayloadBidMissing {
 					require.Zero(t, blockSigner.calls)
@@ -311,9 +377,57 @@ func TestProposeGloas(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, directBlockRoot, headerRoot)
 				require.Equal(t, phase0.Root(bodyRoot), blockSigner.bodyRoot)
+				if test.name == "PayloadIncluded" {
+					beaconBlockRoot := responseProposal.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot.String()
+					require.True(t, capture.HasLog(map[string]any{
+						"message":           "Submitted ePBS beacon block proposal",
+						"beacon_block_root": beaconBlockRoot,
+					}))
+					require.True(t, hasProposalSubmissionCompletedAt(capture, "Submitted ePBS beacon block proposal", beaconBlockRoot))
+					require.True(t, capture.HasLog(map[string]any{
+						"message":           "Submitting execution payload envelope",
+						"beacon_block_root": beaconBlockRoot,
+						"attempt":           uint64(1),
+					}))
+					require.True(t, capture.HasLog(map[string]any{
+						"message":                       "Execution payload envelope submission attempt completed",
+						"beacon_block_root":             beaconBlockRoot,
+						"attempt":                       uint64(1),
+						"envelope_submission_succeeded": true,
+					}))
+					require.True(t, capture.HasLog(map[string]any{
+						"message":                       "Execution payload envelope submission completed",
+						"beacon_block_root":             beaconBlockRoot,
+						"envelope_submission_succeeded": true,
+					}))
+				}
 			}
 		})
 	}
+}
+
+func hasProposalSubmissionCompletedAt(capture *logger.LogCapture, message string, beaconBlockRoot string) bool {
+	for _, entry := range capture.Entries() {
+		if entry["message"] != message || entry["beacon_block_root"] != beaconBlockRoot {
+			continue
+		}
+		if _, exists := entry["proposal_submission_completed_at"]; exists {
+			return true
+		}
+	}
+
+	return false
+}
+
+type cancelingExecutionPayloadEnvelopeSubmitter struct {
+	cancel context.CancelFunc
+	err    error
+}
+
+func (s *cancelingExecutionPayloadEnvelopeSubmitter) SubmitExecutionPayloadEnvelope(_ context.Context, _ *consensusapi.SubmitExecutionPayloadEnvelopeOpts) error {
+	s.cancel()
+
+	return s.err
 }
 
 func TestProposeGloasProposalSource(t *testing.T) {

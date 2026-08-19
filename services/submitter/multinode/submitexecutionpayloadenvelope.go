@@ -15,6 +15,7 @@ package multinode
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,6 +42,12 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 	if len(s.executionPayloadEnvelopeSubmitters) == 0 {
 		return errors.New("no execution payload envelope submitters configured")
 	}
+	beaconBlockRoot := "<unknown>"
+	if opts.SignedExecutionPayloadEnvelope != nil {
+		if root, err := opts.SignedExecutionPayloadEnvelope.BeaconBlockRoot(); err == nil {
+			beaconBlockRoot = root.String()
+		}
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 
@@ -50,7 +57,7 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 	var wg sync.WaitGroup
 	for name, submitter := range s.executionPayloadEnvelopeSubmitters {
 		wg.Go(func() {
-			s.submitExecutionPayloadEnvelope(ctx, sem, submissionCompleted, submissionSucceeded, name, opts, submitter)
+			s.submitExecutionPayloadEnvelope(ctx, sem, submissionCompleted, submissionSucceeded, name, beaconBlockRoot, opts, submitter)
 		})
 	}
 	// Release the timeout context once every submission has finished, rather than as soon as
@@ -69,9 +76,14 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 	// The context is released once every submission has finished, so both cases above can be
 	// ready at once and select picks between them at random.  Consult the success flag rather
 	// than the chosen case, otherwise a successful submission can report a timeout.
-	if !submissionSucceeded.Load() {
+	anyProviderSucceeded := submissionSucceeded.Load()
+	if !anyProviderSucceeded {
+		s.log.Warn().Str("beacon_block_root", beaconBlockRoot).Bool("any_provider_succeeded", false).Msg("Execution payload envelope submission completed")
+
 		return errors.New("no successful submissions before timeout")
 	}
+	log := s.log.With().Str("beacon_block_root", beaconBlockRoot).Bool("any_provider_succeeded", true).Logger()
+	log.Trace().Msg("Execution payload envelope submission completed")
 
 	return nil
 }
@@ -81,6 +93,7 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	submissionCompleted chan<- struct{},
 	submissionSucceeded *atomic.Bool,
 	name string,
+	beaconBlockRoot string,
 	opts *api.SubmitExecutionPayloadEnvelopeOpts,
 	submitter eth2client.ExecutionPayloadEnvelopeSubmitter,
 ) {
@@ -95,15 +108,22 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	}
 	defer sem.Release(1)
 
-	address := "<unknown>"
+	address := name
 	if service, isService := submitter.(eth2client.Service); isService {
 		address = service.Address()
 	}
+	log := s.log.With().Str("provider", name).Str("beacon_block_root", beaconBlockRoot).Logger()
 	started := time.Now()
 	err := submitter.SubmitExecutionPayloadEnvelope(ctx, opts)
-	s.clientMonitor.ClientOperation(address, "submit execution payload envelope", err == nil, time.Since(started))
+	elapsed := time.Since(started)
+	s.clientMonitor.ClientOperation(address, "submit execution payload envelope", err == nil, elapsed)
 	if err != nil {
-		s.log.Warn().Err(err).Msg("Failed to submit execution payload envelope")
+		status := "failed"
+		var apiErr *api.Error
+		if errors.As(err, &apiErr) {
+			status = strconv.Itoa(apiErr.StatusCode)
+		}
+		log.Warn().Err(err).Str("status", status).Dur("elapsed", elapsed).Msg("Execution payload envelope provider submission completed")
 		return
 	}
 
@@ -112,5 +132,5 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	case submissionCompleted <- struct{}{}:
 	default:
 	}
-	s.log.Trace().Msg("Submitted execution payload envelope")
+	log.Trace().Str("status", "succeeded").Dur("elapsed", elapsed).Msg("Execution payload envelope provider submission completed")
 }
