@@ -406,6 +406,7 @@ func TestProposeGloas(t *testing.T) {
 							"message":                       "Execution payload envelope submission attempt completed",
 							"beacon_block_root":             beaconBlockRoot,
 							"attempt":                       attempt,
+							"attempts_remaining":            uint64(0),
 							"envelope_submission_succeeded": false,
 							"error":                         "envelope submission failed",
 						}))
@@ -415,6 +416,18 @@ func TestProposeGloas(t *testing.T) {
 						"beacon_block_root":             beaconBlockRoot,
 						"envelope_submission_succeeded": false,
 					}))
+				}
+				if test.name == "UnknownBlockEnvelopeSubmissionFailure" {
+					beaconBlockRoot := responseProposal.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot.String()
+					for attempt := uint64(1); attempt <= uint64(test.envelopeSubmissionAttempts); attempt++ {
+						require.True(t, capture.HasLog(map[string]any{
+							"message":                       "Execution payload envelope submission attempt completed",
+							"beacon_block_root":             beaconBlockRoot,
+							"attempt":                       attempt,
+							"attempts_remaining":            uint64(test.envelopeSubmissionAttempts) - attempt,
+							"envelope_submission_succeeded": false,
+						}))
+					}
 				}
 				if test.cancelEnvelopeSubmission {
 					beaconBlockRoot := responseProposal.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot.String()
