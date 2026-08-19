@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -41,13 +42,19 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 	if len(s.executionPayloadEnvelopeSubmitters) == 0 {
 		return errors.New("no execution payload envelope submitters configured")
 	}
+	beaconBlockRoot := "<unknown>"
+	if opts.SignedExecutionPayloadEnvelope != nil {
+		if root, err := opts.SignedExecutionPayloadEnvelope.BeaconBlockRoot(); err == nil {
+			beaconBlockRoot = root.String()
+		}
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 
 	sem := semaphore.NewWeighted(s.processConcurrency)
 	results := make(chan error, len(s.executionPayloadEnvelopeSubmitters))
 	for name, submitter := range s.executionPayloadEnvelopeSubmitters {
-		go s.submitExecutionPayloadEnvelope(ctx, sem, results, name, opts, submitter)
+		go s.submitExecutionPayloadEnvelope(ctx, sem, results, name, beaconBlockRoot, opts, submitter)
 	}
 
 	submissionErrors := make([]error, 0, len(s.executionPayloadEnvelopeSubmitters))
@@ -64,17 +71,23 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 					}
 					cancel()
 				}()
+				s.log.Trace().Str("beacon_block_root", beaconBlockRoot).Bool("any_provider_succeeded", true).Msg("Execution payload envelope submission completed")
+
 				return nil
 			}
 			submissionErrors = append(submissionErrors, err)
 		case <-ctx.Done():
 			cancel()
 			submissionErrors = append(submissionErrors, errors.New("no successful submissions before timeout"))
+			s.log.Warn().Str("beacon_block_root", beaconBlockRoot).Bool("any_provider_succeeded", false).Msg("Execution payload envelope submission completed")
+
 			return submitter.NewSubmissionError(submissionErrors...)
 		}
 	}
 
 	cancel()
+	s.log.Warn().Str("beacon_block_root", beaconBlockRoot).Bool("any_provider_succeeded", false).Msg("Execution payload envelope submission completed")
+
 	return submitter.NewSubmissionError(submissionErrors...)
 }
 
@@ -82,6 +95,7 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	sem *semaphore.Weighted,
 	results chan<- error,
 	name string,
+	beaconBlockRoot string,
 	opts *api.SubmitExecutionPayloadEnvelopeOpts,
 	submitter eth2client.ExecutionPayloadEnvelopeSubmitter,
 ) {
@@ -97,19 +111,26 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	}
 	defer sem.Release(1)
 
-	address := "<unknown>"
+	address := name
 	if service, isService := submitter.(eth2client.Service); isService {
 		address = service.Address()
 	}
+	log := s.log.With().Str("provider", name).Str("beacon_block_root", beaconBlockRoot).Logger()
 	started := time.Now()
 	err := submitter.SubmitExecutionPayloadEnvelope(ctx, opts)
-	s.clientMonitor.ClientOperation(address, "submit execution payload envelope", err == nil, time.Since(started))
+	elapsed := time.Since(started)
+	s.clientMonitor.ClientOperation(address, "submit execution payload envelope", err == nil, elapsed)
 	if err != nil {
-		s.log.Warn().Err(err).Msg("Failed to submit execution payload envelope")
+		status := "failed"
+		var apiErr *api.Error
+		if errors.As(err, &apiErr) {
+			status = strconv.Itoa(apiErr.StatusCode)
+		}
+		log.Warn().Err(err).Str("status", status).Dur("elapsed", elapsed).Msg("Execution payload envelope provider submission completed")
 		results <- fmt.Errorf("%s: %w", name, err)
 		return
 	}
 
 	results <- nil
-	s.log.Trace().Msg("Submitted execution payload envelope")
+	log.Trace().Str("status", "succeeded").Dur("elapsed", elapsed).Msg("Execution payload envelope provider submission completed")
 }
