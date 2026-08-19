@@ -506,10 +506,10 @@ func obtainAttestationTimings(spec map[string]any, slotDuration time.Duration, g
 	// SYNC_MESSAGE_DUE_BPS_GLOAS are 2500, AGGREGATE_DUE_BPS_GLOAS and CONTRIBUTION_DUE_BPS_GLOAS
 	// are 5000.  A node that does not serve them still schedules to this fork's timings.
 	return dutyTimings{
-		maxAttestationDelay:           dueBPS(spec, "ATTESTATION_DUE_BPS_GLOAS", slotDuration, slotDuration/4),
-		attestationAggregationDelay:   dueBPS(spec, "AGGREGATE_DUE_BPS_GLOAS", slotDuration, slotDuration/2),
-		maxSyncCommitteeMessageDelay:  dueBPS(spec, "SYNC_MESSAGE_DUE_BPS_GLOAS", slotDuration, slotDuration/4),
-		syncCommitteeAggregationDelay: dueBPS(spec, "CONTRIBUTION_DUE_BPS_GLOAS", slotDuration, slotDuration/2),
+		maxAttestationDelay:           dueBPS(spec, "ATTESTATION_DUE_BPS_GLOAS", slotDuration, slotDuration/4),  // 3s on a 12-second slot.
+		attestationAggregationDelay:   dueBPS(spec, "AGGREGATE_DUE_BPS_GLOAS", slotDuration, slotDuration/2),    // 6s on a 12-second slot.
+		maxSyncCommitteeMessageDelay:  dueBPS(spec, "SYNC_MESSAGE_DUE_BPS_GLOAS", slotDuration, slotDuration/4), // 3s on a 12-second slot.
+		syncCommitteeAggregationDelay: dueBPS(spec, "CONTRIBUTION_DUE_BPS_GLOAS", slotDuration, slotDuration/2), // 6s on a 12-second slot.
 	}
 }
 
