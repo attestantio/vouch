@@ -43,6 +43,7 @@ import (
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"golang.org/x/sync/errgroup"
@@ -328,38 +329,66 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		KZGProofs: kzgProofs,
 		Blobs:     blobs,
 	}
-	var envelopeSubmissionErr error
-	for attempt := 1; attempt <= 3; attempt++ {
-		log.Trace().Int("attempt", attempt).Msg("Submitting execution payload envelope")
-		envelopeSubmissionErr = s.executionPayloadEnvelopeSubmitter.SubmitExecutionPayloadEnvelope(ctx, envelopeSubmissionOpts)
-		if envelopeSubmissionErr == nil {
-			log.Trace().Int("attempt", attempt).Bool("envelope_submission_succeeded", true).Msg("Execution payload envelope submission attempt completed")
-
-			break
-		}
-		log.Warn().Err(envelopeSubmissionErr).Int("attempt", attempt).Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission attempt completed")
-		log.Warn().Err(envelopeSubmissionErr).Int("attempts_remaining", 3-attempt).Msg("Failed to submit execution payload envelope after block publication")
-		if attempt < 3 {
-			select {
-			case <-ctx.Done():
-				log.Warn().Err(ctx.Err()).Str("status", "failed").Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission completed")
-
-				return errors.Wrap(ctx.Err(), "failed to submit execution payload envelope after block publication")
-			case <-time.After(250 * time.Millisecond):
-			}
-		}
-	}
-	if envelopeSubmissionErr == nil {
-		log.Trace().Bool("envelope_submission_succeeded", true).Msg("Execution payload envelope submission completed")
-	} else {
-		log.Warn().Err(envelopeSubmissionErr).Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission completed")
-	}
-	if envelopeSubmissionErr != nil {
-		return errors.Wrap(envelopeSubmissionErr, "failed to submit execution payload envelope after block publication")
+	if err := s.submitExecutionPayloadEnvelope(ctx, log, envelopeSubmissionOpts); err != nil {
+		return err
 	}
 	monitorBeaconBlockProposalSource("local")
 
 	return nil
+}
+
+const (
+	// envelopeSubmissionAttempts is the number of times envelope submission is attempted.  The
+	// envelope cannot be submitted by anyone else, so a failure is retried rather than abandoned.
+	envelopeSubmissionAttempts = 3
+	// envelopeSubmissionRetryInterval is the delay between envelope submission attempts.
+	envelopeSubmissionRetryInterval = 250 * time.Millisecond
+)
+
+// submitExecutionPayloadEnvelope submits the execution payload envelope of a published block.
+// It emits exactly one terminal record on every path out, so an envelope whose submission has
+// started always has a recorded outcome.
+func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
+	log zerolog.Logger,
+	opts *api.SubmitExecutionPayloadEnvelopeOpts,
+) error {
+	err := s.attemptExecutionPayloadEnvelopeSubmission(ctx, log, opts)
+	if err != nil {
+		log.Warn().Err(err).Str("status", "failed").Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission completed")
+
+		return errors.Wrap(err, "failed to submit execution payload envelope after block publication")
+	}
+	log.Trace().Bool("envelope_submission_succeeded", true).Msg("Execution payload envelope submission completed")
+
+	return nil
+}
+
+// attemptExecutionPayloadEnvelopeSubmission submits the envelope, retrying on failure.  It returns
+// the final attempt's error, or the context error if the context is cancelled while backing off.
+func (s *Service) attemptExecutionPayloadEnvelopeSubmission(ctx context.Context,
+	log zerolog.Logger,
+	opts *api.SubmitExecutionPayloadEnvelopeOpts,
+) error {
+	var err error
+	for attempt := 1; attempt <= envelopeSubmissionAttempts; attempt++ {
+		if attempt > 1 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(envelopeSubmissionRetryInterval):
+			}
+		}
+		log.Trace().Int("attempt", attempt).Msg("Submitting execution payload envelope")
+		err = s.executionPayloadEnvelopeSubmitter.SubmitExecutionPayloadEnvelope(ctx, opts)
+		if err == nil {
+			log.Trace().Int("attempt", attempt).Bool("envelope_submission_succeeded", true).Msg("Execution payload envelope submission attempt completed")
+
+			return nil
+		}
+		log.Warn().Err(err).Int("attempt", attempt).Int("attempts_remaining", envelopeSubmissionAttempts-attempt).Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission attempt completed")
+	}
+
+	return err
 }
 
 // epbsProposalEnvelope obtains the execution payload envelope and body root for a proposal,
