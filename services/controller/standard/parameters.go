@@ -435,11 +435,13 @@ func (p *parameters) setDefaultDelays(spec map[string]any, slotDuration time.Dur
 
 func obtainAttestationTimings(spec map[string]any, slotDuration time.Duration, gloasActive bool) dutyTimings {
 	if !gloasActive {
+		// The ratios are the pre-Gloas basis-point deadlines: ATTESTATION_DUE_BPS and
+		// SYNC_MESSAGE_DUE_BPS are 3333, AGGREGATE_DUE_BPS and CONTRIBUTION_DUE_BPS are 6667.
 		return dutyTimings{
-			maxAttestationDelay:           slotDuration / 3,
-			attestationAggregationDelay:   slotDuration * 2 / 3,
-			maxSyncCommitteeMessageDelay:  slotDuration / 3,
-			syncCommitteeAggregationDelay: slotDuration * 2 / 3,
+			maxAttestationDelay:           slotDuration / 3,     // 4s on a 12-second slot.
+			attestationAggregationDelay:   slotDuration * 2 / 3, // 8s on a 12-second slot.
+			maxSyncCommitteeMessageDelay:  slotDuration / 3,     // 4s on a 12-second slot.
+			syncCommitteeAggregationDelay: slotDuration * 2 / 3, // 8s on a 12-second slot.
 		}
 	}
 
@@ -449,13 +451,13 @@ func obtainAttestationTimings(spec map[string]any, slotDuration time.Duration, g
 		slotDuration = time.Duration(durationMS) * time.Millisecond
 	}
 
-	// dueBPS provides the deadline for the given spec value, in basis points of the slot duration,
-	// falling back to the supplied default if the value is not served or is out of range.
+	// dueBPS provides the deadline held in the named spec value, in basis points of the slot
+	// duration, falling back to the supplied default if the value is not served or is out of range.
+	// The name is the exact key: Gloas redefines these four deadlines under _GLOAS-suffixed keys and
+	// keeps serving the unsuffixed keys for the slots before the fork, so reading the unsuffixed key
+	// here would schedule post-fork duties to the deadlines the fork moved away from.
 	dueBPS := func(name string, fallback time.Duration) time.Duration {
-		bps, ok := spec[name+"_GLOAS"].(uint64)
-		if !ok {
-			bps, ok = spec[name].(uint64)
-		}
+		bps, ok := spec[name].(uint64)
 		if !ok || bps == 0 || bps > 10000 {
 			return fallback
 		}
@@ -463,10 +465,13 @@ func obtainAttestationTimings(spec map[string]any, slotDuration time.Duration, g
 		return slotDuration * time.Duration(bps) / 10000
 	}
 
+	// The fallbacks are the Gloas deadlines themselves: ATTESTATION_DUE_BPS_GLOAS and
+	// SYNC_MESSAGE_DUE_BPS_GLOAS are 2500, AGGREGATE_DUE_BPS_GLOAS and CONTRIBUTION_DUE_BPS_GLOAS
+	// are 5000.  A node that does not serve them still schedules to this fork's timings.
 	return dutyTimings{
-		maxAttestationDelay:           dueBPS("ATTESTATION_DUE_BPS", slotDuration/3),
-		attestationAggregationDelay:   dueBPS("AGGREGATE_DUE_BPS", slotDuration*2/3),
-		maxSyncCommitteeMessageDelay:  dueBPS("SYNC_MESSAGE_DUE_BPS", slotDuration/3),
-		syncCommitteeAggregationDelay: dueBPS("CONTRIBUTION_DUE_BPS", slotDuration*2/3),
+		maxAttestationDelay:           dueBPS("ATTESTATION_DUE_BPS_GLOAS", slotDuration/4),  // 3s on a 12-second slot.
+		attestationAggregationDelay:   dueBPS("AGGREGATE_DUE_BPS_GLOAS", slotDuration/2),    // 6s on a 12-second slot.
+		maxSyncCommitteeMessageDelay:  dueBPS("SYNC_MESSAGE_DUE_BPS_GLOAS", slotDuration/4), // 3s on a 12-second slot.
+		syncCommitteeAggregationDelay: dueBPS("CONTRIBUTION_DUE_BPS_GLOAS", slotDuration/2), // 6s on a 12-second slot.
 	}
 }
