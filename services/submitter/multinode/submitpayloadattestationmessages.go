@@ -45,25 +45,30 @@ func (s *Service) SubmitPayloadAttestationMessages(ctx context.Context, opts *ap
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 
 	sem := semaphore.NewWeighted(s.processConcurrency)
+	submissionCompleted := make(chan struct{}, 1)
 	submissionSucceeded := &atomic.Bool{}
 	var wg sync.WaitGroup
 	for name, payloadAttestationMessagesSubmitter := range s.payloadAttestationMessagesSubmitters {
 		wg.Go(func() {
-			s.submitPayloadAttestationMessages(ctx, cancel, sem, submissionSucceeded, name, opts, payloadAttestationMessagesSubmitter)
+			s.submitPayloadAttestationMessages(ctx, sem, submissionCompleted, submissionSucceeded, name, opts, payloadAttestationMessagesSubmitter)
 		})
 	}
-	completed := make(chan struct{})
+	// Release the timeout context once every submission has finished, rather than as soon as
+	// the first one succeeds, so that one node's success does not abort the others' in-flight
+	// submissions.
 	go func() {
 		wg.Wait()
-		close(completed)
 		cancel()
 	}()
 
 	select {
-	case <-completed:
+	case <-submissionCompleted:
 	case <-ctx.Done():
 	}
 
+	// The context is released once every submission has finished, so both cases above can be
+	// ready at once and select picks between them at random.  Consult the success flag rather
+	// than the chosen case, otherwise a successful submission can report a timeout.
 	if !submissionSucceeded.Load() {
 		return errors.New("no successful submissions before timeout")
 	}
@@ -72,8 +77,8 @@ func (s *Service) SubmitPayloadAttestationMessages(ctx context.Context, opts *ap
 }
 
 func (s *Service) submitPayloadAttestationMessages(ctx context.Context,
-	cancel context.CancelFunc,
 	sem *semaphore.Weighted,
+	submissionCompleted chan<- struct{},
 	submissionSucceeded *atomic.Bool,
 	name string,
 	opts *api.SubmitPayloadAttestationMessagesOpts,
@@ -100,8 +105,10 @@ func (s *Service) submitPayloadAttestationMessages(ctx context.Context,
 		return
 	}
 
-	if submissionSucceeded.CompareAndSwap(false, true) {
-		cancel()
+	submissionSucceeded.Store(true)
+	select {
+	case submissionCompleted <- struct{}{}:
+	default:
 	}
 	log.Trace().Msg("Submitted payload attestation messages")
 }
