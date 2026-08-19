@@ -284,6 +284,7 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	log := s.log.With().Str("beacon_block_root", envelope.BeaconBlockRoot.String()).Logger()
 
 	var signedProposal *api.VersionedSignedProposal
 	var signature phase0.BLSSignature
@@ -316,8 +317,11 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	}
 
 	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
+		log.Warn().Err(err).Time("proposal_submission_completed_at", time.Now()).Msg("Failed to submit ePBS beacon block proposal")
+
 		return errors.Wrap(err, "failed to submit proposal")
 	}
+	log.Trace().Time("proposal_submission_completed_at", time.Now()).Msg("Submitted ePBS beacon block proposal")
 
 	envelopeSubmissionOpts := &api.SubmitExecutionPayloadEnvelopeOpts{
 		SignedExecutionPayloadEnvelope: &spec.VersionedSignedExecutionPayloadEnvelope{
@@ -331,23 +335,34 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		Blobs:     blobs,
 	}
 	var envelopeSubmissionErr error
-	for attempts := 3; attempts > 0; attempts-- {
+	for attempt := 1; attempt <= 3; attempt++ {
+		log.Trace().Int("attempt", attempt).Msg("Submitting execution payload envelope")
 		envelopeSubmissionErr = s.executionPayloadEnvelopeSubmitter.SubmitExecutionPayloadEnvelope(ctx, envelopeSubmissionOpts)
 		if envelopeSubmissionErr == nil {
+			log.Trace().Int("attempt", attempt).Bool("envelope_submission_succeeded", true).Msg("Execution payload envelope submission attempt completed")
+
 			break
 		}
+		log.Warn().Err(envelopeSubmissionErr).Int("attempt", attempt).Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission attempt completed")
 		if !isUnknownBeaconBlockError(envelopeSubmissionErr) {
-			s.log.Warn().Err(envelopeSubmissionErr).Msg("Failed to submit execution payload envelope after block publication")
+			log.Warn().Err(envelopeSubmissionErr).Msg("Failed to submit execution payload envelope after block publication")
 			break
 		}
-		s.log.Warn().Err(envelopeSubmissionErr).Int("attempts_remaining", attempts-1).Msg("Beacon node does not yet know execution payload envelope block")
-		if attempts > 1 {
+		log.Warn().Err(envelopeSubmissionErr).Int("attempts_remaining", 3-attempt).Msg("Beacon node does not yet know execution payload envelope block")
+		if attempt < 3 {
 			select {
 			case <-ctx.Done():
+				log.Warn().Err(ctx.Err()).Str("status", "failed").Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission completed")
+
 				return errors.Wrap(ctx.Err(), "failed to submit execution payload envelope after block publication")
 			case <-time.After(250 * time.Millisecond):
 			}
 		}
+	}
+	if envelopeSubmissionErr == nil {
+		log.Trace().Bool("envelope_submission_succeeded", true).Msg("Execution payload envelope submission completed")
+	} else {
+		log.Warn().Err(envelopeSubmissionErr).Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission completed")
 	}
 	if envelopeSubmissionErr != nil {
 		return errors.Wrap(envelopeSubmissionErr, "failed to submit execution payload envelope after block publication")
