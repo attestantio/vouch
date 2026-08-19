@@ -58,7 +58,11 @@ func TestSubmitPayloadAttestationMessagesFansOutToNodes(t *testing.T) {
 
 	opts := &api.SubmitPayloadAttestationMessagesOpts{Messages: []*spec.VersionedPayloadAttestationMessage{{Version: spec.DataVersionGloas}}}
 	require.NoError(t, service.SubmitPayloadAttestationMessages(ctx, opts))
-	require.GreaterOrEqual(t, atomic.LoadInt32(&recorderOne.calls)+atomic.LoadInt32(&recorderTwo.calls), int32(1))
+	// The call returns as soon as the first node succeeds, but every node must still be
+	// submitted to; one node's success must not abort the others.
+	require.Eventually(t, func() bool {
+		return recorderOne.calls.Load() == 1 && recorderTwo.calls.Load() == 1
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestSubmitPayloadAttestationMessagesReturnsOnFirstSuccess(t *testing.T) {
@@ -93,10 +97,12 @@ func TestSubmitPayloadAttestationMessagesReturnsOnFirstSuccess(t *testing.T) {
 	startedAt := time.Now()
 	require.NoError(t, service.SubmitPayloadAttestationMessages(ctx, opts))
 	require.Less(t, time.Since(startedAt), time.Second)
+	// The fast node's success must not abort the slow node's in-flight submission; it runs on
+	// until the strategy's own timeout.
 	select {
 	case <-canceled:
-	case <-time.After(time.Second):
-		t.Fatal("blocking submitter was not canceled")
+		t.Fatal("in-flight submission was aborted by another node's success")
+	case <-time.After(250 * time.Millisecond):
 	}
 }
 
@@ -122,10 +128,10 @@ func (s *waitingPayloadAttestationSubmitter) SubmitPayloadAttestationMessages(_ 
 }
 
 type countingPayloadAttestationSubmitter struct {
-	calls int32
+	calls atomic.Int32
 }
 
 func (s *countingPayloadAttestationSubmitter) SubmitPayloadAttestationMessages(_ context.Context, _ *api.SubmitPayloadAttestationMessagesOpts) error {
-	atomic.AddInt32(&s.calls, 1)
+	s.calls.Add(1)
 	return nil
 }
