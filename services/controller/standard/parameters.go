@@ -69,7 +69,6 @@ type parameters struct {
 	attestationAggregationDelay   time.Duration
 	maxSyncCommitteeMessageDelay  time.Duration
 	syncCommitteeAggregationDelay time.Duration
-	payloadDueDelay               time.Duration
 	payloadAttestationDelay       time.Duration
 	preGloasTimings               dutyTimings
 	gloasTimings                  dutyTimings
@@ -416,13 +415,6 @@ func WithPayloadAttestationDelay(delay time.Duration) Parameter {
 	})
 }
 
-// WithPayloadDueDelay sets the delay before starting payload attestation work.
-func WithPayloadDueDelay(delay time.Duration) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.payloadDueDelay = delay
-	})
-}
-
 // dutyTimings holds the duty scheduling deadlines, as offsets in to the slot.
 type dutyTimings struct {
 	maxAttestationDelay           time.Duration
@@ -465,12 +457,8 @@ func (p *parameters) setDefaultDelays(spec map[string]any, slotDuration time.Dur
 	p.gloasTimings = obtainAttestationTimings(spec, slotDuration, true)
 	p.gloasTimings.applyOverrides(overrides)
 
-	payloadDue, payloadAttestationDue := obtainPayloadTimings(spec, slotDuration)
-	if p.payloadDueDelay == 0 {
-		p.payloadDueDelay = payloadDue
-	}
 	if p.payloadAttestationDelay == 0 {
-		p.payloadAttestationDelay = payloadAttestationDue
+		p.payloadAttestationDelay = obtainPayloadAttestationTiming(spec, slotDuration)
 	}
 }
 
@@ -490,7 +478,7 @@ func gloasSlotDuration(spec map[string]any, slotDuration time.Duration) time.Dur
 // the exact key.  Gloas redefines the attestation and sync committee deadlines under
 // _GLOAS-suffixed keys and keeps serving the unsuffixed keys for the slots before the fork, so
 // reading the unsuffixed key after the fork would schedule duties to the deadlines it moved away
-// from; the payload deadlines are new in Gloas and have no suffixed form.
+// from; the payload attestation deadline is new in Gloas and has no suffixed form.
 func dueBPS(spec map[string]any, name string, slotDuration, fallback time.Duration) time.Duration {
 	bps, ok := spec[name].(uint64)
 	if !ok || bps == 0 || bps > 10000 {
@@ -525,11 +513,10 @@ func obtainAttestationTimings(spec map[string]any, slotDuration time.Duration, g
 	}
 }
 
-// obtainPayloadTimings provides the payload and payload attestation deadlines.  Both duties exist
-// only after Gloas, so both always follow the Gloas slot duration.
-func obtainPayloadTimings(spec map[string]any, slotDuration time.Duration) (time.Duration, time.Duration) {
+// obtainPayloadAttestationTiming provides the payload attestation deadline.  The duty exists only
+// after Gloas, so it always follows the Gloas slot duration.
+func obtainPayloadAttestationTiming(spec map[string]any, slotDuration time.Duration) time.Duration {
 	slotDuration = gloasSlotDuration(spec, slotDuration)
 
-	return dueBPS(spec, "PAYLOAD_DUE_BPS", slotDuration, slotDuration/2),
-		dueBPS(spec, "PAYLOAD_ATTESTATION_DUE_BPS", slotDuration, slotDuration*3/4)
+	return dueBPS(spec, "PAYLOAD_ATTESTATION_DUE_BPS", slotDuration, slotDuration*3/4)
 }

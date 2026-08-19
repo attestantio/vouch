@@ -81,7 +81,6 @@ type Service struct {
 	accountsRefresher            accountmanager.Refresher
 	blockToSlotSetter            cache.BlockRootToSlotSetter
 	maxProposalDelay             time.Duration
-	payloadDueDelay              time.Duration
 	payloadAttestationDelay      time.Duration
 	preGloasTimings              dutyTimings
 	gloasTimings                 dutyTimings
@@ -164,7 +163,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		accountsRefresher:            parameters.accountsRefresher,
 		blockToSlotSetter:            parameters.blockToSlotSetter,
 		maxProposalDelay:             parameters.maxProposalDelay,
-		payloadDueDelay:              parameters.payloadDueDelay,
 		payloadAttestationDelay:      parameters.payloadAttestationDelay,
 		preGloasTimings:              parameters.preGloasTimings,
 		gloasTimings:                 parameters.gloasTimings,
