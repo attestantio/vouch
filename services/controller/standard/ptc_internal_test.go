@@ -38,7 +38,6 @@ func TestSchedulePayloadAttestationsGroupsDutiesAndCallsService(t *testing.T) {
 		validatingAccountsProvider: accounts,
 		scheduler:                  schedulerService,
 		payloadAttester:            payloadService,
-		payloadDueDelay:            500 * time.Millisecond,
 		payloadAttestationDelay:    750 * time.Millisecond,
 		gloasForkEpoch:             0,
 	}
@@ -50,14 +49,64 @@ func TestSchedulePayloadAttestationsGroupsDutiesAndCallsService(t *testing.T) {
 	require.Len(t, schedulerService.jobs, 2)
 
 	job := schedulerService.jobs[0]
-	require.Equal(t, chainTime.StartOfSlot(10).Add(500*time.Millisecond), job.runtime)
 	job.job(ctx)
 
 	require.Len(t, payloadService.duties, 1)
-	require.Equal(t, chainTime.StartOfSlot(10).Add(750*time.Millisecond), payloadService.deadline)
 	require.Equal(t, phase0.Slot(10), payloadService.duties[0].Slot())
 	require.Equal(t, []phase0.ValidatorIndex{1, 2}, payloadService.duties[0].ValidatorIndices())
 	require.Len(t, payloadService.duties[0].Accounts(), 2)
+}
+
+// TestSchedulePayloadAttestationVotesAtTheAttestationDeadline confirms that the vote is cast at the
+// payload attestation deadline rather than when the payload becomes due.  payload_present is a
+// question about the payload due time that only the beacon node can answer, and a beacon node does
+// not serve an answer it does not yet consider final, so voting at the payload due time returns no
+// data at all for exactly the marginal payloads the vote exists to judge.
+func TestSchedulePayloadAttestationVotesAtTheAttestationDeadline(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{}
+	chainTime := &recordingChainTime{slotDuration: 12 * time.Second, slotsPerEpoch: 32}
+	service := &Service{
+		chainTimeService:           chainTime,
+		ptcDutiesProvider:          &recordingPTCDutiesProvider{duties: []*apiv1.PTCDuty{{Slot: 10, ValidatorIndex: 1}}},
+		validatingAccountsProvider: &recordingAccountsProvider{},
+		scheduler:                  schedulerService,
+		payloadAttester:            &recordingPayloadAttester{},
+		payloadAttestationDelay:    9 * time.Second,
+		gloasForkEpoch:             0,
+	}
+
+	service.schedulePayloadAttestations(ctx, 0, []phase0.ValidatorIndex{1}, false)
+
+	require.Len(t, schedulerService.jobs, 1)
+	require.Equal(t, chainTime.StartOfSlot(10).Add(9*time.Second+250*time.Millisecond), schedulerService.jobs[0].runtime)
+}
+
+// TestSchedulePayloadAttestationDeadlineRunsToTheEndOfTheSlot confirms that the vote's context runs
+// to the end of its slot rather than to the payload attestation deadline.  The vote is cast at that
+// deadline, so a context expiring on it would cut off the signing and submission it is there to
+// bound, and the gossip rule accepts a payload attestation for the whole of its slot.
+func TestSchedulePayloadAttestationDeadlineRunsToTheEndOfTheSlot(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{}
+	payloadService := &recordingPayloadAttester{}
+	chainTime := &recordingChainTime{slotDuration: 12 * time.Second, slotsPerEpoch: 32}
+	service := &Service{
+		chainTimeService:           chainTime,
+		ptcDutiesProvider:          &recordingPTCDutiesProvider{duties: []*apiv1.PTCDuty{{Slot: 10, ValidatorIndex: 1}}},
+		validatingAccountsProvider: &recordingAccountsProvider{},
+		scheduler:                  schedulerService,
+		payloadAttester:            payloadService,
+		payloadAttestationDelay:    9 * time.Second,
+		gloasForkEpoch:             0,
+	}
+
+	service.schedulePayloadAttestations(ctx, 0, []phase0.ValidatorIndex{1}, false)
+
+	require.Len(t, schedulerService.jobs, 1)
+	schedulerService.jobs[0].job(ctx)
+
+	require.Equal(t, chainTime.StartOfSlot(11), payloadService.deadline)
 }
 
 func TestSchedulePayloadAttestationsIsInactiveBeforeGloas(t *testing.T) {
@@ -102,7 +151,6 @@ func TestSchedulePayloadAttestationsDoesNotRefetchScheduledEpoch(t *testing.T) {
 		validatingAccountsProvider: &recordingAccountsProvider{},
 		scheduler:                  schedulerService,
 		payloadAttester:            &recordingPayloadAttester{},
-		payloadDueDelay:            500 * time.Millisecond,
 		payloadAttestationDelay:    750 * time.Millisecond,
 		gloasForkEpoch:             0,
 	}
@@ -200,7 +248,7 @@ func TestRefreshPayloadAttestationsDoesNotRerunTheCurrentSlot(t *testing.T) {
 	service.refreshPayloadAttestationDutiesForEpoch(context.Background(), 1)
 
 	require.Len(t, schedulerService.jobs, 1)
-	require.Equal(t, service.chainTimeService.StartOfSlot(33), schedulerService.jobs[0].runtime)
+	require.Equal(t, service.chainTimeService.StartOfSlot(33).Add(payloadAttestationGrace), schedulerService.jobs[0].runtime)
 }
 
 // TestRefreshPayloadAttestationsWaitsForEpochPreparation confirms that a refresh of an epoch that
