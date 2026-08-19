@@ -15,12 +15,11 @@ package payloadattester
 
 import (
 	"context"
+	"slices"
 
 	"github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/signer"
-	"github.com/attestantio/vouch/services/submitter"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
@@ -45,10 +44,8 @@ func (d *Duty) AddDuty(duty *v1.PTCDuty) {
 	if duty == nil || duty.Slot != d.slot {
 		return
 	}
-	for _, index := range d.validatorIndices {
-		if index == duty.ValidatorIndex {
-			return
-		}
+	if slices.Contains(d.validatorIndices, duty.ValidatorIndex) {
+		return
 	}
 	d.validatorIndices = append(d.validatorIndices, duty.ValidatorIndex)
 }
@@ -91,8 +88,3 @@ type Service interface {
 	Prepare(ctx context.Context, duty *Duty) error
 	Attest(ctx context.Context, duty *Duty) ([]*spec.VersionedPayloadAttestationMessage, error)
 }
-
-var (
-	_ signer.PayloadAttestationDataSigner
-	_ submitter.PayloadAttestationMessagesSubmitter
-)
