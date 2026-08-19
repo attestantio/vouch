@@ -137,6 +137,93 @@ func TestSchedulePayloadAttestationsSkipsPastAndCurrentSlotWhenRequested(t *test
 	require.Equal(t, phase0.Slot(33), service.payloadAttester.(*recordingPayloadAttester).duties[0].Slot())
 }
 
+// TestSchedulePayloadAttestationsDoesNotRescheduleCurrentEpoch confirms that the epoch ticker does
+// not refetch and reschedule an epoch that the preceding epoch's preparation already scheduled.
+// Both call sites reach the same epoch, and the scheduler rejects a job that already exists, so
+// without this every payload attestation duty would fail to schedule once per epoch.
+func TestSchedulePayloadAttestationsDoesNotRescheduleCurrentEpoch(t *testing.T) {
+	provider := &recordingPTCDutiesProvider{duties: []*apiv1.PTCDuty{{Slot: 10, ValidatorIndex: 1}}}
+	schedulerService := &recordingScheduler{existing: map[string]bool{"Payload attestations for slot 10": true}}
+	service := &Service{
+		chainTimeService:           &recordingChainTime{currentEpoch: 0, slotsPerEpoch: 32},
+		ptcDutiesProvider:          provider,
+		validatingAccountsProvider: &recordingAccountsProvider{},
+		scheduler:                  schedulerService,
+		payloadAttester:            &recordingPayloadAttester{},
+		gloasForkEpoch:             0,
+	}
+
+	service.schedulePayloadAttestations(context.Background(), 0, []phase0.ValidatorIndex{1}, false)
+
+	require.Equal(t, 0, provider.calls)
+	require.Empty(t, schedulerService.jobs)
+}
+
+// TestSchedulePayloadAttestationsSchedulesFirstGloasEpochBeforeTheFork confirms that the first Gloas
+// epoch's duties are scheduled from the epoch before the fork, where they are prepared.  Testing the
+// current epoch rather than the epoch being scheduled would drop that whole epoch's duties.
+func TestSchedulePayloadAttestationsSchedulesFirstGloasEpochBeforeTheFork(t *testing.T) {
+	provider := &recordingPTCDutiesProvider{duties: []*apiv1.PTCDuty{{Slot: 165, ValidatorIndex: 1}}}
+	schedulerService := &recordingScheduler{}
+	service := &Service{
+		chainTimeService:           &recordingChainTime{currentEpoch: 4, slotDuration: time.Second, slotsPerEpoch: 32},
+		ptcDutiesProvider:          provider,
+		validatingAccountsProvider: &recordingAccountsProvider{},
+		scheduler:                  schedulerService,
+		payloadAttester:            &recordingPayloadAttester{},
+		gloasForkEpoch:             5,
+	}
+
+	service.schedulePayloadAttestations(context.Background(), 5, []phase0.ValidatorIndex{1}, true)
+
+	require.Equal(t, 1, provider.calls)
+	require.Len(t, schedulerService.jobs, 1)
+}
+
+// TestRefreshPayloadAttestationsDoesNotRerunTheCurrentSlot confirms that a refresh does not
+// reschedule the current slot's duty when its job has already run.  The scheduler runs a job whose
+// time has passed immediately, so rescheduling it would attest to the same slot's payload twice.
+func TestRefreshPayloadAttestationsDoesNotRerunTheCurrentSlot(t *testing.T) {
+	schedulerService := &recordingScheduler{missing: map[string]bool{"Payload attestations for slot 32": true}}
+	service := &Service{
+		chainTimeService: &recordingChainTime{currentEpoch: 1, slotDuration: time.Second, slotsPerEpoch: 32},
+		ptcDutiesProvider: &recordingPTCDutiesProvider{duties: []*apiv1.PTCDuty{
+			{Slot: 32, ValidatorIndex: 1},
+			{Slot: 33, ValidatorIndex: 1},
+		}},
+		validatingAccountsProvider: &recordingAccountsProvider{epochIndices: []phase0.ValidatorIndex{1}},
+		scheduler:                  schedulerService,
+		payloadAttester:            &recordingPayloadAttester{},
+		gloasForkEpoch:             0,
+	}
+
+	service.refreshPayloadAttestationDutiesForEpoch(context.Background(), 1)
+
+	require.Len(t, schedulerService.jobs, 1)
+	require.Equal(t, service.chainTimeService.StartOfSlot(33), schedulerService.jobs[0].runtime)
+}
+
+// TestRefreshPayloadAttestationsWaitsForEpochPreparation confirms that a refresh of an epoch that
+// has not yet been prepared leaves it alone, rather than fetching its duties early.
+func TestRefreshPayloadAttestationsWaitsForEpochPreparation(t *testing.T) {
+	provider := &recordingPTCDutiesProvider{duties: []*apiv1.PTCDuty{{Slot: 40, ValidatorIndex: 1}}}
+	schedulerService := &recordingScheduler{existing: map[string]bool{"Prepare for epoch 1": true}}
+	service := &Service{
+		chainTimeService:           &recordingChainTime{currentEpoch: 0, slotsPerEpoch: 32},
+		ptcDutiesProvider:          provider,
+		validatingAccountsProvider: &recordingAccountsProvider{epochIndices: []phase0.ValidatorIndex{1}},
+		scheduler:                  schedulerService,
+		payloadAttester:            &recordingPayloadAttester{},
+		gloasForkEpoch:             0,
+	}
+
+	service.refreshPayloadAttestationDutiesForEpoch(context.Background(), 1)
+
+	require.Equal(t, 0, provider.calls)
+	require.Empty(t, schedulerService.cancelled)
+	require.Empty(t, schedulerService.jobs)
+}
+
 type recordingPTCDutiesProvider struct {
 	duties []*apiv1.PTCDuty
 	calls  int
@@ -181,6 +268,9 @@ type recordingScheduler struct {
 	jobs      []recordedJob
 	cancelled []string
 	existing  map[string]bool
+	// missing names the jobs for which a cancellation reports that no such job exists, standing
+	// in for a job that has already run.
+	missing map[string]bool
 }
 
 type recordedJob struct {
@@ -198,6 +288,9 @@ func (*recordingScheduler) SchedulePeriodicJob(context.Context, string, string, 
 }
 
 func (s *recordingScheduler) CancelJob(_ context.Context, name string) error {
+	if s.missing[name] {
+		return scheduler.ErrNoSuchJob
+	}
 	s.cancelled = append(s.cancelled, name)
 	return nil
 }

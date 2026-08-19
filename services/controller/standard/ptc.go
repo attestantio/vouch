@@ -16,7 +16,7 @@ package standard
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
@@ -25,16 +25,25 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
+// payloadAttestationJobName provides the scheduler job name for a slot's payload attestations.
+func payloadAttestationJobName(slot phase0.Slot) string {
+	return fmt.Sprintf("Payload attestations for slot %d", slot)
+}
+
 // schedulePayloadAttestations schedules payload attestation duties.
 func (s *Service) schedulePayloadAttestations(ctx context.Context,
 	epoch phase0.Epoch,
 	validatorIndices []phase0.ValidatorIndex,
 	notCurrentSlot bool,
 ) {
-	if !s.canSchedulePayloadAttestations(validatorIndices) {
+	if !s.canSchedulePayloadAttestations(epoch, validatorIndices) {
 		return
 	}
-	if epoch > s.chainTimeService.CurrentEpoch() && s.payloadAttestationsAlreadyScheduled(ctx, epoch) {
+	// The epoch is scheduled from whichever of the epoch ticker and the following epoch's
+	// preparation reaches it first, so check every epoch rather than only future ones: without
+	// this the ticker refetches the duties the preparation already scheduled and then fails to
+	// schedule every one of their jobs.
+	if s.payloadAttestationsAlreadyScheduled(ctx, epoch) {
 		s.log.Trace().Uint64("epoch", uint64(epoch)).Msg("Payload attestation duties already scheduled")
 		return
 	}
@@ -69,19 +78,23 @@ func (s *Service) schedulePayloadAttestations(ctx context.Context,
 	for slot := range dutiesBySlot {
 		slots = append(slots, slot)
 	}
-	sort.Slice(slots, func(i, j int) bool { return slots[i] < slots[j] })
+	slices.Sort(slots)
 	for _, slot := range slots {
 		s.schedulePayloadAttestation(ctx, dutiesBySlot[slot], accounts)
 	}
 }
 
-func (s *Service) canSchedulePayloadAttestations(validatorIndices []phase0.ValidatorIndex) bool {
-	return len(validatorIndices) > 0 && s.ptcDutiesProvider != nil && s.payloadAttester != nil && s.chainTimeService.CurrentEpoch() >= s.gloasForkEpoch
+// canSchedulePayloadAttestations reports whether the duties for the given epoch can be scheduled.
+// The fork test is on the epoch being scheduled rather than on the current one: the epoch after the
+// fork epoch is prepared from the epoch before it, where the current epoch is still pre-Gloas, so
+// testing the current epoch would drop the first Gloas epoch's duties.
+func (s *Service) canSchedulePayloadAttestations(epoch phase0.Epoch, validatorIndices []phase0.ValidatorIndex) bool {
+	return len(validatorIndices) > 0 && s.ptcDutiesProvider != nil && s.payloadAttester != nil && epoch >= s.gloasForkEpoch
 }
 
 func (s *Service) payloadAttestationsAlreadyScheduled(ctx context.Context, epoch phase0.Epoch) bool {
 	for slot := s.chainTimeService.FirstSlotOfEpoch(epoch); slot < s.chainTimeService.FirstSlotOfEpoch(epoch+1); slot++ {
-		if s.scheduler.JobExists(ctx, fmt.Sprintf("Payload attestations for slot %d", slot)) {
+		if s.scheduler.JobExists(ctx, payloadAttestationJobName(slot)) {
 			return true
 		}
 	}
@@ -131,7 +144,7 @@ func (s *Service) schedulePayloadAttestation(ctx context.Context,
 	deadline := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.payloadAttestationDelay)
 	if err := s.scheduler.ScheduleJob(ctx,
 		"Payload attestation",
-		fmt.Sprintf("Payload attestations for slot %d", duty.Slot()),
+		payloadAttestationJobName(duty.Slot()),
 		jobTime,
 		func(ctx context.Context) {
 			ctx, cancel := context.WithDeadline(ctx, deadline)
@@ -150,8 +163,17 @@ func (s *Service) attestPayload(ctx context.Context, duty *payloadattester.Duty)
 }
 
 func (s *Service) refreshPayloadAttestationDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {
+	// If the epoch duties are yet to be scheduled then we don't have anything to do.
+	if s.scheduler.JobExists(ctx, fmt.Sprintf("Prepare for epoch %d", epoch)) {
+		s.log.Trace().Msg("Payload attestation refresh not necessary as epoch not yet prepared")
+		return
+	}
+
+	cancelledJobs := make(map[phase0.Slot]bool)
 	for slot := s.chainTimeService.FirstSlotOfEpoch(epoch); slot < s.chainTimeService.FirstSlotOfEpoch(epoch+1); slot++ {
-		s.scheduler.CancelJobIfExists(ctx, fmt.Sprintf("Payload attestations for slot %d", slot))
+		if err := s.scheduler.CancelJob(ctx, payloadAttestationJobName(slot)); err == nil {
+			cancelledJobs[slot] = true
+		}
 	}
 
 	_, validatorIndices, err := s.accountsAndIndicesForEpoch(ctx, epoch)
@@ -163,5 +185,9 @@ func (s *Service) refreshPayloadAttestationDutiesForEpoch(ctx context.Context, e
 		return
 	}
 
-	s.schedulePayloadAttestations(ctx, epoch, validatorIndices, false)
+	// Only reschedule the current slot if its job was cancelled.  If it was not then it has
+	// already run, and rescheduling it would place a job in the past that the scheduler runs
+	// immediately, attesting to the same slot's payload twice.
+	currentSlotJobCancelled := cancelledJobs[s.chainTimeService.CurrentSlot()]
+	s.schedulePayloadAttestations(ctx, epoch, validatorIndices, !currentSlotJobCancelled)
 }
