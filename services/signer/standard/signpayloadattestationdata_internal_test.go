@@ -22,6 +22,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -52,6 +53,40 @@ func TestSignPayloadAttestationDataUsesGenericMulti(t *testing.T) {
 	require.NotEqual(t, phase0.BLSSignature{}, sigs[0])
 	require.NotEqual(t, phase0.BLSSignature{}, sigs[1])
 	require.Len(t, batches, 1)
+}
+
+func TestNewWarnsWhenPTCAttesterDomainUnavailable(t *testing.T) {
+	capture := logger.NewLogCapture()
+
+	_, err := New(context.Background(),
+		WithLogLevel(zerolog.WarnLevel),
+		WithMonitor(nullmetrics.New()),
+		WithClientMonitor(nullmetrics.New()),
+		WithSpecProvider(&preGloasSpecProvider{}),
+		WithDomainProvider(mock.NewDomainProvider()),
+	)
+	require.NoError(t, err)
+	capture.AssertHasEntry(t, "DOMAIN_PTC_ATTESTER unavailable in spec; payload attestation signing unavailable")
+}
+
+func TestSignPayloadAttestationDataUnavailableBeforeGloas(t *testing.T) {
+	ctx := context.Background()
+	service, err := New(ctx,
+		WithLogLevel(zerolog.Disabled),
+		WithMonitor(nullmetrics.New()),
+		WithClientMonitor(nullmetrics.New()),
+		WithSpecProvider(&preGloasSpecProvider{}),
+		WithDomainProvider(mock.NewDomainProvider()),
+	)
+	require.NoError(t, err)
+
+	batches := make([]batchRecord, 0)
+	accounts := []e2wtypes.Account{newMockMultiSignerAccount("one", &batches)}
+
+	_, err = service.SignPayloadAttestationData(ctx, accounts, &gloas.PayloadAttestationData{Slot: 33, PayloadPresent: true})
+	require.EqualError(t, err, "DOMAIN_PTC_ATTESTER unavailable in beacon node spec; cannot sign payload attestation data")
+	// The guard must fire before any signing is attempted.
+	require.Empty(t, batches)
 }
 
 type ptcSpecProvider struct{}
