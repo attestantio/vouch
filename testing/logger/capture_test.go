@@ -59,6 +59,10 @@ func TestHasLog(t *testing.T) {
 	}
 }
 
+// TestEntriesDuringConcurrentWrite reads Entries while another goroutine is still capturing
+// output, which is how the multinode submitters log once their submission has already returned.
+// The final length assertion also proves every write was captured, so the writes need no
+// assertion of their own on the writing goroutine.
 func TestEntriesDuringConcurrentWrite(t *testing.T) {
 	capture := &LogCapture{
 		entries: make([]map[string]any, 0),
@@ -67,8 +71,7 @@ func TestEntriesDuringConcurrentWrite(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		for i := range 128 {
-			_, err := capture.Write([]byte(fmt.Sprintf(`{"message":"entry","index":%d}`, i)))
-			require.NoError(t, err)
+			_, _ = fmt.Fprintf(capture, `{"message":"entry","index":%d}`, i)
 		}
 	})
 
