@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSubmitExecutionPayloadEnvelopeReportsProviderAndOverallResults(t *testing.T) {
+func TestSubmitExecutionPayloadEnvelopeReportsProviderResults(t *testing.T) {
 	ctx := context.Background()
 	capture := logger.NewLogCapture()
 	monitor, err := prometheusmetrics.New(ctx,
@@ -41,9 +41,11 @@ func TestSubmitExecutionPayloadEnvelopeReportsProviderAndOverallResults(t *testi
 	)
 	require.NoError(t, err)
 	beaconBlockRoot := phase0.Root{0x01}
-	failedAddress := "https://user:secret@failed.example/path?access_token=secret"
-	failedProviderCountBefore := clientOperationCount(t, "https://user:xxxxx@failed.example/xxxxx?access_token=xxxxx", "submit execution payload envelope", "failed")
-	successfulProviderCountBefore := clientOperationCount(t, "http://succeeded", "submit execution payload envelope", "succeeded")
+	failingAddress := "https://user:secret@failed.example/path?access_token=secret"
+	workingAddress := "http://working.example"
+	failingProviderCountBefore := clientOperationCount(t, "https://user:xxxxx@failed.example/xxxxx?access_token=xxxxx", "submit execution payload envelope", "failed")
+	workingProviderCountBefore := clientOperationCount(t, workingAddress, "submit execution payload envelope", "succeeded")
+	unaddressedProviderCountBefore := clientOperationCount(t, "http://<unknown>", "submit execution payload envelope", "succeeded")
 	service, err := multinode.New(ctx,
 		multinode.WithLogLevel(zerolog.TraceLevel),
 		multinode.WithClientMonitor(monitor),
@@ -53,8 +55,9 @@ func TestSubmitExecutionPayloadEnvelopeReportsProviderAndOverallResults(t *testi
 			"one": mock.NewProposalSubmitter(),
 		}),
 		multinode.WithExecutionPayloadEnvelopeSubmitters(map[string]eth2client.ExecutionPayloadEnvelopeSubmitter{
-			"failed":    &errorExecutionPayloadEnvelopeSubmitter{address: failedAddress, err: &api.Error{StatusCode: 400}},
-			"succeeded": &capturingExecutionPayloadEnvelopeSubmitter{},
+			"failing":     &serviceExecutionPayloadEnvelopeSubmitter{address: failingAddress, err: &api.Error{StatusCode: 400}},
+			"working":     &serviceExecutionPayloadEnvelopeSubmitter{address: workingAddress},
+			"unaddressed": &capturingExecutionPayloadEnvelopeSubmitter{},
 		}),
 		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
 			"one": mock.NewAttestationsSubmitter(),
@@ -91,36 +94,33 @@ func TestSubmitExecutionPayloadEnvelopeReportsProviderAndOverallResults(t *testi
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		return capture.HasLog(map[string]any{
-			"message":           "Execution payload envelope provider submission completed",
-			"provider":          "failed",
-			"beacon_block_root": beaconBlockRoot.String(),
-			"status":            "400",
-		}) && hasProviderSubmissionField(capture, "failed", beaconBlockRoot.String(), "400", "elapsed") &&
-			hasProviderSubmissionField(capture, "failed", beaconBlockRoot.String(), "400", "error")
+			"message":             "Execution payload envelope provider submission completed",
+			"beacon_node_address": "failing",
+			"beacon_block_root":   beaconBlockRoot.String(),
+			"status":              "failed",
+			"status_code":         400,
+		}) && hasProviderSubmissionField(capture, "failing", beaconBlockRoot.String(), "failed", "elapsed") &&
+			hasProviderSubmissionField(capture, "failing", beaconBlockRoot.String(), "failed", "error")
 	}, time.Second, 10*time.Millisecond)
 	require.Eventually(t, func() bool {
 		return capture.HasLog(map[string]any{
-			"message":           "Execution payload envelope provider submission completed",
-			"provider":          "succeeded",
-			"beacon_block_root": beaconBlockRoot.String(),
-			"status":            "succeeded",
-		}) && hasProviderSubmissionField(capture, "succeeded", beaconBlockRoot.String(), "succeeded", "elapsed")
+			"message":             "Execution payload envelope provider submission completed",
+			"beacon_node_address": "working",
+			"beacon_block_root":   beaconBlockRoot.String(),
+			"status":              "succeeded",
+		}) && hasProviderSubmissionField(capture, "working", beaconBlockRoot.String(), "succeeded", "elapsed")
 	}, time.Second, 10*time.Millisecond)
-	require.True(t, capture.HasLog(map[string]any{
-		"message":                "Execution payload envelope submission completed",
-		"beacon_block_root":      beaconBlockRoot.String(),
-		"any_provider_succeeded": true,
-	}))
 	for _, entry := range capture.Entries() {
-		require.NotContains(t, entry, "beacon_node_address")
 		for _, value := range entry {
-			require.NotEqual(t, failedAddress, value)
+			require.NotEqual(t, failingAddress, value)
 		}
 	}
 	require.Eventually(t, func() bool {
-		return clientOperationCount(t, "https://user:xxxxx@failed.example/xxxxx?access_token=xxxxx", "submit execution payload envelope", "failed") == failedProviderCountBefore+1 &&
-			clientOperationCount(t, "http://succeeded", "submit execution payload envelope", "succeeded") == successfulProviderCountBefore+1
+		return clientOperationCount(t, "https://user:xxxxx@failed.example/xxxxx?access_token=xxxxx", "submit execution payload envelope", "failed") == failingProviderCountBefore+1 &&
+			clientOperationCount(t, workingAddress, "submit execution payload envelope", "succeeded") == workingProviderCountBefore+1 &&
+			clientOperationCount(t, "http://<unknown>", "submit execution payload envelope", "succeeded") == unaddressedProviderCountBefore+1
 	}, time.Second, 10*time.Millisecond)
+	require.Zero(t, clientOperationCount(t, "http://unaddressed", "submit execution payload envelope", "succeeded"))
 }
 
 func TestSubmitExecutionPayloadEnvelopeReturnsPromptlyAfterImmediateSuccess(t *testing.T) {
@@ -225,13 +225,80 @@ func TestSubmitExecutionPayloadEnvelopeDoesNotWaitForNodeVersion(t *testing.T) {
 	}
 }
 
+// TestSubmitExecutionPayloadEnvelopeIdentifiesProviderThatNeverStarts covers the provider that
+// leaves through the semaphore rather than through a submission: with a single concurrency slot
+// held until the deadline, the queued provider must still be identifiable in the log.
+func TestSubmitExecutionPayloadEnvelopeIdentifiesProviderThatNeverStarts(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	canceled := make(chan struct{}, 2)
+	beaconBlockRoot := phase0.Root{0x03}
+	service, err := multinode.New(ctx,
+		multinode.WithLogLevel(zerolog.TraceLevel),
+		multinode.WithTimeout(50*time.Millisecond),
+		multinode.WithProcessConcurrency(1),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"one": mock.NewProposalSubmitter(),
+		}),
+		multinode.WithExecutionPayloadEnvelopeSubmitters(map[string]eth2client.ExecutionPayloadEnvelopeSubmitter{
+			"one": &blockingExecutionPayloadEnvelopeSubmitter{canceled: canceled},
+			"two": &blockingExecutionPayloadEnvelopeSubmitter{canceled: canceled},
+		}),
+		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
+			"one": mock.NewAttestationsSubmitter(),
+		}),
+		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
+			"one": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
+		}),
+		multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{
+			"one": mock.NewAggregateAttestationsSubmitter(),
+		}),
+		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{
+			"one": mock.NewProposalPreparationsSubmitter(),
+		}),
+		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{
+			"one": mock.NewSyncCommitteeMessagesSubmitter(),
+		}),
+		multinode.WithSyncCommitteeSubscriptionsSubmitters(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter{
+			"one": mock.NewSyncCommitteeSubscriptionsSubmitter(),
+		}),
+		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
+			"one": mock.NewSyncCommitteeContributionsSubmitter(),
+		}),
+	)
+	require.NoError(t, err)
+
+	// Only one of the two providers takes the single slot; the other never starts its
+	// submission, so its only record is the semaphore failure.
+	err = service.SubmitExecutionPayloadEnvelope(ctx, &api.SubmitExecutionPayloadEnvelopeOpts{
+		SignedExecutionPayloadEnvelope: &spec.VersionedSignedExecutionPayloadEnvelope{
+			Version: spec.DataVersionGloas,
+			Gloas: &gloas.SignedExecutionPayloadEnvelope{
+				Message: &gloas.ExecutionPayloadEnvelope{BeaconBlockRoot: beaconBlockRoot},
+			},
+		},
+	})
+	require.EqualError(t, err, "no successful submissions before timeout")
+	require.Eventually(t, func() bool {
+		for _, name := range []string{"one", "two"} {
+			if capture.HasLog(map[string]any{
+				"message":             "Failed to acquire semaphore",
+				"beacon_node_address": name,
+				"beacon_block_root":   beaconBlockRoot.String(),
+			}) {
+				return true
+			}
+		}
+
+		return false
+	}, time.Second, 10*time.Millisecond)
+}
+
 func TestSubmitExecutionPayloadEnvelopeCancelsOnDeadline(t *testing.T) {
 	ctx := context.Background()
 	canceled := make(chan struct{}, 1)
-	capture := logger.NewLogCapture()
-	beaconBlockRoot := phase0.Root{0x02}
 	service, err := multinode.New(ctx,
-		multinode.WithLogLevel(zerolog.TraceLevel),
+		multinode.WithLogLevel(zerolog.Disabled),
 		multinode.WithTimeout(50*time.Millisecond),
 		multinode.WithProcessConcurrency(1),
 		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
@@ -264,20 +331,8 @@ func TestSubmitExecutionPayloadEnvelopeCancelsOnDeadline(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = service.SubmitExecutionPayloadEnvelope(ctx, &api.SubmitExecutionPayloadEnvelopeOpts{
-		SignedExecutionPayloadEnvelope: &spec.VersionedSignedExecutionPayloadEnvelope{
-			Version: spec.DataVersionGloas,
-			Gloas: &gloas.SignedExecutionPayloadEnvelope{
-				Message: &gloas.ExecutionPayloadEnvelope{BeaconBlockRoot: beaconBlockRoot},
-			},
-		},
-	})
+	err = service.SubmitExecutionPayloadEnvelope(ctx, &api.SubmitExecutionPayloadEnvelopeOpts{})
 	require.EqualError(t, err, "no successful submissions before timeout")
-	require.True(t, capture.HasLog(map[string]any{
-		"message":                "Execution payload envelope submission completed",
-		"beacon_block_root":      beaconBlockRoot.String(),
-		"any_provider_succeeded": false,
-	}))
 	require.Eventually(t, func() bool {
 		select {
 		case <-canceled:
@@ -355,28 +410,30 @@ func (s *capturingExecutionPayloadEnvelopeSubmitter) SubmitExecutionPayloadEnvel
 	return nil
 }
 
-type errorExecutionPayloadEnvelopeSubmitter struct {
+// serviceExecutionPayloadEnvelopeSubmitter is an envelope submitter that is also an
+// eth2client.Service, so that its address rather than its name reaches the client monitor.
+type serviceExecutionPayloadEnvelopeSubmitter struct {
 	address string
 	err     error
 }
 
-func (s *errorExecutionPayloadEnvelopeSubmitter) SubmitExecutionPayloadEnvelope(_ context.Context, _ *api.SubmitExecutionPayloadEnvelopeOpts) error {
+func (s *serviceExecutionPayloadEnvelopeSubmitter) SubmitExecutionPayloadEnvelope(_ context.Context, _ *api.SubmitExecutionPayloadEnvelopeOpts) error {
 	return s.err
 }
 
-func (*errorExecutionPayloadEnvelopeSubmitter) Name() string {
-	return "error"
+func (*serviceExecutionPayloadEnvelopeSubmitter) Name() string {
+	return "service"
 }
 
-func (s *errorExecutionPayloadEnvelopeSubmitter) Address() string {
+func (s *serviceExecutionPayloadEnvelopeSubmitter) Address() string {
 	return s.address
 }
 
-func (*errorExecutionPayloadEnvelopeSubmitter) IsActive() bool {
+func (*serviceExecutionPayloadEnvelopeSubmitter) IsActive() bool {
 	return true
 }
 
-func (*errorExecutionPayloadEnvelopeSubmitter) IsSynced() bool {
+func (*serviceExecutionPayloadEnvelopeSubmitter) IsSynced() bool {
 	return true
 }
 
@@ -410,10 +467,10 @@ func clientOperationCount(t *testing.T, provider string, operation string, resul
 	return 0
 }
 
-func hasProviderSubmissionField(capture *logger.LogCapture, provider string, beaconBlockRoot string, status string, field string) bool {
+func hasProviderSubmissionField(capture *logger.LogCapture, beaconNodeAddress string, beaconBlockRoot string, status string, field string) bool {
 	for _, entry := range capture.Entries() {
 		if entry["message"] != "Execution payload envelope provider submission completed" ||
-			entry["provider"] != provider ||
+			entry["beacon_node_address"] != beaconNodeAddress ||
 			entry["beacon_block_root"] != beaconBlockRoot ||
 			entry["status"] != status {
 			continue

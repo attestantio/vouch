@@ -15,7 +15,6 @@ package multinode
 
 import (
 	"context"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -76,14 +75,9 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 	// The context is released once every submission has finished, so both cases above can be
 	// ready at once and select picks between them at random.  Consult the success flag rather
 	// than the chosen case, otherwise a successful submission can report a timeout.
-	anyProviderSucceeded := submissionSucceeded.Load()
-	if !anyProviderSucceeded {
-		s.log.Warn().Str("beacon_block_root", beaconBlockRoot).Bool("any_provider_succeeded", false).Msg("Execution payload envelope submission completed")
-
+	if !submissionSucceeded.Load() {
 		return errors.New("no successful submissions before timeout")
 	}
-	log := s.log.With().Str("beacon_block_root", beaconBlockRoot).Bool("any_provider_succeeded", true).Logger()
-	log.Trace().Msg("Execution payload envelope submission completed")
 
 	return nil
 }
@@ -102,28 +96,30 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	))
 	defer span.End()
 
+	log := s.log.With().Str("beacon_node_address", name).Str("beacon_block_root", beaconBlockRoot).Logger()
 	if err := sem.Acquire(ctx, 1); err != nil {
-		s.log.Error().Err(err).Msg("Failed to acquire semaphore")
+		log.Error().Err(err).Msg("Failed to acquire semaphore")
 		return
 	}
 	defer sem.Release(1)
 
-	address := name
+	address := "<unknown>"
 	if service, isService := submitter.(eth2client.Service); isService {
 		address = service.Address()
 	}
-	log := s.log.With().Str("provider", name).Str("beacon_block_root", beaconBlockRoot).Logger()
 	started := time.Now()
 	err := submitter.SubmitExecutionPayloadEnvelope(ctx, opts)
 	elapsed := time.Since(started)
 	s.clientMonitor.ClientOperation(address, "submit execution payload envelope", err == nil, elapsed)
 	if err != nil {
-		status := "failed"
+		// The status field carries the outcome of the submission and status_code the HTTP
+		// status of an API failure; status_code is 0 when there was no response to fail.
+		statusCode := 0
 		var apiErr *api.Error
 		if errors.As(err, &apiErr) {
-			status = strconv.Itoa(apiErr.StatusCode)
+			statusCode = apiErr.StatusCode
 		}
-		log.Warn().Err(err).Str("status", status).Dur("elapsed", elapsed).Msg("Execution payload envelope provider submission completed")
+		log.Warn().Err(err).Str("status", "failed").Int("status_code", statusCode).Dur("elapsed", elapsed).Msg("Execution payload envelope provider submission completed")
 		return
 	}
 
