@@ -17,7 +17,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -71,23 +70,17 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 					}
 					cancel()
 				}()
-				s.log.Trace().Str("beacon_block_root", beaconBlockRoot).Bool("any_provider_succeeded", true).Msg("Execution payload envelope submission completed")
-
 				return nil
 			}
 			submissionErrors = append(submissionErrors, err)
 		case <-ctx.Done():
 			cancel()
 			submissionErrors = append(submissionErrors, errors.New("no successful submissions before timeout"))
-			s.log.Warn().Str("beacon_block_root", beaconBlockRoot).Bool("any_provider_succeeded", false).Msg("Execution payload envelope submission completed")
-
 			return submitter.NewSubmissionError(submissionErrors...)
 		}
 	}
 
 	cancel()
-	s.log.Warn().Str("beacon_block_root", beaconBlockRoot).Bool("any_provider_succeeded", false).Msg("Execution payload envelope submission completed")
-
 	return submitter.NewSubmissionError(submissionErrors...)
 }
 
@@ -104,29 +97,31 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	))
 	defer span.End()
 
+	log := s.log.With().Str("beacon_node_address", name).Str("beacon_block_root", beaconBlockRoot).Logger()
 	if err := sem.Acquire(ctx, 1); err != nil {
-		s.log.Error().Err(err).Msg("Failed to acquire semaphore")
+		log.Error().Err(err).Msg("Failed to acquire semaphore")
 		results <- fmt.Errorf("%s: %w", name, err)
 		return
 	}
 	defer sem.Release(1)
 
-	address := name
+	address := "<unknown>"
 	if service, isService := submitter.(eth2client.Service); isService {
 		address = service.Address()
 	}
-	log := s.log.With().Str("provider", name).Str("beacon_block_root", beaconBlockRoot).Logger()
 	started := time.Now()
 	err := submitter.SubmitExecutionPayloadEnvelope(ctx, opts)
 	elapsed := time.Since(started)
 	s.clientMonitor.ClientOperation(address, "submit execution payload envelope", err == nil, elapsed)
 	if err != nil {
-		status := "failed"
+		// The status field carries the outcome of the submission and status_code the HTTP
+		// status of an API failure; status_code is 0 when there was no response to fail.
+		statusCode := 0
 		var apiErr *api.Error
 		if errors.As(err, &apiErr) {
-			status = strconv.Itoa(apiErr.StatusCode)
+			statusCode = apiErr.StatusCode
 		}
-		log.Warn().Err(err).Str("status", status).Dur("elapsed", elapsed).Msg("Execution payload envelope provider submission completed")
+		log.Warn().Err(err).Str("status", "failed").Int("status_code", statusCode).Dur("elapsed", elapsed).Msg("Execution payload envelope provider submission completed")
 		results <- fmt.Errorf("%s: %w", name, err)
 		return
 	}
