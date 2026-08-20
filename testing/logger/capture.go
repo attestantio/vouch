@@ -116,7 +116,13 @@ func fieldsMatch(entryValue any, value any) bool {
 	}
 }
 
-// Entries returns all captures log entries.
+// Entries returns a snapshot of all captured log entries.
 func (c *LogCapture) Entries() []map[string]any {
-	return c.entries
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	entries := make([]map[string]any, len(c.entries))
+	copy(entries, c.entries)
+
+	return entries
 }
