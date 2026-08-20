@@ -119,6 +119,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	var ptcAttesterDomainType *phase0.DomainType
 	if tmp, err := domainType(spec, "DOMAIN_PTC_ATTESTER"); err == nil {
 		ptcAttesterDomainType = &tmp
+	} else {
+		log.Warn().Err(err).Msg("DOMAIN_PTC_ATTESTER unavailable in spec; payload attestation signing unavailable")
 	}
 
 	s := &Service{
