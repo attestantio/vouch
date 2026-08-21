@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -17,8 +17,8 @@ import (
 	"errors"
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
-	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/graffitiprovider"
@@ -29,20 +29,22 @@ import (
 )
 
 type parameters struct {
-	logLevel                   zerolog.Level
-	monitor                    metrics.Service
-	chainTime                  chaintime.Service
-	blockAuctioneer            blockauctioneer.BlockAuctioneer
-	proposalProvider           eth2client.ProposalProvider
-	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
-	executionChainHeadProvider cache.ExecutionChainHeadProvider
-	graffitiProvider           graffitiprovider.Service
-	proposalSubmitter          submitter.ProposalSubmitter
-	randaoRevealSigner         signer.RANDAORevealSigner
-	beaconBlockSigner          signer.BeaconBlockSigner
-	blobSidecarSigner          signer.BlobSidecarSigner
-	unblindFromAllRelays       bool
-	builderBoostFactor         uint64
+	monitor                           metrics.Service
+	proposalProvider                  beaconblockproposer.ProposalDataProvider
+	validatingAccountsProvider        accountmanager.ValidatingAccountsProvider
+	executionChainHeadProvider        cache.ExecutionChainHeadProvider
+	graffitiProvider                  graffitiprovider.Service
+	proposalSubmitter                 submitter.ProposalSubmitter
+	executionPayloadEnvelopeSubmitter submitter.ExecutionPayloadEnvelopeSubmitter
+	randaoRevealSigner                signer.RANDAORevealSigner
+	beaconBlockSigner                 signer.BeaconBlockSigner
+	executionPayloadEnvelopeSigner    signer.ExecutionPayloadEnvelopeSigner
+	blobSidecarSigner                 signer.BlobSidecarSigner
+	chainTime                         chaintime.Service
+	blockAuctioneer                   blockauctioneer.BlockAuctioneer
+	logLevel                          zerolog.Level
+	unblindFromAllRelays              bool
+	builderBoostFactor                uint64
 }
 
 // Parameter is the interface for service parameters.
@@ -78,7 +80,7 @@ func WithBlockAuctioneer(auctioneer blockauctioneer.BlockAuctioneer) Parameter {
 }
 
 // WithProposalDataProvider sets the proposal data provider.
-func WithProposalDataProvider(provider eth2client.ProposalProvider) Parameter {
+func WithProposalDataProvider(provider beaconblockproposer.ProposalDataProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalProvider = provider
 	})
@@ -119,6 +121,13 @@ func WithProposalSubmitter(submitter submitter.ProposalSubmitter) Parameter {
 	})
 }
 
+// WithExecutionPayloadEnvelopeSubmitter sets the execution payload envelope submitter.
+func WithExecutionPayloadEnvelopeSubmitter(submitter submitter.ExecutionPayloadEnvelopeSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.executionPayloadEnvelopeSubmitter = submitter
+	})
+}
+
 // WithRANDAORevealSigner sets the RANDAO reveal signer.
 func WithRANDAORevealSigner(signer signer.RANDAORevealSigner) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -130,6 +139,13 @@ func WithRANDAORevealSigner(signer signer.RANDAORevealSigner) Parameter {
 func WithBeaconBlockSigner(signer signer.BeaconBlockSigner) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.beaconBlockSigner = signer
+	})
+}
+
+// WithExecutionPayloadEnvelopeSigner sets the execution payload envelope signer.
+func WithExecutionPayloadEnvelopeSigner(signer signer.ExecutionPayloadEnvelopeSigner) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.executionPayloadEnvelopeSigner = signer
 	})
 }
 
@@ -192,6 +208,12 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.beaconBlockSigner == nil {
 		return nil, errors.New("no beacon block signer specified")
+	}
+	if parameters.executionPayloadEnvelopeSigner == nil {
+		return nil, errors.New("no execution payload envelope signer specified")
+	}
+	if parameters.executionPayloadEnvelopeSubmitter == nil {
+		return nil, errors.New("no execution payload envelope submitter specified")
 	}
 	if parameters.blobSidecarSigner == nil {
 		return nil, errors.New("no blob sidecar signer specified")

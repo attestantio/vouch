@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,6 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
@@ -33,7 +34,7 @@ type parameters struct {
 	processConcurrency     int64
 	chainTime              chaintime.Service
 	specProvider           eth2client.SpecProvider
-	proposalProviders      map[string]eth2client.ProposalProvider
+	proposalProviders      map[string]beaconblockproposer.ProposalDataProvider
 	timeout                time.Duration
 	blockRootToSlotCache   cache.BlockRootToSlotProvider
 	executionPayloadFactor float64
@@ -93,7 +94,7 @@ func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 }
 
 // WithProposalProviders sets the proposal providers.
-func WithProposalProviders(providers map[string]eth2client.ProposalProvider) Parameter {
+func WithProposalProviders(providers map[string]beaconblockproposer.ProposalDataProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalProviders = providers
 	})

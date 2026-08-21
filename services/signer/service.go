@@ -1,4 +1,4 @@
-// Copyright © 2021 Attestant Limited.
+// Copyright © 2021 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,6 +19,7 @@ import (
 
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -98,6 +99,19 @@ type BlobSidecarSigner interface {
 		account e2wtypes.Account,
 		slot phase0.Slot,
 		blobSidecarRoot phase0.Root,
+	) (
+		phase0.BLSSignature,
+		error,
+	)
+}
+
+// ExecutionPayloadEnvelopeSigner provides methods to sign execution payload envelopes.
+type ExecutionPayloadEnvelopeSigner interface {
+	// SignExecutionPayloadEnvelope signs an execution payload envelope.
+	SignExecutionPayloadEnvelope(ctx context.Context,
+		account e2wtypes.Account,
+		slot phase0.Slot,
+		envelope *gloas.ExecutionPayloadEnvelope,
 	) (
 		phase0.BLSSignature,
 		error,

@@ -15,17 +15,87 @@ package standard_test
 
 import (
 	"context"
+	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/chaintime/standard"
+	testlogger "github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
+	zerologger "github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
 )
+
+type mutableSpecProvider struct {
+	mu       sync.RWMutex
+	response *api.Response[map[string]any]
+	err      error
+	calls    atomic.Uint64
+	entered  chan struct{}
+	release  chan struct{}
+}
+
+func (s *mutableSpecProvider) Spec(_ context.Context, _ *api.SpecOpts) (*api.Response[map[string]any], error) {
+	s.calls.Add(1)
+	s.mu.RLock()
+	response := s.response
+	err := s.err
+	entered := s.entered
+	release := s.release
+	s.mu.RUnlock()
+	if entered != nil {
+		select {
+		case entered <- struct{}{}:
+		default:
+		}
+	}
+	if release != nil {
+		<-release
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
+func newMutableSpecProvider(spec map[string]any) *mutableSpecProvider {
+	return &mutableSpecProvider{
+		response: &api.Response[map[string]any]{Data: spec},
+	}
+}
+
+func (s *mutableSpecProvider) setSpec(spec map[string]any) {
+	s.mu.Lock()
+	s.response = &api.Response[map[string]any]{Data: spec}
+	s.mu.Unlock()
+}
+
+func (s *mutableSpecProvider) setError(err error) {
+	s.mu.Lock()
+	s.err = err
+	s.mu.Unlock()
+}
+
+func createMutableSpecService(t testing.TB, specProvider *mutableSpecProvider) chaintime.Service {
+	t.Helper()
+
+	service, err := standard.New(context.Background(),
+		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standard.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+
+	return service
+}
 
 func TestService(t *testing.T) {
 	genesisTime := time.Now()
@@ -226,4 +296,148 @@ func TestFirstSlotOfEpoch(t *testing.T) {
 			assert.Equal(t, test.slot, slot)
 		})
 	}
+}
+
+func TestHardForkEpochUsesConstructionSchedule(t *testing.T) {
+	ctx := context.Background()
+	specProvider := newMutableSpecProvider(map[string]any{
+		"SECONDS_PER_SLOT": 12 * time.Second,
+		"SLOTS_PER_EPOCH":  uint64(32),
+		"GLOAS_FORK_EPOCH": uint64(2048),
+	})
+	service := createMutableSpecService(t, specProvider)
+
+	specProvider.setError(errors.New("spec unavailable"))
+
+	require.Equal(t, phase0.Epoch(2048), service.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH"))
+}
+
+func TestHardForkEpochRetainsDiscoveredFork(t *testing.T) {
+	ctx := context.Background()
+	specProvider := newMutableSpecProvider(map[string]any{
+		"SECONDS_PER_SLOT": 12 * time.Second,
+		"SLOTS_PER_EPOCH":  uint64(32),
+	})
+	service := createMutableSpecService(t, specProvider)
+
+	specProvider.setSpec(map[string]any{
+		"SECONDS_PER_SLOT":  12 * time.Second,
+		"SLOTS_PER_EPOCH":   uint64(32),
+		"FUTURE_FORK_EPOCH": uint64(2048),
+	})
+	require.Equal(t, phase0.Epoch(2048), service.HardForkEpoch(ctx, "FUTURE_FORK_EPOCH"))
+
+	specProvider.setError(errors.New("spec unavailable"))
+	require.Equal(t, phase0.Epoch(2048), service.HardForkEpoch(ctx, "FUTURE_FORK_EPOCH"))
+}
+
+func TestHardForkEpochRecognisesMalformedConstructionValue(t *testing.T) {
+	ctx := context.Background()
+	oldLogger := zerologger.Logger
+	oldLogLevel := zerolog.GlobalLevel()
+	t.Cleanup(func() {
+		zerologger.Logger = oldLogger
+		zerolog.SetGlobalLevel(oldLogLevel)
+	})
+	logCapture := testlogger.NewLogCapture()
+	specProvider := newMutableSpecProvider(map[string]any{
+		"SECONDS_PER_SLOT": 12 * time.Second,
+		"SLOTS_PER_EPOCH":  uint64(32),
+		"GLOAS_FORK_EPOCH": "2048",
+	})
+	service, err := standard.New(ctx,
+		standard.WithLogLevel(zerolog.TraceLevel),
+		standard.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standard.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+
+	require.Equal(t, phase0.Epoch(^uint64(0)), service.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH"))
+	require.Equal(t, uint64(1), specProvider.calls.Load())
+	require.True(t, logCapture.HasLog(map[string]any{
+		"error": "GLOAS_FORK_EPOCH is not a uint64",
+	}))
+}
+
+func TestHardForkEpochRetainsMalformedRefreshedValue(t *testing.T) {
+	ctx := context.Background()
+	specProvider := newMutableSpecProvider(map[string]any{
+		"SECONDS_PER_SLOT": 12 * time.Second,
+		"SLOTS_PER_EPOCH":  uint64(32),
+	})
+	service := createMutableSpecService(t, specProvider)
+
+	specProvider.setSpec(map[string]any{
+		"SECONDS_PER_SLOT": 12 * time.Second,
+		"SLOTS_PER_EPOCH":  uint64(32),
+		"GLOAS_FORK_EPOCH": "2048",
+	})
+	require.Equal(t, phase0.Epoch(^uint64(0)), service.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH"))
+
+	specProvider.setError(errors.New("spec unavailable"))
+	require.Equal(t, phase0.Epoch(^uint64(0)), service.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH"))
+	require.Equal(t, uint64(2), specProvider.calls.Load())
+}
+
+func TestHardForkEpochRetainsValidValueWhenRefreshIsMalformed(t *testing.T) {
+	ctx := context.Background()
+	specProvider := newMutableSpecProvider(map[string]any{
+		"SECONDS_PER_SLOT": 12 * time.Second,
+		"SLOTS_PER_EPOCH":  uint64(32),
+		"GLOAS_FORK_EPOCH": uint64(2048),
+	})
+	service := createMutableSpecService(t, specProvider)
+
+	specProvider.setSpec(map[string]any{
+		"SECONDS_PER_SLOT": 12 * time.Second,
+		"SLOTS_PER_EPOCH":  uint64(32),
+		"GLOAS_FORK_EPOCH": "2048",
+	})
+	require.Equal(t, phase0.Epoch(^uint64(0)), service.HardForkEpoch(ctx, "MISSING_FORK_EPOCH"))
+	require.Equal(t, phase0.Epoch(2048), service.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH"))
+	require.Equal(t, uint64(2), specProvider.calls.Load())
+}
+
+func TestHardForkEpochReturnsFarFutureWhenUnavailable(t *testing.T) {
+	ctx := context.Background()
+	specProvider := newMutableSpecProvider(map[string]any{
+		"SECONDS_PER_SLOT": 12 * time.Second,
+		"SLOTS_PER_EPOCH":  uint64(32),
+	})
+	service := createMutableSpecService(t, specProvider)
+	specProvider.setError(errors.New("spec unavailable"))
+
+	require.Equal(t, phase0.Epoch(^uint64(0)), service.HardForkEpoch(ctx, "MISSING_FORK_EPOCH"))
+}
+
+func TestHardForkEpochReadersContinueDuringRefresh(t *testing.T) {
+	ctx := context.Background()
+	specProvider := newMutableSpecProvider(map[string]any{
+		"SECONDS_PER_SLOT": 12 * time.Second,
+		"SLOTS_PER_EPOCH":  uint64(32),
+		"GLOAS_FORK_EPOCH": uint64(2048),
+	})
+	service := createMutableSpecService(t, specProvider)
+
+	specProvider.entered = make(chan struct{}, 1)
+	specProvider.release = make(chan struct{})
+	refreshed := make(chan phase0.Epoch, 1)
+	go func() {
+		refreshed <- service.HardForkEpoch(ctx, "MISSING_FORK_EPOCH")
+	}()
+	<-specProvider.entered
+
+	known := make(chan phase0.Epoch, 1)
+	go func() {
+		known <- service.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH")
+	}()
+	select {
+	case epoch := <-known:
+		require.Equal(t, phase0.Epoch(2048), epoch)
+	case <-time.After(time.Second):
+		t.Fatal("known fork lookup blocked during refresh")
+	}
+
+	close(specProvider.release)
+	require.Equal(t, phase0.Epoch(^uint64(0)), <-refreshed)
 }

@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,6 +16,9 @@ package standard
 import (
 	"context"
 	"fmt"
+	"maps"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	client "github.com/attestantio/go-eth2-client"
@@ -26,13 +29,30 @@ import (
 	zerologger "github.com/rs/zerolog/log"
 )
 
+// forkSchedule is immutable after publication through Service.forkSchedule.
+type forkSchedule struct {
+	epochs    map[string]phase0.Epoch
+	malformed map[string]struct{}
+}
+
+type forkScheduleRefresh struct {
+	err  error
+	done chan struct{}
+}
+
+type forkScheduleGeneration struct {
+	refresh atomic.Pointer[forkScheduleRefresh]
+}
+
 // Service provides chain time services.
 type Service struct {
-	log           zerolog.Logger
-	genesisTime   time.Time
-	slotDuration  time.Duration
-	slotsPerEpoch uint64
-	specProvider  client.SpecProvider
+	log                    zerolog.Logger
+	specProvider           client.SpecProvider
+	genesisTime            time.Time
+	slotDuration           time.Duration
+	slotsPerEpoch          uint64
+	forkSchedule           atomic.Pointer[forkSchedule]
+	forkScheduleGeneration atomic.Pointer[forkScheduleGeneration]
 }
 
 // New creates a new controller.
@@ -88,6 +108,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		slotsPerEpoch: slotsPerEpoch,
 		specProvider:  parameters.specProvider,
 	}
+	forkSchedule := forkScheduleFromSpec(spec)
+	s.forkSchedule.Store(&forkSchedule)
+	s.forkScheduleGeneration.Store(&forkScheduleGeneration{})
 
 	return s, nil
 }
@@ -135,30 +158,149 @@ func (s *Service) FirstSlotOfEpoch(epoch phase0.Epoch) phase0.Slot {
 
 // HardForkEpoch returns the activation epoch of the specified hard fork or far future epoch if missing.
 func (s *Service) HardForkEpoch(ctx context.Context, hardForkName string) phase0.Epoch {
-	forkEpoch, err := s.getHardForkEpoch(ctx, hardForkName)
-	if err != nil {
+	forkSchedule := s.forkSchedule.Load()
+	if forkEpoch, exists := forkSchedule.epochs[hardForkName]; exists {
+		return forkEpoch
+	}
+	if _, exists := forkSchedule.malformed[hardForkName]; exists {
+		s.log.Error().Err(fmt.Errorf("%s is not a uint64", hardForkName)).Msg("Failed to obtain hard fork")
+		return 0xffffffffffffffff
+	}
+
+	generation := s.forkScheduleGeneration.Load()
+	// A concurrent refresh may have published the requested fork before we captured its generation.
+	forkSchedule = s.forkSchedule.Load()
+	if forkEpoch, exists := forkSchedule.epochs[hardForkName]; exists {
+		return forkEpoch
+	}
+	if _, exists := forkSchedule.malformed[hardForkName]; exists {
+		s.log.Error().Err(fmt.Errorf("%s is not a uint64", hardForkName)).Msg("Failed to obtain hard fork")
+		return 0xffffffffffffffff
+	}
+	if err := s.refreshForkSchedule(ctx, generation); err != nil {
 		s.log.Error().Err(err).Msg("Failed to obtain hard fork")
 		return 0xffffffffffffffff
 	}
-	return forkEpoch
+	forkSchedule = s.forkSchedule.Load()
+	if forkEpoch, exists := forkSchedule.epochs[hardForkName]; exists {
+		return forkEpoch
+	}
+	if _, exists := forkSchedule.malformed[hardForkName]; exists {
+		s.log.Error().Err(fmt.Errorf("%s is not a uint64", hardForkName)).Msg("Failed to obtain hard fork")
+		return 0xffffffffffffffff
+	}
+
+	s.log.Error().Err(fmt.Errorf("%s version not known by chain", hardForkName)).Msg("Failed to obtain hard fork")
+	return 0xffffffffffffffff
 }
 
-func (s *Service) getHardForkEpoch(ctx context.Context, hardForkName string) (phase0.Epoch, error) {
-	// Fetch the fork version.
+func forkScheduleFromSpec(spec map[string]any) forkSchedule {
+	res := forkSchedule{
+		epochs:    make(map[string]phase0.Epoch),
+		malformed: make(map[string]struct{}),
+	}
+	for name, value := range spec {
+		if !strings.HasSuffix(name, "_FORK_EPOCH") {
+			continue
+		}
+		epoch, isEpoch := value.(uint64)
+		if !isEpoch {
+			res.malformed[name] = struct{}{}
+			continue
+		}
+		res.epochs[name] = phase0.Epoch(epoch)
+	}
+
+	return res
+}
+
+func (s *Service) refreshForkSchedule(ctx context.Context, generation *forkScheduleGeneration) error {
+	// Each generation admits one provider request; other callers reuse its result.
+	if generation == nil {
+		generation = &forkScheduleGeneration{}
+		if !s.forkScheduleGeneration.CompareAndSwap(nil, generation) {
+			generation = s.forkScheduleGeneration.Load()
+		}
+	}
+
+	refresh := generation.refresh.Load()
+	leader := false
+	if refresh == nil {
+		candidate := &forkScheduleRefresh{done: make(chan struct{})}
+		if generation.refresh.CompareAndSwap(nil, candidate) {
+			refresh = candidate
+			leader = true
+		} else {
+			refresh = generation.refresh.Load()
+		}
+	}
+	if !leader {
+		select {
+		case <-refresh.done:
+			return refresh.err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	specResponse, err := s.specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to obtain spec")
-	}
-	spec := specResponse.Data
-
-	tmp, exists := spec[hardForkName]
-	if !exists {
-		return 0, fmt.Errorf("%s version not known by chain", hardForkName)
-	}
-	epoch, isEpoch := tmp.(uint64)
-	if !isEpoch {
-		return 0, fmt.Errorf("%s is not a uint64", hardForkName)
+		err = errors.Wrap(err, "failed to obtain spec")
+	} else {
+		current := s.forkSchedule.Load()
+		incoming := forkScheduleFromSpec(specResponse.Data)
+		next := mergeForkSchedule(current, incoming, s.CurrentEpoch())
+		if next != nil {
+			s.forkSchedule.Store(next)
+		}
 	}
 
-	return phase0.Epoch(epoch), nil
+	refresh.err = err
+	// Advance the generation before waking waiters so a later miss can refresh again.
+	s.forkScheduleGeneration.CompareAndSwap(generation, &forkScheduleGeneration{})
+	close(refresh.done)
+
+	return err
+}
+
+func mergeForkSchedule(current *forkSchedule,
+	incoming forkSchedule,
+	currentEpoch phase0.Epoch,
+) *forkSchedule {
+	var next *forkSchedule
+	cloneCurrent := func() {
+		if next == nil {
+			next = &forkSchedule{
+				epochs:    maps.Clone(current.epochs),
+				malformed: maps.Clone(current.malformed),
+			}
+		}
+	}
+
+	for name, epoch := range incoming.epochs {
+		if existingEpoch, exists := current.epochs[name]; exists {
+			if existingEpoch == epoch {
+				continue
+			}
+			// Once either schedule activates a fork, retain the last-known-good boundary.
+			if existingEpoch <= currentEpoch || epoch <= currentEpoch {
+				continue
+			}
+		}
+		cloneCurrent()
+		next.epochs[name] = epoch
+		delete(next.malformed, name)
+	}
+
+	for name := range incoming.malformed {
+		if _, exists := current.epochs[name]; exists {
+			continue
+		}
+		if _, exists := current.malformed[name]; exists {
+			continue
+		}
+		cloneCurrent()
+		next.malformed[name] = struct{}{}
+	}
+
+	return next
 }

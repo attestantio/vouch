@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -29,6 +29,7 @@ import (
 // Service is the manager for signers.
 type Service struct {
 	monitor                               metrics.SignerMonitor
+	domainProvider                        eth2client.DomainProvider
 	clientMonitor                         metrics.ClientMonitor
 	slotsPerEpoch                         phase0.Slot
 	beaconProposerDomainType              phase0.DomainType
@@ -41,7 +42,7 @@ type Service struct {
 	contributionAndProofDomainType        *phase0.DomainType
 	applicationBuilderDomainType          *phase0.DomainType
 	blobSidecarDomainType                 *phase0.DomainType
-	domainProvider                        eth2client.DomainProvider
+	beaconBuilderDomainType               *phase0.DomainType
 }
 
 // module-wide log.
@@ -101,34 +102,23 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	// The following are optional.
-	var syncCommitteeDomainType *phase0.DomainType
-	if tmp, err := domainType(spec, "DOMAIN_SYNC_COMMITTEE"); err == nil {
-		syncCommitteeDomainType = &tmp
-	}
+	syncCommitteeDomainType := optionalDomainType(spec, "DOMAIN_SYNC_COMMITTEE")
+	syncCommitteeSelectionProofDomainType := optionalDomainType(spec, "DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF")
+	contributionAndProofDomainType := optionalDomainType(spec, "DOMAIN_CONTRIBUTION_AND_PROOF")
+	applicationBuilderDomainType := optionalDomainType(spec, "DOMAIN_APPLICATION_BUILDER")
+	blobSidecarDomainType := optionalDomainType(spec, "DOMAIN_BLOB_SIDECAR")
 
-	var syncCommitteeSelectionProofDomainType *phase0.DomainType
-	if tmp, err := domainType(spec, "DOMAIN_SYNC_COMMITTEE_SELECTION_PROOF"); err == nil {
-		syncCommitteeSelectionProofDomainType = &tmp
-	}
-
-	var contributionAndProofDomainType *phase0.DomainType
-	if tmp, err := domainType(spec, "DOMAIN_CONTRIBUTION_AND_PROOF"); err == nil {
-		contributionAndProofDomainType = &tmp
-	}
-
-	var applicationBuilderDomainType *phase0.DomainType
-	if tmp, err := domainType(spec, "DOMAIN_APPLICATION_BUILDER"); err == nil {
-		applicationBuilderDomainType = &tmp
-	}
-
-	var blobSidecarDomainType *phase0.DomainType
-	if tmp, err := domainType(spec, "DOMAIN_BLOB_SIDECAR"); err == nil {
-		blobSidecarDomainType = &tmp
+	var beaconBuilderDomainType *phase0.DomainType
+	if tmp, err := domainType(spec, "DOMAIN_BEACON_BUILDER"); err == nil {
+		beaconBuilderDomainType = &tmp
+	} else {
+		log.Warn().Err(err).Msg("DOMAIN_BEACON_BUILDER unavailable in spec; execution payload envelope signing unavailable")
 	}
 
 	s := &Service{
 		monitor:                               parameters.monitor,
 		clientMonitor:                         parameters.clientMonitor,
+		domainProvider:                        parameters.domainProvider,
 		slotsPerEpoch:                         phase0.Slot(slotsPerEpoch),
 		beaconAttesterDomainType:              beaconAttesterDomainType,
 		beaconProposerDomainType:              beaconProposerDomainType,
@@ -140,7 +130,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		contributionAndProofDomainType:        contributionAndProofDomainType,
 		applicationBuilderDomainType:          applicationBuilderDomainType,
 		blobSidecarDomainType:                 blobSidecarDomainType,
-		domainProvider:                        parameters.domainProvider,
+		beaconBuilderDomainType:               beaconBuilderDomainType,
 	}
 
 	return s, nil
@@ -156,4 +146,14 @@ func domainType(spec map[string]interface{}, input string) (phase0.DomainType, e
 		return phase0.DomainType{}, fmt.Errorf("%v of unexpected type", input)
 	}
 	return domainType, nil
+}
+
+// optionalDomainType returns the domain type if present in the spec, otherwise nil.
+func optionalDomainType(spec map[string]interface{}, input string) *phase0.DomainType {
+	tmp, err := domainType(spec, input)
+	if err != nil {
+		return nil
+	}
+
+	return &tmp
 }

@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2025 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -17,8 +17,8 @@ import (
 	"context"
 	"time"
 
-	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
@@ -33,7 +33,7 @@ type Service struct {
 	clientMonitor          metrics.ClientMonitor
 	processConcurrency     int64
 	chainTime              chaintime.Service
-	proposalProviders      map[string]eth2client.ProposalProvider
+	proposalProviders      map[string]beaconblockproposer.ProposalDataProvider
 	timeout                time.Duration
 	blockRootToSlotCache   cache.BlockRootToSlotProvider
 	executionPayloadFactor float64

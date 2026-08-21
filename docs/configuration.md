@@ -51,6 +51,9 @@ eth2client:
   # operation, for example fetching the current list of active validators.  These operations are not time-sensitive,
   # and can contain large amounts of information, hence the longer timeout.
   timeout: '2m'
+  # custom-spec-support enables dynamic SSZ encoding and decoding for beacon nodes that use a non-mainnet preset.
+  # It is slower than the generated mainnet path, so enable it only when the network requires it.
+  custom-spec-support: false
   #
   # allow-delayed-start allows Vouch to start if some of the consensus nodes are unavailable.
   # Note that this can result in Vouch being active without being able to validate, however, if strategies use

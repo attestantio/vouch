@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -26,6 +26,7 @@ type parameters struct {
 	logLevel                              zerolog.Level
 	clientMonitor                         metrics.ClientMonitor
 	proposalSubmitter                     eth2client.ProposalSubmitter
+	executionPayloadEnvelopeSubmitter     eth2client.ExecutionPayloadEnvelopeSubmitter
 	attestationsSubmitter                 eth2client.AttestationsSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
@@ -64,6 +65,13 @@ func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
 func WithProposalSubmitter(submitter eth2client.ProposalSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalSubmitter = submitter
+	})
+}
+
+// WithExecutionPayloadEnvelopeSubmitter sets the execution payload envelope submitter.
+func WithExecutionPayloadEnvelopeSubmitter(submitter eth2client.ExecutionPayloadEnvelopeSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.executionPayloadEnvelopeSubmitter = submitter
 	})
 }
 
@@ -133,6 +141,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.proposalSubmitter == nil {
 		return nil, errors.New("no proposal submitter specified")
+	}
+	if parameters.executionPayloadEnvelopeSubmitter == nil {
+		return nil, errors.New("no execution payload envelope submitter specified")
 	}
 	if parameters.attestationsSubmitter == nil {
 		return nil, errors.New("no attestations submitter specified")

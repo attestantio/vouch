@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -31,6 +31,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 )
 
 // GenesisProvider is a mock for eth2client.GenesisProvider.
@@ -578,7 +579,7 @@ func (m *SleepyBeaconCommitteeSubscriptionsSubmitter) SubmitBeaconCommitteeSubsc
 type ProposalProvider struct{}
 
 // NewProposalProvider returns a mock beacon block proposal provider.
-func NewProposalProvider() eth2client.ProposalProvider {
+func NewProposalProvider() *ProposalProvider {
 	return &ProposalProvider{}
 }
 
@@ -679,11 +680,21 @@ func (*ProposalProvider) Proposal(_ context.Context,
 	}, nil
 }
 
+// EPBSProposal is a mock.
+func (*ProposalProvider) EPBSProposal(_ context.Context,
+	_ *api.EPBSProposalOpts,
+) (
+	*api.Response[*api.VersionedEPBSProposal],
+	error,
+) {
+	return nil, errors.New("error")
+}
+
 // ErroringProposalProvider is a mock for eth2client.ProposalProvider.
 type ErroringProposalProvider struct{}
 
 // NewErroringProposalProvider returns a mock beacon block proposal provider.
-func NewErroringProposalProvider() eth2client.ProposalProvider {
+func NewErroringProposalProvider() *ErroringProposalProvider {
 	return &ErroringProposalProvider{}
 }
 
@@ -697,18 +708,39 @@ func (*ErroringProposalProvider) Proposal(_ context.Context,
 	return nil, errors.New("error")
 }
 
+// EPBSProposal is a mock.
+func (*ErroringProposalProvider) EPBSProposal(_ context.Context,
+	_ *api.EPBSProposalOpts,
+) (
+	*api.Response[*api.VersionedEPBSProposal],
+	error,
+) {
+	return nil, errors.New("error")
+}
+
 // SleepyProposalProvider is a mock for eth2client.ProposalProvider.
 type SleepyProposalProvider struct {
 	wait time.Duration
-	next eth2client.ProposalProvider
+	next beaconblockproposer.ProposalDataProvider
 }
 
 // NewSleepyProposalProvider returns a mock beacon block proposal.
-func NewSleepyProposalProvider(wait time.Duration, next eth2client.ProposalProvider) eth2client.ProposalProvider {
+func NewSleepyProposalProvider(wait time.Duration, next beaconblockproposer.ProposalDataProvider) *SleepyProposalProvider {
 	return &SleepyProposalProvider{
 		wait: wait,
 		next: next,
 	}
+}
+
+// EPBSProposal is a mock.
+func (m *SleepyProposalProvider) EPBSProposal(ctx context.Context,
+	opts *api.EPBSProposalOpts,
+) (
+	*api.Response[*api.VersionedEPBSProposal],
+	error,
+) {
+	time.Sleep(m.wait)
+	return m.next.EPBSProposal(ctx, opts)
 }
 
 // Proposal is a mock.
@@ -1240,6 +1272,7 @@ func (*SpecProvider) Spec(_ context.Context, _ *api.SpecOpts) (*api.Response[map
 				// Mainnet params (give or take).
 				"DOMAIN_AGGREGATE_AND_PROOF":               phase0.DomainType{0x06, 0x00, 0x00, 0x00},
 				"DOMAIN_BEACON_ATTESTER":                   phase0.DomainType{0x00, 0x00, 0x00, 0x00},
+				"DOMAIN_BEACON_BUILDER":                    phase0.DomainType{0x0a, 0x00, 0x00, 0x00},
 				"DOMAIN_BEACON_PROPOSER":                   phase0.DomainType{0x01, 0x00, 0x00, 0x00},
 				"DOMAIN_CONTRIBUTION_AND_PROOF":            phase0.DomainType{0x09, 0x00, 0x00, 0x00},
 				"DOMAIN_DEPOSIT":                           phase0.DomainType{0x03, 0x00, 0x00, 0x00},

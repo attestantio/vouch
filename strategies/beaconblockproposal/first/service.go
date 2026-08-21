@@ -1,4 +1,4 @@
-// Copyright © 2020, 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,6 +19,8 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
@@ -33,8 +35,120 @@ import (
 type Service struct {
 	log               zerolog.Logger
 	clientMonitor     metrics.ClientMonitor
-	proposalProviders map[string]eth2client.ProposalProvider
+	proposalProviders map[string]beaconblockproposer.ProposalDataProvider
 	timeout           time.Duration
+}
+
+// EPBSProposal provides the first ePBS proposal from a number of beacon nodes.
+func (s *Service) EPBSProposal(ctx context.Context,
+	opts *api.EPBSProposalOpts,
+) (
+	*api.Response[*api.VersionedEPBSProposal],
+	error,
+) {
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.first").Start(ctx, "EPBSProposal", trace.WithAttributes(
+		attribute.Int64("slot", util.SlotToInt64(opts.Slot)),
+	))
+	defer span.End()
+
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+
+	proposalCh := make(chan *api.VersionedEPBSProposal, len(s.proposalProviders))
+	for name, provider := range s.proposalProviders {
+		go s.fetchEPBSProposal(ctx, name, provider, opts, proposalCh)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			cancel()
+			s.log.Debug().Msg("Failed to obtain ePBS beacon block proposal before timeout")
+			return nil, errors.New("failed to obtain ePBS beacon block proposal before timeout")
+		case proposal := <-proposalCh:
+			if !s.acceptableEPBSProposal(proposal, opts.IncludePayload) {
+				continue
+			}
+			cancel()
+
+			return &api.Response[*api.VersionedEPBSProposal]{
+				Data:     proposal,
+				Metadata: make(map[string]any),
+			}, nil
+		}
+	}
+}
+
+// fetchEPBSProposal obtains an ePBS beacon block proposal from a single provider, recording the
+// operation with the client monitor, and sends the result to ch unless ctx is done first.
+func (s *Service) fetchEPBSProposal(ctx context.Context,
+	name string,
+	provider beaconblockproposer.ProposalDataProvider,
+	opts *api.EPBSProposalOpts,
+	ch chan *api.VersionedEPBSProposal,
+) {
+	log := s.log.With().Str("provider", name).Uint64("slot", uint64(opts.Slot)).Logger()
+
+	started := time.Now()
+	proposalResponse, err := provider.EPBSProposal(ctx, opts)
+	s.clientMonitor.ClientOperation(name, "ePBS beacon block proposal", err == nil, time.Since(started))
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			log.Debug().Err(err).Msg("Failed to obtain ePBS beacon block proposal")
+		}
+
+		return
+	}
+	if proposalResponse == nil {
+		log.Warn().Msg("Discarding empty ePBS proposal response")
+
+		return
+	}
+	proposal := proposalResponse.Data
+	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained ePBS beacon block proposal")
+
+	select {
+	case ch <- proposal:
+	case <-ctx.Done():
+	}
+}
+
+// acceptableEPBSProposal reports whether proposal is usable, discarding and logging it if it is
+// nil, lacks a requested execution payload, or (for Gloas) is structurally malformed or pays a
+// zero fee recipient.
+func (s *Service) acceptableEPBSProposal(proposal *api.VersionedEPBSProposal, includePayload *bool) bool {
+	if proposal == nil {
+		s.log.Warn().Msg("Discarding empty ePBS proposal")
+
+		return false
+	}
+	if includePayload != nil && *includePayload && !proposal.ExecutionPayloadIncluded {
+		s.log.Warn().Msg("Discarding ePBS proposal without requested execution payload")
+
+		return false
+	}
+	if proposal.Version == spec.DataVersionGloas {
+		block := proposal.Gloas
+		if proposal.ExecutionPayloadIncluded {
+			if proposal.GloasContents == nil {
+				s.log.Warn().Msg("Discarding malformed ePBS proposal")
+
+				return false
+			}
+			block = proposal.GloasContents.Block
+		}
+		if block == nil || block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
+			s.log.Warn().Msg("Discarding malformed ePBS proposal")
+
+			return false
+		}
+		if block.Body.SignedExecutionPayloadBid.Message.FeeRecipient.IsZero() {
+			s.log.Warn().Msg("Discarding ePBS proposal with 0 fee recipient")
+
+			return false
+		}
+	}
+
+	return true
 }
 
 // New creates a new beacon block proposal strategy.

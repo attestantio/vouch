@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
-	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
@@ -38,19 +37,21 @@ import (
 
 // Service is a beacon block proposer.
 type Service struct {
-	log                        zerolog.Logger
-	chainTime                  chaintime.Service
-	blockAuctioneer            blockauctioneer.BlockAuctioneer
-	proposalProvider           eth2client.ProposalProvider
-	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
-	executionChainHeadProvider cache.ExecutionChainHeadProvider
-	graffitiProvider           graffitiprovider.Service
-	proposalSubmitter          submitter.ProposalSubmitter
-	randaoRevealSigner         signer.RANDAORevealSigner
-	beaconBlockSigner          signer.BeaconBlockSigner
-	blobSidecarSigner          signer.BlobSidecarSigner
-	unblindFromAllRelays       bool
-	builderBoostFactor         uint64
+	log                               zerolog.Logger
+	proposalProvider                  beaconblockproposer.ProposalDataProvider
+	validatingAccountsProvider        accountmanager.ValidatingAccountsProvider
+	executionChainHeadProvider        cache.ExecutionChainHeadProvider
+	graffitiProvider                  graffitiprovider.Service
+	proposalSubmitter                 submitter.ProposalSubmitter
+	executionPayloadEnvelopeSubmitter submitter.ExecutionPayloadEnvelopeSubmitter
+	randaoRevealSigner                signer.RANDAORevealSigner
+	beaconBlockSigner                 signer.BeaconBlockSigner
+	executionPayloadEnvelopeSigner    signer.ExecutionPayloadEnvelopeSigner
+	blobSidecarSigner                 signer.BlobSidecarSigner
+	chainTime                         chaintime.Service
+	blockAuctioneer                   blockauctioneer.BlockAuctioneer
+	unblindFromAllRelays              bool
+	builderBoostFactor                uint64
 }
 
 // New creates a new beacon block proposer.
@@ -71,19 +72,21 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	s := &Service{
-		log:                        log,
-		chainTime:                  parameters.chainTime,
-		blockAuctioneer:            parameters.blockAuctioneer,
-		proposalProvider:           parameters.proposalProvider,
-		validatingAccountsProvider: parameters.validatingAccountsProvider,
-		executionChainHeadProvider: parameters.executionChainHeadProvider,
-		graffitiProvider:           parameters.graffitiProvider,
-		proposalSubmitter:          parameters.proposalSubmitter,
-		randaoRevealSigner:         parameters.randaoRevealSigner,
-		beaconBlockSigner:          parameters.beaconBlockSigner,
-		blobSidecarSigner:          parameters.blobSidecarSigner,
-		unblindFromAllRelays:       parameters.unblindFromAllRelays,
-		builderBoostFactor:         parameters.builderBoostFactor,
+		log:                               log,
+		chainTime:                         parameters.chainTime,
+		blockAuctioneer:                   parameters.blockAuctioneer,
+		proposalProvider:                  parameters.proposalProvider,
+		validatingAccountsProvider:        parameters.validatingAccountsProvider,
+		executionChainHeadProvider:        parameters.executionChainHeadProvider,
+		graffitiProvider:                  parameters.graffitiProvider,
+		proposalSubmitter:                 parameters.proposalSubmitter,
+		executionPayloadEnvelopeSubmitter: parameters.executionPayloadEnvelopeSubmitter,
+		randaoRevealSigner:                parameters.randaoRevealSigner,
+		beaconBlockSigner:                 parameters.beaconBlockSigner,
+		executionPayloadEnvelopeSigner:    parameters.executionPayloadEnvelopeSigner,
+		blobSidecarSigner:                 parameters.blobSidecarSigner,
+		unblindFromAllRelays:              parameters.unblindFromAllRelays,
+		builderBoostFactor:                parameters.builderBoostFactor,
 	}
 
 	return s, nil
