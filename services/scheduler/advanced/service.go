@@ -1,4 +1,4 @@
-// Copyright © 2021, 2024 Attestant Limited.
+// Copyright © 2021 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -29,11 +29,11 @@ import (
 
 // job contains control points for a job.
 type job struct {
-	// stateLock is required for active or finalised.
-	stateLock deadlock.Mutex
 	active    atomic.Bool
 	finalised atomic.Bool
 	periodic  bool
+	// stateLock is required for active or finalised.
+	stateLock deadlock.Mutex
 	cancelCh  chan struct{}
 	runCh     chan struct{}
 }

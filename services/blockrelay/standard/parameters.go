@@ -1,4 +1,4 @@
-// Copyright © 2022, 2023 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -33,8 +33,12 @@ import (
 )
 
 type parameters struct {
-	logLevel                                  zerolog.Level
 	monitor                                   metrics.Service
+	accountsProvider                          accountmanager.AccountsProvider
+	validatorsProvider                        consensusclient.ValidatorsProvider
+	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
+	builderBidProvider                        builderbid.Provider
+	logLevel                                  zerolog.Level
 	majordomo                                 majordomo.Service
 	scheduler                                 scheduler.Service
 	listenAddress                             string
@@ -45,14 +49,10 @@ type parameters struct {
 	clientCertURL                             string
 	clientKeyURL                              string
 	caCertURL                                 string
-	accountsProvider                          accountmanager.AccountsProvider
-	validatorsProvider                        consensusclient.ValidatorsProvider
-	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 	logResults                                bool
 	releaseVersion                            string
-	builderBidProvider                        builderbid.Provider
 	builderConfigs                            map[phase0.BLSPubKey]*blockrelay.BuilderConfig
 }
 
@@ -227,52 +227,51 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		p.apply(&parameters)
 	}
 
-	if parameters.monitor == nil {
-		return nil, errors.New("no monitor specified")
-	}
-	if parameters.majordomo == nil {
-		return nil, errors.New("no majordomo specified")
-	}
-	if parameters.scheduler == nil {
-		return nil, errors.New("no scheduler specified")
-	}
-	if parameters.chainTime == nil {
-		return nil, errors.New("no chaintime specified")
-	}
-	if bytes.Equal(parameters.fallbackFeeRecipient[:], zeroExecutionAddress[:]) {
-		return nil, errors.New("no fallback fee recipient specified")
-	}
-	if parameters.fallbackGasLimit == 0 {
-		return nil, errors.New("no fallback gas limit specified")
-	}
-	if parameters.accountsProvider == nil {
-		return nil, errors.New("no accounts provider specified")
-	}
-	if parameters.validatorsProvider == nil {
-		return nil, errors.New("no validators provider specified")
-	}
-	if parameters.validatingAccountsProvider == nil {
-		return nil, errors.New("no validating accounts provider specified")
-	}
-	if parameters.validatorRegistrationSigner == nil {
-		return nil, errors.New("no validator registration signer specified")
-	}
-	if parameters.listenAddress == "" {
-		return nil, errors.New("no listen address specified")
-	}
-	if _, _, err := net.SplitHostPort(parameters.listenAddress); err != nil {
-		return nil, errors.New("listen address malformed")
-	}
-	// config URL can be empty.
-	if parameters.releaseVersion == "" {
-		return nil, errors.New("no release version specified")
-	}
-	if parameters.builderBidProvider == nil {
-		return nil, errors.New("no builder bid provider specified")
-	}
-	if parameters.builderConfigs == nil {
-		return nil, errors.New("no builder configs specified")
+	if err := parameters.validate(); err != nil {
+		return nil, err
 	}
 
 	return &parameters, nil
+}
+
+func (p *parameters) validate() error {
+	checks := []struct {
+		valid bool
+		err   string
+	}{
+		{p.monitor != nil, "no monitor specified"},
+		{p.majordomo != nil, "no majordomo specified"},
+		{p.scheduler != nil, "no scheduler specified"},
+		{p.chainTime != nil, "no chaintime specified"},
+		{!bytes.Equal(p.fallbackFeeRecipient[:], zeroExecutionAddress[:]), "no fallback fee recipient specified"},
+		{p.fallbackGasLimit != 0, "no fallback gas limit specified"},
+		{p.accountsProvider != nil, "no accounts provider specified"},
+		{p.validatorsProvider != nil, "no validators provider specified"},
+		{p.validatingAccountsProvider != nil, "no validating accounts provider specified"},
+		{p.validatorRegistrationSigner != nil, "no validator registration signer specified"},
+		{p.listenAddress != "", "no listen address specified"},
+	}
+	for _, check := range checks {
+		if !check.valid {
+			return errors.New(check.err)
+		}
+	}
+	if _, _, err := net.SplitHostPort(p.listenAddress); err != nil {
+		return errors.New("listen address malformed")
+	}
+	checks = []struct {
+		valid bool
+		err   string
+	}{
+		{p.releaseVersion != "", "no release version specified"},
+		{p.builderBidProvider != nil, "no builder bid provider specified"},
+		{p.builderConfigs != nil, "no builder configs specified"},
+	}
+	for _, check := range checks {
+		if !check.valid {
+			return errors.New(check.err)
+		}
+	}
+
+	return nil
 }

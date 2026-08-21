@@ -1,4 +1,4 @@
-// Copyright © 2022 - 2024 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -41,6 +41,10 @@ import (
 type Service struct {
 	log                                       zerolog.Logger
 	monitor                                   metrics.Service
+	accountsProvider                          accountmanager.AccountsProvider
+	validatorsProvider                        consensusclient.ValidatorsProvider
+	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
+	builderBidProvider                        builderbid.Provider
 	majordomo                                 majordomo.Service
 	chainTime                                 chaintime.Service
 	configURL                                 string
@@ -49,40 +53,31 @@ type Service struct {
 	clientCertURL                             string
 	clientKeyURL                              string
 	caCertURL                                 string
-	accountsProvider                          accountmanager.AccountsProvider
-	validatorsProvider                        consensusclient.ValidatorsProvider
-	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	builderBidsCache                          map[string]map[string]*builderspec.VersionedSignedBuilderBid
-	builderBidsCacheMu                        sync.RWMutex
 	latestValidatorRegistrations              map[phase0.BLSPubKey]phase0.Root
-	latestValidatorRegistrationsMu            sync.RWMutex
 	signedValidatorRegistrations              map[phase0.Root]*apiv1.SignedValidatorRegistration
-	signedValidatorRegistrationsMu            sync.RWMutex
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 	logResults                                bool
 	releaseVersion                            string
-	builderBidProvider                        builderbid.Provider
 	builderConfigs                            map[phase0.BLSPubKey]*blockrelay.BuilderConfig
-
-	// builderBidMu ensures that only one builder bid operation is actively talking to
-	// relays at a time.
-	builderBidMu sync.Mutex
-
-	executionConfig   blockrelay.ExecutionConfigurator
-	executionConfigMu sync.RWMutex
-
+	executionConfig                           blockrelay.ExecutionConfigurator
 	// controlledValidators is a map of validators that are controlled
 	// by Vouch.  Used when receiving registrations from beacon nodes to know
 	// which registrations to forward, and which to drop because we have already
 	// submitted them.
-	controlledValidators   map[phase0.BLSPubKey]struct{}
-	controlledValidatorsMu sync.RWMutex
-
-	activitySem *semaphore.Weighted
-
+	controlledValidators map[phase0.BLSPubKey]struct{}
+	activitySem          *semaphore.Weighted
 	// Needed only to create dummy VersionedSignedBuilderBid in cacheBid.
-	electraForkEpoch phase0.Epoch
+	electraForkEpoch               phase0.Epoch
+	builderBidsCacheMu             sync.RWMutex
+	latestValidatorRegistrationsMu sync.RWMutex
+	signedValidatorRegistrationsMu sync.RWMutex
+	// builderBidMu ensures that only one builder bid operation is actively talking to
+	// relays at a time.
+	builderBidMu           sync.Mutex
+	executionConfigMu      sync.RWMutex
+	controlledValidatorsMu sync.RWMutex
 }
 
 // New creates a new controller.
