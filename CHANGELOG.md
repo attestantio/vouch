@@ -9,6 +9,7 @@ gloas:
   - do not update execution chain head state from gloas blocks, as an execution payload bid carries no execution block number
   - report "builder" as a beacon block proposal source method
   - update go-eth2-client to a gloas pseudo-version
+  - satisfy the attgo struct field order and comment capitalisation rules across services and strategies
 
 1.13.1:
   - initialise sync committee verification metrics to 0
