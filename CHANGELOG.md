@@ -8,6 +8,7 @@ gloas:
   - cache the hard fork schedule in chaintime; known-fork lookups are allocation-free and unknown forks trigger a coalesced refresh
   - do not update execution chain head state from gloas blocks, as an execution payload bid carries no execution block number
   - report "builder" as a beacon block proposal source method
+  - preserve the beacon node's gloas payload vote in both the attestation signing root and the submitted attestation, rejecting an invalid vote before signing
   - update go-eth2-client to a gloas pseudo-version
   - satisfy the attgo struct field order and comment capitalisation rules across services and strategies
 
