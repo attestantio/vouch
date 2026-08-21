@@ -1,5 +1,6 @@
 gloas:
   - add gloas self-build beacon block proposal path: request an ePBS proposal with its payload, sign the beacon block and matching execution payload envelope, then publish the block followed by its envelope
+  - refuse a self-build gloas proposal whose execution payload pays no fee recipient, before its envelope is signed
   - extend the first and best beaconblockproposal strategies for ePBS proposals, rejecting malformed or payload-excluded responses when payload inclusion was requested
   - route the simple beaconblockproposal style through the first strategy; beacon node clients that do not support ePBS proposals now fail at startup
   - skip the relay auction under gloas and warn operators that their relay settings are ignored
