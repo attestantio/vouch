@@ -247,8 +247,13 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		s.log.Warn().Msg("Ignoring non-default builder boost factor on Gloas proposal path")
 	}
 
+	// A Gloas block never carries an execution payload: it commits to a bid, and the
+	// payload is revealed separately as an envelope.  IncludePayload selects whether
+	// that envelope travels back with the block or stays cached on the producing node,
+	// so asking for it is what keeps the reveal publishable through any beacon node
+	// rather than only the one that built the payload.
 	includePayload := true
-	// Force local building and include its payload so any beacon node can publish it.
+	// Force local building.
 	selfBuildBoostFactor := uint64(0)
 	proposalResponse, err := s.proposalProvider.EPBSProposal(ctx, &api.EPBSProposalOpts{
 		Slot:               duty.Slot(),
@@ -343,7 +348,7 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 }
 
 // epbsProposalEnvelope obtains the execution payload envelope and body root for a proposal,
-// confirming that the envelope is for the proposed block.
+// confirming that the envelope is for the proposed block and pays a fee recipient.
 func (*Service) epbsProposalEnvelope(proposal *api.VersionedEPBSProposal) (*gloas.ExecutionPayloadEnvelope, phase0.Root, error) {
 	envelope, err := proposal.ExecutionPayloadEnvelope()
 	if err != nil {
@@ -351,6 +356,13 @@ func (*Service) epbsProposalEnvelope(proposal *api.VersionedEPBSProposal) (*gloa
 	}
 	if envelope.Payload == nil {
 		return nil, phase0.Root{}, errors.New("ePBS execution payload envelope has no payload")
+	}
+	// The bid's fee recipient is the one the strategies check, but a self-built bid pays
+	// nothing: the spec requires bid.value to be zero and records no builder payment for
+	// it.  The payload's own fee recipient collects the slot's priority fees and MEV, so
+	// it is the one that has to be checked before this envelope is signed.
+	if envelope.Payload.FeeRecipient.IsZero() {
+		return nil, phase0.Root{}, errors.New("ePBS execution payload envelope has 0 fee recipient")
 	}
 	if proposal.GloasContents == nil || proposal.GloasContents.Block == nil || proposal.GloasContents.Block.Body == nil || proposal.GloasContents.Block.Body.SignedExecutionPayloadBid == nil || proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message == nil {
 		return nil, phase0.Root{}, errors.New("ePBS proposal has no execution payload bid")
