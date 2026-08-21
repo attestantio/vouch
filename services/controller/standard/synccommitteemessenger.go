@@ -1,4 +1,4 @@
-// Copyright © 2021, 2024 Attestant Limited.
+// Copyright © 2021 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -148,7 +148,7 @@ func (s *Service) prepareMessageSyncCommittee(ctx context.Context, duty *synccom
 	}
 
 	// At this point we can schedule the message job.
-	jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxSyncCommitteeMessageDelay)
+	jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.timingsForSlot(duty.Slot()).maxSyncCommitteeMessageDelay)
 	if err := s.scheduler.ScheduleJob(ctx,
 		"Generate sync committee messages",
 		fmt.Sprintf("Sync committee messages for slot %d", duty.Slot()),
@@ -193,7 +193,7 @@ func (s *Service) messageSyncCommittee(ctx context.Context, duty *synccommitteem
 		if err := s.scheduler.ScheduleJob(ctx,
 			"Aggregate sync committee messages",
 			fmt.Sprintf("Sync committee aggregation for slot %d", duty.Slot()),
-			s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.syncCommitteeAggregationDelay),
+			s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.timingsForSlot(duty.Slot()).syncCommitteeAggregationDelay),
 			func(ctx context.Context) { s.syncCommitteeAggregator.Aggregate(ctx, aggregatorDuty) },
 		); err != nil {
 			log.Error().Err(err).Msg("Failed to schedule sync committee attestation aggregation job")

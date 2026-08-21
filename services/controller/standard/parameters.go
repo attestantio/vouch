@@ -66,6 +66,8 @@ type parameters struct {
 	attestationAggregationDelay   time.Duration
 	maxSyncCommitteeMessageDelay  time.Duration
 	syncCommitteeAggregationDelay time.Duration
+	preGloasTimings               dutyTimings
+	gloasTimings                  dutyTimings
 	verifySyncCommitteeInclusion  bool
 	fastTrackAttestations         bool
 	fastTrackSyncCommittees       bool
@@ -327,12 +329,12 @@ func parseAndCheckParameters(ctx context.Context, params ...Parameter) (*paramet
 	if err := parameters.validate(); err != nil {
 		return nil, err
 	}
-	slotDuration, err := parameters.slotDuration(ctx)
+	spec, slotDuration, err := parameters.slotDuration(ctx)
 	if err != nil {
 		return nil, err
 	}
 	// maxProposalDelay can be 0, so no check for it here.
-	parameters.setDefaultDelays(slotDuration)
+	parameters.setDefaultDelays(spec, slotDuration)
 	// Sync committee duties provider/messenger/aggregator/subscriber are optional so no checks here.
 
 	return &parameters, nil
@@ -371,34 +373,105 @@ func (p *parameters) validate() error {
 	return nil
 }
 
-func (p *parameters) slotDuration(ctx context.Context) (time.Duration, error) {
+func (p *parameters) slotDuration(ctx context.Context) (map[string]any, time.Duration, error) {
 	specResponse, err := p.specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to obtain spec")
+		return nil, 0, errors.Wrap(err, "failed to obtain spec")
 	}
 	secondsPerSlot, exists := specResponse.Data["SECONDS_PER_SLOT"]
 	if !exists {
-		return 0, errors.New("SECONDS_PER_SLOT not found in spec")
+		return nil, 0, errors.New("SECONDS_PER_SLOT not found in spec")
 	}
 	slotDuration, ok := secondsPerSlot.(time.Duration)
 	if !ok {
-		return 0, errors.New("SECONDS_PER_SLOT of unexpected type")
+		return nil, 0, errors.New("SECONDS_PER_SLOT of unexpected type")
 	}
 
-	return slotDuration, nil
+	return specResponse.Data, slotDuration, nil
 }
 
-func (p *parameters) setDefaultDelays(slotDuration time.Duration) {
-	if p.maxAttestationDelay == 0 {
-		p.maxAttestationDelay = slotDuration / 3
+// dutyTimings holds the duty scheduling deadlines, as offsets in to the slot.
+type dutyTimings struct {
+	maxAttestationDelay           time.Duration
+	attestationAggregationDelay   time.Duration
+	maxSyncCommitteeMessageDelay  time.Duration
+	syncCommitteeAggregationDelay time.Duration
+}
+
+// applyOverrides replaces each deadline for which the operator supplied an explicit value.  An
+// explicit value is absolute: it applies on both sides of the Gloas fork, as documented for these
+// options.
+func (t *dutyTimings) applyOverrides(overrides dutyTimings) {
+	if overrides.maxAttestationDelay != 0 {
+		t.maxAttestationDelay = overrides.maxAttestationDelay
 	}
-	if p.attestationAggregationDelay == 0 {
-		p.attestationAggregationDelay = slotDuration * 2 / 3
+	if overrides.attestationAggregationDelay != 0 {
+		t.attestationAggregationDelay = overrides.attestationAggregationDelay
 	}
-	if p.maxSyncCommitteeMessageDelay == 0 {
-		p.maxSyncCommitteeMessageDelay = slotDuration / 3
+	if overrides.maxSyncCommitteeMessageDelay != 0 {
+		t.maxSyncCommitteeMessageDelay = overrides.maxSyncCommitteeMessageDelay
 	}
-	if p.syncCommitteeAggregationDelay == 0 {
-		p.syncCommitteeAggregationDelay = slotDuration * 2 / 3
+	if overrides.syncCommitteeAggregationDelay != 0 {
+		t.syncCommitteeAggregationDelay = overrides.syncCommitteeAggregationDelay
+	}
+}
+
+// setDefaultDelays derives both the pre-Gloas and the Gloas duty timings.  Both are derived here,
+// at construction, but which of them applies is decided per duty from that duty's slot; deciding it
+// here would freeze the process on whichever side of the fork it happened to start.
+func (p *parameters) setDefaultDelays(spec map[string]any, slotDuration time.Duration) {
+	overrides := dutyTimings{
+		maxAttestationDelay:           p.maxAttestationDelay,
+		attestationAggregationDelay:   p.attestationAggregationDelay,
+		maxSyncCommitteeMessageDelay:  p.maxSyncCommitteeMessageDelay,
+		syncCommitteeAggregationDelay: p.syncCommitteeAggregationDelay,
+	}
+
+	p.preGloasTimings = obtainAttestationTimings(spec, slotDuration, false)
+	p.preGloasTimings.applyOverrides(overrides)
+	p.gloasTimings = obtainAttestationTimings(spec, slotDuration, true)
+	p.gloasTimings.applyOverrides(overrides)
+}
+
+func obtainAttestationTimings(spec map[string]any, slotDuration time.Duration, gloasActive bool) dutyTimings {
+	if !gloasActive {
+		// The ratios are the pre-Gloas basis-point deadlines: ATTESTATION_DUE_BPS and
+		// SYNC_MESSAGE_DUE_BPS are 3333, AGGREGATE_DUE_BPS and CONTRIBUTION_DUE_BPS are 6667.
+		return dutyTimings{
+			maxAttestationDelay:           slotDuration / 3,     // 4s on a 12-second slot.
+			attestationAggregationDelay:   slotDuration * 2 / 3, // 8s on a 12-second slot.
+			maxSyncCommitteeMessageDelay:  slotDuration / 3,     // 4s on a 12-second slot.
+			syncCommitteeAggregationDelay: slotDuration * 2 / 3, // 8s on a 12-second slot.
+		}
+	}
+
+	// Gloas serves the slot duration in milliseconds, and it can differ from SECONDS_PER_SLOT.
+	// All Gloas-derived deadlines must be fractions of this value rather than of SECONDS_PER_SLOT.
+	if durationMS, ok := spec["SLOT_DURATION_MS"].(uint64); ok && durationMS != 0 {
+		slotDuration = time.Duration(durationMS) * time.Millisecond
+	}
+
+	// dueBPS provides the deadline held in the named spec value, in basis points of the slot
+	// duration, falling back to the supplied default if the value is not served or is out of range.
+	// The name is the exact key: Gloas redefines these four deadlines under _GLOAS-suffixed keys and
+	// keeps serving the unsuffixed keys for the slots before the fork, so reading the unsuffixed key
+	// here would schedule post-fork duties to the deadlines the fork moved away from.
+	dueBPS := func(name string, fallback time.Duration) time.Duration {
+		bps, ok := spec[name].(uint64)
+		if !ok || bps == 0 || bps > 10000 {
+			return fallback
+		}
+
+		return slotDuration * time.Duration(bps) / 10000
+	}
+
+	// The fallbacks are the Gloas deadlines themselves: ATTESTATION_DUE_BPS_GLOAS and
+	// SYNC_MESSAGE_DUE_BPS_GLOAS are 2500, AGGREGATE_DUE_BPS_GLOAS and CONTRIBUTION_DUE_BPS_GLOAS
+	// are 5000.  A node that does not serve them still schedules to this fork's timings.
+	return dutyTimings{
+		maxAttestationDelay:           dueBPS("ATTESTATION_DUE_BPS_GLOAS", slotDuration/4),  // 3s on a 12-second slot.
+		attestationAggregationDelay:   dueBPS("AGGREGATE_DUE_BPS_GLOAS", slotDuration/2),    // 6s on a 12-second slot.
+		maxSyncCommitteeMessageDelay:  dueBPS("SYNC_MESSAGE_DUE_BPS_GLOAS", slotDuration/4), // 3s on a 12-second slot.
+		syncCommitteeAggregationDelay: dueBPS("CONTRIBUTION_DUE_BPS_GLOAS", slotDuration/2), // 6s on a 12-second slot.
 	}
 }
