@@ -9,6 +9,7 @@ gloas:
   - do not update execution chain head state from gloas blocks, as an execution payload bid carries no execution block number
   - report "builder" as a beacon block proposal source method
   - preserve the beacon node's gloas payload vote in both the attestation signing root and the submitted attestation, rejecting an invalid vote before signing
+  - convert gloas aggregate attestations and signed aggregate-and-proof containers for aggregation and submission, rejecting a missing gloas arm before signing
   - update go-eth2-client to a gloas pseudo-version
   - satisfy the attgo struct field order and comment capitalisation rules across services and strategies
 
