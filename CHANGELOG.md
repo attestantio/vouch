@@ -14,6 +14,7 @@ gloas:
   - default controller.max-attestation-delay, controller.attestation-aggregation-delay, controller.max-sync-committee-message-delay and controller.sync-committee-aggregation-delay to 0; the hardcoded defaults made the spec-derived deadlines unreachable
   - add the payload timeliness committee duty: fetch PTC duties for the epoch, group each slot's validators into one job scheduled inside the gloas payload timing window, and vote on whether the slot's execution payload was revealed on time
   - submit versioned payload attestations through the immediate, multinode and null submitters, batching signatures for validators that share a slot
+  - obtain payload attestation data from a dedicated multiclient, configurable with strategies.payloadattestationdata.beacon-node-addresses
   - update go-eth2-client to a gloas pseudo-version
   - satisfy the attgo struct field order and comment capitalisation rules across services and strategies
 
