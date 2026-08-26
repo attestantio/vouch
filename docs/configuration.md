@@ -141,6 +141,11 @@ submitter:
 
 # strategies provide advanced strategies for dealing with multiple beacon nodes
 strategies:
+  # The payloadattestationdata strategy obtains PTC payload attestation data.
+  # beacon-node-addresses are the addresses from which to receive payload attestation data.
+  # If not set, Vouch uses the top-level beacon-node-addresses.
+  payloadattestationdata:
+    beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
   # The attestationdata strategy obtains attestation data from multiple sources.
   attestationdata:
     # style can be 'best', which obtains attestation data from all nodes and selects the best, 'first', which uses the first returned,

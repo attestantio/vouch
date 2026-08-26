@@ -76,6 +76,16 @@ func BeaconNodeAddressesForProposing() []string {
 	)
 }
 
+// BeaconNodeAddressesForPayloadAttestationData obtains the beacon node addresses used for
+// payload attestation data from the configuration.
+func BeaconNodeAddressesForPayloadAttestationData() []string {
+	addresses := viper.GetStringSlice("strategies.payloadattestationdata.beacon-node-addresses")
+	if len(addresses) == 0 {
+		addresses = BeaconNodeAddresses("")
+	}
+	return uniqueSortedAddresses(addresses)
+}
+
 // BeaconNodeAddressesForAttestationData obtains the beacon node addresses used for
 // attestation data from the configuration.
 // This takes into account the used styles in strategies, and removes duplicates.

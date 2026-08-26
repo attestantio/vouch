@@ -18,12 +18,14 @@ import (
 	"encoding/binary"
 	nethttp "net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	bitfield "github.com/OffchainLabs/go-bitfield"
 	client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	apiv1gloas "github.com/attestantio/go-eth2-client/api/v1/gloas"
 	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -32,9 +34,12 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics/null"
+	"github.com/attestantio/vouch/services/payloadattester"
+	"github.com/attestantio/vouch/testutil"
 	dynssz "github.com/pk910/dynamic-ssz"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 func TestFetchClientCustomSpecSupport(t *testing.T) {
@@ -99,6 +104,72 @@ func TestFetchClientCustomSpecSupport(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, spec.DataVersionGloas, response.Data.Version)
 	require.Equal(t, block.Slot, response.Data.Gloas.Slot)
+}
+
+func TestPayloadAttesterUsesConfiguredPayloadAttestationDataProviders(t *testing.T) {
+	ctx := context.Background()
+	var configuredRequests atomic.Int64
+	var globalRequests atomic.Int64
+	newServer := func(requests *atomic.Int64) *httptest.Server {
+		return httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+			switch r.URL.Path {
+			case "/eth/v1/node/version":
+				_, _ = w.Write([]byte(`{"data":{"version":"test"}}`))
+			case "/eth/v1/node/syncing":
+				_, _ = w.Write([]byte(`{"data":{"is_syncing":false,"is_optimistic":false,"el_offline":false,"head_slot":"12","sync_distance":"0"}}`))
+			case "/eth/v1/validator/payload_attestation_data":
+				if r.URL.Query().Get("slot") != "12" {
+					t.Errorf("unexpected slot %q", r.URL.Query().Get("slot"))
+				}
+				requests.Add(1)
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Eth-Consensus-Version", "gloas")
+				_, _ = w.Write([]byte(`{"version":"gloas","data":{"beacon_block_root":"0x0100000000000000000000000000000000000000000000000000000000000000","slot":"12","payload_present":true,"blob_data_available":true}}`))
+			default:
+				t.Errorf("unexpected request %s", r.URL.Path)
+				w.WriteHeader(nethttp.StatusNotFound)
+			}
+		}))
+	}
+	configuredServer := newServer(&configuredRequests)
+	defer configuredServer.Close()
+	globalServer := newServer(&globalRequests)
+	defer globalServer.Close()
+
+	viper.Set("timeout", time.Second)
+	viper.Set("beacon-node-addresses", []string{globalServer.URL})
+	viper.Set("strategies.payloadattestationdata.beacon-node-addresses", []string{configuredServer.URL})
+	t.Cleanup(func() {
+		viper.Reset()
+		knownClientsMu.Lock()
+		delete(knownClients, configuredServer.URL)
+		delete(knownClients, globalServer.URL)
+		delete(knownClients, "multi:"+configuredServer.URL)
+		knownClientsMu.Unlock()
+	})
+	service, err := startPayloadAttester(ctx, null.New(), &payloadAttestationDataSigner{}, &payloadAttestationMessagesSubmitter{})
+	require.NoError(t, err)
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{1}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 12, ValidatorIndex: 1})
+	duty.SetAccount(1, accounts[1])
+
+	_, err = service.Attest(ctx, duty)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), configuredRequests.Load())
+	require.Zero(t, globalRequests.Load())
+}
+
+type payloadAttestationDataSigner struct{}
+
+func (*payloadAttestationDataSigner) SignPayloadAttestationData(_ context.Context, accounts []e2wtypes.Account, _ *gloas.PayloadAttestationData) ([]phase0.BLSSignature, error) {
+	return make([]phase0.BLSSignature, len(accounts)), nil
+}
+
+type payloadAttestationMessagesSubmitter struct{}
+
+func (*payloadAttestationMessagesSubmitter) SubmitPayloadAttestationMessages(_ context.Context, _ *api.SubmitPayloadAttestationMessagesOpts) error {
+	return nil
 }
 
 func TestSimpleProposalProviderRejectsZeroFeeRecipient(t *testing.T) {

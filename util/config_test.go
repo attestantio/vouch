@@ -256,6 +256,25 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			envPrefix: "VOUCH_BEACONNODEADDRESSFORATTESTING",
 			handler:   util.BeaconNodeAddressesForAttestationData,
 		},
+		{
+			name: "PayloadAttestationDataFallsBackToTopLevelAddresses",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESSES": "1 2",
+			},
+			expected:  []string{"1", "2"},
+			envPrefix: "VOUCH_BEACONNODEADDRESSFORPAYLOADATTESTATIONDATA",
+			handler:   util.BeaconNodeAddressesForPayloadAttestationData,
+		},
+		{
+			name: "PayloadAttestationDataIgnoresStrategiesAddresses",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESSES":            "1 2",
+				"STRATEGIES_BEACON_NODE_ADDRESSES": "3 4",
+			},
+			expected:  []string{"1", "2"},
+			envPrefix: "VOUCH_BEACONNODEADDRESSFORPAYLOADATTESTATIONDATA",
+			handler:   util.BeaconNodeAddressesForPayloadAttestationData,
+		},
 	}
 
 	// SignedBeaconBlock and BeaconBlockHeader only support "first" style,

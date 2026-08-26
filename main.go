@@ -375,7 +375,7 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to select submitter")
 	}
 
-	payloadAttester, err := startPayloadAttester(ctx, monitor, eth2Client, signerSvc, submitter)
+	payloadAttester, err := startPayloadAttester(ctx, monitor, signerSvc, submitter)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to start payload attester")
 	}
@@ -1679,25 +1679,31 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 	return submitter, nil
 }
 
-// startPayloadAttester starts the payload attester when the consensus client, signer and submitter
-// all provide their side of the payload attestation flow.  Anything missing leaves the service
+// startPayloadAttester starts the payload attester when the signer and submitter both provide
+// their side of the payload attestation flow.  Anything missing leaves the service
 // disabled rather than making startup fail.  Whether the network is at Gloas is not decided here:
 // the controller schedules no payload attestation duty before GLOAS_FORK_EPOCH.
 func startPayloadAttester(ctx context.Context,
 	monitor metrics.Service,
-	eth2Client eth2client.Service,
 	signerSvc signer.Service,
 	submitterStrategy submitter.Service,
 ) (payloadattester.Service, error) {
-	payloadAttestationDataProvider, ok := eth2Client.(eth2client.PayloadAttestationDataProvider)
-	if !ok {
-		return nil, nil
-	}
 	payloadAttestationDataSigner, ok := signerSvc.(signer.PayloadAttestationDataSigner)
 	if !ok {
 		return nil, nil
 	}
 	payloadAttestationMessagesSubmitter, ok := submitterStrategy.(submitter.PayloadAttestationMessagesSubmitter)
+	if !ok {
+		return nil, nil
+	}
+	payloadAttestationDataClient, err := fetchMultiClient(ctx, monitor,
+		"payloadattestationdata",
+		util.BeaconNodeAddressesForPayloadAttestationData(),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch clients for payload attestation data")
+	}
+	payloadAttestationDataProvider, ok := payloadAttestationDataClient.(eth2client.PayloadAttestationDataProvider)
 	if !ok {
 		return nil, nil
 	}
