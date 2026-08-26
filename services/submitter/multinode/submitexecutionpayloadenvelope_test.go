@@ -167,6 +167,63 @@ func TestSubmitExecutionPayloadEnvelopeReturnsPromptlyAfterImmediateSuccess(t *t
 	require.Same(t, opts, capture.opts)
 }
 
+func TestSubmitExecutionPayloadEnvelopeContinuesAfterCallerCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	canceled := make(chan struct{})
+	completed := make(chan struct{})
+	service, err := multinode.New(ctx,
+		multinode.WithLogLevel(zerolog.Disabled),
+		multinode.WithTimeout(time.Second),
+		multinode.WithProcessConcurrency(2),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"one": mock.NewProposalSubmitter(),
+		}),
+		multinode.WithExecutionPayloadEnvelopeSubmitters(map[string]eth2client.ExecutionPayloadEnvelopeSubmitter{
+			"slow": &cancelAwareExecutionPayloadEnvelopeSubmitter{started: started, release: release, canceled: canceled, completed: completed},
+			"fast": &waitingExecutionPayloadEnvelopeSubmitter{started: started},
+		}),
+		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
+			"one": mock.NewAttestationsSubmitter(),
+		}),
+		multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{
+			"one": mock.NewAggregateAttestationsSubmitter(),
+		}),
+		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{
+			"one": mock.NewProposalPreparationsSubmitter(),
+		}),
+		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
+			"one": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
+		}),
+		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{
+			"one": mock.NewSyncCommitteeMessagesSubmitter(),
+		}),
+		multinode.WithSyncCommitteeSubscriptionsSubmitters(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter{
+			"one": mock.NewSyncCommitteeSubscriptionsSubmitter(),
+		}),
+		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
+			"one": mock.NewSyncCommitteeContributionsSubmitter(),
+		}),
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, service.SubmitExecutionPayloadEnvelope(ctx, &api.SubmitExecutionPayloadEnvelopeOpts{}))
+	cancel()
+	select {
+	case <-canceled:
+		t.Fatal("in-flight submission was canceled when the caller returned")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-completed:
+	case <-time.After(time.Second):
+		t.Fatal("in-flight submission did not complete")
+	}
+}
+
 func TestSubmitExecutionPayloadEnvelopeDoesNotWaitForNodeVersion(t *testing.T) {
 	ctx := context.Background()
 	nodeVersionRelease := make(chan struct{})
@@ -481,6 +538,38 @@ func hasProviderSubmissionField(capture *logger.LogCapture, beaconNodeAddress st
 	}
 
 	return false
+}
+
+type cancelAwareExecutionPayloadEnvelopeSubmitter struct {
+	started   chan<- struct{}
+	release   <-chan struct{}
+	canceled  chan<- struct{}
+	completed chan<- struct{}
+}
+
+func (s *cancelAwareExecutionPayloadEnvelopeSubmitter) SubmitExecutionPayloadEnvelope(ctx context.Context,
+	_ *api.SubmitExecutionPayloadEnvelopeOpts,
+) error {
+	close(s.started)
+	select {
+	case <-ctx.Done():
+		close(s.canceled)
+		return ctx.Err()
+	case <-s.release:
+		close(s.completed)
+		return nil
+	}
+}
+
+type waitingExecutionPayloadEnvelopeSubmitter struct {
+	started <-chan struct{}
+}
+
+func (s *waitingExecutionPayloadEnvelopeSubmitter) SubmitExecutionPayloadEnvelope(_ context.Context,
+	_ *api.SubmitExecutionPayloadEnvelopeOpts,
+) error {
+	<-s.started
+	return nil
 }
 
 type blockingExecutionPayloadEnvelopeSubmitter struct {

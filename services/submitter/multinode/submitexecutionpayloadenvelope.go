@@ -48,7 +48,7 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.timeout)
 
 	sem := semaphore.NewWeighted(s.processConcurrency)
 	submissionCompleted := make(chan struct{}, 1)

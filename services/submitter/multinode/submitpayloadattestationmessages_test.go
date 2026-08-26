@@ -65,6 +65,51 @@ func TestSubmitPayloadAttestationMessagesFansOutToNodes(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 }
 
+func TestSubmitPayloadAttestationMessagesContinuesAfterCallerCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	canceled := make(chan struct{})
+	completed := make(chan struct{})
+
+	service, err := multinode.New(ctx,
+		multinode.WithLogLevel(zerolog.Disabled),
+		multinode.WithClientMonitor(nullmetrics.New()),
+		multinode.WithTimeout(time.Second),
+		multinode.WithProcessConcurrency(2),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{"one": mock.NewProposalSubmitter()}),
+		multinode.WithExecutionPayloadEnvelopeSubmitters(map[string]eth2client.ExecutionPayloadEnvelopeSubmitter{"one": &capturingExecutionPayloadEnvelopeSubmitter{}}),
+		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{"one": mock.NewAttestationsSubmitter()}),
+		multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{"one": mock.NewAggregateAttestationsSubmitter()}),
+		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{"one": mock.NewProposalPreparationsSubmitter()}),
+		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{"one": mock.NewBeaconCommitteeSubscriptionsSubmitter()}),
+		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{"one": mock.NewSyncCommitteeMessagesSubmitter()}),
+		multinode.WithSyncCommitteeSubscriptionsSubmitters(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter{"one": mock.NewSyncCommitteeSubscriptionsSubmitter()}),
+		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{"one": mock.NewSyncCommitteeContributionsSubmitter()}),
+		multinode.WithPayloadAttestationMessagesSubmitters(map[string]submitter.PayloadAttestationMessagesSubmitter{
+			"slow": &cancelAwarePayloadAttestationSubmitter{started: started, release: release, canceled: canceled, completed: completed},
+			"fast": &waitingPayloadAttestationSubmitter{started: started},
+		}),
+	)
+	require.NoError(t, err)
+
+	opts := &api.SubmitPayloadAttestationMessagesOpts{Messages: []*spec.VersionedPayloadAttestationMessage{{Version: spec.DataVersionGloas}}}
+	require.NoError(t, service.SubmitPayloadAttestationMessages(ctx, opts))
+	cancel()
+	select {
+	case <-canceled:
+		t.Fatal("in-flight submission was canceled when the caller returned")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-completed:
+	case <-time.After(time.Second):
+		t.Fatal("in-flight submission did not complete")
+	}
+}
+
 func TestSubmitPayloadAttestationMessagesReturnsOnFirstSuccess(t *testing.T) {
 	ctx := context.Background()
 	client, err := mocketh2client.New(ctx)
@@ -103,6 +148,25 @@ func TestSubmitPayloadAttestationMessagesReturnsOnFirstSuccess(t *testing.T) {
 	case <-canceled:
 		t.Fatal("in-flight submission was aborted by another node's success")
 	case <-time.After(250 * time.Millisecond):
+	}
+}
+
+type cancelAwarePayloadAttestationSubmitter struct {
+	started   chan<- struct{}
+	release   <-chan struct{}
+	canceled  chan<- struct{}
+	completed chan<- struct{}
+}
+
+func (s *cancelAwarePayloadAttestationSubmitter) SubmitPayloadAttestationMessages(ctx context.Context, _ *api.SubmitPayloadAttestationMessagesOpts) error {
+	close(s.started)
+	select {
+	case <-ctx.Done():
+		close(s.canceled)
+		return ctx.Err()
+	case <-s.release:
+		close(s.completed)
+		return nil
 	}
 }
 
