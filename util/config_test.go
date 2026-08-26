@@ -266,12 +266,23 @@ func TestBeaconNodeAddressesPerStrategy(t *testing.T) {
 			handler:   util.BeaconNodeAddressesForPayloadAttestationData,
 		},
 		{
-			name: "PayloadAttestationDataIgnoresStrategiesAddresses",
+			name: "PayloadAttestationDataUsesStrategiesAddresses",
 			env: map[string]string{
 				"BEACON_NODE_ADDRESSES":            "1 2",
 				"STRATEGIES_BEACON_NODE_ADDRESSES": "3 4",
 			},
-			expected:  []string{"1", "2"},
+			expected:  []string{"3", "4"},
+			envPrefix: "VOUCH_BEACONNODEADDRESSFORPAYLOADATTESTATIONDATA",
+			handler:   util.BeaconNodeAddressesForPayloadAttestationData,
+		},
+		{
+			name: "PayloadAttestationDataOverridesStrategiesAddresses",
+			env: map[string]string{
+				"BEACON_NODE_ADDRESSES":                                   "1 2",
+				"STRATEGIES_BEACON_NODE_ADDRESSES":                        "3 4",
+				"STRATEGIES_PAYLOADATTESTATIONDATA_BEACON_NODE_ADDRESSES": "5 6",
+			},
+			expected:  []string{"5", "6"},
 			envPrefix: "VOUCH_BEACONNODEADDRESSFORPAYLOADATTESTATIONDATA",
 			handler:   util.BeaconNodeAddressesForPayloadAttestationData,
 		},

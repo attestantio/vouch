@@ -1680,8 +1680,10 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 }
 
 // startPayloadAttester starts the payload attester when the signer and submitter both provide
-// their side of the payload attestation flow.  Anything missing leaves the service
-// disabled rather than making startup fail.  Whether the network is at Gloas is not decided here:
+// their side of the payload attestation flow.  A missing signer or submitter side leaves the
+// service disabled rather than making startup fail; a misconfigured or unreachable set of
+// payload attestation data addresses does fail startup, as it would otherwise silently drop
+// every payload attestation duty.  Whether the network is at Gloas is not decided here:
 // the controller schedules no payload attestation duty before GLOAS_FORK_EPOCH.
 func startPayloadAttester(ctx context.Context,
 	monitor metrics.Service,

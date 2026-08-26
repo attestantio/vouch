@@ -141,11 +141,6 @@ submitter:
 
 # strategies provide advanced strategies for dealing with multiple beacon nodes
 strategies:
-  # The payloadattestationdata strategy obtains PTC payload attestation data.
-  # beacon-node-addresses are the addresses from which to receive payload attestation data.
-  # If not set, Vouch uses the top-level beacon-node-addresses.
-  payloadattestationdata:
-    beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
   # The attestationdata strategy obtains attestation data from multiple sources.
   attestationdata:
     # style can be 'best', which obtains attestation data from all nodes and selects the best, 'first', which uses the first returned,
@@ -223,6 +218,12 @@ strategies:
       deadline: '1s'
       # bid-gap is the gap between receiving a response from a relay and querying it again.
       bid-gap: '100ms'
+  # The payloadattestationdata strategy obtains payload attestation data for payload timeliness committee duties.
+  # It uses a single multiclient; there is no style to select.
+  payloadattestationdata:
+    # beacon-node-addresses are the addresses from which to receive payload attestation data, falling back to the
+    # top-level beacon-node-addresses if not set.
+    beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
   # The signedbeaconblock strategy obtains the signed beacon blocks from multiple beacon nodes.
   signedbeaconblock:
     # style can be 'first'. If not defined, the 'first' style will be used.
