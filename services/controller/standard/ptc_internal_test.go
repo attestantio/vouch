@@ -12,9 +12,13 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/payloadattester"
+	payloadattesterstandard "github.com/attestantio/vouch/services/payloadattester/standard"
 	"github.com/attestantio/vouch/services/scheduler"
+	"github.com/attestantio/vouch/testutil"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -57,6 +61,62 @@ func TestSchedulePayloadAttestationsGroupsDutiesAndCallsService(t *testing.T) {
 	require.Equal(t, phase0.Slot(10), payloadService.duties[0].Slot())
 	require.Equal(t, []phase0.ValidatorIndex{1, 2}, payloadService.duties[0].ValidatorIndices())
 	require.Len(t, payloadService.duties[0].Accounts(), 2)
+}
+
+func TestScheduledPayloadAttestationFetchesBatchedSignsAndSubmits(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{1, 2}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	data := &gloas.PayloadAttestationData{BeaconBlockRoot: phase0.Root{0x01}, Slot: 10, PayloadPresent: true}
+	dataProvider := &recordingPayloadAttestationDataProvider{data: data}
+	signer := &recordingPayloadAttestationDataSigner{}
+	submitter := &recordingPayloadAttestationMessagesSubmitter{}
+	payloadService, err := payloadattesterstandard.New(ctx,
+		payloadattesterstandard.WithLogLevel(zerolog.Disabled),
+		payloadattesterstandard.WithMonitor(prometheusMonitor{}),
+		payloadattesterstandard.WithPayloadAttestationDataProvider(dataProvider),
+		payloadattesterstandard.WithPayloadAttestationDataSigner(signer),
+		payloadattesterstandard.WithPayloadAttestationMessagesSubmitter(submitter),
+	)
+	require.NoError(t, err)
+	schedulerService := &recordingScheduler{}
+	service := &Service{
+		chainTimeService:           &recordingChainTime{slotDuration: time.Second, slotsPerEpoch: 32},
+		ptcDutiesProvider:          &recordingPTCDutiesProvider{duties: []*apiv1.PTCDuty{{Slot: 10, ValidatorIndex: 1}, {Slot: 10, ValidatorIndex: 2}}},
+		validatingAccountsProvider: &recordingAccountsProvider{accounts: accounts},
+		scheduler:                  schedulerService,
+		payloadAttester:            payloadService,
+		payloadAttestationDelay:    750 * time.Millisecond,
+		gloasForkEpoch:             0,
+	}
+
+	service.schedulePayloadAttestations(ctx, 0, []phase0.ValidatorIndex{1, 2}, false)
+	require.Len(t, schedulerService.jobs, 1)
+
+	schedulerService.jobs[0].job(ctx)
+
+	require.Equal(t, []phase0.Slot{10}, dataProvider.slots)
+	require.Equal(t, 1, signer.calls)
+	require.Equal(t, accounts[1], signer.accounts[0])
+	require.Equal(t, accounts[2], signer.accounts[1])
+	require.Same(t, data, signer.data)
+	require.Len(t, submitter.messages, 2)
+	require.Equal(t, &spec.VersionedPayloadAttestationMessage{
+		Version: spec.DataVersionGloas,
+		Gloas: &gloas.PayloadAttestationMessage{
+			ValidatorIndex: 1,
+			Data:           data,
+			Signature:      phase0.BLSSignature{0x01},
+		},
+	}, submitter.messages[0])
+	require.Equal(t, &spec.VersionedPayloadAttestationMessage{
+		Version: spec.DataVersionGloas,
+		Gloas: &gloas.PayloadAttestationMessage{
+			ValidatorIndex: 2,
+			Data:           data,
+			Signature:      phase0.BLSSignature{0x02},
+		},
+	}, submitter.messages[1])
 }
 
 func TestSchedulePayloadAttestationDoesNotPrepareWhenSchedulingFails(t *testing.T) {
@@ -302,25 +362,26 @@ func (p *recordingPTCDutiesProvider) PTCDuties(_ context.Context, _ *api.PTCDuti
 }
 
 type recordingAccountsProvider struct {
+	accounts     map[phase0.ValidatorIndex]e2wtypes.Account
 	indices      []phase0.ValidatorIndex
 	epochIndices []phase0.ValidatorIndex
 }
 
 func (p *recordingAccountsProvider) ValidatingAccountsForEpoch(_ context.Context, _ phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
-	accounts := make(map[phase0.ValidatorIndex]e2wtypes.Account, len(p.epochIndices))
-	for _, index := range p.epochIndices {
-		accounts[index] = nil
-	}
-	return accounts, nil
+	return p.accountsFor(p.epochIndices), nil
 }
 
 func (p *recordingAccountsProvider) ValidatingAccountsForEpochByIndex(_ context.Context, _ phase0.Epoch, indices []phase0.ValidatorIndex) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
 	p.indices = append([]phase0.ValidatorIndex(nil), indices...)
+	return p.accountsFor(indices), nil
+}
+
+func (p *recordingAccountsProvider) accountsFor(indices []phase0.ValidatorIndex) map[phase0.ValidatorIndex]e2wtypes.Account {
 	accounts := make(map[phase0.ValidatorIndex]e2wtypes.Account, len(indices))
 	for _, index := range indices {
-		accounts[index] = nil
+		accounts[index] = p.accounts[index]
 	}
-	return accounts, nil
+	return accounts
 }
 
 func (*recordingAccountsProvider) SyncCommitteeAccountsForEpoch(_ context.Context, _ phase0.Epoch) (map[phase0.ValidatorIndex]e2wtypes.Account, error) {
@@ -415,3 +476,48 @@ func (s *recordingChainTime) FirstSlotOfEpoch(epoch phase0.Epoch) phase0.Slot {
 	return phase0.Slot(uint64(epoch) * s.slotsPerEpoch)
 }
 func (*recordingChainTime) HardForkEpoch(context.Context, string) phase0.Epoch { return 0 }
+
+type prometheusMonitor struct{}
+
+func (prometheusMonitor) Presenter() string {
+	return "prometheus"
+}
+
+type recordingPayloadAttestationDataProvider struct {
+	data  *gloas.PayloadAttestationData
+	slots []phase0.Slot
+}
+
+func (p *recordingPayloadAttestationDataProvider) PayloadAttestationData(_ context.Context, opts *api.PayloadAttestationDataOpts) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+	p.slots = append(p.slots, opts.Slot)
+	return &api.Response[*spec.VersionedPayloadAttestationData]{Data: &spec.VersionedPayloadAttestationData{
+		Version: spec.DataVersionGloas,
+		Gloas:   p.data,
+	}}, nil
+}
+
+type recordingPayloadAttestationDataSigner struct {
+	accounts []e2wtypes.Account
+	calls    int
+	data     *gloas.PayloadAttestationData
+}
+
+func (s *recordingPayloadAttestationDataSigner) SignPayloadAttestationData(_ context.Context, accounts []e2wtypes.Account, data *gloas.PayloadAttestationData) ([]phase0.BLSSignature, error) {
+	s.calls++
+	s.accounts = accounts
+	s.data = data
+	signatures := make([]phase0.BLSSignature, len(accounts))
+	for i := range signatures {
+		signatures[i][0] = byte(i + 1)
+	}
+	return signatures, nil
+}
+
+type recordingPayloadAttestationMessagesSubmitter struct {
+	messages []*spec.VersionedPayloadAttestationMessage
+}
+
+func (s *recordingPayloadAttestationMessagesSubmitter) SubmitPayloadAttestationMessages(_ context.Context, opts *api.SubmitPayloadAttestationMessagesOpts) error {
+	s.messages = opts.Messages
+	return nil
+}
