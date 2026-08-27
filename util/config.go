@@ -80,7 +80,14 @@ func BeaconNodeAddressesForProposing() []string {
 // payload attestation data from the configuration.
 // This follows the hierarchical address configuration, and removes duplicates.
 func BeaconNodeAddressesForPayloadAttestationData() []string {
-	return uniqueSortedAddresses(BeaconNodeAddresses("strategies.payloadattestationdata"))
+	switch viper.GetString("strategies.payloadattestationdata.style") {
+	case "first":
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.payloadattestationdata.first"))
+	case "majority":
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.payloadattestationdata.majority"))
+	default:
+		return uniqueSortedAddresses(BeaconNodeAddresses("strategies.payloadattestationdata"))
+	}
 }
 
 // BeaconNodeAddressesForAttestationData obtains the beacon node addresses used for
