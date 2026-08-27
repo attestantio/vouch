@@ -19,8 +19,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -28,24 +28,18 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-// SubmitExecutionPayloadEnvelope submits a signed execution payload envelope.
-func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.SubmitExecutionPayloadEnvelopeOpts) error {
-	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "SubmitExecutionPayloadEnvelope", trace.WithAttributes(
+// SubmitPayloadAttestationMessages submits payload attestation messages to all configured nodes.
+func (s *Service) SubmitPayloadAttestationMessages(ctx context.Context, opts *api.SubmitPayloadAttestationMessagesOpts) error {
+	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "SubmitPayloadAttestationMessages", trace.WithAttributes(
 		attribute.String("strategy", "multinode"),
 	))
 	defer span.End()
 
-	if opts == nil {
-		return errors.New("no execution payload envelope supplied")
+	if opts == nil || len(opts.Messages) == 0 {
+		return errors.New("no payload attestation messages supplied")
 	}
-	if len(s.executionPayloadEnvelopeSubmitters) == 0 {
-		return errors.New("no execution payload envelope submitters configured")
-	}
-	beaconBlockRoot := "<unknown>"
-	if opts.SignedExecutionPayloadEnvelope != nil {
-		if root, err := opts.SignedExecutionPayloadEnvelope.BeaconBlockRoot(); err == nil {
-			beaconBlockRoot = root.String()
-		}
+	if len(s.payloadAttestationMessagesSubmitters) == 0 {
+		return errors.New("no payload attestation message submitters configured")
 	}
 
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.timeout)
@@ -54,9 +48,9 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 	submissionCompleted := make(chan struct{}, 1)
 	submissionSucceeded := &atomic.Bool{}
 	var wg sync.WaitGroup
-	for name, submitter := range s.executionPayloadEnvelopeSubmitters {
+	for name, payloadAttestationMessagesSubmitter := range s.payloadAttestationMessagesSubmitters {
 		wg.Go(func() {
-			s.submitExecutionPayloadEnvelope(ctx, sem, submissionCompleted, submissionSucceeded, name, beaconBlockRoot, opts, submitter)
+			s.submitPayloadAttestationMessages(ctx, sem, submissionCompleted, submissionSucceeded, name, opts, payloadAttestationMessagesSubmitter)
 		})
 	}
 	// Release the timeout context once every submission has finished, rather than as soon as
@@ -82,44 +76,32 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 	return nil
 }
 
-func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
+func (s *Service) submitPayloadAttestationMessages(ctx context.Context,
 	sem *semaphore.Weighted,
 	submissionCompleted chan<- struct{},
 	submissionSucceeded *atomic.Bool,
 	name string,
-	beaconBlockRoot string,
-	opts *api.SubmitExecutionPayloadEnvelopeOpts,
-	submitter eth2client.ExecutionPayloadEnvelopeSubmitter,
+	opts *api.SubmitPayloadAttestationMessagesOpts,
+	payloadAttestationMessagesSubmitter submitter.PayloadAttestationMessagesSubmitter,
 ) {
-	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "submitExecutionPayloadEnvelope", trace.WithAttributes(
+	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "submitPayloadAttestationMessages", trace.WithAttributes(
 		attribute.String("server", name),
 	))
 	defer span.End()
 
-	log := s.log.With().Str("beacon_node_address", name).Str("beacon_block_root", beaconBlockRoot).Logger()
+	log := s.log.With().Str("beacon_node_address", name).Logger()
 	if err := sem.Acquire(ctx, 1); err != nil {
 		log.Error().Err(err).Msg("Failed to acquire semaphore")
 		return
 	}
 	defer sem.Release(1)
 
-	address := "<unknown>"
-	if service, isService := submitter.(eth2client.Service); isService {
-		address = service.Address()
-	}
+	_, address := s.serviceInfo(ctx, payloadAttestationMessagesSubmitter)
 	started := time.Now()
-	err := submitter.SubmitExecutionPayloadEnvelope(ctx, opts)
-	elapsed := time.Since(started)
-	s.clientMonitor.ClientOperation(address, "submit execution payload envelope", err == nil, elapsed)
+	err := payloadAttestationMessagesSubmitter.SubmitPayloadAttestationMessages(ctx, opts)
+	s.clientMonitor.ClientOperation(address, "submit payload attestation messages", err == nil, time.Since(started))
 	if err != nil {
-		// The status field carries the outcome of the submission and status_code the HTTP
-		// status of an API failure; status_code is 0 when there was no response to fail.
-		statusCode := 0
-		var apiErr *api.Error
-		if errors.As(err, &apiErr) {
-			statusCode = apiErr.StatusCode
-		}
-		log.Warn().Err(err).Str("status", "failed").Int("status_code", statusCode).Dur("elapsed", elapsed).Msg("Execution payload envelope provider submission completed")
+		log.Warn().Err(err).Msg("Failed to submit payload attestation messages")
 		return
 	}
 
@@ -128,5 +110,5 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	case submissionCompleted <- struct{}{}:
 	default:
 	}
-	log.Trace().Str("status", "succeeded").Dur("elapsed", elapsed).Msg("Execution payload envelope provider submission completed")
+	log.Trace().Msg("Submitted payload attestation messages")
 }

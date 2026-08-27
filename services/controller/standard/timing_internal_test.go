@@ -253,3 +253,54 @@ func TestTimingsForSlotWithoutGloas(t *testing.T) {
 	require.Equal(t, 4*time.Second, s.timingsForSlot(0).maxAttestationDelay)
 	require.Equal(t, 4*time.Second, s.timingsForSlot(1<<40).maxAttestationDelay)
 }
+
+// TestObtainPayloadAttestationTiming confirms the payload attestation deadline.  The duty exists
+// only after Gloas, so the deadline follows the Gloas slot duration on either side of the fork.
+func TestObtainPayloadAttestationTiming(t *testing.T) {
+	// The pre-Gloas slot duration, as served in SECONDS_PER_SLOT.
+	slotDuration := 12 * time.Second
+
+	tests := []struct {
+		name     string
+		spec     map[string]any
+		expected time.Duration
+	}{
+		{
+			// The specification value, as devnet-8 serves it: the payload timeliness committee
+			// votes three quarters of the way through the slot.
+			name:     "served value",
+			spec:     gloasDevnet8Spec(),
+			expected: 9 * time.Second,
+		},
+		{
+			// The payload attestation deadline is new in Gloas, so the specification defines no
+			// _GLOAS-suffixed form of the key and a served suffixed key is not read.
+			name:     "unsuffixed key holds the deadline",
+			spec:     map[string]any{"PAYLOAD_ATTESTATION_DUE_BPS": uint64(2500), "PAYLOAD_ATTESTATION_DUE_BPS_GLOAS": uint64(7500)},
+			expected: 3 * time.Second,
+		},
+		{
+			name:     "fallback",
+			spec:     map[string]any{},
+			expected: 9 * time.Second,
+		},
+		{
+			// The duty exists only after Gloas, so its fallback follows the Gloas slot duration
+			// even though the served basis points are absent.
+			name:     "gloas slot duration drives fallback",
+			spec:     map[string]any{"SLOT_DURATION_MS": uint64(6000)},
+			expected: 4500 * time.Millisecond,
+		},
+		{
+			name:     "out of range value ignored",
+			spec:     map[string]any{"PAYLOAD_ATTESTATION_DUE_BPS": uint64(10001)},
+			expected: 9 * time.Second,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.expected, obtainPayloadAttestationTiming(test.spec, slotDuration))
+		})
+	}
+}

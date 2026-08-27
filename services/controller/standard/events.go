@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -178,6 +178,8 @@ func (s *Service) handlePreviousDependentRootChanged(ctx context.Context) {
 
 	// We need to refresh the attester duties for this epoch.
 	s.refreshAttesterDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
+	// The payload timeliness committee is derived from the same epoch state.
+	s.refreshPayloadAttestationDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
 }
 
 // handleCurrentDependentRootChanged handles the situation where the current
@@ -194,6 +196,8 @@ func (s *Service) handleCurrentDependentRootChanged(ctx context.Context) {
 	}
 	// We need to refresh the attester duties for the next epoch.
 	go s.refreshAttesterDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch()+1)
+	// The payload timeliness committee for the next epoch uses the current dependent root.
+	go s.refreshPayloadAttestationDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch()+1)
 }
 
 func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {

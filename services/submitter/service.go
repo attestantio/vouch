@@ -24,6 +24,11 @@ import (
 // Service is the submitter service.
 type Service interface{}
 
+// PayloadAttestationMessagesSubmitter provides methods to submit payload attestation messages.
+type PayloadAttestationMessagesSubmitter interface {
+	SubmitPayloadAttestationMessages(ctx context.Context, opts *api.SubmitPayloadAttestationMessagesOpts) error
+}
+
 // AttestationsSubmitter is the interface for a submitter of attestations.
 type AttestationsSubmitter interface {
 	// SubmitAttestations submits multiple attestations.

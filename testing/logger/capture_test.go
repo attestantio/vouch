@@ -14,6 +14,8 @@
 package logger
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -55,4 +57,30 @@ func TestHasLog(t *testing.T) {
 			require.Equal(t, test.match, capture.HasLog(test.fields))
 		})
 	}
+}
+
+// TestEntriesDuringConcurrentWrite reads Entries while another goroutine is still capturing
+// output, which is how the multinode submitters log once their submission has already returned.
+// The final length assertion also proves every write was captured, so the writes need no
+// assertion of their own on the writing goroutine.
+func TestEntriesDuringConcurrentWrite(t *testing.T) {
+	capture := &LogCapture{
+		entries: make([]map[string]any, 0),
+	}
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for i := range 128 {
+			_, _ = fmt.Fprintf(capture, `{"message":"entry","index":%d}`, i)
+		}
+	})
+
+	for range 128 {
+		for _, entry := range capture.Entries() {
+			require.Equal(t, "entry", entry["message"])
+		}
+	}
+	wg.Wait()
+
+	require.Len(t, capture.Entries(), 128)
 }
