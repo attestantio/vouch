@@ -143,6 +143,29 @@ func TestPayloadAttestationDataThresholdExceedingStrictMajority(t *testing.T) {
 	require.Equal(t, response.Data, actual.Data)
 }
 
+func TestPayloadAttestationDataUsesResponsesReceivedAtTimeout(t *testing.T) {
+	ctx := context.Background()
+	root := phase0.Root{1}
+	response := data(12, root, true, true)
+	service, err := majority.New(ctx,
+		majority.WithLogLevel(zerolog.Disabled),
+		majority.WithTimeout(100*time.Millisecond),
+		majority.WithPayloadAttestationDataProviders(map[string]eth2client.PayloadAttestationDataProvider{
+			"one":   provider(t, response),
+			"two":   provider(t, response),
+			"three": provider(t, data(12, phase0.Root{2}, true, true)),
+			// A strict majority of 3 is never reached, so the strategy waits for this
+			// provider until the timeout and must then use the responses it has.
+			"hung": delayedProvider(t, response, time.Minute),
+		}),
+	)
+	require.NoError(t, err)
+
+	actual, err := service.PayloadAttestationData(ctx, &api.PayloadAttestationDataOpts{Slot: 12})
+	require.NoError(t, err)
+	require.Equal(t, response.Data, actual.Data)
+}
+
 func TestPayloadAttestationDataSelection(t *testing.T) {
 	ctx := context.Background()
 	root1 := phase0.Root{1}
