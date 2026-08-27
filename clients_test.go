@@ -160,6 +160,48 @@ func TestPayloadAttesterUsesConfiguredPayloadAttestationDataProviders(t *testing
 	require.Zero(t, globalRequests.Load())
 }
 
+func TestFirstPayloadAttestationDataStrategyRejectsInvalidResponses(t *testing.T) {
+	ctx := context.Background()
+	invalidAddress := "http://payload-data-invalid.test"
+	validAddress := "http://payload-data-valid.test"
+	invalid, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	invalid.PayloadAttestationDataFunc = func(context.Context, *api.PayloadAttestationDataOpts) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+		return &api.Response[*spec.VersionedPayloadAttestationData]{}, nil
+	}
+	valid, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	valid.PayloadAttestationDataFunc = func(_ context.Context, opts *api.PayloadAttestationDataOpts) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+		return &api.Response[*spec.VersionedPayloadAttestationData]{
+			Data: &spec.VersionedPayloadAttestationData{
+				Version: spec.DataVersionGloas,
+				Gloas:   &gloas.PayloadAttestationData{Slot: opts.Slot},
+			},
+		}, nil
+	}
+	viper.Set("strategies.payloadattestationdata.style", "first")
+	viper.Set("strategies.payloadattestationdata.first.timeout", time.Second)
+	viper.Set("strategies.payloadattestationdata.first.beacon-node-addresses", []string{invalidAddress, validAddress})
+	knownClientsMu.Lock()
+	knownClients[invalidAddress] = invalid
+	knownClients[validAddress] = valid
+	knownClientsMu.Unlock()
+	t.Cleanup(func() {
+		viper.Reset()
+		knownClientsMu.Lock()
+		delete(knownClients, invalidAddress)
+		delete(knownClients, validAddress)
+		knownClientsMu.Unlock()
+	})
+
+	provider, err := selectPayloadAttestationDataProvider(ctx, null.New())
+	require.NoError(t, err)
+	response, err := provider.PayloadAttestationData(ctx, &api.PayloadAttestationDataOpts{Slot: 12})
+	require.NoError(t, err)
+	require.NotNil(t, response.Data)
+	require.Equal(t, phase0.Slot(12), response.Data.Gloas.Slot)
+}
+
 type payloadAttestationDataSigner struct{}
 
 func (*payloadAttestationDataSigner) SignPayloadAttestationData(_ context.Context, accounts []e2wtypes.Account, _ *gloas.PayloadAttestationData) ([]phase0.BLSSignature, error) {

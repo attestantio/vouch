@@ -98,6 +98,8 @@ import (
 	"github.com/attestantio/vouch/strategies/builderbid"
 	bestbuilderbidstrategy "github.com/attestantio/vouch/strategies/builderbid/best"
 	deadlinebuilderbidstrategy "github.com/attestantio/vouch/strategies/builderbid/deadline"
+	firstpayloadattestationdatastrategy "github.com/attestantio/vouch/strategies/payloadattestationdata/first"
+	majoritypayloadattestationdatastrategy "github.com/attestantio/vouch/strategies/payloadattestationdata/majority"
 	firstsignedbeaconblockstrategy "github.com/attestantio/vouch/strategies/signedbeaconblock/first"
 	bestsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/best"
 	firstsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/first"
@@ -274,6 +276,9 @@ func fetchConfig() error {
 	viper.SetDefault("beaconblockproposer.builder-boost-factor", 91)
 	viper.SetDefault("strategies.builderbid.deadline.deadline", time.Second)
 	viper.SetDefault("strategies.builderbid.deadline.bid-gap", 100*time.Millisecond)
+	// Payload attestation data is due 75% of the way through the slot, so default tighter than the
+	// global timeout.  Set at the strategy level so that the per-style timeouts still inherit from it.
+	viper.SetDefault("strategies.payloadattestationdata.timeout", time.Second)
 	viper.SetDefault("submitter.style", "multinode")
 	viper.SetDefault("multiinstance.static-delay.attester-delay", time.Second)
 	viper.SetDefault("multiinstance.static-delay.proposer-delay", 2*time.Second)
@@ -1698,15 +1703,11 @@ func startPayloadAttester(ctx context.Context,
 	if !ok {
 		return nil, nil
 	}
-	payloadAttestationDataClient, err := fetchMultiClient(ctx, monitor,
-		"payloadattestationdata",
-		util.BeaconNodeAddressesForPayloadAttestationData(),
-	)
+	payloadAttestationDataProvider, err := selectPayloadAttestationDataProvider(ctx, monitor)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to fetch clients for payload attestation data")
+		return nil, errors.Wrap(err, "failed to obtain payload attestation data provider")
 	}
-	payloadAttestationDataProvider, ok := payloadAttestationDataClient.(eth2client.PayloadAttestationDataProvider)
-	if !ok {
+	if payloadAttestationDataProvider == nil {
 		return nil, nil
 	}
 
@@ -1723,6 +1724,59 @@ func startPayloadAttester(ctx context.Context,
 	}
 
 	return service, nil
+}
+
+func selectPayloadAttestationDataProvider(ctx context.Context, monitor metrics.Service) (eth2client.PayloadAttestationDataProvider, error) {
+	switch viper.GetString("strategies.payloadattestationdata.style") {
+	case "first":
+		providers, err := genericAddressToClientMapper[eth2client.PayloadAttestationDataProvider](ctx, monitor,
+			"strategies.payloadattestationdata.first",
+			"first payload attestation data strategy")
+		if err != nil {
+			return nil, err
+		}
+		provider, err := firstpayloadattestationdatastrategy.New(ctx,
+			firstpayloadattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			firstpayloadattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.payloadattestationdata.first")),
+			firstpayloadattestationdatastrategy.WithPayloadAttestationDataProviders(providers),
+			firstpayloadattestationdatastrategy.WithTimeout(util.Timeout("strategies.payloadattestationdata.first")),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start first payload attestation data strategy")
+		}
+		return provider, nil
+	case "majority":
+		providers, err := genericAddressToClientMapper[eth2client.PayloadAttestationDataProvider](ctx, monitor,
+			"strategies.payloadattestationdata.majority",
+			"majority payload attestation data strategy")
+		if err != nil {
+			return nil, err
+		}
+		provider, err := majoritypayloadattestationdatastrategy.New(ctx,
+			majoritypayloadattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			majoritypayloadattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.payloadattestationdata.majority")),
+			majoritypayloadattestationdatastrategy.WithPayloadAttestationDataProviders(providers),
+			majoritypayloadattestationdatastrategy.WithTimeout(util.Timeout("strategies.payloadattestationdata.majority")),
+			majoritypayloadattestationdatastrategy.WithThreshold(viper.GetInt("strategies.payloadattestationdata.majority.threshold")),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start majority payload attestation data strategy")
+		}
+		return provider, nil
+	default:
+		payloadAttestationDataClient, err := fetchMultiClient(ctx, monitor,
+			"payloadattestationdata",
+			util.BeaconNodeAddressesForPayloadAttestationData(),
+		)
+		if err != nil {
+			return nil, err
+		}
+		provider, ok := payloadAttestationDataClient.(eth2client.PayloadAttestationDataProvider)
+		if !ok {
+			return nil, nil
+		}
+		return provider, nil
+	}
 }
 
 func genericAddressToClientMapper[T any](ctx context.Context, monitor metrics.Service, path, description string) (map[string]T, error) {
