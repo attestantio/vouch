@@ -169,6 +169,10 @@ func (s *Service) schedulePayloadAttestation(ctx context.Context,
 		},
 	); err != nil {
 		s.log.Error().Err(err).Msg("Failed to schedule payload attestation")
+		return
+	}
+	if err := s.payloadAttester.Prepare(ctx, duty); err != nil {
+		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to prepare payload attestation")
 	}
 }
 
