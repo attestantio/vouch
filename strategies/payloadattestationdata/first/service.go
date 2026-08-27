@@ -65,11 +65,11 @@ func (s *Service) PayloadAttestationData(ctx context.Context, opts *api.PayloadA
 	}
 	results := make(chan result, len(s.payloadAttestationDataProviders))
 	for name, provider := range s.payloadAttestationDataProviders {
-		go func() {
+		go func(providerName string, provider eth2client.PayloadAttestationDataProvider) {
 			response, err := provider.PayloadAttestationData(ctx, opts)
-			s.clientMonitor.ClientOperation(name, "payload attestation data", err == nil, time.Since(started))
-			results <- result{provider: name, response: response, err: err}
-		}()
+			s.clientMonitor.ClientOperation(providerName, "payload attestation data", err == nil, time.Since(started))
+			results <- result{provider: providerName, response: response, err: err}
+		}(name, provider)
 	}
 
 	for range s.payloadAttestationDataProviders {
