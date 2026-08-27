@@ -5,6 +5,7 @@ package standard
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -47,6 +48,7 @@ func TestSchedulePayloadAttestationsGroupsDutiesAndCallsService(t *testing.T) {
 	require.Equal(t, 1, provider.calls)
 	require.Equal(t, []phase0.ValidatorIndex{1, 2, 3}, accounts.indices)
 	require.Len(t, schedulerService.jobs, 2)
+	require.Len(t, payloadService.prepared, 2)
 
 	job := schedulerService.jobs[0]
 	job.job(ctx)
@@ -55,6 +57,23 @@ func TestSchedulePayloadAttestationsGroupsDutiesAndCallsService(t *testing.T) {
 	require.Equal(t, phase0.Slot(10), payloadService.duties[0].Slot())
 	require.Equal(t, []phase0.ValidatorIndex{1, 2}, payloadService.duties[0].ValidatorIndices())
 	require.Len(t, payloadService.duties[0].Accounts(), 2)
+}
+
+func TestSchedulePayloadAttestationDoesNotPrepareWhenSchedulingFails(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{err: errors.New("scheduler failed")}
+	payloadService := &recordingPayloadAttester{}
+	service := &Service{
+		chainTimeService:        &recordingChainTime{slotDuration: time.Second, slotsPerEpoch: 32},
+		scheduler:               schedulerService,
+		payloadAttester:         payloadService,
+		payloadAttestationDelay: time.Second,
+	}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})
+
+	service.schedulePayloadAttestation(ctx, duty, map[phase0.ValidatorIndex]e2wtypes.Account{})
+
+	require.Empty(t, payloadService.prepared)
 }
 
 // TestSchedulePayloadAttestationVotesAtTheAttestationDeadline confirms that the vote is cast at the
@@ -315,6 +334,7 @@ func (*recordingAccountsProvider) SyncCommitteeAccountsForEpochByIndex(_ context
 type recordingScheduler struct {
 	jobs      []recordedJob
 	cancelled []string
+	err       error
 	existing  map[string]bool
 	// missing names the jobs for which a cancellation reports that no such job exists, standing
 	// in for a job that has already run.
@@ -327,6 +347,9 @@ type recordedJob struct {
 }
 
 func (s *recordingScheduler) ScheduleJob(_ context.Context, _ string, _ string, runtime time.Time, job scheduler.JobFunc) error {
+	if s.err != nil {
+		return s.err
+	}
 	s.jobs = append(s.jobs, recordedJob{runtime: runtime, job: job})
 	return nil
 }
@@ -353,10 +376,14 @@ func (*recordingScheduler) ListJobs(context.Context) []string               { re
 
 type recordingPayloadAttester struct {
 	duties   []*payloadattester.Duty
+	prepared []*payloadattester.Duty
 	deadline time.Time
 }
 
-func (*recordingPayloadAttester) Prepare(context.Context, *payloadattester.Duty) error { return nil }
+func (s *recordingPayloadAttester) Prepare(_ context.Context, duty *payloadattester.Duty) error {
+	s.prepared = append(s.prepared, duty)
+	return nil
+}
 
 func (s *recordingPayloadAttester) Attest(ctx context.Context, duty *payloadattester.Duty) ([]*spec.VersionedPayloadAttestationMessage, error) {
 	s.deadline, _ = ctx.Deadline()
