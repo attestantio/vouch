@@ -226,14 +226,15 @@ strategies:
     # top-level beacon-node-addresses if not set.
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
     first:
-      # beacon-node-addresses fall back to payloadattestationdata and then the top-level setting.
+      # beacon-node-addresses and timeout fall back to payloadattestationdata and then the top-level setting.
       beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
       timeout: '1s'
     majority:
-      # beacon-node-addresses fall back to payloadattestationdata and then the top-level setting.
+      # beacon-node-addresses and timeout fall back to payloadattestationdata and then the top-level setting.
       beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
       timeout: '1s'
       # threshold is the minimum number of matching valid responses. 0 is valid.
+      # At the timeout the strategy proceeds with the responses it has received.
       threshold: 0
   # The signedbeaconblock strategy obtains the signed beacon blocks from multiple beacon nodes.
   signedbeaconblock:

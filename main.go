@@ -276,8 +276,9 @@ func fetchConfig() error {
 	viper.SetDefault("beaconblockproposer.builder-boost-factor", 91)
 	viper.SetDefault("strategies.builderbid.deadline.deadline", time.Second)
 	viper.SetDefault("strategies.builderbid.deadline.bid-gap", 100*time.Millisecond)
-	viper.SetDefault("strategies.payloadattestationdata.first.timeout", time.Second)
-	viper.SetDefault("strategies.payloadattestationdata.majority.timeout", time.Second)
+	// Payload attestation data is due 75% of the way through the slot, so default tighter than the
+	// global timeout.  Set at the strategy level so that the per-style timeouts still inherit from it.
+	viper.SetDefault("strategies.payloadattestationdata.timeout", time.Second)
 	viper.SetDefault("submitter.style", "multinode")
 	viper.SetDefault("multiinstance.static-delay.attester-delay", time.Second)
 	viper.SetDefault("multiinstance.static-delay.proposer-delay", 2*time.Second)

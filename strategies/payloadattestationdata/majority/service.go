@@ -75,33 +75,42 @@ func (s *Service) PayloadAttestationData(ctx context.Context, opts *api.PayloadA
 	defer cancel()
 
 	started := time.Now()
-	buckets, err := s.payloadAttestationDataBuckets(ctx, opts, started)
-	if err != nil {
-		return nil, err
-	}
-	return s.selectPayloadAttestationData(started, buckets)
+	buckets := s.payloadAttestationDataBuckets(ctx, opts, started)
+
+	return s.selectPayloadAttestationData(ctx, started, buckets)
 }
 
-func (s *Service) payloadAttestationDataBuckets(ctx context.Context, opts *api.PayloadAttestationDataOpts, started time.Time) (map[payloadAttestationDataKey][]payloadAttestationDataResult, error) {
+func (s *Service) payloadAttestationDataBuckets(ctx context.Context, opts *api.PayloadAttestationDataOpts, started time.Time) map[payloadAttestationDataKey][]payloadAttestationDataResult {
 	results := s.issuePayloadAttestationDataRequests(ctx, opts, started)
 	buckets := make(map[payloadAttestationDataKey][]payloadAttestationDataResult)
 	requiredCount := max(len(s.payloadAttestationDataProviders)/2+1, s.threshold)
 	largestCount := 0
+	bucket := func(result payloadAttestationDataResult) {
+		if key, ok := s.payloadAttestationDataKey(opts, result); ok {
+			buckets[key] = append(buckets[key], result)
+			largestCount = max(largestCount, len(buckets[key]))
+		}
+	}
 	for range s.payloadAttestationDataProviders {
 		if largestCount >= requiredCount {
 			break
 		}
 		select {
 		case <-ctx.Done():
-			return nil, errors.Wrap(ctx.Err(), "failed to obtain payload attestation data")
-		case result := <-results:
-			if key, ok := s.payloadAttestationDataKey(opts, result); ok {
-				buckets[key] = append(buckets[key], result)
-				largestCount = max(largestCount, len(buckets[key]))
+			// Deadline reached; consider the outstanding providers timed out and
+			// proceed with the responses that did arrive.
+			for len(results) > 0 {
+				bucket(<-results)
 			}
+			s.log.Debug().Int("buckets", len(buckets)).Msg("Timed out awaiting payload attestation data")
+
+			return buckets
+		case result := <-results:
+			bucket(result)
 		}
 	}
-	return buckets, nil
+
+	return buckets
 }
 
 func (s *Service) issuePayloadAttestationDataRequests(ctx context.Context, opts *api.PayloadAttestationDataOpts, started time.Time) <-chan payloadAttestationDataResult {
@@ -134,9 +143,13 @@ func (s *Service) payloadAttestationDataKey(opts *api.PayloadAttestationDataOpts
 	}, true
 }
 
-func (s *Service) selectPayloadAttestationData(started time.Time, buckets map[payloadAttestationDataKey][]payloadAttestationDataResult) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+func (s *Service) selectPayloadAttestationData(ctx context.Context, started time.Time, buckets map[payloadAttestationDataKey][]payloadAttestationDataResult) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
 	leading, count := leadingPayloadAttestationDataBuckets(buckets)
 	if count == 0 {
+		if ctx.Err() != nil {
+			return nil, errors.Wrap(ctx.Err(), "failed to obtain payload attestation data")
+		}
+
 		return nil, errors.New("no valid payload attestation data received")
 	}
 	if count < s.threshold {
