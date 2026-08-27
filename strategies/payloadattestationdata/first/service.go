@@ -34,6 +34,12 @@ type Service struct {
 	timeout                         time.Duration
 }
 
+type payloadAttestationDataResult struct {
+	provider string
+	response *api.Response[*spec.VersionedPayloadAttestationData]
+	err      error
+}
+
 // New creates a payload attestation data strategy.
 func New(_ context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
@@ -58,40 +64,62 @@ func (s *Service) PayloadAttestationData(ctx context.Context, opts *api.PayloadA
 	defer cancel()
 
 	started := time.Now()
-	type result struct {
-		provider string
-		response *api.Response[*spec.VersionedPayloadAttestationData]
-		err      error
-	}
-	results := make(chan result, len(s.payloadAttestationDataProviders))
-	for name, provider := range s.payloadAttestationDataProviders {
-		go func(providerName string, provider eth2client.PayloadAttestationDataProvider) {
-			response, err := provider.PayloadAttestationData(ctx, opts)
-			s.clientMonitor.ClientOperation(providerName, "payload attestation data", err == nil, time.Since(started))
-			results <- result{provider: providerName, response: response, err: err}
-		}(name, provider)
-	}
+	results := s.issuePayloadAttestationDataRequests(ctx, opts, started)
 
 	for range s.payloadAttestationDataProviders {
 		select {
 		case <-ctx.Done():
+			// Deadline reached; prefer a response that already arrived over the expired context.
+			for len(results) > 0 {
+				if response := s.selectedPayloadAttestationData(opts, <-results, started); response != nil {
+					return response, nil
+				}
+			}
+
 			return nil, errors.Wrap(ctx.Err(), "failed to obtain payload attestation data")
 		case result := <-results:
-			if result.err != nil {
-				s.log.Debug().Err(result.err).Str("provider", result.provider).Msg("Failed to obtain payload attestation data")
-				continue
+			if response := s.selectedPayloadAttestationData(opts, result, started); response != nil {
+				return response, nil
 			}
-			if result.response == nil || result.response.Data == nil || result.response.Data.Version != spec.DataVersionGloas || result.response.Data.Gloas == nil || result.response.Data.Gloas.Slot != opts.Slot {
-				s.log.Debug().Str("provider", result.provider).Msg("Received invalid payload attestation data")
-				continue
-			}
-			s.clientMonitor.StrategyOperation("first", result.provider, "payload attestation data", time.Since(started))
-			return &api.Response[*spec.VersionedPayloadAttestationData]{
-				Data:     result.response.Data,
-				Metadata: make(map[string]any),
-			}, nil
 		}
 	}
 
+	if ctx.Err() != nil {
+		return nil, errors.Wrap(ctx.Err(), "failed to obtain payload attestation data")
+	}
+
 	return nil, errors.New("no valid payload attestation data received")
+}
+
+func (s *Service) issuePayloadAttestationDataRequests(ctx context.Context, opts *api.PayloadAttestationDataOpts, started time.Time) <-chan payloadAttestationDataResult {
+	results := make(chan payloadAttestationDataResult, len(s.payloadAttestationDataProviders))
+	for name, provider := range s.payloadAttestationDataProviders {
+		go func(providerName string, provider eth2client.PayloadAttestationDataProvider) {
+			response, err := provider.PayloadAttestationData(ctx, opts)
+			s.clientMonitor.ClientOperation(providerName, "payload attestation data", err == nil, time.Since(started))
+			results <- payloadAttestationDataResult{provider: providerName, response: response, err: err}
+		}(name, provider)
+	}
+
+	return results
+}
+
+// selectedPayloadAttestationData returns the response if the result is valid for the request, otherwise nil.
+func (s *Service) selectedPayloadAttestationData(opts *api.PayloadAttestationDataOpts, result payloadAttestationDataResult, started time.Time) *api.Response[*spec.VersionedPayloadAttestationData] {
+	if result.err != nil {
+		s.log.Debug().Err(result.err).Str("provider", result.provider).Msg("Failed to obtain payload attestation data")
+
+		return nil
+	}
+	if result.response == nil || result.response.Data == nil || result.response.Data.Version != spec.DataVersionGloas || result.response.Data.Gloas == nil || result.response.Data.Gloas.Slot != opts.Slot {
+		s.log.Debug().Str("provider", result.provider).Msg("Received invalid payload attestation data")
+
+		return nil
+	}
+	s.clientMonitor.StrategyOperation("first", result.provider, "payload attestation data", time.Since(started))
+
+	return &api.Response[*spec.VersionedPayloadAttestationData]{
+		Data:     result.response.Data,
+		Metadata: make(map[string]any),
+	}
 }
