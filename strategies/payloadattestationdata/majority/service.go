@@ -75,74 +75,96 @@ func (s *Service) PayloadAttestationData(ctx context.Context, opts *api.PayloadA
 	defer cancel()
 
 	started := time.Now()
-	results := make(chan payloadAttestationDataResult, len(s.payloadAttestationDataProviders))
-	for name, provider := range s.payloadAttestationDataProviders {
-		go func() {
-			response, err := provider.PayloadAttestationData(ctx, opts)
-			s.clientMonitor.ClientOperation(name, "payload attestation data", err == nil, time.Since(started))
-			results <- payloadAttestationDataResult{provider: name, response: response, err: err}
-		}()
+	buckets, err := s.payloadAttestationDataBuckets(ctx, opts, started)
+	if err != nil {
+		return nil, err
 	}
+	return s.selectPayloadAttestationData(started, buckets)
+}
 
+func (s *Service) payloadAttestationDataBuckets(ctx context.Context, opts *api.PayloadAttestationDataOpts, started time.Time) (map[payloadAttestationDataKey][]payloadAttestationDataResult, error) {
+	results := s.issuePayloadAttestationDataRequests(ctx, opts, started)
 	buckets := make(map[payloadAttestationDataKey][]payloadAttestationDataResult)
-	requests := len(s.payloadAttestationDataProviders)
-	strictMajority := requests/2 + 1
-	requiredCount := max(strictMajority, s.threshold)
+	requiredCount := max(len(s.payloadAttestationDataProviders)/2+1, s.threshold)
 	largestCount := 0
-	completed := 0
-	for completed < requests && largestCount < requiredCount {
+	for range s.payloadAttestationDataProviders {
+		if largestCount >= requiredCount {
+			break
+		}
 		select {
 		case <-ctx.Done():
-			completed = requests
+			return nil, errors.Wrap(ctx.Err(), "failed to obtain payload attestation data")
 		case result := <-results:
-			completed++
-			if result.err != nil {
-				s.log.Debug().Err(result.err).Str("provider", result.provider).Msg("Failed to obtain payload attestation data")
-				continue
-			}
-			if result.response == nil || result.response.Data == nil || result.response.Data.Version != spec.DataVersionGloas || result.response.Data.Gloas == nil || result.response.Data.Gloas.Slot != opts.Slot {
-				s.log.Debug().Str("provider", result.provider).Msg("Received invalid payload attestation data")
-				continue
-			}
-			key := payloadAttestationDataKey{
-				version:           result.response.Data.Version,
-				beaconBlockRoot:   result.response.Data.Gloas.BeaconBlockRoot,
-				slot:              result.response.Data.Gloas.Slot,
-				payloadPresent:    result.response.Data.Gloas.PayloadPresent,
-				blobDataAvailable: result.response.Data.Gloas.BlobDataAvailable,
-			}
-			buckets[key] = append(buckets[key], result)
-			if len(buckets[key]) > largestCount {
-				largestCount = len(buckets[key])
+			if key, ok := s.payloadAttestationDataKey(opts, result); ok {
+				buckets[key] = append(buckets[key], result)
+				largestCount = max(largestCount, len(buckets[key]))
 			}
 		}
 	}
+	return buckets, nil
+}
 
-	if ctx.Err() != nil {
-		return nil, errors.Wrap(ctx.Err(), "failed to obtain payload attestation data")
+func (s *Service) issuePayloadAttestationDataRequests(ctx context.Context, opts *api.PayloadAttestationDataOpts, started time.Time) <-chan payloadAttestationDataResult {
+	results := make(chan payloadAttestationDataResult, len(s.payloadAttestationDataProviders))
+	for name, provider := range s.payloadAttestationDataProviders {
+		go func(providerName string, provider eth2client.PayloadAttestationDataProvider) {
+			response, err := provider.PayloadAttestationData(ctx, opts)
+			s.clientMonitor.ClientOperation(providerName, "payload attestation data", err == nil, time.Since(started))
+			results <- payloadAttestationDataResult{provider: providerName, response: response, err: err}
+		}(name, provider)
 	}
-	if len(buckets) == 0 {
+	return results
+}
+
+func (s *Service) payloadAttestationDataKey(opts *api.PayloadAttestationDataOpts, result payloadAttestationDataResult) (payloadAttestationDataKey, bool) {
+	if result.err != nil {
+		s.log.Debug().Err(result.err).Str("provider", result.provider).Msg("Failed to obtain payload attestation data")
+		return payloadAttestationDataKey{}, false
+	}
+	if result.response == nil || result.response.Data == nil || result.response.Data.Version != spec.DataVersionGloas || result.response.Data.Gloas == nil || result.response.Data.Gloas.Slot != opts.Slot {
+		s.log.Debug().Str("provider", result.provider).Msg("Received invalid payload attestation data")
+		return payloadAttestationDataKey{}, false
+	}
+	return payloadAttestationDataKey{
+		version:           result.response.Data.Version,
+		beaconBlockRoot:   result.response.Data.Gloas.BeaconBlockRoot,
+		slot:              result.response.Data.Gloas.Slot,
+		payloadPresent:    result.response.Data.Gloas.PayloadPresent,
+		blobDataAvailable: result.response.Data.Gloas.BlobDataAvailable,
+	}, true
+}
+
+func (s *Service) selectPayloadAttestationData(started time.Time, buckets map[payloadAttestationDataKey][]payloadAttestationDataResult) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+	leading, count := leadingPayloadAttestationDataBuckets(buckets)
+	if count == 0 {
 		return nil, errors.New("no valid payload attestation data received")
 	}
-
-	leading := make([]payloadAttestationDataKey, 0, 2)
-	for key, responses := range buckets {
-		switch {
-		case len(responses) > largestCount:
-			largestCount = len(responses)
-			leading = append(leading[:0], key)
-		case len(responses) == largestCount:
-			leading = append(leading, key)
-		}
-	}
-	if largestCount < s.threshold {
-		s.log.Debug().Int("count", largestCount).Int("threshold", s.threshold).Msg("Insufficient payload attestation data agreement")
-		return nil, errors.Errorf("payload attestation data count of %d lower than threshold %d", largestCount, s.threshold)
+	if count < s.threshold {
+		s.log.Debug().Int("count", count).Int("threshold", s.threshold).Msg("Insufficient payload attestation data agreement")
+		return nil, errors.Errorf("payload attestation data count of %d lower than threshold %d", count, s.threshold)
 	}
 	if len(leading) == 1 {
 		return s.selectedPayloadAttestationData(started, buckets[leading[0]]), nil
 	}
+	return s.resolvePayloadAttestationDataTie(started, leading, buckets)
+}
 
+func leadingPayloadAttestationDataBuckets(buckets map[payloadAttestationDataKey][]payloadAttestationDataResult) ([]payloadAttestationDataKey, int) {
+	leading := make([]payloadAttestationDataKey, 0, 2)
+	count := 0
+	for key, responses := range buckets {
+		switch {
+		case len(responses) > count:
+			count = len(responses)
+			leading = append(leading[:0], key)
+		case len(responses) == count:
+			leading = append(leading, key)
+		}
+	}
+	return leading, count
+}
+
+func (s *Service) resolvePayloadAttestationDataTie(started time.Time, leading []payloadAttestationDataKey, buckets map[payloadAttestationDataKey][]payloadAttestationDataResult) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
 	first := leading[0]
 	for _, key := range leading[1:] {
 		if key.version != first.version || key.slot != first.slot || key.beaconBlockRoot != first.beaconBlockRoot {
