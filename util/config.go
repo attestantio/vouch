@@ -1,4 +1,4 @@
-// Copyright © 2024 Attestant Limited.
+// Copyright © 2024 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -74,6 +74,13 @@ func BeaconNodeAddressesForProposing() []string {
 		BeaconNodeAddressesForBeaconBlockProposal(),
 		beaconNodeAddressesForBlindedBeaconBlockProposal(),
 	)
+}
+
+// BeaconNodeAddressesForPayloadAttestationData obtains the beacon node addresses used for
+// payload attestation data from the configuration.
+// This follows the hierarchical address configuration, and removes duplicates.
+func BeaconNodeAddressesForPayloadAttestationData() []string {
+	return uniqueSortedAddresses(BeaconNodeAddresses("strategies.payloadattestationdata"))
 }
 
 // BeaconNodeAddressesForAttestationData obtains the beacon node addresses used for

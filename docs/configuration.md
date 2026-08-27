@@ -218,6 +218,12 @@ strategies:
       deadline: '1s'
       # bid-gap is the gap between receiving a response from a relay and querying it again.
       bid-gap: '100ms'
+  # The payloadattestationdata strategy obtains payload attestation data for payload timeliness committee duties.
+  # It uses a single multiclient; there is no style to select.
+  payloadattestationdata:
+    # beacon-node-addresses are the addresses from which to receive payload attestation data, falling back to the
+    # top-level beacon-node-addresses if not set.
+    beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
   # The signedbeaconblock strategy obtains the signed beacon blocks from multiple beacon nodes.
   signedbeaconblock:
     # style can be 'first'. If not defined, the 'first' style will be used.
