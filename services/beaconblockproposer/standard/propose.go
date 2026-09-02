@@ -58,6 +58,10 @@ func (s *Service) Propose(ctx context.Context, duty *beaconblockproposer.Duty) e
 
 		return err
 	}
+
+	// Pre-warming runs concurrently with the work below, so that the beacon nodes have
+	// carried out their per-slot block production work before they are asked for a block.
+	go s.prewarm(ctx, duty)
 	span.SetAttributes(attribute.Int64("slot", util.SlotToInt64(slot)))
 	log := s.log.With().Uint64("proposing_slot", uint64(slot)).Uint64("validator_index", uint64(duty.ValidatorIndex())).Logger()
 	log.Trace().Msg("Proposing")

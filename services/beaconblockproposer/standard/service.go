@@ -16,6 +16,7 @@ package standard
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
@@ -51,6 +52,8 @@ type Service struct {
 	blobSidecarSigner          signer.BlobSidecarSigner
 	unblindFromAllRelays       bool
 	builderBoostFactor         uint64
+	prewarmAddresses           []string
+	prewarmClient              *http.Client
 }
 
 // New creates a new beacon block proposer.
@@ -84,6 +87,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		blobSidecarSigner:          parameters.blobSidecarSigner,
 		unblindFromAllRelays:       parameters.unblindFromAllRelays,
 		builderBoostFactor:         parameters.builderBoostFactor,
+		prewarmAddresses:           parameters.prewarmAddresses,
+		prewarmClient:              &http.Client{Timeout: prewarmTimeout},
 	}
 
 	return s, nil

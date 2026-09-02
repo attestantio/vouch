@@ -43,6 +43,7 @@ type parameters struct {
 	blobSidecarSigner          signer.BlobSidecarSigner
 	unblindFromAllRelays       bool
 	builderBoostFactor         uint64
+	prewarmAddresses           []string
 }
 
 // Parameter is the interface for service parameters.
@@ -151,6 +152,14 @@ func WithUnblindFromAllRelays(unblindFromAll bool) Parameter {
 func WithBuilderBoostFactor(factor uint64) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.builderBoostFactor = factor
+	})
+}
+
+// WithPrewarmAddresses sets the addresses of the beacon nodes to pre-warm at the start of
+// a proposal slot.  If empty, pre-warming is disabled.
+func WithPrewarmAddresses(addresses []string) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.prewarmAddresses = addresses
 	})
 }
 
