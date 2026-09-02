@@ -27,12 +27,14 @@ import (
 	"github.com/attestantio/vouch/services/attester"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/beaconcommitteesubscriber"
+	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/multiinstance"
 	"github.com/attestantio/vouch/services/payloadattester"
 	"github.com/attestantio/vouch/services/proposalpreparer"
+	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/attestantio/vouch/services/scheduler"
 	"github.com/attestantio/vouch/services/synccommitteeaggregator"
 	"github.com/attestantio/vouch/services/synccommitteemessenger"
@@ -55,6 +57,7 @@ type Service struct {
 	log                          zerolog.Logger
 	monitor                      metrics.Service
 	chainTimeService             chaintime.Service
+	executionConfigProvider      blockrelay.ExecutionConfigProvider
 	proposerDutiesProvider       eth2client.ProposerDutiesProvider
 	attesterDutiesProvider       eth2client.AttesterDutiesProvider
 	syncCommitteeDutiesProvider  eth2client.SyncCommitteeDutiesProvider
@@ -74,6 +77,7 @@ type Service struct {
 	syncCommitteesSubscriber     synccommitteesubscriber.Service
 	payloadAttester              payloadattester.Service
 	beaconBlockProposer          beaconblockproposer.Service
+	proposerPreferences          proposerpreferences.Service
 	attestationAggregator        attestationaggregator.Service
 	beaconCommitteeSubscriber    beaconcommitteesubscriber.Service
 	activeValidators             int
@@ -90,23 +94,29 @@ type Service struct {
 	fastTrackGrace               time.Duration
 	multiInstance                multiinstance.Service
 	// Hard fork control.
-	handlingAltair     bool
-	altairForkEpoch    phase0.Epoch
-	handlingBellatrix  bool
-	bellatrixForkEpoch phase0.Epoch
-	capellaForkEpoch   phase0.Epoch
-	handlingElectra    bool
-	electraForkEpoch   phase0.Epoch
-	gloasForkEpoch     phase0.Epoch
+	handlingAltair               bool
+	altairForkEpoch              phase0.Epoch
+	handlingBellatrix            bool
+	bellatrixForkEpoch           phase0.Epoch
+	capellaForkEpoch             phase0.Epoch
+	handlingElectra              bool
+	electraForkEpoch             phase0.Epoch
+	gloasForkEpoch               phase0.Epoch
+	proposerPreferencesLookahead uint64
 	// Tracking for reorgs.
 	lastBlockRoot             phase0.Root
 	lastBlockEpoch            phase0.Epoch
 	currentDutyDependentRoot  phase0.Root
 	previousDutyDependentRoot phase0.Root
 	// Tracking for attestations.
-	pendingAttestations      map[phase0.Slot]bool
-	subscriptionInfosMutex   sync.Mutex
-	pendingAttestationsMutex sync.RWMutex
+	pendingAttestations                   map[phase0.Slot]bool
+	proposerPreferencesDependentRoots     map[phase0.Epoch]phase0.Root
+	proposerPreferencesPublicationRunning bool
+	proposerPreferencesPublicationPending bool
+	subscriptionInfosMutex                sync.Mutex
+	proposerPreferencesDependentRootMutex sync.RWMutex
+	proposerPreferencesPublicationMutex   sync.Mutex
+	pendingAttestationsMutex              sync.RWMutex
 }
 
 // New creates a new controller.
@@ -125,7 +135,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if err := registerMetrics(ctx, parameters.monitor); err != nil {
 		return nil, errors.New("failed to register metrics")
 	}
-	slotDuration, slotsPerEpoch, epochsPerSyncCommitteePeriod, err := obtainSpecValues(ctx, parameters.specProvider)
+	slotDuration, slotsPerEpoch, epochsPerSyncCommitteePeriod, proposerPreferencesLookahead, err := obtainSpecValues(ctx, parameters.specProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -137,50 +147,54 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	gloasForkEpoch := gloasDetails(ctx, log, parameters.chainTimeService)
 
 	s := &Service{
-		log:                          log,
-		monitor:                      parameters.monitor,
-		slotDuration:                 slotDuration,
-		slotsPerEpoch:                slotsPerEpoch,
-		epochsPerSyncCommitteePeriod: epochsPerSyncCommitteePeriod,
-		chainTimeService:             parameters.chainTimeService,
-		proposerDutiesProvider:       parameters.proposerDutiesProvider,
-		attesterDutiesProvider:       parameters.attesterDutiesProvider,
-		syncCommitteeDutiesProvider:  parameters.syncCommitteeDutiesProvider,
-		syncCommitteesSubscriber:     parameters.syncCommitteesSubscriber,
-		validatingAccountsProvider:   parameters.validatingAccountsProvider,
-		proposalsPreparer:            parameters.proposalsPreparer,
-		scheduler:                    parameters.scheduler,
-		attester:                     parameters.attester,
-		ptcDutiesProvider:            parameters.ptcDutiesProvider,
-		payloadAttester:              parameters.payloadAttester,
-		syncCommitteeMessenger:       parameters.syncCommitteeMessenger,
-		syncCommitteeAggregator:      parameters.syncCommitteeAggregator,
-		beaconBlockProposer:          parameters.beaconBlockProposer,
-		beaconBlockHeadersProvider:   parameters.beaconBlockHeadersProvider,
-		signedBeaconBlockProvider:    parameters.signedBeaconBlockProvider,
-		attestationAggregator:        parameters.attestationAggregator,
-		beaconCommitteeSubscriber:    parameters.beaconCommitteeSubscriber,
-		accountsRefresher:            parameters.accountsRefresher,
-		blockToSlotSetter:            parameters.blockToSlotSetter,
-		maxProposalDelay:             parameters.maxProposalDelay,
-		payloadAttestationDelay:      parameters.payloadAttestationDelay,
-		preGloasTimings:              parameters.preGloasTimings,
-		gloasTimings:                 parameters.gloasTimings,
-		verifySyncCommitteeInclusion: parameters.verifySyncCommitteeInclusion,
-		fastTrackAttestations:        parameters.fastTrackAttestations,
-		fastTrackSyncCommittees:      parameters.fastTrackSyncCommittees,
-		fastTrackGrace:               parameters.fastTrackGrace,
-		multiInstance:                parameters.multiInstance,
-		subscriptionInfos:            make(map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
-		handlingAltair:               handlingAltair,
-		altairForkEpoch:              altairForkEpoch,
-		handlingBellatrix:            handlingBellatrix,
-		bellatrixForkEpoch:           bellatrixForkEpoch,
-		capellaForkEpoch:             capellaForkEpoch,
-		handlingElectra:              handlingElectra,
-		electraForkEpoch:             electraForkEpoch,
-		gloasForkEpoch:               gloasForkEpoch,
-		pendingAttestations:          make(map[phase0.Slot]bool),
+		log:                               log,
+		monitor:                           parameters.monitor,
+		slotDuration:                      slotDuration,
+		slotsPerEpoch:                     slotsPerEpoch,
+		epochsPerSyncCommitteePeriod:      epochsPerSyncCommitteePeriod,
+		chainTimeService:                  parameters.chainTimeService,
+		proposerDutiesProvider:            parameters.proposerDutiesProvider,
+		attesterDutiesProvider:            parameters.attesterDutiesProvider,
+		syncCommitteeDutiesProvider:       parameters.syncCommitteeDutiesProvider,
+		syncCommitteesSubscriber:          parameters.syncCommitteesSubscriber,
+		validatingAccountsProvider:        parameters.validatingAccountsProvider,
+		proposalsPreparer:                 parameters.proposalsPreparer,
+		scheduler:                         parameters.scheduler,
+		attester:                          parameters.attester,
+		ptcDutiesProvider:                 parameters.ptcDutiesProvider,
+		payloadAttester:                   parameters.payloadAttester,
+		syncCommitteeMessenger:            parameters.syncCommitteeMessenger,
+		syncCommitteeAggregator:           parameters.syncCommitteeAggregator,
+		beaconBlockProposer:               parameters.beaconBlockProposer,
+		proposerPreferences:               parameters.proposerPreferences,
+		executionConfigProvider:           parameters.executionConfigProvider,
+		beaconBlockHeadersProvider:        parameters.beaconBlockHeadersProvider,
+		signedBeaconBlockProvider:         parameters.signedBeaconBlockProvider,
+		attestationAggregator:             parameters.attestationAggregator,
+		beaconCommitteeSubscriber:         parameters.beaconCommitteeSubscriber,
+		accountsRefresher:                 parameters.accountsRefresher,
+		blockToSlotSetter:                 parameters.blockToSlotSetter,
+		maxProposalDelay:                  parameters.maxProposalDelay,
+		payloadAttestationDelay:           parameters.payloadAttestationDelay,
+		preGloasTimings:                   parameters.preGloasTimings,
+		gloasTimings:                      parameters.gloasTimings,
+		verifySyncCommitteeInclusion:      parameters.verifySyncCommitteeInclusion,
+		fastTrackAttestations:             parameters.fastTrackAttestations,
+		fastTrackSyncCommittees:           parameters.fastTrackSyncCommittees,
+		fastTrackGrace:                    parameters.fastTrackGrace,
+		multiInstance:                     parameters.multiInstance,
+		subscriptionInfos:                 make(map[phase0.Epoch]map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription),
+		handlingAltair:                    handlingAltair,
+		altairForkEpoch:                   altairForkEpoch,
+		handlingBellatrix:                 handlingBellatrix,
+		bellatrixForkEpoch:                bellatrixForkEpoch,
+		capellaForkEpoch:                  capellaForkEpoch,
+		handlingElectra:                   handlingElectra,
+		electraForkEpoch:                  electraForkEpoch,
+		gloasForkEpoch:                    gloasForkEpoch,
+		proposerPreferencesLookahead:      proposerPreferencesLookahead,
+		pendingAttestations:               make(map[phase0.Slot]bool),
+		proposerPreferencesDependentRoots: make(map[phase0.Epoch]phase0.Root),
 	}
 
 	// Subscribe to head events.  This allows us to go early for attestations if a block arrives, as well as
@@ -589,42 +603,52 @@ func obtainSpecValues(ctx context.Context,
 	time.Duration,
 	uint64,
 	uint64,
+	uint64,
 	error,
 ) {
 	specResponse, err := specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
-		return 0, 0, 0, errors.Wrap(err, "failed to obtain spec")
+		return 0, 0, 0, 0, errors.Wrap(err, "failed to obtain spec")
 	}
 	spec := specResponse.Data
 
 	tmp, exists := spec["SECONDS_PER_SLOT"]
 	if !exists {
-		return 0, 0, 0, errors.New("SECONDS_PER_SLOT not found in spec")
+		return 0, 0, 0, 0, errors.New("SECONDS_PER_SLOT not found in spec")
 	}
 	slotDuration, ok := tmp.(time.Duration)
 	if !ok {
-		return 0, 0, 0, errors.New("SECONDS_PER_SLOT of unexpected type")
+		return 0, 0, 0, 0, errors.New("SECONDS_PER_SLOT of unexpected type")
 	}
 
 	tmp, exists = spec["SLOTS_PER_EPOCH"]
 	if !exists {
-		return 0, 0, 0, errors.New("SLOTS_PER_EPOCH not found in spec")
+		return 0, 0, 0, 0, errors.New("SLOTS_PER_EPOCH not found in spec")
 	}
 	slotsPerEpoch, ok := tmp.(uint64)
 	if !ok {
-		return 0, 0, 0, errors.New("SLOTS_PER_EPOCH of unexpected type")
+		return 0, 0, 0, 0, errors.New("SLOTS_PER_EPOCH of unexpected type")
 	}
 
 	var epochsPerSyncCommitteePeriod uint64
 	if tmp, exists := spec["EPOCHS_PER_SYNC_COMMITTEE_PERIOD"]; exists {
 		tmp2, ok := tmp.(uint64)
 		if !ok {
-			return 0, 0, 0, errors.New("EPOCHS_PER_SYNC_COMMITTEE_PERIOD of unexpected type")
+			return 0, 0, 0, 0, errors.New("EPOCHS_PER_SYNC_COMMITTEE_PERIOD of unexpected type")
 		}
 		epochsPerSyncCommitteePeriod = tmp2
 	}
 
-	return slotDuration, slotsPerEpoch, epochsPerSyncCommitteePeriod, nil
+	var proposerPreferencesLookahead uint64
+	if tmp, exists := spec["MIN_SEED_LOOKAHEAD"]; exists {
+		var ok bool
+		proposerPreferencesLookahead, ok = tmp.(uint64)
+		if !ok {
+			return 0, 0, 0, 0, errors.New("MIN_SEED_LOOKAHEAD of unexpected type")
+		}
+	}
+
+	return slotDuration, slotsPerEpoch, epochsPerSyncCommitteePeriod, proposerPreferencesLookahead, nil
 }
 
 func capellaDetails(ctx context.Context, log zerolog.Logger, specProvider eth2client.SpecProvider) phase0.Epoch {

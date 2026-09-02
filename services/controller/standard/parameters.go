@@ -24,12 +24,14 @@ import (
 	"github.com/attestantio/vouch/services/attester"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/beaconcommitteesubscriber"
+	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/multiinstance"
 	"github.com/attestantio/vouch/services/payloadattester"
 	"github.com/attestantio/vouch/services/proposalpreparer"
+	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/attestantio/vouch/services/scheduler"
 	"github.com/attestantio/vouch/services/synccommitteeaggregator"
 	"github.com/attestantio/vouch/services/synccommitteemessenger"
@@ -42,6 +44,7 @@ type parameters struct {
 	monitor                       metrics.Service
 	specProvider                  eth2client.SpecProvider
 	chainTimeService              chaintime.Service
+	executionConfigProvider       blockrelay.ExecutionConfigProvider
 	proposerDutiesProvider        eth2client.ProposerDutiesProvider
 	attesterDutiesProvider        eth2client.AttesterDutiesProvider
 	syncCommitteeDutiesProvider   eth2client.SyncCommitteeDutiesProvider
@@ -60,6 +63,7 @@ type parameters struct {
 	syncCommitteeAggregator       synccommitteeaggregator.Service
 	payloadAttester               payloadattester.Service
 	beaconBlockProposer           beaconblockproposer.Service
+	proposerPreferences           proposerpreferences.Service
 	attestationAggregator         attestationaggregator.Service
 	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
 	accountsRefresher             accountmanager.Refresher
@@ -220,6 +224,20 @@ func WithSignedBeaconBlockProvider(provider eth2client.SignedBeaconBlockProvider
 func WithBeaconBlockProposer(proposer beaconblockproposer.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.beaconBlockProposer = proposer
+	})
+}
+
+// WithProposerPreferences sets the proposer preferences publisher.
+func WithProposerPreferences(preferences proposerpreferences.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.proposerPreferences = preferences
+	})
+}
+
+// WithExecutionConfigProvider sets the execution configuration provider.
+func WithExecutionConfigProvider(provider blockrelay.ExecutionConfigProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.executionConfigProvider = provider
 	})
 }
 
