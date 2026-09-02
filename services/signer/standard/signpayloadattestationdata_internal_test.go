@@ -23,6 +23,7 @@ import (
 	"github.com/attestantio/vouch/mock"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/testing/logger"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -53,6 +54,24 @@ func TestSignPayloadAttestationDataUsesGenericMulti(t *testing.T) {
 	require.NotEqual(t, phase0.BLSSignature{}, sigs[0])
 	require.NotEqual(t, phase0.BLSSignature{}, sigs[1])
 	require.Len(t, batches, 1)
+}
+
+func TestSignProposerPreferencesSignsForProposalEpoch(t *testing.T) {
+	ctx := context.Background()
+	service, err := New(ctx,
+		WithLogLevel(zerolog.Disabled),
+		WithMonitor(nullmetrics.New()),
+		WithClientMonitor(nullmetrics.New()),
+		WithSpecProvider(&ptcSpecProvider{}),
+		WithDomainProvider(mock.NewDomainProvider()),
+	)
+	require.NoError(t, err)
+
+	account := &mockSignerAccount{id: uuid.New(), name: "one", pubKey: &mockPublicKey{data: []byte("one")}}
+	signature, err := service.SignProposerPreferences(ctx, account, &gloas.ProposerPreferences{ProposalSlot: 33})
+	require.NoError(t, err)
+	require.NotEqual(t, phase0.BLSSignature{}, signature)
+	require.Equal(t, 1, account.signCount)
 }
 
 func TestNewWarnsWhenPTCAttesterDomainUnavailable(t *testing.T) {
@@ -93,12 +112,13 @@ type ptcSpecProvider struct{}
 
 func (*ptcSpecProvider) Spec(_ context.Context, _ *api.SpecOpts) (*api.Response[map[string]any], error) {
 	return &api.Response[map[string]any]{Data: map[string]any{
-		"SLOTS_PER_EPOCH":            uint64(32),
-		"DOMAIN_BEACON_ATTESTER":     phase0.DomainType{0x01},
-		"DOMAIN_BEACON_PROPOSER":     phase0.DomainType{0x02},
-		"DOMAIN_RANDAO":              phase0.DomainType{0x03},
-		"DOMAIN_SELECTION_PROOF":     phase0.DomainType{0x04},
-		"DOMAIN_AGGREGATE_AND_PROOF": phase0.DomainType{0x05},
-		"DOMAIN_PTC_ATTESTER":        phase0.DomainType{0x0c},
+		"SLOTS_PER_EPOCH":             uint64(32),
+		"DOMAIN_BEACON_ATTESTER":      phase0.DomainType{0x01},
+		"DOMAIN_BEACON_PROPOSER":      phase0.DomainType{0x02},
+		"DOMAIN_RANDAO":               phase0.DomainType{0x03},
+		"DOMAIN_SELECTION_PROOF":      phase0.DomainType{0x04},
+		"DOMAIN_AGGREGATE_AND_PROOF":  phase0.DomainType{0x05},
+		"DOMAIN_PTC_ATTESTER":         phase0.DomainType{0x0c},
+		"DOMAIN_PROPOSER_PREFERENCES": phase0.DomainType{0x0d},
 	}}, nil
 }

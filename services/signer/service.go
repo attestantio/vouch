@@ -27,6 +27,17 @@ import (
 // Service is the generic signer service.
 type Service interface{}
 
+// ProposerPreferencesSigner provides methods to sign proposer preferences.
+type ProposerPreferencesSigner interface {
+	SignProposerPreferences(ctx context.Context,
+		account e2wtypes.Account,
+		preferences *gloas.ProposerPreferences,
+	) (
+		phase0.BLSSignature,
+		error,
+	)
+}
+
 // PayloadAttestationDataSigner provides methods to sign payload attestation data.
 type PayloadAttestationDataSigner interface {
 	SignPayloadAttestationData(ctx context.Context,
