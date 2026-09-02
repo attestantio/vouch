@@ -136,6 +136,7 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 
 	return &beaconblockproposer.ProposerConfig{
 		FeeRecipient: proposerConfig.FeeRecipient,
+		GasLimit:     proposerConfig.GasLimit,
 		Relays:       relays,
 	}, nil
 }
