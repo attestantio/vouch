@@ -94,7 +94,7 @@ func (s *Service) prewarmNode(ctx context.Context, address string, duty *beaconb
 		duty.RANDAOReveal().String(),
 	)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		log.Debug().Err(err).Msg("Failed to create pre-warm request")
 
