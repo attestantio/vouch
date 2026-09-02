@@ -7,7 +7,7 @@ require (
 	github.com/attestantio/go-block-relay v0.6.0
 	github.com/attestantio/go-builder-client v0.8.0
 	github.com/attestantio/go-certmanager v0.2.0
-	github.com/attestantio/go-eth2-client v0.29.1-0.20260817140745-1263dc7060ea
+	github.com/attestantio/go-eth2-client v0.29.1-0.20260821085032-826788087ec1
 	github.com/aws/aws-sdk-go v1.55.6
 	github.com/google/uuid v1.6.0
 	github.com/holiman/uint256 v1.3.2
