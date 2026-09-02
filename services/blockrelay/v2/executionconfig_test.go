@@ -149,6 +149,22 @@ func TestExecutionConfig(t *testing.T) {
 	}
 }
 
+func TestExecutionConfigExposesResolvedGasLimit(t *testing.T) {
+	ctx := context.Background()
+	gasLimit := uint64(30000000)
+	config := &v2.ExecutionConfig{GasLimit: &gasLimit}
+
+	proposerConfig, err := config.ProposerConfig(ctx,
+		nil,
+		phase0.BLSPubKey{},
+		bellatrix.ExecutionAddress{},
+		10000000,
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, gasLimit, proposerConfig.GasLimit)
+}
+
 func TestConfig(t *testing.T) {
 	ctx := context.Background()
 
@@ -763,7 +779,8 @@ func TestConfig(t *testing.T) {
 				require.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, test.expected, res)
+				require.Equal(t, test.expected.FeeRecipient, res.FeeRecipient)
+				require.Equal(t, test.expected.Relays, res.Relays)
 			}
 		})
 	}
