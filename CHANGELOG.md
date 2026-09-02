@@ -1,3 +1,6 @@
+1.13.2:
+  - optionally pre-warm beacon nodes at the start of a proposal slot
+
 1.13.1:
   - initialise sync committee verification metrics to 0
   - use dynssz v1.3.2 and corresponding lib updates

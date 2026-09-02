@@ -100,6 +100,13 @@ beaconblockproposer:
   # -  91: `builder value` must be more than ~10% higher than the local value (`local value*(100/91)`) to be used
   # - 100: `builder value` must be more than the local value (`local value*(100/100)`) to be used
   builder-boost-factor: 91
+  # If prewarm is true then at the start of a slot in which Vouch is due to propose it asks each
+  # beacon node used for beacon block proposals to produce a block, discarding the result.  Beacon
+  # nodes can carry per-slot work that only block production triggers, for example aggregating the
+  # attestation pool; pre-warming moves that work off the critical path of the proposal, at the cost
+  # of the beacon nodes producing an additional block per proposal slot.  The request is made to the
+  # non-blinded endpoint, so it does not trigger a builder auction.
+  prewarm: false
 
 # attester provides control of the attester process.
 attester:

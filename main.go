@@ -263,6 +263,7 @@ func fetchConfig() error {
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.0005))
 	viper.SetDefault("beaconblockproposer.builder-boost-factor", 91)
+	viper.SetDefault("beaconblockproposer.prewarm", false)
 	viper.SetDefault("strategies.builderbid.deadline.deadline", time.Second)
 	viper.SetDefault("strategies.builderbid.deadline.bid-gap", 100*time.Millisecond)
 	viper.SetDefault("submitter.style", "multinode")
@@ -804,6 +805,11 @@ func startSigningServices(ctx context.Context,
 		return nil, nil, nil, nil, err
 	}
 
+	// Pre-warming targets the same beacon nodes that will be asked for the block.
+	var prewarmAddresses []string
+	if viper.GetBool("beaconblockproposer.prewarm") {
+		prewarmAddresses = util.BeaconNodeAddressesForBeaconBlockProposal()
+	}
 	beaconBlockProposer, err := standardbeaconblockproposer.New(ctx,
 		standardbeaconblockproposer.WithLogLevel(util.LogLevel("beaconblockproposer")),
 		standardbeaconblockproposer.WithChainTime(chainTime),
@@ -819,6 +825,7 @@ func startSigningServices(ctx context.Context,
 		standardbeaconblockproposer.WithBlobSidecarSigner(signerSvc.(signer.BlobSidecarSigner)),
 		standardbeaconblockproposer.WithUnblindFromAllRelays(viper.GetBool("beaconblockproposer.unblind-from-all-relays")),
 		standardbeaconblockproposer.WithBuilderBoostFactor(viper.GetUint64("beaconblockproposer.builder-boost-factor")),
+		standardbeaconblockproposer.WithPrewarmAddresses(prewarmAddresses),
 	)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to start beacon block proposer service")

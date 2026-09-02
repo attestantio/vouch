@@ -29,6 +29,7 @@ var (
 	beaconBlockProposalMarkTimer         prometheus.Histogram
 	beaconBlockProposalProcessLatestSlot prometheus.Gauge
 	beaconBlockProposalSource            *prometheus.CounterVec
+	prewarmTimer                         *prometheus.HistogramVec
 )
 
 func registerMetrics(ctx context.Context, monitor metrics.Service) error {
@@ -115,6 +116,20 @@ func registerPrometheusMetrics(_ context.Context) error {
 		return err
 	}
 
+	prewarmTimer = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "vouch",
+		Subsystem: "beaconblockproposer",
+		Name:      "prewarm_duration_seconds",
+		Help:      "The time taken to pre-warm a beacon node.  result can be either succeeded or failed.",
+		Buckets: []float64{
+			0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+			1.2, 1.4, 1.6, 1.8, 2.0,
+		},
+	}, []string{"address", "result"})
+	if err := prometheus.Register(prewarmTimer); err != nil {
+		return err
+	}
+
 	bestBidRelayCount = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "vouch",
 		Subsystem: "beaconblockproposer",
@@ -162,4 +177,13 @@ func monitorBeaconBlockProposalSource(source string) {
 	}
 
 	beaconBlockProposalSource.WithLabelValues(source).Inc()
+}
+
+// monitorPrewarmed is called when an attempt to pre-warm a beacon node completes.
+func monitorPrewarmed(address string, started time.Time, result string) {
+	if prewarmTimer == nil {
+		return
+	}
+
+	prewarmTimer.WithLabelValues(address, result).Observe(time.Since(started).Seconds())
 }

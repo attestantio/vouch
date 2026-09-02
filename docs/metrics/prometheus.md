@@ -67,6 +67,8 @@ Performance metrics provide a mechanism to understand how quickly Vouch is carry
 
 These metrics are provided as histograms, with buckets in increments of 0.1 seconds up to 2 seconds.
 
+If `beaconblockproposer.prewarm` is enabled then `vouch_beaconblockproposer_prewarm_duration_seconds` provides the time taken to pre-warm each beacon node at the start of a proposal slot.  It has two labels: `address`, the beacon node that was pre-warmed, and `result`, either "succeeded" or "failed".  A failed pre-warm does not affect the proposal, but a pre-warm that regularly takes longer than the rest of the proposal process leaves its work on the critical path.
+
 A major part of Vouch's work is in the strategy section, where it selects the appropriate data to sign.  Data that combines the provider of the data along with the time taken to obtain and evaluate it contained in the `vouch_strategy_operation_duration_seconds` metric.  This is a histogram with buckets in increments of 0.1 seconds up to 4 seconds.  It has three labels:
 
   - `strategy` is the strategy for the operation
