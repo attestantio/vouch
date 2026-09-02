@@ -81,6 +81,44 @@ func TestEPBSProposalDoesNotLeaveLateProvidersBlocked(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 }
 
+func TestEPBSProposalSkipsBuilderBidFromUnreadyProvider(t *testing.T) {
+	ctx := context.Background()
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"unready": &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})},
+		}),
+		first.WithProviderReadiness(&providerReadiness{ready: false}),
+		first.WithTimeout(10*time.Millisecond),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+	require.Nil(t, response)
+	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+}
+
+func TestEPBSProposalAcceptsSelfBuiltProposalFromUnreadyProvider(t *testing.T) {
+	ctx := context.Background()
+	proposal := gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})
+	proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = gloas.BuilderIndex(^uint64(0))
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"unready": &epbsProposalProvider{proposal: proposal},
+		}),
+		first.WithProviderReadiness(&providerReadiness{ready: false}),
+		first.WithTimeout(time.Second),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+	require.NoError(t, err)
+	require.Same(t, proposal, response.Data)
+}
+
 func TestEPBSProposalSkipsProposalWithoutRequestedPayload(t *testing.T) {
 	ctx := context.Background()
 	includePayload := true
@@ -249,6 +287,14 @@ func gloasEPBSProposal(feeRecipient bellatrix.ExecutionAddress) *api.VersionedEP
 			},
 		},
 	}
+}
+
+type providerReadiness struct {
+	ready bool
+}
+
+func (p *providerReadiness) ProviderReady(string, phase0.Slot, phase0.ValidatorIndex) bool {
+	return p.ready
 }
 
 type epbsProposalProvider struct {

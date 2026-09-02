@@ -50,7 +50,18 @@ func NewDuty(dependentRoot phase0.Root,
 	}
 }
 
-// Service publishes proposer preferences.
-type Service interface {
+// ProviderReadiness reports whether a proposal provider has accepted a current preference.
+type ProviderReadiness interface {
+	ProviderReady(provider string, proposalSlot phase0.Slot, validatorIndex phase0.ValidatorIndex) bool
+}
+
+// Publisher publishes proposer preferences.
+type Publisher interface {
 	Publish(ctx context.Context, duty *Duty) error
+}
+
+// Service publishes proposer preferences and reports provider readiness.
+type Service interface {
+	Publisher
+	ProviderReadiness
 }

@@ -16,6 +16,7 @@ package immediate
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -81,7 +82,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 }
 
 // SubmitProposerPreferences submits signed proposer preferences to the configured beacon node.
-func (s *Service) SubmitProposerPreferences(ctx context.Context, preferences []*gloas.SignedProposerPreferences) map[string]error {
+func (s *Service) SubmitProposerPreferences(ctx context.Context, preferences []*gloas.SignedProposerPreferences, providers []string) map[string]error {
 	if s.proposerPreferencesSubmitter == nil {
 		return map[string]error{"<unknown>": errors.New("no proposer preferences submitter configured")}
 	}
@@ -89,6 +90,9 @@ func (s *Service) SubmitProposerPreferences(ctx context.Context, preferences []*
 	address := "<unknown>"
 	if service, isService := s.proposerPreferencesSubmitter.(eth2client.Service); isService {
 		address = service.Address()
+	}
+	if len(providers) > 0 && !slices.Contains(providers, address) {
+		return map[string]error{}
 	}
 	started := time.Now()
 	err := s.proposerPreferencesSubmitter.SubmitProposerPreferences(ctx, preferences)

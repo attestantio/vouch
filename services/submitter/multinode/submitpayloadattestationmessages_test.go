@@ -57,7 +57,7 @@ func TestSubmitProposerPreferencesFansOutToNodes(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	outcomes := service.SubmitProposerPreferences(ctx, []*gloas.SignedProposerPreferences{{Message: &gloas.ProposerPreferences{}}})
+	outcomes := service.SubmitProposerPreferences(ctx, []*gloas.SignedProposerPreferences{{Message: &gloas.ProposerPreferences{}}}, nil)
 
 	require.Equal(t, map[string]error{"one": nil, "two": nil}, outcomes)
 	require.Eventually(t, func() bool {

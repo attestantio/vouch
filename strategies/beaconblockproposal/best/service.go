@@ -22,6 +22,7 @@ import (
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -34,6 +35,7 @@ type Service struct {
 	processConcurrency     int64
 	chainTime              chaintime.Service
 	proposalProviders      map[string]beaconblockproposer.ProposalDataProvider
+	providerReadiness      proposerpreferences.ProviderReadiness
 	timeout                time.Duration
 	blockRootToSlotCache   cache.BlockRootToSlotProvider
 	executionPayloadFactor float64
@@ -85,6 +87,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		processConcurrency:     parameters.processConcurrency,
 		chainTime:              parameters.chainTime,
 		proposalProviders:      parameters.proposalProviders,
+		providerReadiness:      parameters.providerReadiness,
 		timeout:                parameters.timeout,
 		blockRootToSlotCache:   parameters.blockRootToSlotCache,
 		clientMonitor:          parameters.clientMonitor,

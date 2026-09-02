@@ -63,7 +63,7 @@ type parameters struct {
 	syncCommitteeAggregator       synccommitteeaggregator.Service
 	payloadAttester               payloadattester.Service
 	beaconBlockProposer           beaconblockproposer.Service
-	proposerPreferences           proposerpreferences.Service
+	proposerPreferences           proposerpreferences.Publisher
 	attestationAggregator         attestationaggregator.Service
 	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
 	accountsRefresher             accountmanager.Refresher
@@ -228,7 +228,7 @@ func WithBeaconBlockProposer(proposer beaconblockproposer.Service) Parameter {
 }
 
 // WithProposerPreferences sets the proposer preferences publisher.
-func WithProposerPreferences(preferences proposerpreferences.Service) Parameter {
+func WithProposerPreferences(preferences proposerpreferences.Publisher) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposerPreferences = preferences
 	})

@@ -22,5 +22,5 @@ import (
 // ProposerPreferencesSubmitter provides one result for submitting proposer preferences to each configured provider.
 type ProposerPreferencesSubmitter interface {
 	// SubmitProposerPreferences returns an entry for each provider; nil indicates acceptance.
-	SubmitProposerPreferences(ctx context.Context, preferences []*gloas.SignedProposerPreferences) map[string]error
+	SubmitProposerPreferences(ctx context.Context, preferences []*gloas.SignedProposerPreferences, providers []string) map[string]error
 }

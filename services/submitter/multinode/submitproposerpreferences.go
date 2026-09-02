@@ -15,6 +15,7 @@ package multinode
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"time"
 
@@ -25,7 +26,7 @@ import (
 )
 
 // SubmitProposerPreferences submits signed proposer preferences to every configured beacon node.
-func (s *Service) SubmitProposerPreferences(ctx context.Context, preferences []*gloas.SignedProposerPreferences) map[string]error {
+func (s *Service) SubmitProposerPreferences(ctx context.Context, preferences []*gloas.SignedProposerPreferences, providers []string) map[string]error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.timeout)
 	defer cancel()
 
@@ -41,6 +42,9 @@ func (s *Service) SubmitProposerPreferences(ctx context.Context, preferences []*
 	var outcomesMutex sync.Mutex
 	var wg sync.WaitGroup
 	for name, submitter := range s.proposerPreferencesSubmitters {
+		if len(providers) > 0 && !slices.Contains(providers, name) {
+			continue
+		}
 		wg.Go(func() {
 			s.submitProposerPreferences(ctx, sem, &outcomesMutex, outcomes, name, preferences, submitter)
 		})

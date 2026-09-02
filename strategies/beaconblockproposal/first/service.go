@@ -20,8 +20,10 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -36,6 +38,7 @@ type Service struct {
 	log               zerolog.Logger
 	clientMonitor     metrics.ClientMonitor
 	proposalProviders map[string]beaconblockproposer.ProposalDataProvider
+	providerReadiness proposerpreferences.ProviderReadiness
 	timeout           time.Duration
 }
 
@@ -53,7 +56,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 
-	proposalCh := make(chan *api.VersionedEPBSProposal, len(s.proposalProviders))
+	proposalCh := make(chan *epbsProposalResponse, len(s.proposalProviders))
 	for name, provider := range s.proposalProviders {
 		go s.fetchEPBSProposal(ctx, name, provider, opts, proposalCh)
 	}
@@ -64,14 +67,14 @@ func (s *Service) EPBSProposal(ctx context.Context,
 			cancel()
 			s.log.Debug().Msg("Failed to obtain ePBS beacon block proposal before timeout")
 			return nil, errors.New("failed to obtain ePBS beacon block proposal before timeout")
-		case proposal := <-proposalCh:
-			if !s.acceptableEPBSProposal(proposal, opts.IncludePayload) {
+		case response := <-proposalCh:
+			if !s.acceptableEPBSProposal(response.provider, response.proposal, opts) {
 				continue
 			}
 			cancel()
 
 			return &api.Response[*api.VersionedEPBSProposal]{
-				Data:     proposal,
+				Data:     response.proposal,
 				Metadata: make(map[string]any),
 			}, nil
 		}
@@ -84,7 +87,7 @@ func (s *Service) fetchEPBSProposal(ctx context.Context,
 	name string,
 	provider beaconblockproposer.ProposalDataProvider,
 	opts *api.EPBSProposalOpts,
-	ch chan *api.VersionedEPBSProposal,
+	ch chan *epbsProposalResponse,
 ) {
 	log := s.log.With().Str("provider", name).Uint64("slot", uint64(opts.Slot)).Logger()
 
@@ -107,21 +110,26 @@ func (s *Service) fetchEPBSProposal(ctx context.Context,
 	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained ePBS beacon block proposal")
 
 	select {
-	case ch <- proposal:
+	case ch <- &epbsProposalResponse{provider: name, proposal: proposal}:
 	case <-ctx.Done():
 	}
 }
 
+type epbsProposalResponse struct {
+	provider string
+	proposal *api.VersionedEPBSProposal
+}
+
 // acceptableEPBSProposal reports whether proposal is usable, discarding and logging it if it is
-// nil, lacks a requested execution payload, or (for Gloas) is structurally malformed or pays a
-// zero fee recipient.
-func (s *Service) acceptableEPBSProposal(proposal *api.VersionedEPBSProposal, includePayload *bool) bool {
+// nil, lacks a requested execution payload, comes from an unready builder provider, or (for Gloas)
+// is structurally malformed or pays a zero fee recipient.
+func (s *Service) acceptableEPBSProposal(provider string, proposal *api.VersionedEPBSProposal, opts *api.EPBSProposalOpts) bool {
 	if proposal == nil {
 		s.log.Warn().Msg("Discarding empty ePBS proposal")
 
 		return false
 	}
-	if includePayload != nil && *includePayload && !proposal.ExecutionPayloadIncluded {
+	if opts.IncludePayload != nil && *opts.IncludePayload && !proposal.ExecutionPayloadIncluded {
 		s.log.Warn().Msg("Discarding ePBS proposal without requested execution payload")
 
 		return false
@@ -141,7 +149,13 @@ func (s *Service) acceptableEPBSProposal(proposal *api.VersionedEPBSProposal, in
 
 			return false
 		}
-		if block.Body.SignedExecutionPayloadBid.Message.FeeRecipient.IsZero() {
+		bid := block.Body.SignedExecutionPayloadBid.Message
+		if bid.BuilderIndex != gloas.BuilderIndex(^uint64(0)) && s.providerReadiness != nil && !s.providerReadiness.ProviderReady(provider, opts.Slot, block.ProposerIndex) {
+			s.log.Warn().Str("provider", provider).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
+
+			return false
+		}
+		if bid.FeeRecipient.IsZero() {
 			s.log.Warn().Msg("Discarding ePBS proposal with 0 fee recipient")
 
 			return false
@@ -167,6 +181,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	s := &Service{
 		log:               log,
 		proposalProviders: parameters.proposalProviders,
+		providerReadiness: parameters.providerReadiness,
 		timeout:           parameters.timeout,
 		clientMonitor:     parameters.clientMonitor,
 	}

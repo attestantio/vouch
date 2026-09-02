@@ -21,6 +21,7 @@ import (
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -29,6 +30,7 @@ type parameters struct {
 	logLevel          zerolog.Level
 	clientMonitor     metrics.ClientMonitor
 	proposalProviders map[string]beaconblockproposer.ProposalDataProvider
+	providerReadiness proposerpreferences.ProviderReadiness
 	timeout           time.Duration
 }
 
@@ -61,6 +63,13 @@ func WithClientMonitor(monitor metrics.ClientMonitor) Parameter {
 func WithProposalProviders(providers map[string]beaconblockproposer.ProposalDataProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalProviders = providers
+	})
+}
+
+// WithProviderReadiness sets the proposer-preferences readiness provider.
+func WithProviderReadiness(provider proposerpreferences.ProviderReadiness) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.providerReadiness = provider
 	})
 }
 

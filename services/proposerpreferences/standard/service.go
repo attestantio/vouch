@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/attestantio/go-eth2-client/spec/gloas"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/attestantio/vouch/services/signer"
@@ -30,12 +31,20 @@ import (
 type Service struct {
 	monitor   metrics.Service
 	cache     map[gloas.ProposerPreferences]*cachedPreference
+	current   map[preferenceDuty]gloas.ProposerPreferences
 	signer    signer.ProposerPreferencesSigner
 	submitter submitter.ProposerPreferencesSubmitter
 	mutex     sync.Mutex
 }
 
+type preferenceDuty struct {
+	proposalSlot   phase0.Slot
+	validatorIndex phase0.ValidatorIndex
+}
+
 type cachedPreference struct {
+	accepted  map[string]struct{}
+	outcomes  map[string]error
 	signed    *gloas.SignedProposerPreferences
 	published bool
 }
@@ -52,7 +61,26 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		signer:    parameters.signer,
 		submitter: parameters.submitter,
 		cache:     make(map[gloas.ProposerPreferences]*cachedPreference),
+		current:   make(map[preferenceDuty]gloas.ProposerPreferences),
 	}, nil
+}
+
+// ProviderReady reports whether provider has accepted the current preference for a proposal duty.
+func (s *Service) ProviderReady(provider string, proposalSlot phase0.Slot, validatorIndex phase0.ValidatorIndex) bool {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	preferences, exists := s.current[preferenceDuty{proposalSlot: proposalSlot, validatorIndex: validatorIndex}]
+	if !exists {
+		return false
+	}
+	cached, exists := s.cache[preferences]
+	if !exists {
+		return false
+	}
+	_, exists = cached.accepted[provider]
+
+	return exists
 }
 
 // Publish publishes the supplied duty's proposer preferences.
@@ -78,26 +106,48 @@ func (s *Service) Publish(ctx context.Context, duty *proposerpreferences.Duty) e
 	if exists && cached.published {
 		return nil
 	}
+	providers := []string(nil)
 	if !exists {
 		signature, err := s.signer.SignProposerPreferences(ctx, duty.Account, &preferences)
 		if err != nil {
 			return errors.Wrap(err, "failed to sign proposer preferences")
 		}
-		cached = &cachedPreference{signed: &gloas.SignedProposerPreferences{
-			Message:   &preferences,
-			Signature: signature,
-		}}
+		cached = &cachedPreference{
+			accepted: make(map[string]struct{}),
+			outcomes: make(map[string]error),
+			signed: &gloas.SignedProposerPreferences{
+				Message:   &preferences,
+				Signature: signature,
+			},
+		}
 		s.cache[preferences] = cached
+	} else {
+		for provider, err := range cached.outcomes {
+			if err != nil {
+				providers = append(providers, provider)
+			}
+		}
 	}
+	s.current[preferenceDuty{proposalSlot: duty.ProposalSlot, validatorIndex: duty.ValidatorIndex}] = preferences
 
-	outcomes := s.submitter.SubmitProposerPreferences(ctx, []*gloas.SignedProposerPreferences{cached.signed})
+	outcomes := s.submitter.SubmitProposerPreferences(ctx, []*gloas.SignedProposerPreferences{cached.signed}, providers)
 	if len(outcomes) == 0 {
 		return errors.New("no proposer preferences submission outcomes")
 	}
-	for _, err := range outcomes {
+	var submissionErr error
+	for provider, err := range outcomes {
+		cached.outcomes[provider] = err
 		if err != nil {
-			return errors.Wrap(err, "failed to submit proposer preferences")
+			delete(cached.accepted, provider)
+			if submissionErr == nil {
+				submissionErr = err
+			}
+			continue
 		}
+		cached.accepted[provider] = struct{}{}
+	}
+	if submissionErr != nil {
+		return errors.Wrap(submissionErr, "failed to submit proposer preferences")
 	}
 	cached.published = true
 

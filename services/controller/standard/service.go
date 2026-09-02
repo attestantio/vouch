@@ -77,7 +77,7 @@ type Service struct {
 	syncCommitteesSubscriber     synccommitteesubscriber.Service
 	payloadAttester              payloadattester.Service
 	beaconBlockProposer          beaconblockproposer.Service
-	proposerPreferences          proposerpreferences.Service
+	proposerPreferences          proposerpreferences.Publisher
 	attestationAggregator        attestationaggregator.Service
 	beaconCommitteeSubscriber    beaconcommitteesubscriber.Service
 	activeValidators             int

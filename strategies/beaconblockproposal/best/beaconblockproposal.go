@@ -22,6 +22,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
@@ -87,7 +88,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 				Int("errored", errored).
 				Int("timed_out", timedOut).
 				Msg("Response received")
-			bestProposal, bestProvider = considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
+			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
 		case err := <-errCh:
 			errored++
 			log.Debug().
@@ -129,7 +130,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 				Int("errored", errored).
 				Int("timed_out", timedOut).
 				Msg("Response received")
-			bestProposal, bestProvider = considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
+			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
 		case err := <-errCh:
 			errored++
 			log.Debug().
@@ -173,7 +174,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 
 // considerEPBSProposal updates the best proposal seen so far, ignoring proposals that lack a
 // requested execution payload.
-func considerEPBSProposal(opts *api.EPBSProposalOpts,
+func (s *Service) considerEPBSProposal(opts *api.EPBSProposalOpts,
 	response *beaconBlockEPBSResponse,
 	bestProposal *api.VersionedEPBSProposal,
 	bestProvider string,
@@ -183,6 +184,18 @@ func considerEPBSProposal(opts *api.EPBSProposalOpts,
 		log.Warn().Str("provider", response.provider).Msg("Discarding ePBS proposal without requested execution payload")
 
 		return bestProposal, bestProvider
+	}
+	if response.proposal.Version == spec.DataVersionGloas {
+		block := response.proposal.Gloas
+		if response.proposal.ExecutionPayloadIncluded {
+			block = response.proposal.GloasContents.Block
+		}
+		bid := block.Body.SignedExecutionPayloadBid.Message
+		if bid.BuilderIndex != gloas.BuilderIndex(^uint64(0)) && s.providerReadiness != nil && !s.providerReadiness.ProviderReady(response.provider, opts.Slot, block.ProposerIndex) {
+			log.Warn().Str("provider", response.provider).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
+
+			return bestProposal, bestProvider
+		}
 	}
 
 	if bestProposal == nil || response.proposal.Value().Cmp(bestProposal.Value()) > 0 {

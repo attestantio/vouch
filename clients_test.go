@@ -246,7 +246,7 @@ func TestSimpleProposalProviderRejectsZeroFeeRecipient(t *testing.T) {
 		knownClientsMu.Unlock()
 	})
 
-	provider, err := selectProposalProvider(ctx, null.New(), nil, nil, nil)
+	provider, err := selectProposalProvider(ctx, null.New(), nil, nil, nil, nil)
 	require.NoError(t, err)
 	includePayload := true
 	response, err := provider.EPBSProposal(ctx, &api.EPBSProposalOpts{
