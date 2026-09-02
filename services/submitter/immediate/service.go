@@ -47,6 +47,7 @@ type Service struct {
 	syncCommitteeContributionsSubmitter   eth2client.SyncCommitteeContributionsSubmitter
 	payloadAttestationMessagesSubmitter   submitter.PayloadAttestationMessagesSubmitter
 	proposerPreferencesSubmitter          eth2client.ProposerPreferencesSubmitter
+	proposerPreferencesSubmitters         map[string]eth2client.ProposerPreferencesSubmitter
 }
 
 // New creates a new submitter.
@@ -76,6 +77,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeContributionsSubmitter:   parameters.syncCommitteeContributionsSubmitter,
 		payloadAttestationMessagesSubmitter:   parameters.payloadAttestationMessagesSubmitter,
 		proposerPreferencesSubmitter:          parameters.proposerPreferencesSubmitter,
+		proposerPreferencesSubmitters:         parameters.proposerPreferencesSubmitters,
 	}
 
 	return s, nil
@@ -83,6 +85,19 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 
 // SubmitProposerPreferences submits signed proposer preferences to the configured beacon node.
 func (s *Service) SubmitProposerPreferences(ctx context.Context, preferences []*gloas.SignedProposerPreferences, providers []string) map[string]error {
+	if len(s.proposerPreferencesSubmitters) > 0 {
+		outcomes := make(map[string]error, len(s.proposerPreferencesSubmitters))
+		for address, submitter := range s.proposerPreferencesSubmitters {
+			if len(providers) > 0 && !slices.Contains(providers, address) {
+				continue
+			}
+			started := time.Now()
+			err := submitter.SubmitProposerPreferences(ctx, preferences)
+			s.clientMonitor.ClientOperation(address, "submit proposer preferences", err == nil, time.Since(started))
+			outcomes[address] = err
+		}
+		return outcomes
+	}
 	if s.proposerPreferencesSubmitter == nil {
 		return map[string]error{"<unknown>": errors.New("no proposer preferences submitter configured")}
 	}

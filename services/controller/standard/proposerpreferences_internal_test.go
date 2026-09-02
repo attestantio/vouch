@@ -62,6 +62,22 @@ func TestPublishProposerPreferencesPublishesFirstGloasEpoch(t *testing.T) {
 	)}, preferences.duties)
 }
 
+func TestPublishProposerPreferencesPrunesPastSlots(t *testing.T) {
+	preferences := &recordingProposerPreferences{}
+	service := &Service{
+		chainTimeService:             &recordingChainTime{currentEpoch: 4, slotsPerEpoch: 32},
+		proposerDutiesProvider:       &recordingProposerDutiesProvider{},
+		proposerPreferences:          preferences,
+		executionConfigProvider:      &recordingExecutionConfigProvider{},
+		gloasForkEpoch:               5,
+		proposerPreferencesLookahead: 1,
+	}
+
+	service.publishProposerPreferences(context.Background(), 4, phase0.Root{0x01})
+
+	require.Equal(t, []phase0.Slot{128}, preferences.prunedSlots)
+}
+
 func TestPublishProposerPreferencesRejectsDutiesWithoutDependentRoot(t *testing.T) {
 	provider := &recordingProposerDutiesProvider{duties: []*apiv1.ProposerDuty{{Slot: 160, ValidatorIndex: 3}}}
 	preferences := &recordingProposerPreferences{}
@@ -137,7 +153,12 @@ func (p *recordingExecutionConfigProvider) ProposerConfig(context.Context, e2wty
 }
 
 type recordingProposerPreferences struct {
-	duties []*proposerpreferences.Duty
+	duties      []*proposerpreferences.Duty
+	prunedSlots []phase0.Slot
+}
+
+func (p *recordingProposerPreferences) Prune(slot phase0.Slot) {
+	p.prunedSlots = append(p.prunedSlots, slot)
 }
 
 func (p *recordingProposerPreferences) Publish(_ context.Context, duty *proposerpreferences.Duty) error {

@@ -1705,9 +1705,13 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 		if payloadAttestationMessagesSubmitter, ok := eth2Client.(eth2client.PayloadAttestationMessagesSubmitter); ok {
 			params = append(params, immediatesubmitter.WithPayloadAttestationMessagesSubmitter(payloadAttestationMessagesSubmitter))
 		}
-		if proposerPreferencesSubmitter, ok := eth2Client.(eth2client.ProposerPreferencesSubmitter); ok {
-			params = append(params, immediatesubmitter.WithProposerPreferencesSubmitter(proposerPreferencesSubmitter))
+		proposerPreferencesSubmitters, mapErr := addressToClientMapper[eth2client.ProposerPreferencesSubmitter](ctx, monitor,
+			util.BeaconNodeAddressesForBeaconBlockProposal(),
+			"proposer preferences submitter strategy")
+		if mapErr != nil {
+			return nil, mapErr
 		}
+		params = append(params, immediatesubmitter.WithProposerPreferencesSubmitters(proposerPreferencesSubmitters))
 		submitter, err = immediatesubmitter.New(ctx, params...)
 	}
 	if err != nil {
@@ -1840,8 +1844,12 @@ func selectPayloadAttestationDataProvider(ctx context.Context, monitor metrics.S
 }
 
 func genericAddressToClientMapper[T any](ctx context.Context, monitor metrics.Service, path, description string) (map[string]T, error) {
+	return addressToClientMapper[T](ctx, monitor, util.BeaconNodeAddresses(path), description)
+}
+
+func addressToClientMapper[T any](ctx context.Context, monitor metrics.Service, addresses []string, description string) (map[string]T, error) {
 	addressToClientMap := make(map[string]T)
-	for _, address := range util.BeaconNodeAddresses(path) {
+	for _, address := range addresses {
 		client, err := fetchClient(ctx, monitor, address)
 		if err != nil {
 			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for %s", address, description))
@@ -1936,8 +1944,8 @@ func startMultinodeSubmitter(ctx context.Context,
 
 	var proposerPreferencesSubmitters map[string]eth2client.ProposerPreferencesSubmitter
 	if _, ok := eth2Client.(eth2client.ProposerPreferencesSubmitter); ok {
-		proposerPreferencesSubmitters, err = genericAddressToClientMapper[eth2client.ProposerPreferencesSubmitter](ctx, monitor,
-			"submitter.proposal.multinode",
+		proposerPreferencesSubmitters, err = addressToClientMapper[eth2client.ProposerPreferencesSubmitter](ctx, monitor,
+			util.BeaconNodeAddressesForBeaconBlockProposal(),
 			"proposer preferences submitter strategy")
 		if err != nil {
 			return nil, err

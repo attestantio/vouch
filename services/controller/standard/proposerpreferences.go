@@ -89,7 +89,11 @@ func (s *Service) publishProposerPreferencesForKnownRoots(ctx context.Context) {
 
 // publishProposerPreferences publishes preferences for the proposal epoch whose duties share the supplied dependent root.
 func (s *Service) publishProposerPreferences(ctx context.Context, rootEpoch phase0.Epoch, dependentRoot phase0.Root) {
-	if dependentRoot == (phase0.Root{}) || s.proposerPreferences == nil || s.executionConfigProvider == nil || s.proposerPreferencesLookahead == 0 {
+	if s.proposerPreferences == nil || s.executionConfigProvider == nil || s.proposerPreferencesLookahead == 0 {
+		return
+	}
+	s.proposerPreferences.Prune(s.chainTimeService.CurrentSlot())
+	if dependentRoot == (phase0.Root{}) {
 		return
 	}
 
