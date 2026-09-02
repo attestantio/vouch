@@ -92,6 +92,7 @@ import (
 	majorityattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/majority"
 	combinedattestationpoolstrategy "github.com/attestantio/vouch/strategies/attestationpool/combined"
 	firstbeaconblockheaderstrategy "github.com/attestantio/vouch/strategies/beaconblockheader/first"
+	"github.com/attestantio/vouch/strategies/beaconblockproposal"
 	bestbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	firstbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/first"
 	firstbeaconblockrootstrategy "github.com/attestantio/vouch/strategies/beaconblockroot/first"
@@ -407,6 +408,7 @@ func startServices(ctx context.Context,
 		blockRelay,
 		accountManager,
 		submitter,
+		proposerPreferences,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -483,7 +485,7 @@ func initController(ctx context.Context,
 	beaconBlockHeaderProvider eth2client.BeaconBlockHeadersProvider,
 	multiInstance multiinstance.Service,
 	payloadAttester payloadattester.Service,
-	proposerPreferences proposerpreferences.Service,
+	proposerPreferences proposerpreferences.Publisher,
 	blockRelay blockrelay.Service,
 ) (
 	*standardcontroller.Service,
@@ -717,6 +719,7 @@ func startProviders(ctx context.Context,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cache cache.Service,
+	providerReadiness proposerpreferences.ProviderReadiness,
 ) (
 	graffitiprovider.Service,
 	eth2client.MultiForkProposalProvider,
@@ -731,7 +734,7 @@ func startProviders(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting beacon block proposal provider")
-	beaconBlockProposalProvider, err := selectProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
+	beaconBlockProposalProvider, err := selectProposalProvider(ctx, monitor, eth2Client, chainTime, cache, providerReadiness)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to select beacon block proposal provider")
 	}
@@ -835,6 +838,7 @@ func startSigningServices(ctx context.Context,
 	blockRelay blockrelay.Service,
 	accountManager accountmanager.Service,
 	submitterStrategy submitter.Service,
+	providerReadiness proposerpreferences.ProviderReadiness,
 ) (
 	beaconblockproposer.Service,
 	attester.Service,
@@ -848,6 +852,7 @@ func startSigningServices(ctx context.Context,
 		eth2Client,
 		chainTime,
 		cacheSvc,
+		providerReadiness,
 	)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -1449,6 +1454,7 @@ func selectProposalProvider(ctx context.Context,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cacheSvc cache.Service,
+	providerReadiness proposerpreferences.ProviderReadiness,
 ) (eth2client.MultiForkProposalProvider, error) {
 	var proposalProvider eth2client.MultiForkProposalProvider
 	var err error
@@ -1474,6 +1480,7 @@ func selectProposalProvider(ctx context.Context,
 			bestbeaconblockproposalstrategy.WithChainTimeService(chainTime),
 			bestbeaconblockproposalstrategy.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 			bestbeaconblockproposalstrategy.WithProposalProviders(proposalProviders),
+			bestbeaconblockproposalstrategy.WithProviderReadiness(providerReadiness),
 			bestbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.best")),
 			bestbeaconblockproposalstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
 			bestbeaconblockproposalstrategy.WithExecutionPayloadFactor(viper.GetFloat64("strategies.beaconblockproposal.best.execution-payload-factor")),
@@ -1499,6 +1506,7 @@ func selectProposalProvider(ctx context.Context,
 			firstbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.first")),
 			firstbeaconblockproposalstrategy.WithProposalProviders(proposalProviders),
+			firstbeaconblockproposalstrategy.WithProviderReadiness(providerReadiness),
 			firstbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.first")),
 		)
 		if err != nil {
@@ -1515,9 +1523,45 @@ func selectProposalProvider(ctx context.Context,
 			return nil, errors.New("beacon block proposal client does not support ePBS proposals")
 		}
 		proposalProvider = provider
+		if providerReadiness != nil {
+			proposalProvider = &readinessGatedProposalProvider{
+				MultiForkProposalProvider: provider,
+				providerReadiness:         providerReadiness,
+			}
+		}
 	}
 
 	return proposalProvider, nil
+}
+
+// readinessGatedProposalProvider applies the proposer preferences readiness gate to the simple
+// style's multiclient without wrapping it in another strategy.
+type readinessGatedProposalProvider struct {
+	eth2client.MultiForkProposalProvider
+
+	providerReadiness proposerpreferences.ProviderReadiness
+}
+
+// EPBSProposal obtains an ePBS proposal, rejecting a builder-backed bid until every endpoint
+// has accepted the current proposer preferences.
+func (p *readinessGatedProposalProvider) EPBSProposal(ctx context.Context,
+	opts *api.EPBSProposalOpts,
+) (
+	*api.Response[*api.VersionedEPBSProposal],
+	error,
+) {
+	response, err := p.MultiForkProposalProvider.EPBSProposal(ctx, opts)
+	if err != nil || response == nil {
+		return response, err
+	}
+	if err := beaconblockproposal.ValidateEPBSProposal(response.Data, opts.IncludePayload); err != nil {
+		return nil, err
+	}
+	if err := beaconblockproposal.ValidateBuilderBidReadiness(p.providerReadiness, "simple", opts.Slot, response.Data); err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
 // selectSyncCommitteeContributionProvider selects the appropriate sync committee contribution provider given user input.
