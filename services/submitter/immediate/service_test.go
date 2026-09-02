@@ -22,6 +22,7 @@ import (
 	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/attestantio/vouch/services/submitter/immediate"
@@ -253,6 +254,47 @@ func TestInterfaces(t *testing.T) {
 	require.Implements(t, (*submitter.SyncCommitteeMessagesSubmitter)(nil), s)
 	require.Implements(t, (*submitter.SyncCommitteeSubscriptionsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.SyncCommitteeContributionsSubmitter)(nil), s)
+	require.Implements(t, (*submitter.ProposerPreferencesSubmitter)(nil), s)
+}
+
+func TestSubmitProposerPreferences(t *testing.T) {
+	ctx := context.Background()
+	preferencesSubmitter := &recordingProposerPreferencesSubmitter{}
+	service, err := newTestService(ctx,
+		immediate.WithLogLevel(zerolog.Disabled),
+		immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+		immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
+		immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+		immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+		immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
+		immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+		immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+		immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+		immediate.WithProposerPreferencesSubmitter(preferencesSubmitter),
+	)
+	require.NoError(t, err)
+
+	preferences := []*gloas.SignedProposerPreferences{{}}
+
+	require.Equal(t, map[string]error{"test": nil}, service.SubmitProposerPreferences(ctx, preferences))
+	require.Equal(t, preferences, preferencesSubmitter.preferences)
+}
+
+type recordingProposerPreferencesSubmitter struct {
+	preferences []*gloas.SignedProposerPreferences
+}
+
+func (s *recordingProposerPreferencesSubmitter) Name() string { return "test" }
+
+func (s *recordingProposerPreferencesSubmitter) Address() string { return "test" }
+
+func (s *recordingProposerPreferencesSubmitter) IsActive() bool { return true }
+
+func (s *recordingProposerPreferencesSubmitter) IsSynced() bool { return true }
+
+func (s *recordingProposerPreferencesSubmitter) SubmitProposerPreferences(_ context.Context, preferences []*gloas.SignedProposerPreferences) error {
+	s.preferences = preferences
+	return nil
 }
 
 func TestSubmitProposal(t *testing.T) {

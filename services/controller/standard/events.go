@@ -63,6 +63,9 @@ func (s *Service) HandleHeadEvent(ctx context.Context, data *apiv1.HeadEvent) {
 	}
 
 	s.checkEventForReorg(ctx, epoch, data.Slot, data.PreviousDutyDependentRoot, data.CurrentDutyDependentRoot)
+	if s.proposerPreferences != nil && s.executionConfigProvider != nil && s.proposerPreferencesLookahead != 0 {
+		s.queueProposerPreferencesPublication(ctx)
+	}
 
 	s.fastTrackJobs(ctx, data.Slot)
 
@@ -139,6 +142,12 @@ func (s *Service) checkEventForReorg(ctx context.Context,
 	s.lastBlockEpoch = epoch
 	s.previousDutyDependentRoot = previousDutyDependentRoot
 	s.currentDutyDependentRoot = currentDutyDependentRoot
+	if s.proposerPreferences != nil && s.executionConfigProvider != nil && s.proposerPreferencesLookahead != 0 {
+		if epoch > 0 {
+			s.recordProposerPreferencesDependentRoot(epoch-1, previousDutyDependentRoot)
+		}
+		s.recordProposerPreferencesDependentRoot(epoch, currentDutyDependentRoot)
+	}
 }
 
 // fastTrackJobs kicks off jobs when a block has been seen early.

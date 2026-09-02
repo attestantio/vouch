@@ -67,6 +67,8 @@ import (
 	standardpayloadattester "github.com/attestantio/vouch/services/payloadattester/standard"
 	"github.com/attestantio/vouch/services/proposalpreparer"
 	standardproposalpreparer "github.com/attestantio/vouch/services/proposalpreparer/standard"
+	"github.com/attestantio/vouch/services/proposerpreferences"
+	standardproposerpreferences "github.com/attestantio/vouch/services/proposerpreferences/standard"
 	"github.com/attestantio/vouch/services/scheduler"
 	advancedscheduler "github.com/attestantio/vouch/services/scheduler/advanced"
 	"github.com/attestantio/vouch/services/signer"
@@ -385,6 +387,11 @@ func startServices(ctx context.Context,
 		return nil, nil, errors.Wrap(err, "failed to start payload attester")
 	}
 
+	proposerPreferences, err := startProposerPreferences(ctx, monitor, signerSvc, submitter)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to start proposer preferences")
+	}
+
 	blockRelay, err := startBlockRelay(ctx, majordomo, monitor, eth2Client, schedulerSvc, chainTime, accountManager, signerSvc, cacheSvc)
 	if err != nil {
 		return nil, nil, err
@@ -446,6 +453,8 @@ func startServices(ctx context.Context,
 		beaconBlockHeaderProvider,
 		multiInstance,
 		payloadAttester,
+		proposerPreferences,
+		blockRelay,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -474,6 +483,8 @@ func initController(ctx context.Context,
 	beaconBlockHeaderProvider eth2client.BeaconBlockHeadersProvider,
 	multiInstance multiinstance.Service,
 	payloadAttester payloadattester.Service,
+	proposerPreferences proposerpreferences.Service,
+	blockRelay blockrelay.Service,
 ) (
 	*standardcontroller.Service,
 	error,
@@ -524,6 +535,16 @@ func initController(ctx context.Context,
 		controllerParams = append(controllerParams,
 			standardcontroller.WithPTCDutiesProvider(ptcDutiesProvider),
 			standardcontroller.WithPayloadAttester(payloadAttester),
+		)
+	}
+	if proposerPreferences != nil {
+		executionConfigProvider, ok := blockRelay.(blockrelay.ExecutionConfigProvider)
+		if !ok {
+			return nil, errors.New("block relay does not provide execution configuration")
+		}
+		controllerParams = append(controllerParams,
+			standardcontroller.WithProposerPreferences(proposerPreferences),
+			standardcontroller.WithExecutionConfigProvider(executionConfigProvider),
 		)
 	}
 	controller, err := standardcontroller.New(ctx, controllerParams...)
@@ -1676,6 +1697,9 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 		if payloadAttestationMessagesSubmitter, ok := eth2Client.(eth2client.PayloadAttestationMessagesSubmitter); ok {
 			params = append(params, immediatesubmitter.WithPayloadAttestationMessagesSubmitter(payloadAttestationMessagesSubmitter))
 		}
+		if proposerPreferencesSubmitter, ok := eth2Client.(eth2client.ProposerPreferencesSubmitter); ok {
+			params = append(params, immediatesubmitter.WithProposerPreferencesSubmitter(proposerPreferencesSubmitter))
+		}
 		submitter, err = immediatesubmitter.New(ctx, params...)
 	}
 	if err != nil {
@@ -1721,6 +1745,34 @@ func startPayloadAttester(ctx context.Context,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start standard payload attester service")
+	}
+
+	return service, nil
+}
+
+// startProposerPreferences starts proposer preferences publishing when the signer and submitter
+// both support it.  The controller publishes only for proposal epochs at or after GLOAS_FORK_EPOCH.
+func startProposerPreferences(ctx context.Context,
+	monitor metrics.Service,
+	signerSvc signer.Service,
+	submitterStrategy submitter.Service,
+) (proposerpreferences.Service, error) {
+	proposerPreferencesSigner, ok := signerSvc.(signer.ProposerPreferencesSigner)
+	if !ok {
+		return nil, nil
+	}
+	proposerPreferencesSubmitter, ok := submitterStrategy.(submitter.ProposerPreferencesSubmitter)
+	if !ok {
+		return nil, nil
+	}
+
+	service, err := standardproposerpreferences.New(ctx,
+		standardproposerpreferences.WithMonitor(monitor),
+		standardproposerpreferences.WithSigner(proposerPreferencesSigner),
+		standardproposerpreferences.WithSubmitter(proposerPreferencesSubmitter),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start standard proposer preferences service")
 	}
 
 	return service, nil
@@ -1874,6 +1926,16 @@ func startMultinodeSubmitter(ctx context.Context,
 		}
 	}
 
+	var proposerPreferencesSubmitters map[string]eth2client.ProposerPreferencesSubmitter
+	if _, ok := eth2Client.(eth2client.ProposerPreferencesSubmitter); ok {
+		proposerPreferencesSubmitters, err = genericAddressToClientMapper[eth2client.ProposerPreferencesSubmitter](ctx, monitor,
+			"submitter.proposal.multinode",
+			"proposer preferences submitter strategy")
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	params := []multinodesubmitter.Parameter{
 		multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 		multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
@@ -1891,6 +1953,9 @@ func startMultinodeSubmitter(ctx context.Context,
 	}
 	if payloadAttestationMessagesSubmitters != nil {
 		params = append(params, multinodesubmitter.WithPayloadAttestationMessagesSubmitters(payloadAttestationMessagesSubmitters))
+	}
+	if proposerPreferencesSubmitters != nil {
+		params = append(params, multinodesubmitter.WithProposerPreferencesSubmitters(proposerPreferencesSubmitters))
 	}
 	submitterService, err := multinodesubmitter.New(ctx, params...)
 	if err != nil {

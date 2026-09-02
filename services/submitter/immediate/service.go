@@ -22,6 +22,7 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
@@ -44,6 +45,7 @@ type Service struct {
 	syncCommitteeSubscriptionsSubmitter   eth2client.SyncCommitteeSubscriptionsSubmitter
 	syncCommitteeContributionsSubmitter   eth2client.SyncCommitteeContributionsSubmitter
 	payloadAttestationMessagesSubmitter   submitter.PayloadAttestationMessagesSubmitter
+	proposerPreferencesSubmitter          eth2client.ProposerPreferencesSubmitter
 }
 
 // New creates a new submitter.
@@ -72,9 +74,30 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeSubscriptionsSubmitter:   parameters.syncCommitteeSubscriptionsSubmitter,
 		syncCommitteeContributionsSubmitter:   parameters.syncCommitteeContributionsSubmitter,
 		payloadAttestationMessagesSubmitter:   parameters.payloadAttestationMessagesSubmitter,
+		proposerPreferencesSubmitter:          parameters.proposerPreferencesSubmitter,
 	}
 
 	return s, nil
+}
+
+// SubmitProposerPreferences submits signed proposer preferences to the configured beacon node.
+func (s *Service) SubmitProposerPreferences(ctx context.Context, preferences []*gloas.SignedProposerPreferences) map[string]error {
+	if s.proposerPreferencesSubmitter == nil {
+		return map[string]error{"<unknown>": errors.New("no proposer preferences submitter configured")}
+	}
+
+	address := "<unknown>"
+	if service, isService := s.proposerPreferencesSubmitter.(eth2client.Service); isService {
+		address = service.Address()
+	}
+	started := time.Now()
+	err := s.proposerPreferencesSubmitter.SubmitProposerPreferences(ctx, preferences)
+	s.clientMonitor.ClientOperation(address, "submit proposer preferences", err == nil, time.Since(started))
+	if err != nil {
+		s.log.Warn().Err(err).Msg("Failed to submit proposer preferences")
+	}
+
+	return map[string]error{address: err}
 }
 
 // SubmitProposal submits a proposal.
