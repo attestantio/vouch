@@ -164,6 +164,11 @@ func (e *ExecutionConfig) ProposerConfig(ctx context.Context,
 	} else {
 		config.FeeRecipient = *e.FeeRecipient
 	}
+	if e.GasLimit == nil {
+		config.GasLimit = fallbackGasLimit
+	} else {
+		config.GasLimit = *e.GasLimit
+	}
 
 	e.setInitialRelayOptions(ctx, config, fallbackGasLimit)
 
@@ -260,6 +265,7 @@ func (e *ExecutionConfig) setProposerConfigOptions(_ context.Context,
 		}
 	}
 	if proposerConfig.GasLimit != nil {
+		config.GasLimit = *proposerConfig.GasLimit
 		for _, configRelay := range config.Relays {
 			configRelay.GasLimit = *proposerConfig.GasLimit
 		}

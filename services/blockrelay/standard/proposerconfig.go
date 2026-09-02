@@ -35,6 +35,7 @@ func (s *Service) ProposerConfig(ctx context.Context,
 		s.log.Warn().Msg("No execution configuration available; using fallback information")
 		return &beaconblockproposer.ProposerConfig{
 			FeeRecipient: s.fallbackFeeRecipient,
+			GasLimit:     s.fallbackGasLimit,
 			Relays:       make([]*beaconblockproposer.RelayConfig, 0),
 		}, nil
 	}

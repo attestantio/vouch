@@ -41,6 +41,7 @@ type Service struct {
 	syncCommitteeSubscriptionSubmitters   map[string]eth2client.SyncCommitteeSubscriptionsSubmitter
 	syncCommitteeContributionsSubmitters  map[string]eth2client.SyncCommitteeContributionsSubmitter
 	payloadAttestationMessagesSubmitters  map[string]submitter.PayloadAttestationMessagesSubmitter
+	proposerPreferencesSubmitters         map[string]eth2client.ProposerPreferencesSubmitter
 }
 
 // New creates a new multinode submitter.
@@ -71,6 +72,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeSubscriptionSubmitters:   parameters.syncCommitteeSubscriptionsSubmitters,
 		syncCommitteeContributionsSubmitters:  parameters.syncCommitteeContributionsSubmitters,
 		payloadAttestationMessagesSubmitters:  parameters.payloadAttestationMessagesSubmitters,
+		proposerPreferencesSubmitters:         parameters.proposerPreferencesSubmitters,
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 

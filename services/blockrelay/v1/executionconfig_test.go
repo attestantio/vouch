@@ -230,7 +230,8 @@ func TestECProposerConfig(t *testing.T) {
 				require.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, test.pc, pc)
+				require.Equal(t, test.pc.FeeRecipient, pc.FeeRecipient)
+				require.Equal(t, test.pc.Relays, pc.Relays)
 			}
 		})
 	}

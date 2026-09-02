@@ -104,6 +104,7 @@ func TestProposerConfig(t *testing.T) {
 		name           string
 		params         []standard.Parameter
 		proposerConfig string
+		gasLimit       uint64
 		err            string
 		logEntries     []map[string]interface{}
 	}{
@@ -126,6 +127,7 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
 			},
 			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","relays":[]}`,
+			gasLimit:       10000000,
 		},
 		{
 			name: "File",
@@ -146,6 +148,7 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
 			},
 			proposerConfig: `{"fee_recipient":"0x0200000000000000000000000000000000000000","relays":[]}`,
+			gasLimit:       20000000,
 			logEntries: []map[string]interface{}{
 				{
 					"message": "Obtained configuration",
@@ -171,6 +174,7 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
 			},
 			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","relays":[]}`,
+			gasLimit:       10000000,
 			logEntries: []map[string]interface{}{
 				{
 					"message": "Failed to obtain execution configuration",
@@ -192,6 +196,7 @@ func TestProposerConfig(t *testing.T) {
 				data, err := json.Marshal(proposerConfig)
 				require.NoError(t, err)
 				require.Equal(t, test.proposerConfig, string(data))
+				require.Equal(t, test.gasLimit, proposerConfig.GasLimit)
 			}
 			for _, logEntry := range test.logEntries {
 				if !capture.HasLog(logEntry) {

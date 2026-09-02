@@ -23,6 +23,7 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	mocketh2client "github.com/attestantio/go-eth2-client/mock"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/vouch/mock"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/submitter"
@@ -30,6 +31,39 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSubmitProposerPreferencesFansOutToNodes(t *testing.T) {
+	ctx := context.Background()
+	client, err := mocketh2client.New(ctx)
+	require.NoError(t, err)
+	recorderOne := &countingProposerPreferencesSubmitter{}
+	recorderTwo := &countingProposerPreferencesSubmitter{}
+
+	service, err := multinode.New(ctx,
+		multinode.WithLogLevel(zerolog.Disabled),
+		multinode.WithClientMonitor(nullmetrics.New()),
+		multinode.WithTimeout(time.Second),
+		multinode.WithProcessConcurrency(2),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{"one": mock.NewProposalSubmitter()}),
+		multinode.WithExecutionPayloadEnvelopeSubmitters(map[string]eth2client.ExecutionPayloadEnvelopeSubmitter{"one": client}),
+		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{"one": mock.NewAttestationsSubmitter()}),
+		multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{"one": mock.NewAggregateAttestationsSubmitter()}),
+		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{"one": mock.NewProposalPreparationsSubmitter()}),
+		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{"one": mock.NewBeaconCommitteeSubscriptionsSubmitter()}),
+		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{"one": mock.NewSyncCommitteeMessagesSubmitter()}),
+		multinode.WithSyncCommitteeSubscriptionsSubmitters(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter{"one": mock.NewSyncCommitteeSubscriptionsSubmitter()}),
+		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{"one": mock.NewSyncCommitteeContributionsSubmitter()}),
+		multinode.WithProposerPreferencesSubmitters(map[string]eth2client.ProposerPreferencesSubmitter{"one": recorderOne, "two": recorderTwo}),
+	)
+	require.NoError(t, err)
+
+	outcomes := service.SubmitProposerPreferences(ctx, []*gloas.SignedProposerPreferences{{Message: &gloas.ProposerPreferences{}}})
+
+	require.Equal(t, map[string]error{"one": nil, "two": nil}, outcomes)
+	require.Eventually(t, func() bool {
+		return recorderOne.calls.Load() == 1 && recorderTwo.calls.Load() == 1
+	}, time.Second, 10*time.Millisecond)
+}
 
 func TestSubmitPayloadAttestationMessagesFansOutToNodes(t *testing.T) {
 	ctx := context.Background()
@@ -149,6 +183,15 @@ func TestSubmitPayloadAttestationMessagesReturnsOnFirstSuccess(t *testing.T) {
 		t.Fatal("in-flight submission was aborted by another node's success")
 	case <-time.After(250 * time.Millisecond):
 	}
+}
+
+type countingProposerPreferencesSubmitter struct {
+	calls atomic.Int32
+}
+
+func (s *countingProposerPreferencesSubmitter) SubmitProposerPreferences(_ context.Context, _ []*gloas.SignedProposerPreferences) error {
+	s.calls.Add(1)
+	return nil
 }
 
 type cancelAwarePayloadAttestationSubmitter struct {

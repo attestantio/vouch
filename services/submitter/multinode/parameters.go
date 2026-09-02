@@ -41,6 +41,7 @@ type parameters struct {
 	syncCommitteeSubscriptionsSubmitters   map[string]eth2client.SyncCommitteeSubscriptionsSubmitter
 	syncCommitteeContributionsSubmitters   map[string]eth2client.SyncCommitteeContributionsSubmitter
 	payloadAttestationMessagesSubmitters   map[string]submitter.PayloadAttestationMessagesSubmitter
+	proposerPreferencesSubmitters          map[string]eth2client.ProposerPreferencesSubmitter
 }
 
 // Parameter is the interface for service parameters.
@@ -121,6 +122,13 @@ func WithProposalPreparationsSubmitters(submitters map[string]eth2client.Proposa
 func WithPayloadAttestationMessagesSubmitters(submitters map[string]submitter.PayloadAttestationMessagesSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.payloadAttestationMessagesSubmitters = submitters
+	})
+}
+
+// WithProposerPreferencesSubmitters sets the proposer preferences submitters.
+func WithProposerPreferencesSubmitters(submitters map[string]eth2client.ProposerPreferencesSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.proposerPreferencesSubmitters = submitters
 	})
 }
 

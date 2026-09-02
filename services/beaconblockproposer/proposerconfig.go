@@ -23,6 +23,7 @@ import (
 // ProposerConfig contains configuration for a proposer.
 type ProposerConfig struct {
 	FeeRecipient bellatrix.ExecutionAddress
+	GasLimit     uint64
 	Relays       []*RelayConfig
 }
 
