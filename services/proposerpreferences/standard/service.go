@@ -50,10 +50,13 @@ type cachedPreference struct {
 }
 
 // New creates a standard proposer-preferences service.
-func New(_ context.Context, params ...Parameter) (*Service, error) {
+func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(params...)
 	if err != nil {
 		return nil, errors.Wrap(err, "problem with parameters")
+	}
+	if err := registerMetrics(ctx, parameters.monitor); err != nil {
+		return nil, errors.Wrap(err, "failed to register metrics")
 	}
 
 	return &Service{
@@ -78,9 +81,29 @@ func (s *Service) ProviderReady(provider string, proposalSlot phase0.Slot, valid
 	if !exists {
 		return false
 	}
+	if provider == "simple" {
+		return cached.published
+	}
 	_, exists = cached.accepted[provider]
 
 	return exists
+}
+
+// Prune discards preferences for proposal slots that have passed.
+func (s *Service) Prune(slot phase0.Slot) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	for duty := range s.current {
+		if duty.proposalSlot < slot {
+			delete(s.current, duty)
+		}
+	}
+	for preferences := range s.cache {
+		if preferences.ProposalSlot < slot {
+			delete(s.cache, preferences)
+		}
+	}
 }
 
 // Publish publishes the supplied duty's proposer preferences.
@@ -104,7 +127,12 @@ func (s *Service) Publish(ctx context.Context, duty *proposerpreferences.Duty) e
 	defer s.mutex.Unlock()
 	cached, exists := s.cache[preferences]
 	if exists && cached.published {
+		monitorProposerPreferencesProcess("replayed")
 		return nil
+	}
+	dutyKey := preferenceDuty{proposalSlot: duty.ProposalSlot, validatorIndex: duty.ValidatorIndex}
+	if current, exists := s.current[dutyKey]; exists && current != preferences {
+		monitorProposerPreferencesProcess("refreshed")
 	}
 	providers := []string(nil)
 	if !exists {
@@ -121,6 +149,7 @@ func (s *Service) Publish(ctx context.Context, duty *proposerpreferences.Duty) e
 			},
 		}
 		s.cache[preferences] = cached
+		monitorProposerPreferencesProcess("signed")
 	} else {
 		for provider, err := range cached.outcomes {
 			if err != nil {
@@ -128,7 +157,7 @@ func (s *Service) Publish(ctx context.Context, duty *proposerpreferences.Duty) e
 			}
 		}
 	}
-	s.current[preferenceDuty{proposalSlot: duty.ProposalSlot, validatorIndex: duty.ValidatorIndex}] = preferences
+	s.current[dutyKey] = preferences
 
 	outcomes := s.submitter.SubmitProposerPreferences(ctx, []*gloas.SignedProposerPreferences{cached.signed}, providers)
 	if len(outcomes) == 0 {
@@ -139,12 +168,14 @@ func (s *Service) Publish(ctx context.Context, duty *proposerpreferences.Duty) e
 		cached.outcomes[provider] = err
 		if err != nil {
 			delete(cached.accepted, provider)
+			monitorProposerPreferencesProcess("rejected")
 			if submissionErr == nil {
 				submissionErr = err
 			}
 			continue
 		}
 		cached.accepted[provider] = struct{}{}
+		monitorProposerPreferencesProcess("accepted")
 	}
 	if submissionErr != nil {
 		return errors.Wrap(submissionErr, "failed to submit proposer preferences")
