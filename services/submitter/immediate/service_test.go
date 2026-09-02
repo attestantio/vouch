@@ -276,7 +276,7 @@ func TestSubmitProposerPreferences(t *testing.T) {
 
 	preferences := []*gloas.SignedProposerPreferences{{}}
 
-	require.Equal(t, map[string]error{"test": nil}, service.SubmitProposerPreferences(ctx, preferences))
+	require.Equal(t, map[string]error{"test": nil}, service.SubmitProposerPreferences(ctx, preferences, nil))
 	require.Equal(t, preferences, preferencesSubmitter.preferences)
 }
 

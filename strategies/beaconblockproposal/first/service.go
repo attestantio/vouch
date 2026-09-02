@@ -22,6 +22,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/attestantio/vouch/strategies/beaconblockproposal"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
@@ -37,6 +38,7 @@ type Service struct {
 	log               zerolog.Logger
 	clientMonitor     metrics.ClientMonitor
 	proposalProviders map[string]eth2client.MultiForkProposalProvider
+	providerReadiness proposerpreferences.ProviderReadiness
 	timeout           time.Duration
 }
 
@@ -91,7 +93,7 @@ func firstProposal[T any](ctx context.Context,
 	log zerolog.Logger,
 	results <-chan *proposalResult[T],
 	providers int,
-	validate func(T) error,
+	validate func(string, T) error,
 	failure string,
 	timeoutMessage string,
 ) (
@@ -107,7 +109,7 @@ func firstProposal[T any](ctx context.Context,
 			return zero, false
 		}
 		if validate != nil {
-			if err := validate(result.proposal); err != nil {
+			if err := validate(result.provider, result.proposal); err != nil {
 				proposalErrors = append(proposalErrors, fmt.Errorf("%s: %w", result.provider, err))
 
 				return zero, false
@@ -195,8 +197,8 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		s.log,
 		results,
 		len(s.proposalProviders),
-		func(proposal *api.VersionedEPBSProposal) error {
-			return s.validateEPBSProposal(proposal, opts.IncludePayload)
+		func(provider string, proposal *api.VersionedEPBSProposal) error {
+			return s.validateEPBSProposal(provider, proposal, opts)
 		},
 		"failed to obtain ePBS beacon block proposal",
 		"Failed to obtain ePBS beacon block proposal before timeout",
@@ -211,13 +213,21 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	}, nil
 }
 
-func (s *Service) validateEPBSProposal(proposal *api.VersionedEPBSProposal, includePayload *bool) error {
-	err := beaconblockproposal.ValidateEPBSProposal(proposal, includePayload)
-	if err != nil {
+// validateEPBSProposal rejects an invalid proposal, or a builder-backed Gloas proposal from a
+// provider that has not accepted the current proposer preferences.
+func (s *Service) validateEPBSProposal(provider string, proposal *api.VersionedEPBSProposal, opts *api.EPBSProposalOpts) error {
+	if err := beaconblockproposal.ValidateEPBSProposal(proposal, opts.IncludePayload); err != nil {
 		s.log.Warn().Err(err).Msg("Discarding invalid ePBS proposal")
+
+		return err
+	}
+	if err := beaconblockproposal.ValidateBuilderBidReadiness(s.providerReadiness, provider, opts.Slot, proposal); err != nil {
+		s.log.Warn().Str("provider", provider).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
+
+		return err
 	}
 
-	return err
+	return nil
 }
 
 // New creates a new beacon block proposal strategy.
@@ -236,6 +246,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	s := &Service{
 		log:               log,
 		proposalProviders: parameters.proposalProviders,
+		providerReadiness: parameters.providerReadiness,
 		timeout:           parameters.timeout,
 		clientMonitor:     parameters.clientMonitor,
 	}

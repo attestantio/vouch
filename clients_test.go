@@ -30,6 +30,7 @@ import (
 	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics/null"
@@ -236,7 +237,7 @@ func TestSimpleProposalProviderReturnsProviderError(t *testing.T) {
 		knownClientsMu.Unlock()
 	})
 
-	provider, err := selectProposalProvider(ctx, null.New(), nil, nil, nil)
+	provider, err := selectProposalProvider(ctx, null.New(), nil, nil, nil, nil)
 	require.NoError(t, err)
 	includePayload := true
 	response, err := provider.EPBSProposal(ctx, &api.EPBSProposalOpts{
@@ -245,4 +246,109 @@ func TestSimpleProposalProviderReturnsProviderError(t *testing.T) {
 	})
 	require.Nil(t, response)
 	require.ErrorIs(t, err, providerErr)
+}
+
+func TestSimpleProposalProviderGatesBuilderBidsOnReadiness(t *testing.T) {
+	const selfBuild = gloas.BuilderIndex(^uint64(0))
+	tests := []struct {
+		name         string
+		builderIndex gloas.BuilderIndex
+		ready        bool
+		providerErr  error
+		err          string
+	}{
+		{
+			name:         "BuilderBidFromReadyProvider",
+			builderIndex: 1,
+			ready:        true,
+		},
+		{
+			name:         "BuilderBidFromUnreadyProvider",
+			builderIndex: 1,
+			err:          "builder-backed ePBS proposal from provider without current preferences",
+		},
+		{
+			name:         "SelfBuildFromUnreadyProvider",
+			builderIndex: selfBuild,
+		},
+		{
+			name:        "ProviderError",
+			providerErr: errors.New("proposal failed"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			const address = "http://proposal.test"
+			proposal := &api.VersionedEPBSProposal{
+				Version: spec.DataVersionGloas,
+				Gloas: &gloas.BeaconBlock{
+					Slot:          1,
+					ProposerIndex: 7,
+					Body: &gloas.BeaconBlockBody{
+						SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{
+							Message: &gloas.ExecutionPayloadBid{
+								BuilderIndex: test.builderIndex,
+								FeeRecipient: bellatrix.ExecutionAddress{0x01},
+							},
+						},
+					},
+				},
+			}
+			proposalClient, err := mockconsensusclient.New(ctx)
+			require.NoError(t, err)
+			proposalClient.EPBSProposalFunc = func(context.Context, *api.EPBSProposalOpts) (*api.Response[*api.VersionedEPBSProposal], error) {
+				if test.providerErr != nil {
+					return nil, test.providerErr
+				}
+
+				return &api.Response[*api.VersionedEPBSProposal]{Data: proposal}, nil
+			}
+			viper.Set("strategies.beaconblockproposal.style", "simple")
+			viper.Set("strategies.beaconblockproposal.beacon-node-addresses", []string{address})
+			knownClientsMu.Lock()
+			knownClients[address] = proposalClient
+			knownClientsMu.Unlock()
+			t.Cleanup(func() {
+				viper.Reset()
+				knownClientsMu.Lock()
+				delete(knownClients, address)
+				delete(knownClients, "multi:"+address)
+				knownClientsMu.Unlock()
+			})
+			readiness := &recordingProviderReadiness{ready: test.ready}
+
+			provider, err := selectProposalProvider(ctx, null.New(), nil, nil, nil, readiness)
+			require.NoError(t, err)
+			response, err := provider.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+			if test.providerErr != nil {
+				require.Nil(t, response)
+				require.ErrorIs(t, err, test.providerErr)
+				require.Empty(t, readiness.providers)
+
+				return
+			}
+			if test.err != "" {
+				require.Nil(t, response)
+				require.EqualError(t, err, test.err)
+				require.Equal(t, []string{"simple"}, readiness.providers)
+
+				return
+			}
+			require.NoError(t, err)
+			require.Same(t, proposal, response.Data)
+		})
+	}
+}
+
+type recordingProviderReadiness struct {
+	ready     bool
+	providers []string
+}
+
+func (r *recordingProviderReadiness) ProviderReady(provider string, _ phase0.Slot, _ phase0.ValidatorIndex) bool {
+	r.providers = append(r.providers, provider)
+
+	return r.ready
 }

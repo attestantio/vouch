@@ -17,6 +17,9 @@ package beaconblockproposal
 import (
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/pkg/errors"
 )
 
@@ -44,6 +47,31 @@ func ValidateEPBSProposal(proposal *api.VersionedEPBSProposal, includePayload *b
 	}
 	if block.Body.SignedExecutionPayloadBid.Message.FeeRecipient.IsZero() {
 		return errors.New("beacon block obtained with 0 fee recipient")
+	}
+
+	return nil
+}
+
+// ValidateBuilderBidReadiness rejects a builder-backed Gloas proposal from a provider that has not
+// accepted the current proposer preferences.  Self-built proposals are always accepted.
+// The proposal must already have passed ValidateEPBSProposal.
+func ValidateBuilderBidReadiness(readiness proposerpreferences.ProviderReadiness,
+	provider string,
+	slot phase0.Slot,
+	proposal *api.VersionedEPBSProposal,
+) error {
+	if readiness == nil || proposal.Version != spec.DataVersionGloas {
+		return nil
+	}
+	block := proposal.Gloas
+	if proposal.ExecutionPayloadIncluded {
+		block = proposal.GloasContents.Block
+	}
+	if block.Body.SignedExecutionPayloadBid.Message.BuilderIndex == gloas.BuilderIndexSelfBuild {
+		return nil
+	}
+	if !readiness.ProviderReady(provider, slot, block.ProposerIndex) {
+		return errors.New("builder-backed ePBS proposal from provider without current preferences")
 	}
 
 	return nil

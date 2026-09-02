@@ -66,6 +66,52 @@ func TestPublishSignsAndSubmitsEachDistinctPreferenceOnce(t *testing.T) {
 	require.Same(t, signer.preferences[0], submitter.preferences[0][0].Message)
 }
 
+func TestProviderReadyAfterAcceptedSubmission(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	submitter := &recordingSubmitter{outcomes: map[string]error{"accepted": nil, "rejected": context.DeadlineExceeded}}
+	service, err := standard.New(ctx,
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithSigner(&recordingSigner{signature: phase0.BLSSignature{0x01}}),
+		standard.WithSubmitter(submitter),
+	)
+	require.NoError(t, err)
+
+	err = service.Publish(ctx, proposerpreferences.NewDuty(
+		phase0.Root{0x01},
+		64,
+		3,
+		accounts[3],
+		bellatrix.ExecutionAddress{0x02},
+		30_000_000,
+	))
+	require.EqualError(t, err, "failed to submit proposer preferences: context deadline exceeded")
+	require.True(t, service.ProviderReady("accepted", 64, 3))
+	require.False(t, service.ProviderReady("rejected", 64, 3))
+}
+
+func TestPublishRetriesOnlyRejectedProvider(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	submitter := &recordingSubmitter{outcomeSets: []map[string]error{
+		{"accepted": nil, "rejected": context.DeadlineExceeded},
+		{"rejected": nil},
+	}}
+	service, err := standard.New(ctx,
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithSigner(&recordingSigner{signature: phase0.BLSSignature{0x01}}),
+		standard.WithSubmitter(submitter),
+	)
+	require.NoError(t, err)
+	duty := proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000)
+
+	require.EqualError(t, service.Publish(ctx, duty), "failed to submit proposer preferences: context deadline exceeded")
+	require.NoError(t, service.Publish(ctx, duty))
+	require.Equal(t, [][]string{nil, {"rejected"}}, submitter.providers)
+}
+
 func TestPublishRejectsMissingProviderOutcomes(t *testing.T) {
 	ctx := context.Background()
 	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
@@ -107,12 +153,21 @@ func (s *recordingSigner) SignProposerPreferences(_ context.Context,
 
 type recordingSubmitter struct {
 	preferences [][]*gloas.SignedProposerPreferences
+	providers   [][]string
 	outcomes    map[string]error
+	outcomeSets []map[string]error
 }
 
 func (s *recordingSubmitter) SubmitProposerPreferences(_ context.Context,
 	preferences []*gloas.SignedProposerPreferences,
+	providers []string,
 ) map[string]error {
 	s.preferences = append(s.preferences, preferences)
+	s.providers = append(s.providers, providers)
+	if len(s.outcomeSets) > 0 {
+		outcomes := s.outcomeSets[0]
+		s.outcomeSets = s.outcomeSets[1:]
+		return outcomes
+	}
 	return s.outcomes
 }

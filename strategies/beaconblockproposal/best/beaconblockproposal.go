@@ -195,7 +195,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 				Int("errored", errored).
 				Int("timed_out", timedOut).
 				Msg("Response received")
-			bestProposal, bestProvider = considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
+			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
 		case err := <-errCh:
 			errored++
 			log.Debug().
@@ -237,7 +237,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 				Int("errored", errored).
 				Int("timed_out", timedOut).
 				Msg("Response received")
-			bestProposal, bestProvider = considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
+			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
 		case err := <-errCh:
 			errored++
 			log.Debug().
@@ -281,7 +281,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 
 // considerEPBSProposal updates the best proposal seen so far, ignoring proposals that lack a
 // requested execution payload.
-func considerEPBSProposal(opts *api.EPBSProposalOpts,
+func (s *Service) considerEPBSProposal(opts *api.EPBSProposalOpts,
 	response *beaconBlockEPBSResponse,
 	bestProposal *api.VersionedEPBSProposal,
 	bestProvider string,
@@ -289,6 +289,11 @@ func considerEPBSProposal(opts *api.EPBSProposalOpts,
 ) (*api.VersionedEPBSProposal, string) {
 	if opts.IncludePayload != nil && *opts.IncludePayload && !response.proposal.ExecutionPayloadIncluded {
 		log.Warn().Str("provider", response.provider).Msg("Discarding ePBS proposal without requested execution payload")
+
+		return bestProposal, bestProvider
+	}
+	if err := beaconblockproposal.ValidateBuilderBidReadiness(s.providerReadiness, response.provider, opts.Slot, response.proposal); err != nil {
+		log.Warn().Str("provider", response.provider).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
 
 		return bestProposal, bestProvider
 	}
