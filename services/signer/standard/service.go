@@ -44,6 +44,7 @@ type Service struct {
 	blobSidecarDomainType                 *phase0.DomainType
 	beaconBuilderDomainType               *phase0.DomainType
 	ptcAttesterDomainType                 *phase0.DomainType
+	proposerPreferencesDomainType         *phase0.DomainType
 }
 
 // Module-wide log.
@@ -123,6 +124,13 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		log.Warn().Err(err).Msg("DOMAIN_PTC_ATTESTER unavailable in spec; payload attestation signing unavailable")
 	}
 
+	var proposerPreferencesDomainType *phase0.DomainType
+	if tmp, err := domainType(spec, "DOMAIN_PROPOSER_PREFERENCES"); err == nil {
+		proposerPreferencesDomainType = &tmp
+	} else {
+		log.Warn().Err(err).Msg("DOMAIN_PROPOSER_PREFERENCES unavailable in spec; proposer preferences signing unavailable")
+	}
+
 	s := &Service{
 		monitor:                               parameters.monitor,
 		clientMonitor:                         parameters.clientMonitor,
@@ -140,6 +148,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		blobSidecarDomainType:                 blobSidecarDomainType,
 		beaconBuilderDomainType:               beaconBuilderDomainType,
 		ptcAttesterDomainType:                 ptcAttesterDomainType,
+		proposerPreferencesDomainType:         proposerPreferencesDomainType,
 	}
 
 	return s, nil
