@@ -198,7 +198,13 @@ func (s *Service) considerEPBSProposal(opts *api.EPBSProposalOpts,
 		}
 	}
 
-	if bestProposal == nil || response.proposal.Value().Cmp(bestProposal.Value()) > 0 {
+	if bestProposal == nil {
+		return response.proposal, response.provider
+	}
+
+	value := response.proposal.Value()
+	bestValue := bestProposal.Value()
+	if value != nil && (bestValue == nil || value.Cmp(bestValue) > 0) {
 		return response.proposal, response.provider
 	}
 
