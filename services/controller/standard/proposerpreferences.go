@@ -115,6 +115,10 @@ func (s *Service) publishProposerPreferences(ctx context.Context, rootEpoch phas
 		s.log.Error().Uint64("epoch", uint64(proposalEpoch)).Msg("No dependent root for proposer preferences duties")
 		return
 	}
+	if responseDependentRoot != dependentRoot {
+		s.log.Error().Uint64("epoch", uint64(proposalEpoch)).Msg("Stale dependent root for proposer preferences duties")
+		return
+	}
 
 	firstSlot := s.chainTimeService.FirstSlotOfEpoch(proposalEpoch)
 	lastSlot := s.chainTimeService.FirstSlotOfEpoch(proposalEpoch+1) - 1

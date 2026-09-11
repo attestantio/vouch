@@ -95,6 +95,31 @@ func TestPublishProposerPreferencesRejectsDutiesWithoutDependentRoot(t *testing.
 	require.Empty(t, preferences.duties)
 }
 
+func TestPublishProposerPreferencesRejectsStaleDependentRoot(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+
+	provider := &recordingProposerDutiesProvider{
+		duties:   []*apiv1.ProposerDuty{{Slot: 160, ValidatorIndex: 3}},
+		metadata: map[string]any{"dependent_root": phase0.Root{0x02}},
+	}
+	preferences := &recordingProposerPreferences{}
+	service := &Service{
+		chainTimeService:             &recordingChainTime{currentEpoch: 4, slotsPerEpoch: 32},
+		proposerDutiesProvider:       provider,
+		validatingAccountsProvider:   &proposerPreferencesAccountsProvider{accounts: accounts},
+		executionConfigProvider:      &recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{}},
+		proposerPreferences:          preferences,
+		gloasForkEpoch:               5,
+		proposerPreferencesLookahead: 1,
+	}
+
+	service.publishProposerPreferences(ctx, 4, phase0.Root{0x01})
+
+	require.Empty(t, preferences.duties)
+}
+
 func TestPublishProposerPreferencesDoesNotPublishBeforeGloas(t *testing.T) {
 	provider := &recordingProposerDutiesProvider{}
 	service := &Service{

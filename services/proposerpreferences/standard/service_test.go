@@ -15,7 +15,9 @@ package standard_test
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/gloas"
@@ -65,6 +67,110 @@ func TestPublishSignsAndSubmitsEachDistinctPreferenceOnce(t *testing.T) {
 	require.Len(t, submitter.preferences, 1)
 	require.Equal(t, signer.signature, submitter.preferences[0][0].Signature)
 	require.Same(t, signer.preferences[0], submitter.preferences[0][0].Message)
+}
+
+func TestProviderReadyDoesNotWaitForPreferenceSubmission(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	submitter := &blockingSubmitter{started: make(chan struct{}), release: make(chan struct{})}
+	service, err := standard.New(ctx,
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithSigner(&recordingSigner{signature: phase0.BLSSignature{0x01}}),
+		standard.WithSubmitter(submitter),
+	)
+	require.NoError(t, err)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- service.Publish(ctx, proposerpreferences.NewDuty(
+			phase0.Root{0x01},
+			64,
+			3,
+			accounts[3],
+			bellatrix.ExecutionAddress{0x02},
+			30_000_000,
+		))
+	}()
+	<-submitter.started
+
+	readyCh := make(chan bool, 1)
+	go func() {
+		readyCh <- service.ProviderReady("accepted", 64, 3)
+	}()
+	select {
+	case ready := <-readyCh:
+		require.False(t, ready)
+	case <-time.After(time.Second):
+		t.Fatal("provider readiness waited for preference submission")
+	}
+	close(submitter.release)
+	require.NoError(t, <-errCh)
+}
+
+func TestConcurrentPublishReusesInFlightPreference(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	signer := &recordingSigner{signature: phase0.BLSSignature{0x01}}
+	submitter := &blockingSubmitter{started: make(chan struct{}), release: make(chan struct{})}
+	service, err := standard.New(ctx,
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithSigner(signer),
+		standard.WithSubmitter(submitter),
+	)
+	require.NoError(t, err)
+	duty := proposerpreferences.NewDuty(
+		phase0.Root{0x01},
+		64,
+		3,
+		accounts[3],
+		bellatrix.ExecutionAddress{0x02},
+		30_000_000,
+	)
+	errs := make(chan error, 2)
+	go func() { errs <- service.Publish(ctx, duty) }()
+	<-submitter.started
+	go func() { errs <- service.Publish(ctx, duty) }()
+
+	close(submitter.release)
+	require.NoError(t, <-errs)
+	require.NoError(t, <-errs)
+
+	require.Len(t, signer.preferences, 1)
+	require.Equal(t, int64(1), submitter.calls.Load())
+}
+
+func TestPruneRetainsInFlightPreference(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	signer := &recordingSigner{signature: phase0.BLSSignature{0x01}}
+	submitter := &blockingSubmitter{started: make(chan struct{}), release: make(chan struct{})}
+	service, err := standard.New(ctx,
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithSigner(signer),
+		standard.WithSubmitter(submitter),
+	)
+	require.NoError(t, err)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- service.Publish(ctx, proposerpreferences.NewDuty(
+			phase0.Root{0x01},
+			64,
+			3,
+			accounts[3],
+			bellatrix.ExecutionAddress{0x02},
+			30_000_000,
+		))
+	}()
+	<-submitter.started
+
+	service.Prune(65)
+	close(submitter.release)
+	require.NoError(t, <-errCh)
+
+	require.True(t, service.ProviderReady("accepted", 64, 3))
+	require.Len(t, signer.preferences, 1)
 }
 
 func TestProviderReadyAfterAcceptedSubmission(t *testing.T) {
@@ -296,6 +402,19 @@ type prometheusMonitor struct{}
 
 func (prometheusMonitor) Presenter() string {
 	return "prometheus"
+}
+
+type blockingSubmitter struct {
+	calls   atomic.Int64
+	started chan struct{}
+	release chan struct{}
+}
+
+func (s *blockingSubmitter) SubmitProposerPreferences(_ context.Context, _ []*gloas.SignedProposerPreferences, _ []string) map[string]error {
+	s.calls.Add(1)
+	close(s.started)
+	<-s.release
+	return map[string]error{"accepted": nil}
 }
 
 type recordingSigner struct {

@@ -32,6 +32,7 @@ type Service struct {
 	monitor   metrics.Service
 	cache     map[gloas.ProposerPreferences]*cachedPreference
 	current   map[preferenceDuty]gloas.ProposerPreferences
+	inFlight  map[gloas.ProposerPreferences]chan struct{}
 	signer    signer.ProposerPreferencesSigner
 	submitter submitter.ProposerPreferencesSubmitter
 	mutex     sync.Mutex
@@ -65,6 +66,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		submitter: parameters.submitter,
 		cache:     make(map[gloas.ProposerPreferences]*cachedPreference),
 		current:   make(map[preferenceDuty]gloas.ProposerPreferences),
+		inFlight:  make(map[gloas.ProposerPreferences]chan struct{}),
 	}, nil
 }
 
@@ -94,14 +96,18 @@ func (s *Service) Prune(slot phase0.Slot) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	for duty := range s.current {
+	for duty, preferences := range s.current {
 		if duty.proposalSlot < slot {
-			delete(s.current, duty)
+			if _, exists := s.inFlight[preferences]; !exists {
+				delete(s.current, duty)
+			}
 		}
 	}
 	for preferences := range s.cache {
 		if preferences.ProposalSlot < slot {
-			delete(s.cache, preferences)
+			if _, exists := s.inFlight[preferences]; !exists {
+				delete(s.cache, preferences)
+			}
 		}
 	}
 }
@@ -122,65 +128,95 @@ func (s *Service) Publish(ctx context.Context, duty *proposerpreferences.Duty) e
 		FeeRecipient:   duty.FeeRecipient,
 		TargetGasLimit: duty.TargetGasLimit,
 	}
-
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	cached, exists := s.cache[preferences]
-	if exists && cached.published {
-		monitorProposerPreferencesProcess("replayed")
-		return nil
-	}
 	dutyKey := preferenceDuty{proposalSlot: duty.ProposalSlot, validatorIndex: duty.ValidatorIndex}
-	if current, exists := s.current[dutyKey]; exists && current != preferences {
-		monitorProposerPreferencesProcess("refreshed")
-	}
-	providers := []string(nil)
-	if !exists {
-		signature, err := s.signer.SignProposerPreferences(ctx, duty.Account, &preferences)
-		if err != nil {
-			return errors.Wrap(err, "failed to sign proposer preferences")
+
+	for {
+		s.mutex.Lock()
+		cached, exists := s.cache[preferences]
+		if exists && cached.published {
+			s.mutex.Unlock()
+			monitorProposerPreferencesProcess("replayed")
+			return nil
 		}
-		cached = &cachedPreference{
-			accepted: make(map[string]struct{}),
-			outcomes: make(map[string]error),
-			signed: &gloas.SignedProposerPreferences{
+		if complete, exists := s.inFlight[preferences]; exists {
+			s.mutex.Unlock()
+			select {
+			case <-complete:
+				continue
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
+		complete := make(chan struct{})
+		s.inFlight[preferences] = complete
+		if current, exists := s.current[dutyKey]; exists && current != preferences {
+			monitorProposerPreferencesProcess("refreshed")
+		}
+		providers := []string(nil)
+		if !exists {
+			cached = &cachedPreference{
+				accepted: make(map[string]struct{}),
+				outcomes: make(map[string]error),
+			}
+			s.cache[preferences] = cached
+		} else {
+			for provider, err := range cached.outcomes {
+				if err != nil {
+					providers = append(providers, provider)
+				}
+			}
+		}
+		s.current[dutyKey] = preferences
+		s.mutex.Unlock()
+
+		if !exists {
+			signature, err := s.signer.SignProposerPreferences(ctx, duty.Account, &preferences)
+			if err != nil {
+				s.mutex.Lock()
+				delete(s.cache, preferences)
+				delete(s.inFlight, preferences)
+				close(complete)
+				s.mutex.Unlock()
+				return errors.Wrap(err, "failed to sign proposer preferences")
+			}
+			cached.signed = &gloas.SignedProposerPreferences{
 				Message:   &preferences,
 				Signature: signature,
-			},
+			}
+			monitorProposerPreferencesProcess("signed")
 		}
-		s.cache[preferences] = cached
-		monitorProposerPreferencesProcess("signed")
-	} else {
-		for provider, err := range cached.outcomes {
+
+		outcomes := s.submitter.SubmitProposerPreferences(ctx, []*gloas.SignedProposerPreferences{cached.signed}, providers)
+		s.mutex.Lock()
+		delete(s.inFlight, preferences)
+		close(complete)
+		if len(outcomes) == 0 {
+			s.mutex.Unlock()
+			return errors.New("no proposer preferences submission outcomes")
+		}
+		var submissionErr error
+		for provider, err := range outcomes {
+			cached.outcomes[provider] = err
 			if err != nil {
-				providers = append(providers, provider)
+				delete(cached.accepted, provider)
+				monitorProposerPreferencesProcess("rejected")
+				if submissionErr == nil {
+					submissionErr = err
+				}
+				continue
 			}
+			cached.accepted[provider] = struct{}{}
+			monitorProposerPreferencesProcess("accepted")
 		}
-	}
-	s.current[dutyKey] = preferences
-
-	outcomes := s.submitter.SubmitProposerPreferences(ctx, []*gloas.SignedProposerPreferences{cached.signed}, providers)
-	if len(outcomes) == 0 {
-		return errors.New("no proposer preferences submission outcomes")
-	}
-	var submissionErr error
-	for provider, err := range outcomes {
-		cached.outcomes[provider] = err
-		if err != nil {
-			delete(cached.accepted, provider)
-			monitorProposerPreferencesProcess("rejected")
-			if submissionErr == nil {
-				submissionErr = err
-			}
-			continue
+		if submissionErr == nil {
+			cached.published = true
 		}
-		cached.accepted[provider] = struct{}{}
-		monitorProposerPreferencesProcess("accepted")
-	}
-	if submissionErr != nil {
-		return errors.Wrap(submissionErr, "failed to submit proposer preferences")
-	}
-	cached.published = true
+		s.mutex.Unlock()
+		if submissionErr != nil {
+			return errors.Wrap(submissionErr, "failed to submit proposer preferences")
+		}
 
-	return nil
+		return nil
+	}
 }
