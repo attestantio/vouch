@@ -27,6 +27,7 @@ import (
 	client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	apiv1gloas "github.com/attestantio/go-eth2-client/api/v1/gloas"
 	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
@@ -214,6 +215,50 @@ type payloadAttestationMessagesSubmitter struct{}
 
 func (*payloadAttestationMessagesSubmitter) SubmitPayloadAttestationMessages(_ context.Context, _ *api.SubmitPayloadAttestationMessagesOpts) error {
 	return nil
+}
+
+func TestSimpleProposalProviderAcceptsUnknownValue(t *testing.T) {
+	ctx := context.Background()
+	const address = "http://proposal-unknown.test"
+	proposal := &api.VersionedEPBSProposal{
+		Version:                  spec.DataVersionGloas,
+		ExecutionPayloadIncluded: true,
+		GloasContents: &apiv1gloas.BlockContents{Block: &gloas.BeaconBlock{Body: &gloas.BeaconBlockBody{
+			SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{Message: &gloas.ExecutionPayloadBid{
+				BuilderIndex: gloas.BuilderIndexSelfBuild,
+				FeeRecipient: bellatrix.ExecutionAddress{0x01},
+			}},
+		}}},
+	}
+	proposalClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	proposalClient.EPBSProposalFunc = func(context.Context, *api.EPBSProposalOpts) (*api.Response[*api.VersionedEPBSProposal], error) {
+		return &api.Response[*api.VersionedEPBSProposal]{Data: proposal}, nil
+	}
+	viper.Set("strategies.beaconblockproposal.style", "simple")
+	viper.Set("strategies.beaconblockproposal.beacon-node-addresses", []string{address})
+	viper.Set("strategies.beaconblockproposal.first.timeout", time.Second)
+	knownClientsMu.Lock()
+	knownClients[address] = proposalClient
+	knownClientsMu.Unlock()
+	t.Cleanup(func() {
+		viper.Reset()
+		knownClientsMu.Lock()
+		delete(knownClients, address)
+		delete(knownClients, "multi:"+address)
+		knownClientsMu.Unlock()
+	})
+
+	provider, err := selectProposalProvider(ctx, null.New(), nil, nil, nil, nil)
+	require.NoError(t, err)
+	includePayload := true
+	response, err := provider.EPBSProposal(ctx, &api.EPBSProposalOpts{
+		Slot:           phase0.Slot(1),
+		IncludePayload: &includePayload,
+	})
+	require.NoError(t, err)
+	require.Same(t, proposal, response.Data)
+	require.Nil(t, response.Data.ExecutionValue)
 }
 
 func TestSimpleProposalProviderReturnsProviderError(t *testing.T) {
