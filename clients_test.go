@@ -100,6 +100,7 @@ func TestFetchClientCustomSpecSupport(t *testing.T) {
 	response, err := service.(client.EPBSProposalProvider).EPBSProposal(ctx, &api.EPBSProposalOpts{
 		Slot:           1,
 		IncludePayload: &includePayload,
+		BuilderConfig:  &gloas.BuilderConfig{Builders: []*gloas.BuilderEntry{}},
 	})
 	require.NoError(t, err)
 	require.Equal(t, spec.DataVersionGloas, response.Data.Version)
