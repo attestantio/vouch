@@ -281,8 +281,9 @@ func TestProposeGloas(t *testing.T) {
 			require.NotNil(t, epbsOpts)
 			require.NotNil(t, epbsOpts.IncludePayload)
 			require.True(t, *epbsOpts.IncludePayload)
-			require.NotNil(t, epbsOpts.BuilderBoostFactor)
-			require.Equal(t, uint64(0), *epbsOpts.BuilderBoostFactor)
+			require.NotNil(t, epbsOpts.BuilderConfig)
+			require.Zero(t, epbsOpts.BuilderConfig.BuilderBoostFactor)
+			require.Empty(t, epbsOpts.BuilderConfig.Builders)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 				if test.proposalSubmitterErr != nil {

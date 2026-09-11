@@ -254,14 +254,15 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	// so asking for it is what keeps the reveal publishable through any beacon node
 	// rather than only the one that built the payload.
 	includePayload := true
-	// Force local building.
-	selfBuildBoostFactor := uint64(0)
+	// Request a local-preferred build without direct builder entries.
 	proposalResponse, err := s.proposalProvider.EPBSProposal(ctx, &api.EPBSProposalOpts{
-		Slot:               duty.Slot(),
-		RandaoReveal:       duty.RANDAOReveal(),
-		Graffiti:           graffiti,
-		IncludePayload:     &includePayload,
-		BuilderBoostFactor: &selfBuildBoostFactor,
+		Slot:           duty.Slot(),
+		RandaoReveal:   duty.RANDAOReveal(),
+		Graffiti:       graffiti,
+		IncludePayload: &includePayload,
+		BuilderConfig: &gloas.BuilderConfig{
+			Builders: []*gloas.BuilderEntry{},
+		},
 	})
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain ePBS proposal")

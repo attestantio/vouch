@@ -284,8 +284,10 @@ func TestEPBSProposalDoesNotWeightExecutionPayloadGas(t *testing.T) {
 	require.NoError(t, err)
 	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
 	consensusCandidate := testGloasProposal(2, bellatrix.ExecutionAddress{0x01})
+	consensusCandidate.ExecutionValue = big.NewInt(2)
 	executionCandidate := testGloasProposal(0, bellatrix.ExecutionAddress{0x02})
 	executionCandidate.ConsensusValue = nil
+	executionCandidate.ExecutionValue = big.NewInt(0)
 	executionCandidate.GloasContents.ExecutionPayloadEnvelope = &gloas.ExecutionPayloadEnvelope{
 		Payload: &gloas.ExecutionPayload{GasUsed: 3},
 	}
@@ -322,9 +324,9 @@ func TestEPBSProposalComparesLargeValuesExactly(t *testing.T) {
 	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
 	base := new(big.Int).Lsh(big.NewInt(1), 54)
 	lowerValueCandidate := testGloasProposal(0, bellatrix.ExecutionAddress{0x01})
-	lowerValueCandidate.ConsensusValue = new(big.Int).Add(base, big.NewInt(1))
+	lowerValueCandidate.ExecutionValue = new(big.Int).Add(base, big.NewInt(1))
 	higherValueCandidate := testGloasProposal(0, bellatrix.ExecutionAddress{0x02})
-	higherValueCandidate.ConsensusValue = new(big.Int).Add(base, big.NewInt(2))
+	higherValueCandidate.ExecutionValue = new(big.Int).Add(base, big.NewInt(2))
 	service, err := best.New(ctx,
 		best.WithLogLevel(zerolog.Disabled),
 		best.WithClientMonitor(nullmetrics.New()),
