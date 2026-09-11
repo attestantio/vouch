@@ -58,12 +58,13 @@ func TestSignPayloadAttestationDataUsesGenericMulti(t *testing.T) {
 
 func TestSignProposerPreferencesSignsForProposalEpoch(t *testing.T) {
 	ctx := context.Background()
+	domainProvider := &recordingDomainProvider{}
 	service, err := New(ctx,
 		WithLogLevel(zerolog.Disabled),
 		WithMonitor(nullmetrics.New()),
 		WithClientMonitor(nullmetrics.New()),
 		WithSpecProvider(&ptcSpecProvider{}),
-		WithDomainProvider(mock.NewDomainProvider()),
+		WithDomainProvider(domainProvider),
 	)
 	require.NoError(t, err)
 
@@ -72,6 +73,8 @@ func TestSignProposerPreferencesSignsForProposalEpoch(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, phase0.BLSSignature{}, signature)
 	require.Equal(t, 1, account.signCount)
+	require.Equal(t, phase0.DomainType{0x0d}, domainProvider.domainType)
+	require.Equal(t, phase0.Epoch(1), domainProvider.epoch)
 }
 
 func TestNewWarnsWhenPTCAttesterDomainUnavailable(t *testing.T) {
