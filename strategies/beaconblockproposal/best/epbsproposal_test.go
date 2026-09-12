@@ -35,6 +35,7 @@ import (
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/strategies/beaconblockproposal/best"
+	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
@@ -122,7 +123,7 @@ func TestEPBSProposalRejectsBuilderBidFromUnreadyProvider(t *testing.T) {
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
 		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
-			"unready": &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x01})},
+			"unready": &testEPBSProposalProvider{proposal: testGloasProposalWithoutPayload(1, bellatrix.ExecutionAddress{0x01})},
 		}),
 		best.WithProviderReadiness(&providerReadiness{ready: false}),
 		best.WithTimeout(time.Second),
@@ -498,6 +499,8 @@ func TestEPBSProposalRejectsMalformedIncludedGloasProposal(t *testing.T) {
 	}
 }
 
+// testGloasProposal returns a self-built proposal: it carries the payload, which only the
+// beacon node's own build can do.
 func testGloasProposal(value int64, feeRecipient bellatrix.ExecutionAddress) *api.VersionedEPBSProposal {
 	return &api.VersionedEPBSProposal{
 		Version:                  spec.DataVersionGloas,
@@ -507,7 +510,10 @@ func testGloasProposal(value int64, feeRecipient bellatrix.ExecutionAddress) *ap
 			Block: &gloas.BeaconBlock{
 				Body: &gloas.BeaconBlockBody{
 					SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{
-						Message: &gloas.ExecutionPayloadBid{FeeRecipient: feeRecipient},
+						Message: &gloas.ExecutionPayloadBid{
+							BuilderIndex: gloas.BuilderIndex(^uint64(0)),
+							FeeRecipient: feeRecipient,
+						},
 					},
 				},
 			},
@@ -515,11 +521,14 @@ func testGloasProposal(value int64, feeRecipient bellatrix.ExecutionAddress) *ap
 	}
 }
 
+// testGloasProposalWithoutPayload returns a builder-backed proposal, which carries only the
+// block: the winning builder reveals the payload itself.
 func testGloasProposalWithoutPayload(value int64, feeRecipient bellatrix.ExecutionAddress) *api.VersionedEPBSProposal {
 	proposal := testGloasProposal(value, feeRecipient)
 	proposal.Gloas = proposal.GloasContents.Block
 	proposal.GloasContents = nil
 	proposal.ExecutionPayloadIncluded = false
+	proposal.Gloas.Body.SignedExecutionPayloadBid.Message.BuilderIndex = 7
 
 	return proposal
 }
@@ -679,6 +688,7 @@ func (p *providerReadiness) ProviderReady(string, phase0.Slot, phase0.ValidatorI
 
 type testEPBSProposalProvider struct {
 	proposal            *api.VersionedEPBSProposal
+	opts                *api.EPBSProposalOpts
 	err                 error
 	delay               time.Duration
 	waitForCancellation bool
@@ -794,11 +804,12 @@ func (*testEPBSProposalProvider) Proposal(_ context.Context, _ *api.ProposalOpts
 }
 
 func (p *testEPBSProposalProvider) EPBSProposal(ctx context.Context,
-	_ *api.EPBSProposalOpts,
+	opts *api.EPBSProposalOpts,
 ) (
 	*api.Response[*api.VersionedEPBSProposal],
 	error,
 ) {
+	p.opts = opts
 	if p.delay != 0 {
 		time.Sleep(p.delay)
 	}
@@ -811,4 +822,207 @@ func (p *testEPBSProposalProvider) EPBSProposal(ctx context.Context,
 	}
 
 	return &api.Response[*api.VersionedEPBSProposal]{Data: p.proposal}, nil
+}
+
+// TestEPBSProposalRecordsDegradedSelectionWithUnknownValues proves that when no valid
+// response reports a value, the strategy still selects one but records that the selection
+// was made without value information.  A selection known to be economically blind is worth
+// distinguishing from a normal one.
+func TestEPBSProposalRecordsDegradedSelectionWithUnknownValues(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+
+	tests := []struct {
+		name     string
+		value    *big.Int
+		degraded bool
+	}{
+		{
+			name:     "AllUnknown",
+			degraded: true,
+		},
+		{
+			name:  "KnownValue",
+			value: big.NewInt(2),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			proposal := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
+			proposal.ExecutionValue = test.value
+			capture := logger.NewLogCapture()
+			service, err := best.New(ctx,
+				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithClientMonitor(nullmetrics.New()),
+				best.WithProcessConcurrency(1),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
+				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+					"one": &testEPBSProposalProvider{proposal: proposal},
+				}),
+				best.WithTimeout(time.Second),
+				best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+			)
+			require.NoError(t, err)
+
+			response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+			require.NoError(t, err)
+			require.Same(t, proposal, response.Data)
+			require.Equal(t, test.degraded, capture.HasLog(map[string]any{
+				"message":  "Selected ePBS proposal with unknown value",
+				"provider": "one",
+			}))
+		})
+	}
+}
+
+// TestEPBSProposalAcceptsBuilderBackedProposal proves that a proposal the beacon node
+// awarded to a P2P builder is a valid candidate even though Vouch asked for the payload:
+// the node never holds a builder's payload, so it cannot return one.
+func TestEPBSProposalAcceptsBuilderBackedProposal(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	proposal := testGloasProposalWithoutPayload(1, bellatrix.ExecutionAddress{0x01})
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"builder": &testEPBSProposalProvider{proposal: proposal},
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	includePayload := true
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, IncludePayload: &includePayload})
+	require.NoError(t, err)
+	require.Same(t, proposal, response.Data)
+}
+
+// TestEPBSProposalRejectsBuilderBackedProposalWithPayload proves that a builder-backed
+// proposal claiming to carry an execution payload is discarded: the two cannot both be true.
+func TestEPBSProposalRejectsBuilderBackedProposalWithPayload(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	inconsistent := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
+	inconsistent.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = 7
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"inconsistent": &testEPBSProposalProvider{proposal: inconsistent},
+		}),
+		best.WithTimeout(100*time.Millisecond),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	includePayload := true
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, IncludePayload: &includePayload})
+	require.Nil(t, response)
+	require.EqualError(t, err, "no ePBS proposals received")
+}
+
+// TestEPBSProposalForwardsBuilderConfigUnchanged proves that the strategy passes the
+// operator's auction policy to each beacon node as given: the boost is the beacon node's to
+// apply, and applying it again here would express a preference nobody configured.
+func TestEPBSProposalForwardsBuilderConfigUnchanged(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	provider := &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x01})}
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"one": provider,
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	builderConfig := &gloas.BuilderConfig{
+		MinBid:             phase0.Gwei(12345),
+		BuilderBoostFactor: 91,
+		Builders:           []*gloas.BuilderEntry{},
+	}
+	_, err = service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, BuilderConfig: builderConfig})
+	require.NoError(t, err)
+
+	require.NotNil(t, provider.opts)
+	require.Equal(t, builderConfig, provider.opts.BuilderConfig)
+}
+
+// TestEPBSProposalRejectsSelfBuiltProposalWithoutPayload proves that a self-built proposal
+// that did not carry the requested payload is discarded: only its producing node could
+// publish it, so it is unusable here.
+func TestEPBSProposalRejectsSelfBuiltProposalWithoutPayload(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	selfBuilt := testGloasProposalWithoutPayload(1, bellatrix.ExecutionAddress{0x01})
+	selfBuilt.Gloas.Body.SignedExecutionPayloadBid.Message.BuilderIndex = gloas.BuilderIndex(^uint64(0))
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"self-built": &testEPBSProposalProvider{proposal: selfBuilt},
+		}),
+		best.WithTimeout(100*time.Millisecond),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	includePayload := true
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, IncludePayload: &includePayload})
+	require.Nil(t, response)
+	require.EqualError(t, err, "no ePBS proposals received")
 }
