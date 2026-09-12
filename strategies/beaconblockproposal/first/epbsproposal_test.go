@@ -15,6 +15,8 @@ package first_test
 
 import (
 	"context"
+	"errors"
+	"math/big"
 	"runtime"
 	"strings"
 	"sync"
@@ -30,8 +32,12 @@ import (
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/strategies/beaconblockproposal/first"
+	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 func TestEPBSProposalFansOutTheSameBuilderConfig(t *testing.T) {
@@ -121,16 +127,100 @@ func TestEPBSProposalAcceptsUnknownValue(t *testing.T) {
 	require.Nil(t, response.Data.ExecutionValue)
 }
 
-func TestEPBSProposalDoesNotLeaveLateProvidersBlocked(t *testing.T) {
+func TestEPBSProposalObservability(t *testing.T) {
 	ctx := context.Background()
-	release := make(chan struct{})
+	capture := logger.NewLogCapture()
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+	previousTracerProvider := otel.GetTracerProvider()
+	otel.SetTracerProvider(tracerProvider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		require.NoError(t, tracerProvider.Shutdown(ctx))
+	})
+	proposal := gloasEPBSProposalWithoutPayload(bellatrix.ExecutionAddress{0x01})
+	proposal.ExecutionValue = big.NewInt(321)
+	bodyRoot := phase0.Root{0x44}
+	proposal.BeaconBlockBodyRoot = &bodyRoot
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.TraceLevel),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"stable-provider": &epbsProposalProvider{
+				proposal: proposal,
+				metadata: map[string]any{"Eth-Builder-Url": "https://builder.example"},
+			},
+		}),
+		first.WithTimeout(time.Second),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+	require.NoError(t, err)
+	require.Equal(t, "first", response.Metadata["vouch.strategy"])
+	require.Equal(t, "stable-provider", response.Metadata["vouch.provider"])
+	require.Equal(t, "builder_api", response.Metadata["vouch.source"])
+	require.True(t, capture.HasLog(map[string]any{
+		"message":             "ePBS proposal provider completed",
+		"slot":                uint64(1),
+		"provider":            "stable-provider",
+		"source":              "builder_api",
+		"builder_index":       uint64(7),
+		"value_known":         true,
+		"execution_value":     "321",
+		"payload_included":    false,
+		"builder_url_present": true,
+		"outcome":             "accepted",
+		"rejection_reason":    "",
+	}))
+	require.Equal(t, false, response.Metadata["vouch.fallback"])
+
+	for _, recordedSpan := range spanRecorder.Ended() {
+		if recordedSpan.Name() != "EPBSProposal" && recordedSpan.Name() != "ePBSBeaconBlockProposal" {
+			continue
+		}
+		attributes := make(map[string]any)
+		for _, attr := range recordedSpan.Attributes() {
+			attributes[string(attr.Key)] = attr.Value.AsInterface()
+		}
+		require.Equal(t, int64(1), attributes["slot"])
+		require.NotEmpty(t, attributes["request_id"])
+		require.Equal(t, "stable-provider", attributes["provider"])
+		require.Equal(t, "builder_api", attributes["source"])
+		require.NotEmpty(t, attributes["proposal_root"])
+	}
+}
+
+func TestEPBSProposalReportsSimpleStrategy(t *testing.T) {
+	ctx := context.Background()
 	service, err := first.New(ctx,
 		first.WithLogLevel(zerolog.Disabled),
 		first.WithClientMonitor(nullmetrics.New()),
 		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
-			"fast":  &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
-			"late1": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}, release: release},
-			"late2": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}, release: release},
+			"simple": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
+		}),
+		first.WithTimeout(time.Second),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.NoError(t, err)
+	require.Equal(t, "simple", response.Metadata["vouch.strategy"])
+}
+
+func TestEPBSProposalDoesNotLeaveLateProvidersBlocked(t *testing.T) {
+	ctx := context.Background()
+	release := make(chan struct{})
+	capture := logger.NewLogCapture()
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.TraceLevel),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"fast":      &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
+			"cancelled": &epbsProposalProvider{waitForCancellation: true},
+			"late1":     &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}, release: release},
+			"late2":     &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}, release: release},
+			"late-nil":  &epbsProposalProvider{release: release},
 		}),
 		first.WithTimeout(time.Second),
 	)
@@ -146,6 +236,95 @@ func TestEPBSProposalDoesNotLeaveLateProvidersBlocked(t *testing.T) {
 		stackLength := runtime.Stack(stack, true)
 		return !strings.Contains(string(stack[:stackLength]), "strategies/beaconblockproposal/first.(*Service).EPBSProposal.func1")
 	}, time.Second, 10*time.Millisecond)
+	for _, provider := range []string{"cancelled", "late1", "late2", "late-nil"} {
+		require.Eventually(t, func() bool {
+			return capture.HasLog(map[string]any{
+				"message":          "ePBS proposal provider completed",
+				"provider":         provider,
+				"outcome":          "cancelled",
+				"rejection_reason": "selection_completed",
+			})
+		}, time.Second, 10*time.Millisecond)
+	}
+}
+
+func TestEPBSProposalFailureObservability(t *testing.T) {
+	tests := []struct {
+		name            string
+		provider        *epbsProposalProvider
+		readiness       *providerReadiness
+		outcome         string
+		rejectionReason string
+	}{
+		{
+			name:            "ProviderError",
+			provider:        &epbsProposalProvider{err: errors.New("connection failed")},
+			outcome:         "error",
+			rejectionReason: "provider_error",
+		},
+		{
+			name:            "ProviderDeadline",
+			provider:        &epbsProposalProvider{err: context.DeadlineExceeded},
+			outcome:         "timeout",
+			rejectionReason: "deadline_reached",
+		},
+		{
+			name:            "Rejected",
+			provider:        &epbsProposalProvider{proposal: gloasEPBSProposalWithoutPayload(bellatrix.ExecutionAddress{0x01})},
+			readiness:       &providerReadiness{ready: false},
+			outcome:         "rejected",
+			rejectionReason: "provider_preferences_not_ready",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			capture := logger.NewLogCapture()
+			service, err := first.New(ctx,
+				first.WithLogLevel(zerolog.TraceLevel),
+				first.WithClientMonitor(nullmetrics.New()),
+				first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+					"failed-provider": test.provider,
+				}),
+				first.WithProviderReadiness(test.readiness),
+				first.WithTimeout(10*time.Millisecond),
+			)
+			require.NoError(t, err)
+
+			response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+			require.Nil(t, response)
+			require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+			require.True(t, capture.HasLog(map[string]any{
+				"message":          "ePBS proposal provider completed",
+				"provider":         "failed-provider",
+				"outcome":          test.outcome,
+				"rejection_reason": test.rejectionReason,
+			}))
+			if test.outcome == "rejected" {
+				var rejectionEntry map[string]any
+				for _, entry := range capture.Entries() {
+					if entry["message"] == "ePBS proposal provider completed" && entry["outcome"] == "rejected" {
+						rejectionEntry = entry
+						break
+					}
+				}
+				require.NotNil(t, rejectionEntry)
+				require.Equal(t, "p2p_builder", rejectionEntry["source"])
+				require.Equal(t, float64(7), rejectionEntry["builder_index"])
+				require.Equal(t, false, rejectionEntry["value_known"])
+				require.Equal(t, "unknown", rejectionEntry["execution_value"])
+				require.Equal(t, false, rejectionEntry["payload_included"])
+				require.Equal(t, false, rejectionEntry["builder_url_present"])
+			}
+			require.True(t, capture.HasLog(map[string]any{
+				"message":          "ePBS proposal selection completed",
+				"slot":             uint64(1),
+				"outcome":          "no_valid_proposal",
+				"deadline_reached": true,
+			}))
+		})
+	}
 }
 
 func TestEPBSProposalSkipsBuilderBidFromUnreadyProvider(t *testing.T) {
@@ -223,8 +402,9 @@ func TestEPBSProposalSkipsZeroFeeRecipient(t *testing.T) {
 
 func TestEPBSProposalSkipsNilResponse(t *testing.T) {
 	ctx := context.Background()
+	capture := logger.NewLogCapture()
 	service, err := first.New(ctx,
-		first.WithLogLevel(zerolog.Disabled),
+		first.WithLogLevel(zerolog.TraceLevel),
 		first.WithClientMonitor(nullmetrics.New()),
 		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
 			"nil": &epbsProposalProvider{nilResponse: true},
@@ -236,6 +416,12 @@ func TestEPBSProposalSkipsNilResponse(t *testing.T) {
 	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
 	require.Nil(t, response)
 	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+	require.True(t, capture.HasLog(map[string]any{
+		"message":          "ePBS proposal provider completed",
+		"provider":         "nil",
+		"outcome":          "rejected",
+		"rejection_reason": "empty_response",
+	}))
 }
 
 func TestEPBSProposalSkipsMalformedGloasProposal(t *testing.T) {
@@ -370,31 +556,41 @@ func (p *providerReadiness) ProviderReady(string, phase0.Slot, phase0.ValidatorI
 }
 
 type epbsProposalProvider struct {
-	proposal    *api.VersionedEPBSProposal
-	opts        *api.EPBSProposalOpts
-	release     <-chan struct{}
-	nilResponse bool
+	proposal            *api.VersionedEPBSProposal
+	metadata            map[string]any
+	err                 error
+	opts                *api.EPBSProposalOpts
+	release             <-chan struct{}
+	nilResponse         bool
+	waitForCancellation bool
 }
 
 func (*epbsProposalProvider) Proposal(_ context.Context, _ *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
 	return nil, nil
 }
 
-func (p *epbsProposalProvider) EPBSProposal(_ context.Context,
+func (p *epbsProposalProvider) EPBSProposal(ctx context.Context,
 	opts *api.EPBSProposalOpts,
 ) (
 	*api.Response[*api.VersionedEPBSProposal],
 	error,
 ) {
 	p.opts = opts
+	if p.waitForCancellation {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	if p.release != nil {
 		<-p.release
 	}
 	if p.nilResponse {
 		return nil, nil
 	}
+	if p.err != nil {
+		return nil, p.err
+	}
 
-	return &api.Response[*api.VersionedEPBSProposal]{Data: p.proposal}, nil
+	return &api.Response[*api.VersionedEPBSProposal]{Data: p.proposal, Metadata: p.metadata}, nil
 }
 
 // TestEPBSProposalAcceptsBuilderBackedProposal proves that a proposal the beacon node

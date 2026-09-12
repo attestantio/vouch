@@ -46,13 +46,19 @@ import (
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 )
 
 // Propose proposes a block.
 func (s *Service) Propose(ctx context.Context, duty *beaconblockproposer.Duty) error {
-	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "Propose")
+	ctx, requestID := beaconblockproposer.EnsureRequestID(ctx)
+	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "Propose", trace.WithAttributes(
+		attribute.String("request_id", requestID),
+		attribute.String("provider", "unknown"),
+		attribute.String("proposal_root", "unknown"),
+	))
 	defer span.End()
 	started := time.Now()
 
@@ -255,7 +261,7 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	proposalResponse, err := s.proposalProvider.EPBSProposal(ctx, &api.EPBSProposalOpts{
+	proposalResponse, err := s.obtainEPBSProposal(ctx, &api.EPBSProposalOpts{
 		Slot:           duty.Slot(),
 		RandaoReveal:   duty.RANDAOReveal(),
 		Graffiti:       graffiti,
@@ -285,6 +291,53 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if bid.ParentBlockRoot != parentRoot {
 		return errors.New("ePBS execution payload bid for incorrect parent block")
 	}
+	strategy := boundedGloasStrategy(responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataStrategy, "unknown"))
+	provider := beaconblockproposer.StableProviderName(responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataProvider, "unknown"))
+	source := boundedGloasSource(responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataSource, ""))
+	if source == "unknown" {
+		source = "p2p_builder"
+		if bid.BuilderIndex == selfBuiltBuilderIndex {
+			source = "self_build"
+		} else if beaconblockproposer.BuilderURLPresent(proposalResponse.Metadata) {
+			source = "builder_api"
+		}
+	}
+	publicationPath := "block_only"
+	if bid.BuilderIndex == selfBuiltBuilderIndex {
+		publicationPath = "block_and_envelope"
+	}
+	requestedPreference := gloasRequestedPreference(builderConfig.BuilderBoostFactor)
+	fallback := responseMetadataBool(proposalResponse.Metadata, beaconblockproposer.MetadataFallback)
+	executionValue := "unknown"
+	if proposal.ExecutionValue != nil {
+		executionValue = proposal.ExecutionValue.String()
+	}
+	proposalRootString := "unknown"
+	if proposalRoot, err := proposal.Root(); err == nil {
+		proposalRootString = proposalRoot.String()
+	}
+	s.log.Info().
+		Uint64("slot", uint64(duty.Slot())).
+		Str("request_id", beaconblockproposer.RequestID(ctx)).
+		Str("strategy", strategy).
+		Str("selected_provider", provider).
+		Str("proposal_root", proposalRootString).
+		Str("source", source).
+		Uint64("requested_min_bid", uint64(builderConfig.MinBid)).
+		Uint64("builder_boost_factor", builderConfig.BuilderBoostFactor).
+		Str("requested_preference", requestedPreference).
+		Bool("value_known", proposal.ExecutionValue != nil).
+		Bool("fallback", fallback).
+		Str("execution_value", executionValue).
+		Str("publication_path", publicationPath).
+		Msg("Selected Gloas proposal")
+	trace.SpanFromContext(ctx).SetAttributes(
+		attribute.String("provider", provider),
+		attribute.String("proposal_root", proposalRootString),
+	)
+	ctx = withGloasSelectionCorrelation(ctx, provider)
+	monitorGloasProposalSelection(strategy, requestedPreference, source)
+
 	// The bid's builder index is the auction result: a self-built proposal reveals its own
 	// payload envelope, whereas the winning builder of a builder-backed proposal reveals
 	// the payload itself, so the block is the entirety of the duty.
@@ -305,6 +358,106 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	}
 
 	return s.proposeSelfBuiltEPBSBlock(ctx, proposal, duty, bid)
+}
+
+func (s *Service) obtainEPBSProposal(ctx context.Context,
+	opts *api.EPBSProposalOpts,
+) (
+	*api.Response[*api.VersionedEPBSProposal],
+	error,
+) {
+	payloadRequested := opts.IncludePayload != nil && *opts.IncludePayload
+	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "selectGloasProposal", trace.WithAttributes(
+		attribute.Int64("slot", util.SlotToInt64(opts.Slot)),
+		attribute.String("request_id", beaconblockproposer.RequestID(ctx)),
+		attribute.String("provider", "unknown"),
+		attribute.String("proposal_root", "unknown"),
+		attribute.String("source", "unknown"),
+		attribute.Int64("requested_min_bid", int64(opts.BuilderConfig.MinBid)),
+		attribute.Int64("builder_boost_factor", int64(opts.BuilderConfig.BuilderBoostFactor)),
+		attribute.String("requested_preference", gloasRequestedPreference(opts.BuilderConfig.BuilderBoostFactor)),
+		attribute.Bool("payload_requested", payloadRequested),
+	))
+	defer span.End()
+
+	response, err := s.proposalProvider.EPBSProposal(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	if response != nil && response.Data != nil {
+		span.SetAttributes(
+			attribute.String("provider", beaconblockproposer.StableProviderName(responseMetadataString(response.Metadata, beaconblockproposer.MetadataProvider, "unknown"))),
+			attribute.String("source", boundedGloasSource(responseMetadataString(response.Metadata, beaconblockproposer.MetadataSource, "unknown"))),
+		)
+		if proposalRoot, err := response.Data.Root(); err == nil {
+			span.SetAttributes(attribute.String("proposal_root", proposalRoot.String()))
+		}
+	}
+
+	return response, nil
+}
+
+type gloasSelectionCorrelation struct {
+	provider string
+}
+
+type gloasSelectionCorrelationKey struct{}
+
+func withGloasSelectionCorrelation(ctx context.Context, provider string) context.Context {
+	return context.WithValue(ctx, gloasSelectionCorrelationKey{}, gloasSelectionCorrelation{
+		provider: provider,
+	})
+}
+
+func gloasSelectionFromContext(ctx context.Context) gloasSelectionCorrelation {
+	correlation, _ := ctx.Value(gloasSelectionCorrelationKey{}).(gloasSelectionCorrelation)
+	return correlation
+}
+
+func boundedGloasStrategy(strategy string) string {
+	switch strategy {
+	case "best", "first", "simple":
+		return strategy
+	default:
+		return "unknown"
+	}
+}
+
+func boundedGloasSource(source string) string {
+	switch source {
+	case "self_build", "p2p_builder", "builder_api":
+		return source
+	default:
+		return "unknown"
+	}
+}
+
+func responseMetadataBool(metadata map[string]any, key string) bool {
+	value, _ := metadata[key].(bool)
+	return value
+}
+
+func responseMetadataString(metadata map[string]any, key string, fallback string) string {
+	value, exists := metadata[key]
+	if !exists {
+		return fallback
+	}
+	result, isString := value.(string)
+	if !isString || result == "" {
+		return fallback
+	}
+	return result
+}
+
+func gloasRequestedPreference(boost uint64) string {
+	switch {
+	case boost < 100:
+		return "self_build_preferred"
+	case boost > 100:
+		return "builder_preferred"
+	default:
+		return "value_maximizing"
+	}
 }
 
 // selfBuiltBuilderIndex is the builder index a beacon node sets on a bid for its own build.
@@ -340,12 +493,26 @@ func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
-		s.log.Warn().Err(err).Time("proposal_submission_completed_at", time.Now()).Msg("Failed to submit builder-backed ePBS beacon block proposal")
+	correlation := gloasSelectionFromContext(ctx)
+	proposalRoot := "unknown"
+	if root, err := proposal.Root(); err == nil {
+		proposalRoot = root.String()
+	}
+	publicationAttributes := []attribute.KeyValue{
+		attribute.Int64("slot", util.SlotToInt64(duty.Slot())),
+		attribute.String("request_id", beaconblockproposer.RequestID(ctx)),
+		attribute.String("provider", correlation.provider),
+		attribute.String("proposal_root", proposalRoot),
+	}
+	_, publicationSpan := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishGloasBlock", trace.WithAttributes(publicationAttributes...))
+	err = s.proposalSubmitter.SubmitProposal(ctx, signedProposal)
+	publicationSpan.End()
+	if err != nil {
+		s.log.Warn().Str("error", beaconblockproposer.SafeError(err)).Str("request_id", beaconblockproposer.RequestID(ctx)).Time("proposal_submission_completed_at", time.Now()).Msg("Failed to submit builder-backed ePBS beacon block proposal")
 
 		return errors.Wrap(err, "failed to submit proposal")
 	}
-	s.log.Trace().Time("proposal_submission_completed_at", time.Now()).Msg("Submitted builder-backed ePBS beacon block proposal")
+	s.log.Trace().Str("request_id", beaconblockproposer.RequestID(ctx)).Time("proposal_submission_completed_at", time.Now()).Msg("Submitted builder-backed ePBS beacon block proposal")
 	monitorBeaconBlockProposalSource("builder")
 
 	return nil
@@ -362,7 +529,11 @@ func (s *Service) proposeSelfBuiltEPBSBlock(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	log := s.log.With().Str("beacon_block_root", envelope.BeaconBlockRoot.String()).Logger()
+	log := s.log.With().
+		Str("beacon_block_root", envelope.BeaconBlockRoot.String()).
+		Str("request_id", beaconblockproposer.RequestID(ctx)).
+		Uint64("slot", uint64(duty.Slot())).
+		Logger()
 
 	var signedProposal *api.VersionedSignedProposal
 	var signature phase0.BLSSignature
@@ -394,8 +565,17 @@ func (s *Service) proposeSelfBuiltEPBSBlock(ctx context.Context,
 		return errors.Wrap(err, "failed to obtain execution payload envelope blobs")
 	}
 
-	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
-		log.Warn().Err(err).Time("proposal_submission_completed_at", time.Now()).Msg("Failed to submit ePBS beacon block proposal")
+	correlation := gloasSelectionFromContext(ctx)
+	_, publicationSpan := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishGloasBlock", trace.WithAttributes(
+		attribute.Int64("slot", util.SlotToInt64(duty.Slot())),
+		attribute.String("request_id", beaconblockproposer.RequestID(ctx)),
+		attribute.String("provider", correlation.provider),
+		attribute.String("proposal_root", envelope.BeaconBlockRoot.String()),
+	))
+	err = s.proposalSubmitter.SubmitProposal(ctx, signedProposal)
+	publicationSpan.End()
+	if err != nil {
+		log.Warn().Str("error", beaconblockproposer.SafeError(err)).Time("proposal_submission_completed_at", time.Now()).Msg("Failed to submit ePBS beacon block proposal")
 
 		return errors.Wrap(err, "failed to submit proposal")
 	}
@@ -412,7 +592,7 @@ func (s *Service) proposeSelfBuiltEPBSBlock(ctx context.Context,
 		KZGProofs: kzgProofs,
 		Blobs:     blobs,
 	}
-	if err := s.submitExecutionPayloadEnvelope(ctx, log, envelopeSubmissionOpts); err != nil {
+	if err := s.submitExecutionPayloadEnvelope(ctx, log, duty.Slot(), envelopeSubmissionOpts); err != nil {
 		return err
 	}
 	monitorBeaconBlockProposalSource("local")
@@ -433,11 +613,21 @@ const (
 // started always has a recorded outcome.
 func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	log zerolog.Logger,
+	slot phase0.Slot,
 	opts *api.SubmitExecutionPayloadEnvelopeOpts,
 ) error {
+	correlation := gloasSelectionFromContext(ctx)
+	_, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishExecutionPayloadEnvelope", trace.WithAttributes(
+		attribute.Int64("slot", util.SlotToInt64(slot)),
+		attribute.String("request_id", beaconblockproposer.RequestID(ctx)),
+		attribute.String("provider", correlation.provider),
+		attribute.String("proposal_root", opts.SignedExecutionPayloadEnvelope.Gloas.Message.BeaconBlockRoot.String()),
+	))
+	defer span.End()
+
 	err := s.attemptExecutionPayloadEnvelopeSubmission(ctx, log, opts)
 	if err != nil {
-		log.Warn().Err(err).Str("status", "failed").Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission completed")
+		log.Warn().Str("error", beaconblockproposer.SafeError(err)).Str("status", "failed").Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission completed")
 
 		return errors.Wrap(err, "failed to submit execution payload envelope after block publication")
 	}
@@ -468,7 +658,7 @@ func (s *Service) attemptExecutionPayloadEnvelopeSubmission(ctx context.Context,
 
 			return nil
 		}
-		log.Warn().Err(err).Int("attempt", attempt).Int("attempts_remaining", envelopeSubmissionAttempts-attempt).Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission attempt completed")
+		log.Warn().Str("error", beaconblockproposer.SafeError(err)).Int("attempt", attempt).Int("attempts_remaining", envelopeSubmissionAttempts-attempt).Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission attempt completed")
 	}
 
 	return err
