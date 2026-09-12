@@ -276,6 +276,7 @@ func fetchConfig() error {
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.0005))
 	viper.SetDefault("beaconblockproposer.builder-boost-factor", 91)
+	viper.SetDefault("beaconblockproposer.builder-min-bid", uint64(0))
 	viper.SetDefault("strategies.builderbid.deadline.deadline", time.Second)
 	viper.SetDefault("strategies.builderbid.deadline.bid-gap", 100*time.Millisecond)
 	// Payload attestation data is due 75% of the way through the slot, so default tighter than the
@@ -920,6 +921,7 @@ func startSigningServices(ctx context.Context,
 		standardbeaconblockproposer.WithBlobSidecarSigner(signerSvc.(signer.BlobSidecarSigner)),
 		standardbeaconblockproposer.WithUnblindFromAllRelays(viper.GetBool("beaconblockproposer.unblind-from-all-relays")),
 		standardbeaconblockproposer.WithBuilderBoostFactor(viper.GetUint64("beaconblockproposer.builder-boost-factor")),
+		standardbeaconblockproposer.WithBuilderMinBid(phase0.Gwei(viper.GetUint64("beaconblockproposer.builder-min-bid"))),
 	)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to start beacon block proposer service")

@@ -106,7 +106,7 @@ func TestProposeGloas(t *testing.T) {
 			name:                     "ForeignBuilderIndex",
 			executionPayloadIncluded: true,
 			foreignBuilderIndex:      true,
-			err:                      "failed to propose block: ePBS execution payload bid is not self-built",
+			err:                      "failed to propose block: builder-backed ePBS proposal carries an execution payload",
 		},
 		{
 			name:                     "MissingEnvelopePayload",
@@ -127,9 +127,9 @@ func TestProposeGloas(t *testing.T) {
 			err:                        "failed to propose block: ePBS proposal has no execution payload bid",
 		},
 		{
-			name:                     "PayloadExcluded",
+			name:                     "BuilderBackedZeroFeeRecipient",
 			executionPayloadIncluded: false,
-			err:                      "failed to propose block: ePBS proposal excludes requested execution payload",
+			err:                      "failed to propose block: ePBS execution payload bid has 0 fee recipient",
 		},
 		{
 			name:                     "MismatchedEnvelopeRoot",
@@ -272,9 +272,6 @@ func TestProposeGloas(t *testing.T) {
 			duty.SetRandaoReveal(phase0.BLSSignature{0x02})
 
 			err = service.Propose(proposeCtx, duty)
-			if test.builderBoostFactor != 0 {
-				capture.AssertHasEntry(t, "Ignoring non-default builder boost factor on Gloas proposal path")
-			}
 			if test.blockAuctioneer {
 				capture.AssertHasEntry(t, "Ignoring configured block auctioneer on Gloas proposal path")
 			}
@@ -282,7 +279,7 @@ func TestProposeGloas(t *testing.T) {
 			require.NotNil(t, epbsOpts.IncludePayload)
 			require.True(t, *epbsOpts.IncludePayload)
 			require.NotNil(t, epbsOpts.BuilderConfig)
-			require.Zero(t, epbsOpts.BuilderConfig.BuilderBoostFactor)
+			require.Equal(t, test.builderBoostFactor, epbsOpts.BuilderConfig.BuilderBoostFactor)
 			require.Empty(t, epbsOpts.BuilderConfig.Builders)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
@@ -452,8 +449,7 @@ func TestProposeGloasProposalSource(t *testing.T) {
 			name:                     "ProtocolBuilderPayload",
 			executionPayloadIncluded: false,
 			source:                   "builder",
-			expectedCountDelta:       0,
-			err:                      "failed to propose block: ePBS proposal excludes requested execution payload",
+			expectedCountDelta:       1,
 		},
 		{
 			name:                     "EnvelopeSubmissionFailure",
@@ -484,7 +480,7 @@ func TestProposeGloasProposalSource(t *testing.T) {
 			}
 			require.Equal(t, proposalSourceCountBefore+test.expectedCountDelta, beaconBlockProposalSourceCount(t, test.source))
 			if !test.executionPayloadIncluded {
-				require.Zero(t, blockSigner.calls)
+				require.Equal(t, 1, blockSigner.calls)
 				require.Zero(t, envelopeSigner.calls)
 				require.Nil(t, envelopeSubmitter.opts)
 			}
@@ -554,6 +550,8 @@ func newGloasProposerForProposalSource(
 			blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
 			require.NoError(t, err)
 			response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
+		} else {
+			setBuilderBackedProposal(t, response.Data, 7)
 		}
 
 		return response, nil
