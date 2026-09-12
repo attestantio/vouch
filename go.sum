@@ -82,12 +82,6 @@ github.com/attestantio/go-builder-client v0.8.0 h1:paYTXZLtpCBG/9/Y99f9OjPNh4C+Z
 github.com/attestantio/go-builder-client v0.8.0/go.mod h1:M3rNO3ntGg+CE7aBDl+MVlwnEStZCiSRUzADG2ZoL+s=
 github.com/attestantio/go-certmanager v0.2.0 h1:Hzj12L5fofK7b281uohMBN0HQuSx+8RfU2UA9eHl84k=
 github.com/attestantio/go-certmanager v0.2.0/go.mod h1:Dn+C/okccD+2RugizT1ryrjX65cBMZl55fNYtmaVYAg=
-github.com/attestantio/go-eth2-client v0.29.1-0.20260817140745-1263dc7060ea h1:izccFMj70xj1wIVONNLjC5W9zy8i9cV0UEt0puL0vIg=
-github.com/attestantio/go-eth2-client v0.29.1-0.20260817140745-1263dc7060ea/go.mod h1:yhVnKAzIsFhtawbq6k/rA/Dy4vsPpu2Z2cGdQVrIjd0=
-github.com/attestantio/go-eth2-client v0.29.1-0.20260821085032-826788087ec1 h1:kGUe7dY5orDJIcAygYwuam/H0xRt8yb4GQPxhRiJO5o=
-github.com/attestantio/go-eth2-client v0.29.1-0.20260821085032-826788087ec1/go.mod h1:yhVnKAzIsFhtawbq6k/rA/Dy4vsPpu2Z2cGdQVrIjd0=
-github.com/attestantio/go-eth2-client v0.29.1-0.20260909141405-214bd73d173a h1:LGobq8Yc/YeC5o4kQzMwEkjBYtMx8aXPXHgUMMtWJnY=
-github.com/attestantio/go-eth2-client v0.29.1-0.20260909141405-214bd73d173a/go.mod h1:yhVnKAzIsFhtawbq6k/rA/Dy4vsPpu2Z2cGdQVrIjd0=
 github.com/attestantio/go-eth2-client v0.29.1-0.20260911095015-badf2db89d3c h1:UW+Y3VtFR7ng9TFL8ydVYSpGLBZS0+xBQMp76B2fo+c=
 github.com/attestantio/go-eth2-client v0.29.1-0.20260911095015-badf2db89d3c/go.mod h1:yhVnKAzIsFhtawbq6k/rA/Dy4vsPpu2Z2cGdQVrIjd0=
 github.com/aws/aws-sdk-go v1.44.81/go.mod h1:y4AeaBuwd2Lk+GepC1E9v0qOiTws0MIWAX4oIKwKHZo=
