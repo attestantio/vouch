@@ -16,6 +16,7 @@ package best
 import (
 	"bytes"
 	"context"
+	"math"
 	"math/big"
 	"time"
 
@@ -184,14 +185,12 @@ func (s *Service) considerEPBSProposal(opts *api.EPBSProposalOpts,
 	bestProvider string,
 	log zerolog.Logger,
 ) (*api.VersionedEPBSProposal, string) {
+	// validateEPBSProposal has already rejected a Gloas proposal without a bid, so a nil block
+	// here means the proposal predates Gloas and is self-built by definition.
 	builderBacked := false
-	if response.proposal.Version == spec.DataVersionGloas {
-		block := response.proposal.Gloas
-		if response.proposal.ExecutionPayloadIncluded {
-			block = response.proposal.GloasContents.Block
-		}
+	if block := epbsProposalBlock(response.proposal); block != nil {
 		bid := block.Body.SignedExecutionPayloadBid.Message
-		builderBacked = bid.BuilderIndex != gloas.BuilderIndex(^uint64(0))
+		builderBacked = bid.BuilderIndex != selfBuiltBuilderIndex
 		if builderBacked && s.providerReadiness != nil && !s.providerReadiness.ProviderReady(response.provider, opts.Slot, block.ProposerIndex) {
 			log.Warn().Str("provider", response.provider).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
 
@@ -304,15 +303,8 @@ func validateEPBSProposal(proposal *api.VersionedEPBSProposal) error {
 		return nil
 	}
 
-	block := proposal.Gloas
-	if proposal.ExecutionPayloadIncluded {
-		if proposal.GloasContents == nil {
-			return errors.New("beacon node returned malformed ePBS proposal")
-		}
-		block = proposal.GloasContents.Block
-	}
-
-	if block == nil || block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
+	block := epbsProposalBlock(proposal)
+	if block == nil {
 		return errors.New("beacon node returned malformed ePBS proposal")
 	}
 
@@ -323,7 +315,33 @@ func validateEPBSProposal(proposal *api.VersionedEPBSProposal) error {
 	return nil
 }
 
+// selfBuiltBuilderIndex is the builder index a beacon node sets on a bid for its own build.
+const selfBuiltBuilderIndex = gloas.BuilderIndex(math.MaxUint64)
+
+// epbsProposalBlock returns the Gloas block of a proposal, or nil if the proposal does not carry
+// one with an execution payload bid.
+func epbsProposalBlock(proposal *api.VersionedEPBSProposal) *gloas.BeaconBlock {
+	if proposal.Version != spec.DataVersionGloas {
+		return nil
+	}
+	block := proposal.Gloas
+	if proposal.ExecutionPayloadIncluded {
+		if proposal.GloasContents == nil {
+			return nil
+		}
+		block = proposal.GloasContents.Block
+	}
+	if block == nil || block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
+		return nil
+	}
+
+	return block
+}
+
 // Proposal provides the best beacon block proposal from a number of beacon nodes.
+// Complexity is due to the soft and hard timeout response loops, each of which handles a
+// response, an error and a timeout from every beacon node.
+// skipcq: GO-R1005
 func (s *Service) Proposal(ctx context.Context,
 	opts *api.ProposalOpts,
 ) (
