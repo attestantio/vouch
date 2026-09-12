@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -305,15 +304,12 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	// the payload itself, so the block is the entirety of the duty.
 	// ValidateEPBSProposal has already matched the payload to the auction result and rejected a
 	// zero bid fee recipient.
-	if bid.BuilderIndex != selfBuiltBuilderIndex {
+	if bid.BuilderIndex != gloas.BuilderIndexSelfBuild {
 		return s.proposeBuilderBackedEPBSBlock(ctx, proposal, duty)
 	}
 
 	return s.proposeSelfBuiltEPBSBlock(ctx, proposal, duty, bid)
 }
-
-// selfBuiltBuilderIndex is the builder index a beacon node sets on a bid for its own build.
-const selfBuiltBuilderIndex = gloas.BuilderIndex(math.MaxUint64)
 
 // proposeBuilderBackedEPBSBlock signs and publishes a proposal whose payload a P2P builder won.
 // The builder reveals that payload, so there is no envelope work to do here.
@@ -330,8 +326,11 @@ func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
 		return err
 	}
 	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
+		s.log.Warn().Err(err).Time("proposal_submission_completed_at", time.Now()).Msg("Failed to submit builder-backed ePBS beacon block proposal")
+
 		return errors.Wrap(err, "failed to submit proposal")
 	}
+	s.log.Trace().Time("proposal_submission_completed_at", time.Now()).Msg("Submitted builder-backed ePBS beacon block proposal")
 	monitorBeaconBlockProposalSource("builder")
 
 	return nil
