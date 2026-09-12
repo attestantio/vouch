@@ -162,6 +162,10 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	if bestProposal == nil {
 		return nil, errors.New("no ePBS proposals received")
 	}
+	if bestProposal.Value() == nil {
+		// Every valid response left its value unreported, so this selection ranked nothing.
+		log.Warn().Str("provider", bestProvider).Msg("Selected ePBS proposal with unknown value")
+	}
 	if bestProvider != "" {
 		s.clientMonitor.StrategyOperation("best", bestProvider, "ePBS beacon block proposal", time.Since(started))
 	}
@@ -172,30 +176,40 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	}, nil
 }
 
-// considerEPBSProposal updates the best proposal seen so far, ignoring proposals that lack a
-// requested execution payload.
+// considerEPBSProposal updates the best proposal seen so far, ignoring proposals that are
+// inconsistent with the auction result their bid reports.
 func (s *Service) considerEPBSProposal(opts *api.EPBSProposalOpts,
 	response *beaconBlockEPBSResponse,
 	bestProposal *api.VersionedEPBSProposal,
 	bestProvider string,
 	log zerolog.Logger,
 ) (*api.VersionedEPBSProposal, string) {
-	if opts.IncludePayload != nil && *opts.IncludePayload && !response.proposal.ExecutionPayloadIncluded {
-		log.Warn().Str("provider", response.provider).Msg("Discarding ePBS proposal without requested execution payload")
-
-		return bestProposal, bestProvider
-	}
+	builderBacked := false
 	if response.proposal.Version == spec.DataVersionGloas {
 		block := response.proposal.Gloas
 		if response.proposal.ExecutionPayloadIncluded {
 			block = response.proposal.GloasContents.Block
 		}
 		bid := block.Body.SignedExecutionPayloadBid.Message
-		if bid.BuilderIndex != gloas.BuilderIndex(^uint64(0)) && s.providerReadiness != nil && !s.providerReadiness.ProviderReady(response.provider, opts.Slot, block.ProposerIndex) {
+		builderBacked = bid.BuilderIndex != gloas.BuilderIndex(^uint64(0))
+		if builderBacked && s.providerReadiness != nil && !s.providerReadiness.ProviderReady(response.provider, opts.Slot, block.ProposerIndex) {
 			log.Warn().Str("provider", response.provider).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
 
 			return bestProposal, bestProvider
 		}
+	}
+	// The beacon node cannot return a builder's payload, so only a self-built proposal can
+	// carry the payload that was requested.
+	if builderBacked {
+		if response.proposal.ExecutionPayloadIncluded {
+			log.Warn().Str("provider", response.provider).Msg("Discarding builder-backed ePBS proposal carrying an execution payload")
+
+			return bestProposal, bestProvider
+		}
+	} else if opts.IncludePayload != nil && *opts.IncludePayload && !response.proposal.ExecutionPayloadIncluded {
+		log.Warn().Str("provider", response.provider).Msg("Discarding ePBS proposal without requested execution payload")
+
+		return bestProposal, bestProvider
 	}
 
 	if bestProposal == nil {

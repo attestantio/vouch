@@ -17,6 +17,9 @@ gloas:
   - obtain payload attestation data from a dedicated multiclient (the 'simple' style), configurable with strategies.payloadattestationdata.beacon-node-addresses
   - add first and majority payloadattestationdata strategies, selected with strategies.payloadattestationdata.style; the majority strategy breaks a tie in favour of the payload-present vote, rejects responses that disagree on the beacon block root, and proceeds with the responses received when the timeout fires rather than discarding them
   - default strategies.payloadattestationdata.timeout to 1s, tighter than the global timeout because payload attestation data is due 75% of the way through the slot; the per-style timeouts and beacon-node-addresses inherit from it
+  - send the operator's builder boost factor and the new beaconblockproposer.builder-min-bid (Gwei, default 0) to each beacon node's gloas auction, with an empty direct-builder list
+  - accept the beacon node's gloas auction result: sign and publish only the block for a builder-backed result, and continue to publish the execution payload envelope for a self-built one
+  - record a best beaconblockproposal selection made when no valid ePBS response reported a value
   - update go-eth2-client to a gloas pseudo-version
   - satisfy the attgo struct field order and comment capitalisation rules across services and strategies
 

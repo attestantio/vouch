@@ -121,19 +121,15 @@ type epbsProposalResponse struct {
 }
 
 // acceptableEPBSProposal reports whether proposal is usable, discarding and logging it if it is
-// nil, lacks a requested execution payload, comes from an unready builder provider, or (for Gloas)
-// is structurally malformed or pays a zero fee recipient.
+// nil, is inconsistent with the auction result its bid reports, comes from an unready builder
+// provider, or (for Gloas) is structurally malformed or pays a zero fee recipient.
 func (s *Service) acceptableEPBSProposal(provider string, proposal *api.VersionedEPBSProposal, opts *api.EPBSProposalOpts) bool {
 	if proposal == nil {
 		s.log.Warn().Msg("Discarding empty ePBS proposal")
 
 		return false
 	}
-	if opts.IncludePayload != nil && *opts.IncludePayload && !proposal.ExecutionPayloadIncluded {
-		s.log.Warn().Msg("Discarding ePBS proposal without requested execution payload")
-
-		return false
-	}
+	builderBacked := false
 	if proposal.Version == spec.DataVersionGloas {
 		block := proposal.Gloas
 		if proposal.ExecutionPayloadIncluded {
@@ -150,7 +146,8 @@ func (s *Service) acceptableEPBSProposal(provider string, proposal *api.Versione
 			return false
 		}
 		bid := block.Body.SignedExecutionPayloadBid.Message
-		if bid.BuilderIndex != gloas.BuilderIndex(^uint64(0)) && s.providerReadiness != nil && !s.providerReadiness.ProviderReady(provider, opts.Slot, block.ProposerIndex) {
+		builderBacked = bid.BuilderIndex != gloas.BuilderIndex(^uint64(0))
+		if builderBacked && s.providerReadiness != nil && !s.providerReadiness.ProviderReady(provider, opts.Slot, block.ProposerIndex) {
 			s.log.Warn().Str("provider", provider).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
 
 			return false
@@ -160,6 +157,19 @@ func (s *Service) acceptableEPBSProposal(provider string, proposal *api.Versione
 
 			return false
 		}
+	}
+	// The beacon node cannot return a builder's payload, so only a self-built proposal can
+	// carry the payload that was requested.
+	if builderBacked {
+		if proposal.ExecutionPayloadIncluded {
+			s.log.Warn().Msg("Discarding builder-backed ePBS proposal carrying an execution payload")
+
+			return false
+		}
+	} else if opts.IncludePayload != nil && *opts.IncludePayload && !proposal.ExecutionPayloadIncluded {
+		s.log.Warn().Msg("Discarding ePBS proposal without requested execution payload")
+
+		return false
 	}
 
 	return true

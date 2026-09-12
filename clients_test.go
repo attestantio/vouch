@@ -223,6 +223,7 @@ func TestSimpleProposalProviderAcceptsUnknownValue(t *testing.T) {
 		ExecutionPayloadIncluded: true,
 		GloasContents: &apiv1gloas.BlockContents{Block: &gloas.BeaconBlock{Body: &gloas.BeaconBlockBody{
 			SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{Message: &gloas.ExecutionPayloadBid{
+				BuilderIndex: gloas.BuilderIndex(^uint64(0)),
 				FeeRecipient: bellatrix.ExecutionAddress{0x01},
 			}},
 		}}},
@@ -270,6 +271,7 @@ func TestSimpleProposalProviderRejectsZeroFeeRecipient(t *testing.T) {
 				ExecutionPayloadIncluded: true,
 				GloasContents: &apiv1gloas.BlockContents{Block: &gloas.BeaconBlock{Body: &gloas.BeaconBlockBody{
 					SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{Message: &gloas.ExecutionPayloadBid{
+						BuilderIndex: gloas.BuilderIndex(^uint64(0)),
 						FeeRecipient: bellatrix.ExecutionAddress{},
 					}},
 				}}},

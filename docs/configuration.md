@@ -102,7 +102,12 @@ beaconblockproposer:
   # -  50: `builder value` must be more than twice the local value (`local value*(100/50)`) to be used
   # -  91: `builder value` must be more than ~10% higher than the local value (`local value*(100/91)`) to be used
   # - 100: `builder value` must be more than the local value (`local value*(100/100)`) to be used
+  # From Gloas onwards this is sent to the beacon node, which runs the auction between its own build and the
+  # bids it sees on the P2P network.
   builder-boost-factor: 91
+  # builder-min-bid is the minimum bid, in Gwei, that a beacon node accepts from a P2P builder from Gloas
+  # onwards.  0 accepts any bid.
+  builder-min-bid: 0
 
 # attester provides control of the attester process.
 attester:
