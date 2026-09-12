@@ -14,6 +14,7 @@
 package best
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -61,17 +62,20 @@ func TestConsiderEPBSProposalUnknownValues(t *testing.T) {
 			var selected *api.VersionedEPBSProposal
 			var selectedProvider string
 			proposals := make([]*api.VersionedEPBSProposal, len(test.values))
+			providers := make([]string, len(test.values))
 			for index, value := range test.values {
 				proposals[index] = &api.VersionedEPBSProposal{ExecutionValue: value}
+				providers[index] = fmt.Sprintf("provider-%d", index)
 				selected, selectedProvider = service.considerEPBSProposal(
 					&api.EPBSProposalOpts{},
-					&beaconBlockEPBSResponse{provider: "provider", proposal: proposals[index]},
+					&beaconBlockEPBSResponse{provider: providers[index], proposal: proposals[index]},
 					selected,
 					selectedProvider,
 					zerolog.Nop(),
 				)
 			}
 			require.Same(t, proposals[test.expected], selected)
+			require.Equal(t, providers[test.expected], selectedProvider)
 		})
 	}
 }
