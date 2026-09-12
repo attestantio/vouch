@@ -249,9 +249,6 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if s.blockAuctioneer != nil {
 		s.log.Warn().Msg("Ignoring configured block auctioneer on Gloas proposal path")
 	}
-	if s.builderBoostFactor != 0 {
-		s.log.Warn().Msg("Ignoring non-default builder boost factor on Gloas proposal path")
-	}
 
 	// A Gloas block never carries an execution payload: it commits to a bid, and the
 	// payload is revealed separately as an envelope.  IncludePayload selects whether
@@ -259,14 +256,18 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	// so asking for it is what keeps the reveal publishable through any beacon node
 	// rather than only the one that built the payload.
 	includePayload := true
-	// Request a local-preferred build without direct builder entries.
+	// The beacon node runs the auction between its own build and the P2P builders, using the
+	// operator's bid floor and boost.  Direct builder entries are empty: Vouch talks to no
+	// builder itself, so every bid it can win comes over P2P.
 	proposalResponse, err := s.proposalProvider.EPBSProposal(ctx, &api.EPBSProposalOpts{
 		Slot:           duty.Slot(),
 		RandaoReveal:   duty.RANDAOReveal(),
 		Graffiti:       graffiti,
 		IncludePayload: &includePayload,
 		BuilderConfig: &gloas.BuilderConfig{
-			Builders: []*gloas.BuilderEntry{},
+			MinBid:             s.builderMinBid,
+			BuilderBoostFactor: s.builderBoostFactor,
+			Builders:           []*gloas.BuilderEntry{},
 		},
 	})
 	if err != nil {
@@ -284,7 +285,66 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		return err
 	}
 
-	envelope, bodyRoot, err := s.epbsProposalEnvelope(proposal)
+	signedBid, err := beaconblockproposal.EPBSProposalBid(proposal)
+	if err != nil {
+		return err
+	}
+	bid := signedBid.Message
+	if bid.Slot != duty.Slot() {
+		return errors.New("ePBS execution payload bid for incorrect slot")
+	}
+	parentRoot, err := proposal.ParentRoot()
+	if err != nil {
+		return errors.Wrap(err, "failed to obtain parent root of ePBS block proposal")
+	}
+	if bid.ParentBlockRoot != parentRoot {
+		return errors.New("ePBS execution payload bid for incorrect parent block")
+	}
+	// The bid's builder index is the auction result: a self-built proposal reveals its own
+	// payload envelope, whereas the winning builder of a builder-backed proposal reveals
+	// the payload itself, so the block is the entirety of the duty.
+	// ValidateEPBSProposal has already matched the payload to the auction result and rejected a
+	// zero bid fee recipient.
+	if bid.BuilderIndex != selfBuiltBuilderIndex {
+		return s.proposeBuilderBackedEPBSBlock(ctx, proposal, duty)
+	}
+
+	return s.proposeSelfBuiltEPBSBlock(ctx, proposal, duty, bid)
+}
+
+// selfBuiltBuilderIndex is the builder index a beacon node sets on a bid for its own build.
+const selfBuiltBuilderIndex = gloas.BuilderIndex(math.MaxUint64)
+
+// proposeBuilderBackedEPBSBlock signs and publishes a proposal whose payload a P2P builder won.
+// The builder reveals that payload, so there is no envelope work to do here.
+func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
+	proposal *api.VersionedEPBSProposal,
+	duty *beaconblockproposer.Duty,
+) error {
+	bodyRoot, err := proposal.BodyRoot()
+	if err != nil {
+		return errors.Wrap(err, "failed to calculate hash tree root of ePBS block body")
+	}
+	signedProposal, err := s.signEPBSProposalData(ctx, proposal, duty, bodyRoot)
+	if err != nil {
+		return err
+	}
+	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
+		return errors.Wrap(err, "failed to submit proposal")
+	}
+	monitorBeaconBlockProposalSource("builder")
+
+	return nil
+}
+
+// proposeSelfBuiltEPBSBlock signs and publishes a proposal the beacon node built itself,
+// along with the execution payload envelope that reveals its payload.
+func (s *Service) proposeSelfBuiltEPBSBlock(ctx context.Context,
+	proposal *api.VersionedEPBSProposal,
+	duty *beaconblockproposer.Duty,
+	bid *gloas.ExecutionPayloadBid,
+) error {
+	envelope, bodyRoot, err := s.epbsProposalEnvelope(proposal, bid)
 	if err != nil {
 		return err
 	}
@@ -459,7 +519,9 @@ func containsUnknownBeaconBlockError(err error) bool {
 
 // epbsProposalEnvelope obtains the execution payload envelope and body root for a proposal,
 // confirming that the envelope is for the proposed block and pays a fee recipient.
-func (*Service) epbsProposalEnvelope(proposal *api.VersionedEPBSProposal) (*gloas.ExecutionPayloadEnvelope, phase0.Root, error) {
+func (*Service) epbsProposalEnvelope(proposal *api.VersionedEPBSProposal,
+	bid *gloas.ExecutionPayloadBid,
+) (*gloas.ExecutionPayloadEnvelope, phase0.Root, error) {
 	envelope, err := proposal.ExecutionPayloadEnvelope()
 	if err != nil {
 		return nil, phase0.Root{}, errors.Wrap(err, "failed to obtain execution payload envelope")
@@ -474,13 +536,7 @@ func (*Service) epbsProposalEnvelope(proposal *api.VersionedEPBSProposal) (*gloa
 	if envelope.Payload.FeeRecipient.IsZero() {
 		return nil, phase0.Root{}, errors.New("ePBS execution payload envelope has 0 fee recipient")
 	}
-	if proposal.GloasContents == nil || proposal.GloasContents.Block == nil || proposal.GloasContents.Block.Body == nil || proposal.GloasContents.Block.Body.SignedExecutionPayloadBid == nil || proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message == nil {
-		return nil, phase0.Root{}, errors.New("ePBS proposal has no execution payload bid")
-	}
-	if proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex != gloas.BuilderIndex(math.MaxUint64) {
-		return nil, phase0.Root{}, errors.New("ePBS execution payload bid is not self-built")
-	}
-	if envelope.BuilderIndex != proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex {
+	if envelope.BuilderIndex != bid.BuilderIndex {
 		return nil, phase0.Root{}, errors.New("ePBS execution payload envelope is for incorrect builder index")
 	}
 	bodyRoot, err := proposal.BodyRoot()

@@ -23,30 +23,67 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ValidateEPBSProposal confirms that an ePBS proposal is usable.
+// ValidateEPBSProposal confirms that an ePBS proposal is usable.  A requested execution payload
+// is required only of a self-built Gloas proposal, and a builder-backed one must not carry it.
 func ValidateEPBSProposal(proposal *api.VersionedEPBSProposal, includePayload *bool) error {
 	if proposal == nil {
 		return errors.New("beacon node returned no ePBS proposal")
 	}
-	if includePayload != nil && *includePayload && !proposal.ExecutionPayloadIncluded {
-		return errors.New("ePBS proposal excludes requested execution payload")
-	}
+	payloadRequested := includePayload != nil && *includePayload
 	if proposal.Version != spec.DataVersionGloas {
+		if payloadRequested && !proposal.ExecutionPayloadIncluded {
+			return errors.New("ePBS proposal excludes requested execution payload")
+		}
+
 		return nil
 	}
 
+	signedBid, err := EPBSProposalBid(proposal)
+	if err != nil {
+		return err
+	}
+	bid := signedBid.Message
+	// A self-built bid pays nothing, so it may leave its fee recipient unset.  The payload
+	// envelope's own fee recipient is checked before signing.
+	selfBuiltWithoutPayment := bid.BuilderIndex == gloas.BuilderIndexSelfBuild &&
+		bid.Value == 0 &&
+		bid.ExecutionPayment == 0 &&
+		signedBid.Signature.IsInfinity()
+	if bid.FeeRecipient.IsZero() && !selfBuiltWithoutPayment {
+		return errors.New("beacon block obtained with 0 fee recipient")
+	}
+
+	return validateEPBSPayload(bid.BuilderIndex, proposal.ExecutionPayloadIncluded, payloadRequested)
+}
+
+// EPBSProposalBid returns the signed execution payload bid of a Gloas proposal.
+func EPBSProposalBid(proposal *api.VersionedEPBSProposal) (*gloas.SignedExecutionPayloadBid, error) {
 	block := proposal.Gloas
 	if proposal.ExecutionPayloadIncluded {
 		if proposal.GloasContents == nil {
-			return errors.New("ePBS proposal has no execution payload bid")
+			return nil, errors.New("ePBS proposal has no execution payload bid")
 		}
 		block = proposal.GloasContents.Block
 	}
 	if block == nil || block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
-		return errors.New("ePBS proposal has no execution payload bid")
+		return nil, errors.New("ePBS proposal has no execution payload bid")
 	}
-	if block.Body.SignedExecutionPayloadBid.Message.FeeRecipient.IsZero() {
-		return errors.New("beacon block obtained with 0 fee recipient")
+
+	return block.Body.SignedExecutionPayloadBid, nil
+}
+
+// validateEPBSPayload matches a Gloas proposal's payload to its auction result.  The beacon node
+// cannot return a builder's payload, so only a self-built proposal can carry the requested one.
+func validateEPBSPayload(builderIndex gloas.BuilderIndex, payloadIncluded bool, payloadRequested bool) error {
+	if builderIndex != gloas.BuilderIndexSelfBuild {
+		if payloadIncluded {
+			return errors.New("builder-backed ePBS proposal carries an execution payload")
+		}
+
+		return nil
+	}
+	if payloadRequested && !payloadIncluded {
+		return errors.New("ePBS proposal excludes requested execution payload")
 	}
 
 	return nil

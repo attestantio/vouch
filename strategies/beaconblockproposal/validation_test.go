@@ -20,6 +20,7 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1gloas "github.com/attestantio/go-eth2-client/api/v1/gloas"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/proposerpreferences"
@@ -47,7 +48,7 @@ func gloasBlock(builderIndex gloas.BuilderIndex) *gloas.BeaconBlock {
 		ProposerIndex: 7,
 		Body: &gloas.BeaconBlockBody{
 			SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{
-				Message: &gloas.ExecutionPayloadBid{BuilderIndex: builderIndex},
+				Message: &gloas.ExecutionPayloadBid{BuilderIndex: builderIndex, FeeRecipient: bellatrix.ExecutionAddress{0x01}},
 			},
 		},
 	}
@@ -62,6 +63,137 @@ func withPayload(builderIndex gloas.BuilderIndex) *api.VersionedEPBSProposal {
 		Version:                  spec.DataVersionGloas,
 		ExecutionPayloadIncluded: true,
 		GloasContents:            &apiv1gloas.BlockContents{Block: gloasBlock(builderIndex)},
+	}
+}
+
+func TestValidateEPBSProposalMatchesPayloadToAuctionResult(t *testing.T) {
+	requested := true
+	notRequested := false
+	tests := []struct {
+		name           string
+		proposal       *api.VersionedEPBSProposal
+		includePayload *bool
+		err            string
+	}{
+		{
+			name:           "BuilderBackedWithoutPayloadRequested",
+			proposal:       withoutPayload(1),
+			includePayload: &requested,
+		},
+		{
+			name:     "BuilderBackedWithoutPayloadNotRequested",
+			proposal: withoutPayload(1),
+		},
+		{
+			name:           "BuilderBackedWithPayload",
+			proposal:       withPayload(1),
+			includePayload: &requested,
+			err:            "builder-backed ePBS proposal carries an execution payload",
+		},
+		{
+			name:           "BuilderBackedWithPayloadNotRequested",
+			proposal:       withPayload(1),
+			includePayload: &notRequested,
+			err:            "builder-backed ePBS proposal carries an execution payload",
+		},
+		{
+			name:           "SelfBuiltWithPayloadRequested",
+			proposal:       withPayload(gloas.BuilderIndexSelfBuild),
+			includePayload: &requested,
+		},
+		{
+			name:           "SelfBuiltWithoutPayloadRequested",
+			proposal:       withoutPayload(gloas.BuilderIndexSelfBuild),
+			includePayload: &requested,
+			err:            "ePBS proposal excludes requested execution payload",
+		},
+		{
+			name:           "SelfBuiltWithoutPayloadNotRequested",
+			proposal:       withoutPayload(gloas.BuilderIndexSelfBuild),
+			includePayload: &notRequested,
+		},
+		{
+			name:           "NotGloasWithoutPayloadRequested",
+			proposal:       &api.VersionedEPBSProposal{Version: spec.DataVersionFulu},
+			includePayload: &requested,
+			err:            "ePBS proposal excludes requested execution payload",
+		},
+		{
+			name:     "NotGloasNotRequested",
+			proposal: &api.VersionedEPBSProposal{Version: spec.DataVersionFulu},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := beaconblockproposal.ValidateEPBSProposal(test.proposal, test.includePayload)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateEPBSProposalZeroFeeRecipient(t *testing.T) {
+	infinity := phase0.BLSSignature{0xc0}
+	tests := []struct {
+		name   string
+		mutate func(*gloas.SignedExecutionPayloadBid)
+		err    string
+	}{
+		{
+			name: "SelfBuild",
+			mutate: func(bid *gloas.SignedExecutionPayloadBid) {
+				bid.Signature = infinity
+			},
+		},
+		{
+			name: "BuilderBacked",
+			mutate: func(bid *gloas.SignedExecutionPayloadBid) {
+				bid.Message.BuilderIndex = 1
+				bid.Signature = infinity
+			},
+			err: "beacon block obtained with 0 fee recipient",
+		},
+		{
+			name: "SelfBuildNonZeroValue",
+			mutate: func(bid *gloas.SignedExecutionPayloadBid) {
+				bid.Message.Value = 1
+				bid.Signature = infinity
+			},
+			err: "beacon block obtained with 0 fee recipient",
+		},
+		{
+			name: "SelfBuildNonZeroExecutionPayment",
+			mutate: func(bid *gloas.SignedExecutionPayloadBid) {
+				bid.Message.ExecutionPayment = 1
+				bid.Signature = infinity
+			},
+			err: "beacon block obtained with 0 fee recipient",
+		},
+		{
+			name:   "SelfBuildNonInfinitySignature",
+			mutate: func(*gloas.SignedExecutionPayloadBid) {},
+			err:    "beacon block obtained with 0 fee recipient",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			proposal := withoutPayload(gloas.BuilderIndexSelfBuild)
+			signedBid := proposal.Gloas.Body.SignedExecutionPayloadBid
+			signedBid.Message.FeeRecipient = bellatrix.ExecutionAddress{}
+			test.mutate(signedBid)
+
+			err := beaconblockproposal.ValidateEPBSProposal(proposal, nil)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
 	}
 }
 

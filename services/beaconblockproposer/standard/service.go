@@ -54,6 +54,7 @@ type Service struct {
 	blockAuctioneer                   blockauctioneer.BlockAuctioneer
 	unblindFromAllRelays              bool
 	builderBoostFactor                uint64
+	builderMinBid                     phase0.Gwei
 }
 
 // New creates a new beacon block proposer.
@@ -90,6 +91,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		blobSidecarSigner:                 parameters.blobSidecarSigner,
 		unblindFromAllRelays:              parameters.unblindFromAllRelays,
 		builderBoostFactor:                parameters.builderBoostFactor,
+		builderMinBid:                     parameters.builderMinBid,
 	}
 
 	return s, nil

@@ -269,6 +269,10 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	if bestProposal == nil {
 		return nil, errors.New("no ePBS proposals received")
 	}
+	if bestProposal.Value() == nil {
+		// Every valid response left its value unreported, so this selection ranked nothing.
+		log.Warn().Str("provider", bestProvider).Msg("Selected ePBS proposal with unknown value")
+	}
 	if bestProvider != "" {
 		s.clientMonitor.StrategyOperation("best", bestProvider, "ePBS beacon block proposal", time.Since(started))
 	}
@@ -279,19 +283,14 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	}, nil
 }
 
-// considerEPBSProposal updates the best proposal seen so far, ignoring proposals that lack a
-// requested execution payload.
+// considerEPBSProposal updates the best proposal seen so far, ignoring builder-backed proposals
+// from providers without current preferences.
 func (s *Service) considerEPBSProposal(opts *api.EPBSProposalOpts,
 	response *beaconBlockEPBSResponse,
 	bestProposal *api.VersionedEPBSProposal,
 	bestProvider string,
 	log zerolog.Logger,
 ) (*api.VersionedEPBSProposal, string) {
-	if opts.IncludePayload != nil && *opts.IncludePayload && !response.proposal.ExecutionPayloadIncluded {
-		log.Warn().Str("provider", response.provider).Msg("Discarding ePBS proposal without requested execution payload")
-
-		return bestProposal, bestProvider
-	}
 	if err := beaconblockproposal.ValidateBuilderBidReadiness(s.providerReadiness, response.provider, opts.Slot, response.proposal); err != nil {
 		log.Warn().Str("provider", response.provider).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
 
