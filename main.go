@@ -1606,7 +1606,16 @@ func (p *readinessGatedProposalProvider) EPBSProposal(ctx context.Context,
 		return nil, err
 	}
 
-	return response, nil
+	// Label the selection as the first and best strategies do.
+	return &api.Response[*api.VersionedEPBSProposal]{
+		Data: response.Data,
+		Metadata: map[string]any{
+			beaconblockproposer.MetadataStrategy: "simple",
+			beaconblockproposer.MetadataProvider: proposerpreferences.SimpleProvider,
+			beaconblockproposer.MetadataSource:   beaconblockproposal.EPBSProposalSource(response.Data, response.Metadata),
+			beaconblockproposer.MetadataFallback: false,
+		},
+	}, nil
 }
 
 // selectSyncCommitteeContributionProvider selects the appropriate sync committee contribution provider given user input.

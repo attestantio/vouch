@@ -19,20 +19,51 @@ import (
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/pkg/errors"
 )
+
+var (
+	errNoProposal              = errors.New("beacon node returned no ePBS proposal")
+	errRequestedPayloadMissing = errors.New("ePBS proposal excludes requested execution payload")
+	errMalformedProposal       = errors.New("ePBS proposal has no execution payload bid")
+	errZeroFeeRecipient        = errors.New("beacon block obtained with 0 fee recipient")
+	errBuilderPayloadIncluded  = errors.New("builder-backed ePBS proposal carries an execution payload")
+	errProviderNotReady        = errors.New("builder-backed ePBS proposal from provider without current preferences")
+)
+
+// RejectionReason returns the bounded telemetry label for an error from ValidateEPBSProposal or
+// ValidateBuilderBidReadiness.
+func RejectionReason(err error) string {
+	switch {
+	case errors.Is(err, errNoProposal):
+		return "empty_response"
+	case errors.Is(err, errRequestedPayloadMissing):
+		return "requested_payload_missing"
+	case errors.Is(err, errMalformedProposal):
+		return "malformed_proposal"
+	case errors.Is(err, errZeroFeeRecipient):
+		return "zero_fee_recipient"
+	case errors.Is(err, errBuilderPayloadIncluded):
+		return "builder_payload_included"
+	case errors.Is(err, errProviderNotReady):
+		return "provider_preferences_not_ready"
+	default:
+		return "invalid_proposal"
+	}
+}
 
 // ValidateEPBSProposal confirms that an ePBS proposal is usable.  A requested execution payload
 // is required only of a self-built Gloas proposal, and a builder-backed one must not carry it.
 func ValidateEPBSProposal(proposal *api.VersionedEPBSProposal, includePayload *bool) error {
 	if proposal == nil {
-		return errors.New("beacon node returned no ePBS proposal")
+		return errNoProposal
 	}
 	payloadRequested := includePayload != nil && *includePayload
 	if proposal.Version != spec.DataVersionGloas {
 		if payloadRequested && !proposal.ExecutionPayloadIncluded {
-			return errors.New("ePBS proposal excludes requested execution payload")
+			return errRequestedPayloadMissing
 		}
 
 		return nil
@@ -50,7 +81,7 @@ func ValidateEPBSProposal(proposal *api.VersionedEPBSProposal, includePayload *b
 		bid.ExecutionPayment == 0 &&
 		signedBid.Signature.IsInfinity()
 	if bid.FeeRecipient.IsZero() && !selfBuiltWithoutPayment {
-		return errors.New("beacon block obtained with 0 fee recipient")
+		return errZeroFeeRecipient
 	}
 
 	return validateEPBSPayload(bid.BuilderIndex, proposal.ExecutionPayloadIncluded, payloadRequested)
@@ -61,15 +92,27 @@ func EPBSProposalBid(proposal *api.VersionedEPBSProposal) (*gloas.SignedExecutio
 	block := proposal.Gloas
 	if proposal.ExecutionPayloadIncluded {
 		if proposal.GloasContents == nil {
-			return nil, errors.New("ePBS proposal has no execution payload bid")
+			return nil, errMalformedProposal
 		}
 		block = proposal.GloasContents.Block
 	}
 	if block == nil || block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
-		return nil, errors.New("ePBS proposal has no execution payload bid")
+		return nil, errMalformedProposal
 	}
 
 	return block.Body.SignedExecutionPayloadBid, nil
+}
+
+// EPBSProposalSource returns the bounded source label of an ePBS proposal's execution payload bid.
+func EPBSProposalSource(proposal *api.VersionedEPBSProposal, metadata map[string]any) string {
+	if signedBid, err := EPBSProposalBid(proposal); err == nil && signedBid.Message.BuilderIndex == gloas.BuilderIndexSelfBuild {
+		return "self_build"
+	}
+	if beaconblockproposer.BuilderURLPresent(metadata) {
+		return "builder_api"
+	}
+
+	return "p2p_builder"
 }
 
 // validateEPBSPayload matches a Gloas proposal's payload to its auction result.  The beacon node
@@ -77,13 +120,13 @@ func EPBSProposalBid(proposal *api.VersionedEPBSProposal) (*gloas.SignedExecutio
 func validateEPBSPayload(builderIndex gloas.BuilderIndex, payloadIncluded bool, payloadRequested bool) error {
 	if builderIndex != gloas.BuilderIndexSelfBuild {
 		if payloadIncluded {
-			return errors.New("builder-backed ePBS proposal carries an execution payload")
+			return errBuilderPayloadIncluded
 		}
 
 		return nil
 	}
 	if payloadRequested && !payloadIncluded {
-		return errors.New("ePBS proposal excludes requested execution payload")
+		return errRequestedPayloadMissing
 	}
 
 	return nil
@@ -109,7 +152,7 @@ func ValidateBuilderBidReadiness(readiness proposerpreferences.ProviderReadiness
 		return nil
 	}
 	if readiness == nil || !readiness.ProviderReady(provider, slot, block.ProposerIndex) {
-		return errors.New("builder-backed ePBS proposal from provider without current preferences")
+		return errProviderNotReady
 	}
 
 	return nil
