@@ -21,6 +21,8 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/strategies/beaconblockproposal"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
@@ -37,8 +39,11 @@ type beaconBlockResponse struct {
 }
 
 type beaconBlockError struct {
-	provider string
-	err      error
+	provider        string
+	err             error
+	elapsed         time.Duration
+	outcome         string
+	rejectionReason string
 }
 
 type beaconBlockProposalResults struct {
@@ -157,13 +162,18 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	*api.Response[*api.VersionedEPBSProposal],
 	error,
 ) {
+	ctx, requestID := beaconblockproposer.EnsureRequestID(ctx)
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.best").Start(ctx, "EPBSProposal", trace.WithAttributes(
 		attribute.Int64("slot", util.SlotToInt64(opts.Slot)),
+		attribute.String("request_id", requestID),
+		attribute.String("provider", "unknown"),
+		attribute.String("proposal_root", "unknown"),
+		attribute.String("source", "unknown"),
 	))
 	defer span.End()
 
 	started := time.Now()
-	log := util.LogWithID(ctx, s.log, "strategy_id").With().Uint64("slot", uint64(opts.Slot)).Logger()
+	log := s.log.With().Str("request_id", requestID).Uint64("slot", uint64(opts.Slot)).Logger()
 	ctx = log.WithContext(ctx)
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
@@ -173,7 +183,9 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	requests := len(s.proposalProviders)
 	respCh := make(chan *beaconBlockEPBSResponse, requests)
 	errCh := make(chan *beaconBlockError, requests)
+	pendingProviders := make(map[string]struct{}, requests)
 	for name, provider := range s.proposalProviders {
+		pendingProviders[name] = struct{}{}
 		providerOpts := *opts
 		go s.epbsProposal(ctx, started, name, provider, respCh, errCh, &providerOpts, log)
 	}
@@ -182,33 +194,38 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	errored := 0
 	timedOut := 0
 	softTimedOut := 0
+	softDeadlineReached := false
+	hardDeadlineReached := false
 	var bestProposal *api.VersionedEPBSProposal
 	var bestProvider string
+	var bestMetadata map[string]any
 	for responded+errored+timedOut+softTimedOut != requests {
 		select {
 		case response := <-respCh:
 			responded++
-			log.Trace().
-				Dur("elapsed", time.Since(started)).
-				Str("provider", response.provider).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Msg("Response received")
+			delete(pendingProviders, response.provider)
+			previousBest := bestProposal
 			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
+			if bestProposal == response.proposal && bestProposal != previousBest {
+				bestMetadata = response.metadata
+			}
+			outcome := "accepted"
+			if response.rejectionReason != "" {
+				outcome = "rejected"
+			}
+			s.logEPBSProviderResult(opts.Slot, requestID, response, outcome, response.rejectionReason)
 		case err := <-errCh:
 			errored++
-			log.Debug().
-				Dur("elapsed", time.Since(started)).
-				Str("provider", err.provider).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Err(err.err).
-				Msg("Error received")
+			delete(pendingProviders, err.provider)
+			s.logEPBSProviderError(opts.Slot, requestID, err)
 		case <-softCtx.Done():
+			softDeadlineReached = true
 			if bestProposal != nil {
 				timedOut = requests - responded - errored
+				for provider := range pendingProviders {
+					s.logEPBSProviderTimeout(opts.Slot, requestID, provider, time.Since(started), "soft_deadline_reached")
+					delete(pendingProviders, provider)
+				}
 				log.Debug().
 					Dur("elapsed", time.Since(started)).
 					Int("responded", responded).
@@ -230,56 +247,79 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		select {
 		case response := <-respCh:
 			responded++
-			log.Trace().
-				Dur("elapsed", time.Since(started)).
-				Str("provider", response.provider).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Msg("Response received")
+			delete(pendingProviders, response.provider)
+			previousBest := bestProposal
 			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
+			if bestProposal == response.proposal && bestProposal != previousBest {
+				bestMetadata = response.metadata
+			}
+			outcome := "accepted"
+			if response.rejectionReason != "" {
+				outcome = "rejected"
+			}
+			s.logEPBSProviderResult(opts.Slot, requestID, response, outcome, response.rejectionReason)
 		case err := <-errCh:
 			errored++
-			log.Debug().
-				Dur("elapsed", time.Since(started)).
-				Str("provider", err.provider).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Err(err.err).
-				Msg("Error received")
+			delete(pendingProviders, err.provider)
+			s.logEPBSProviderError(opts.Slot, requestID, err)
 		case <-ctx.Done():
+			hardDeadlineReached = true
 			timedOut = requests - responded - errored
-			log.Debug().
-				Dur("elapsed", time.Since(started)).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Msg("Hard timeout reached")
+			for provider := range pendingProviders {
+				s.logEPBSProviderTimeout(opts.Slot, requestID, provider, time.Since(started), "deadline_reached")
+				delete(pendingProviders, provider)
+			}
 		}
 	}
 
-	log.Trace().
-		Dur("elapsed", time.Since(started)).
-		Int("responded", responded).
-		Int("errored", errored).
-		Int("timed_out", timedOut).
-		Msg("Results")
-
+	hardDeadlineReached = hardDeadlineReached || errors.Is(ctx.Err(), context.DeadlineExceeded)
 	if bestProposal == nil {
+		outcome := "no_valid_proposal"
+		if hardDeadlineReached {
+			outcome = "timeout"
+		}
+		log.Info().
+			Uint64("slot", uint64(opts.Slot)).
+			Str("request_id", requestID).
+			Str("provider", "unknown").
+			Str("proposal_root", "unknown").
+			Dur("elapsed", time.Since(started)).
+			Int("responded", responded).
+			Int("errored", errored).
+			Int("timed_out", timedOut).
+			Bool("deadline_reached", hardDeadlineReached).
+			Bool("soft_deadline_reached", softDeadlineReached).
+			Bool("hard_deadline_reached", hardDeadlineReached).
+			Str("outcome", outcome).
+			Msg("ePBS proposal selection completed")
 		return nil, errors.New("no ePBS proposals received")
 	}
-	if bestProposal.Value() == nil {
-		// Every valid response left its value unreported, so this selection ranked nothing.
-		log.Warn().Str("provider", bestProvider).Msg("Selected ePBS proposal with unknown value")
+	valueKnown := bestProposal.Value() != nil
+	source := beaconblockproposal.EPBSProposalSource(bestProposal, bestMetadata)
+	stableBestProvider := beaconblockproposer.StableProviderName(bestProvider)
+	if proposalRoot, err := bestProposal.Root(); err == nil {
+		span.SetAttributes(attribute.String("proposal_root", proposalRoot.String()))
 	}
+	span.SetAttributes(
+		attribute.String("provider", stableBestProvider),
+		attribute.String("source", source),
+		attribute.Bool("value_known", valueKnown),
+		attribute.Bool("fallback", !valueKnown),
+		attribute.Bool("soft_deadline_reached", softDeadlineReached),
+		attribute.Bool("hard_deadline_reached", hardDeadlineReached),
+	)
 	if bestProvider != "" {
 		s.clientMonitor.StrategyOperation("best", bestProvider, "ePBS beacon block proposal", time.Since(started))
 	}
 
+	metadata := make(map[string]any, 4)
+	metadata[beaconblockproposer.MetadataStrategy] = "best"
+	metadata[beaconblockproposer.MetadataProvider] = stableBestProvider
+	metadata[beaconblockproposer.MetadataSource] = source
+	metadata[beaconblockproposer.MetadataFallback] = !valueKnown
 	return &api.Response[*api.VersionedEPBSProposal]{
 		Data:     bestProposal,
-		Metadata: make(map[string]any),
+		Metadata: metadata,
 	}, nil
 }
 
@@ -292,7 +332,8 @@ func (s *Service) considerEPBSProposal(opts *api.EPBSProposalOpts,
 	log zerolog.Logger,
 ) (*api.VersionedEPBSProposal, string) {
 	if err := beaconblockproposal.ValidateBuilderBidReadiness(s.providerReadiness, response.provider, opts.Slot, response.proposal); err != nil {
-		log.Warn().Str("provider", response.provider).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
+		log.Warn().Str("provider", beaconblockproposer.StableProviderName(response.provider)).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
+		response.rejectionReason = beaconblockproposal.RejectionReason(err)
 
 		return bestProposal, bestProvider
 	}
@@ -311,8 +352,11 @@ func (s *Service) considerEPBSProposal(opts *api.EPBSProposalOpts,
 }
 
 type beaconBlockEPBSResponse struct {
-	provider string
-	proposal *api.VersionedEPBSProposal
+	provider        string
+	proposal        *api.VersionedEPBSProposal
+	metadata        map[string]any
+	elapsed         time.Duration
+	rejectionReason string
 }
 
 func (s *Service) epbsProposal(ctx context.Context,
@@ -325,22 +369,36 @@ func (s *Service) epbsProposal(ctx context.Context,
 	log zerolog.Logger,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.best").Start(ctx, "ePBSBeaconBlockProposal", trace.WithAttributes(
-		attribute.String("provider", name),
+		attribute.Int64("slot", util.SlotToInt64(opts.Slot)),
+		attribute.String("request_id", beaconblockproposer.RequestID(ctx)),
+		attribute.String("provider", beaconblockproposer.StableProviderName(name)),
+		attribute.String("proposal_root", "unknown"),
+		attribute.String("source", "unknown"),
 	))
 	defer span.End()
 
 	providerGraffiti, err := beaconblockproposal.GraffitiForProvider(ctx, provider, opts.Graffiti)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
+		log.Warn().Msg("Failed to obtain node client; not updating graffiti")
 	}
 	opts.Graffiti = providerGraffiti
 
+	providerStarted := time.Now()
 	proposalResponse, err := provider.EPBSProposal(ctx, opts)
 	s.clientMonitor.ClientOperation(name, "ePBS beacon block proposal", err == nil, time.Since(started))
 	if err != nil {
+		outcome := "error"
+		rejectionReason := "provider_error"
+		if errors.Is(err, context.DeadlineExceeded) {
+			outcome = "timeout"
+			rejectionReason = "deadline_reached"
+		}
 		errCh <- &beaconBlockError{
-			provider: name,
-			err:      err,
+			provider:        name,
+			err:             err,
+			elapsed:         time.Since(providerStarted),
+			outcome:         outcome,
+			rejectionReason: rejectionReason,
 		}
 
 		return
@@ -348,8 +406,11 @@ func (s *Service) epbsProposal(ctx context.Context,
 
 	if proposalResponse == nil || proposalResponse.Data == nil {
 		errCh <- &beaconBlockError{
-			provider: name,
-			err:      errors.New("beacon node returned no ePBS proposal"),
+			provider:        name,
+			err:             errors.New("beacon node returned no ePBS proposal"),
+			elapsed:         time.Since(providerStarted),
+			outcome:         "rejected",
+			rejectionReason: "empty_response",
 		}
 
 		return
@@ -357,17 +418,112 @@ func (s *Service) epbsProposal(ctx context.Context,
 
 	if err := beaconblockproposal.ValidateEPBSProposal(proposalResponse.Data, opts.IncludePayload); err != nil {
 		errCh <- &beaconBlockError{
-			provider: name,
-			err:      err,
+			provider:        name,
+			err:             err,
+			elapsed:         time.Since(providerStarted),
+			outcome:         "rejected",
+			rejectionReason: beaconblockproposal.RejectionReason(err),
 		}
 
 		return
 	}
 
+	source := beaconblockproposal.EPBSProposalSource(proposalResponse.Data, proposalResponse.Metadata)
+	span.SetAttributes(
+		attribute.String("source", source),
+		attribute.Bool("value_known", proposalResponse.Data.ExecutionValue != nil),
+	)
+	if proposalResponse.Data.ExecutionValue == nil {
+		span.SetAttributes(attribute.String("execution_value", "unknown"))
+	} else {
+		span.SetAttributes(attribute.String("execution_value", proposalResponse.Data.ExecutionValue.String()))
+	}
+	if score := proposalResponse.Data.Value(); score == nil {
+		span.SetAttributes(attribute.String("score", "unknown"))
+	} else {
+		span.SetAttributes(attribute.String("score", score.String()))
+	}
+	if proposalRoot, err := proposalResponse.Data.Root(); err == nil {
+		span.SetAttributes(attribute.String("proposal_root", proposalRoot.String()))
+	}
 	respCh <- &beaconBlockEPBSResponse{
 		provider: name,
 		proposal: proposalResponse.Data,
+		metadata: proposalResponse.Metadata,
+		elapsed:  time.Since(providerStarted),
 	}
+}
+
+func (s *Service) logEPBSProviderTimeout(slot phase0.Slot,
+	requestID string,
+	provider string,
+	elapsed time.Duration,
+	reason string,
+) {
+	s.log.Info().
+		Uint64("slot", uint64(slot)).
+		Str("request_id", requestID).
+		Str("provider", beaconblockproposer.StableProviderName(provider)).
+		Str("proposal_root", "unknown").
+		Str("source", "unknown").
+		Str("builder_index", "unknown").
+		Bool("value_known", false).
+		Str("execution_value", "unknown").
+		Bool("payload_included", false).
+		Bool("builder_url_present", false).
+		Dur("latency", elapsed).
+		Str("outcome", "timeout").
+		Str("rejection_reason", reason).
+		Msg("ePBS proposal provider completed")
+}
+
+func (s *Service) logEPBSProviderError(slot phase0.Slot, requestID string, providerError *beaconBlockError) {
+	s.log.Info().
+		Uint64("slot", uint64(slot)).
+		Str("request_id", requestID).
+		Str("provider", beaconblockproposer.StableProviderName(providerError.provider)).
+		Str("proposal_root", "unknown").
+		Str("source", "unknown").
+		Str("builder_index", "unknown").
+		Bool("value_known", false).
+		Str("execution_value", "unknown").
+		Bool("payload_included", false).
+		Bool("builder_url_present", false).
+		Dur("latency", providerError.elapsed).
+		Str("outcome", providerError.outcome).
+		Str("rejection_reason", providerError.rejectionReason).
+		Str("error", beaconblockproposer.SafeError(providerError.err, providerError.provider)).
+		Msg("ePBS proposal provider completed")
+}
+
+func (s *Service) logEPBSProviderResult(slot phase0.Slot,
+	requestID string,
+	response *beaconBlockEPBSResponse,
+	outcome string,
+	rejectionReason string,
+) {
+	builderIndex := uint64(0)
+	if signedBid, err := beaconblockproposal.EPBSProposalBid(response.proposal); err == nil {
+		builderIndex = uint64(signedBid.Message.BuilderIndex)
+	}
+	event := s.log.Info().
+		Uint64("slot", uint64(slot)).
+		Str("request_id", requestID).
+		Str("provider", beaconblockproposer.StableProviderName(response.provider)).
+		Str("source", beaconblockproposal.EPBSProposalSource(response.proposal, response.metadata)).
+		Uint64("builder_index", builderIndex).
+		Bool("value_known", response.proposal.ExecutionValue != nil).
+		Bool("payload_included", response.proposal.ExecutionPayloadIncluded).
+		Bool("builder_url_present", beaconblockproposer.BuilderURLPresent(response.metadata)).
+		Dur("latency", response.elapsed).
+		Str("outcome", outcome).
+		Str("rejection_reason", rejectionReason)
+	if response.proposal.ExecutionValue == nil {
+		event = event.Str("execution_value", "unknown")
+	} else {
+		event = event.Str("execution_value", response.proposal.ExecutionValue.String())
+	}
+	event.Msg("ePBS proposal provider completed")
 }
 
 // Proposal provides the best beacon block proposal from a number of beacon nodes.

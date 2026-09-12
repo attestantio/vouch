@@ -14,6 +14,7 @@
 package beaconblockproposal_test
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -283,4 +284,34 @@ func TestValidateBuilderBidReadiness(t *testing.T) {
 
 func TestBuilderIndexSelfBuildIsUint64Max(t *testing.T) {
 	require.Equal(t, gloas.BuilderIndex(math.MaxUint64), gloas.BuilderIndexSelfBuild)
+}
+
+func TestRejectionReason(t *testing.T) {
+	includePayload := true
+	zeroFeeRecipient := withoutPayload(1)
+	zeroFeeRecipient.Gloas.Body.SignedExecutionPayloadBid.Message.FeeRecipient = bellatrix.ExecutionAddress{}
+	tests := []struct {
+		name     string
+		proposal *api.VersionedEPBSProposal
+		reason   string
+	}{
+		{name: "Nil", reason: "empty_response"},
+		{name: "Malformed", proposal: &api.VersionedEPBSProposal{Version: spec.DataVersionGloas}, reason: "malformed_proposal"},
+		{name: "ZeroFeeRecipient", proposal: zeroFeeRecipient, reason: "zero_fee_recipient"},
+		{name: "BuilderPayloadIncluded", proposal: withPayload(1), reason: "builder_payload_included"},
+		{name: "RequestedPayloadMissing", proposal: withoutPayload(gloas.BuilderIndexSelfBuild), reason: "requested_payload_missing"},
+		{name: "ProviderNotReady", proposal: withoutPayload(1), reason: "provider_preferences_not_ready"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := beaconblockproposal.ValidateEPBSProposal(test.proposal, &includePayload)
+			if err == nil {
+				err = beaconblockproposal.ValidateBuilderBidReadiness(&providerReadiness{}, "provider", 1, test.proposal)
+			}
+			require.Error(t, err)
+			require.Equal(t, test.reason, beaconblockproposal.RejectionReason(err))
+		})
+	}
+	require.Equal(t, "invalid_proposal", beaconblockproposal.RejectionReason(errors.New("other")))
 }
