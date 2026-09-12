@@ -284,13 +284,13 @@ type recordingProposerPreferencesSubmitter struct {
 	preferences []*gloas.SignedProposerPreferences
 }
 
-func (s *recordingProposerPreferencesSubmitter) Name() string { return "test" }
+func (*recordingProposerPreferencesSubmitter) Name() string { return "test" }
 
-func (s *recordingProposerPreferencesSubmitter) Address() string { return "test" }
+func (*recordingProposerPreferencesSubmitter) Address() string { return "test" }
 
-func (s *recordingProposerPreferencesSubmitter) IsActive() bool { return true }
+func (*recordingProposerPreferencesSubmitter) IsActive() bool { return true }
 
-func (s *recordingProposerPreferencesSubmitter) IsSynced() bool { return true }
+func (*recordingProposerPreferencesSubmitter) IsSynced() bool { return true }
 
 func (s *recordingProposerPreferencesSubmitter) SubmitProposerPreferences(_ context.Context, preferences []*gloas.SignedProposerPreferences) error {
 	s.preferences = preferences

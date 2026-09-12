@@ -25,6 +25,7 @@ import (
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // Service is the standard proposer-preferences service.
@@ -48,6 +49,14 @@ type cachedPreference struct {
 	outcomes  map[string]error
 	signed    *gloas.SignedProposerPreferences
 	published bool
+}
+
+type publication struct {
+	preferences gloas.ProposerPreferences
+	cached      *cachedPreference
+	providers   []string
+	sign        bool
+	complete    chan struct{}
 }
 
 // New creates a standard proposer-preferences service.
@@ -129,94 +138,142 @@ func (s *Service) Publish(ctx context.Context, duty *proposerpreferences.Duty) e
 		TargetGasLimit: duty.TargetGasLimit,
 	}
 	dutyKey := preferenceDuty{proposalSlot: duty.ProposalSlot, validatorIndex: duty.ValidatorIndex}
-
 	for {
-		s.mutex.Lock()
-		cached, exists := s.cache[preferences]
-		if exists && cached.published {
-			s.mutex.Unlock()
-			monitorProposerPreferencesProcess("replayed")
+		publication, complete := s.claimPublication(preferences, dutyKey)
+		if publication != nil {
+			return s.publish(ctx, duty.Account, publication)
+		}
+		if complete == nil {
 			return nil
 		}
-		if complete, exists := s.inFlight[preferences]; exists {
-			s.mutex.Unlock()
-			select {
-			case <-complete:
-				continue
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+		if err := waitForPublication(ctx, complete); err != nil {
+			return err
 		}
+	}
+}
 
-		complete := make(chan struct{})
-		s.inFlight[preferences] = complete
-		if current, exists := s.current[dutyKey]; exists && current != preferences {
-			monitorProposerPreferencesProcess("refreshed")
-		}
-		providers := []string(nil)
-		if !exists {
-			cached = &cachedPreference{
-				accepted: make(map[string]struct{}),
-				outcomes: make(map[string]error),
-			}
-			s.cache[preferences] = cached
-		} else {
-			for provider, err := range cached.outcomes {
-				if err != nil {
-					providers = append(providers, provider)
-				}
-			}
-		}
-		s.current[dutyKey] = preferences
-		s.mutex.Unlock()
+func (s *Service) claimPublication(preferences gloas.ProposerPreferences, dutyKey preferenceDuty) (*publication, chan struct{}) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
-		if !exists {
-			signature, err := s.signer.SignProposerPreferences(ctx, duty.Account, &preferences)
-			if err != nil {
-				s.mutex.Lock()
-				delete(s.cache, preferences)
-				delete(s.inFlight, preferences)
-				close(complete)
-				s.mutex.Unlock()
-				return errors.Wrap(err, "failed to sign proposer preferences")
-			}
-			cached.signed = &gloas.SignedProposerPreferences{
-				Message:   &preferences,
-				Signature: signature,
-			}
-			monitorProposerPreferencesProcess("signed")
+	cached, exists := s.cache[preferences]
+	if exists && cached.published {
+		monitorProposerPreferencesProcess("replayed")
+		return nil, nil
+	}
+	if complete, exists := s.inFlight[preferences]; exists {
+		return nil, complete
+	}
+	complete := make(chan struct{})
+	s.inFlight[preferences] = complete
+	if current, exists := s.current[dutyKey]; exists && current != preferences {
+		monitorProposerPreferencesProcess("refreshed")
+	}
+	providers := failedProviders(cached)
+	if !exists {
+		cached = &cachedPreference{
+			accepted: make(map[string]struct{}),
+			outcomes: make(map[string]error),
 		}
+		s.cache[preferences] = cached
+	}
+	s.current[dutyKey] = preferences
 
-		outcomes := s.submitter.SubmitProposerPreferences(ctx, []*gloas.SignedProposerPreferences{cached.signed}, providers)
-		s.mutex.Lock()
-		delete(s.inFlight, preferences)
-		close(complete)
-		if len(outcomes) == 0 {
-			s.mutex.Unlock()
-			return errors.New("no proposer preferences submission outcomes")
-		}
-		var submissionErr error
-		for provider, err := range outcomes {
-			cached.outcomes[provider] = err
-			if err != nil {
-				delete(cached.accepted, provider)
-				monitorProposerPreferencesProcess("rejected")
-				if submissionErr == nil {
-					submissionErr = err
-				}
-				continue
-			}
-			cached.accepted[provider] = struct{}{}
-			monitorProposerPreferencesProcess("accepted")
-		}
-		if submissionErr == nil {
-			cached.published = true
-		}
-		s.mutex.Unlock()
-		if submissionErr != nil {
-			return errors.Wrap(submissionErr, "failed to submit proposer preferences")
-		}
+	return &publication{
+		preferences: preferences,
+		cached:      cached,
+		complete:    complete,
+		providers:   providers,
+		sign:        !exists,
+	}, nil
+}
 
+func failedProviders(cached *cachedPreference) []string {
+	if cached == nil {
 		return nil
 	}
+	providers := make([]string, 0)
+	for provider, err := range cached.outcomes {
+		if err != nil {
+			providers = append(providers, provider)
+		}
+	}
+
+	return providers
+}
+
+func waitForPublication(ctx context.Context, complete <-chan struct{}) error {
+	select {
+	case <-complete:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *Service) publish(ctx context.Context, account e2wtypes.Account, publication *publication) error {
+	if publication.sign {
+		if err := s.sign(ctx, account, publication); err != nil {
+			return err
+		}
+	}
+
+	outcomes := s.submitter.SubmitProposerPreferences(ctx, []*gloas.SignedProposerPreferences{publication.cached.signed}, publication.providers)
+
+	return s.recordSubmission(publication, outcomes)
+}
+
+func (s *Service) sign(ctx context.Context, account e2wtypes.Account, publication *publication) error {
+	signature, err := s.signer.SignProposerPreferences(ctx, account, &publication.preferences)
+	if err != nil {
+		s.abandonPublication(publication)
+		return errors.Wrap(err, "failed to sign proposer preferences")
+	}
+	publication.cached.signed = &gloas.SignedProposerPreferences{
+		Message:   &publication.preferences,
+		Signature: signature,
+	}
+	monitorProposerPreferencesProcess("signed")
+
+	return nil
+}
+
+func (s *Service) abandonPublication(publication *publication) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	delete(s.cache, publication.preferences)
+	delete(s.inFlight, publication.preferences)
+	close(publication.complete)
+}
+
+func (s *Service) recordSubmission(publication *publication, outcomes map[string]error) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	defer close(publication.complete)
+	defer delete(s.inFlight, publication.preferences)
+
+	if len(outcomes) == 0 {
+		return errors.New("no proposer preferences submission outcomes")
+	}
+	var submissionErr error
+	for provider, err := range outcomes {
+		publication.cached.outcomes[provider] = err
+		if err == nil {
+			publication.cached.accepted[provider] = struct{}{}
+			monitorProposerPreferencesProcess("accepted")
+			continue
+		}
+		delete(publication.cached.accepted, provider)
+		monitorProposerPreferencesProcess("rejected")
+		if submissionErr == nil {
+			submissionErr = err
+		}
+	}
+	if submissionErr != nil {
+		return errors.Wrap(submissionErr, "failed to submit proposer preferences")
+	}
+	publication.cached.published = true
+
+	return nil
 }
