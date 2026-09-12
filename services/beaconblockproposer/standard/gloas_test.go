@@ -46,6 +46,9 @@ import (
 	"github.com/stretchr/testify/require"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 // skipcq: GO-R1005
@@ -428,6 +431,136 @@ func (s *cancelingExecutionPayloadEnvelopeSubmitter) SubmitExecutionPayloadEnvel
 	return s.err
 }
 
+func TestProposeGloasSelectionObservability(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+	previousTracerProvider := otel.GetTracerProvider()
+	otel.SetTracerProvider(tracerProvider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		require.NoError(t, tracerProvider.Shutdown(ctx))
+	})
+	monitor, err := prometheusmetrics.New(ctx,
+		prometheusmetrics.WithLogLevel(zerolog.Disabled),
+		prometheusmetrics.WithAddress("localhost:0"),
+	)
+	require.NoError(t, err)
+	before := gloasSelectionCount(t, "best", "value_maximizing", "self_build")
+	service, duty, _, _, _, _ := newGloasProposerForProposalSource(ctx, t, true, monitor)
+
+	require.NoError(t, service.Propose(ctx, duty))
+	require.Equal(t, before+1, gloasSelectionCount(t, "best", "value_maximizing", "self_build"))
+	require.True(t, capture.HasLog(map[string]any{
+		"message":              "Selected Gloas proposal",
+		"slot":                 uint64(1),
+		"strategy":             "best",
+		"selected_provider":    "stable-provider",
+		"source":               "self_build",
+		"requested_min_bid":    uint64(11),
+		"builder_boost_factor": uint64(100),
+		"value_known":          true,
+		"fallback":             false,
+		"execution_value":      "2",
+		"publication_path":     "block_and_envelope",
+		"requested_preference": "value_maximizing",
+	}), "%v", capture.Entries())
+
+	spanAttributes := make(map[string]map[string]any)
+	for _, recordedSpan := range spanRecorder.Ended() {
+		attributes := make(map[string]any)
+		for _, attr := range recordedSpan.Attributes() {
+			attributes[string(attr.Key)] = attr.Value.AsInterface()
+		}
+		spanAttributes[recordedSpan.Name()] = attributes
+	}
+	for _, spanName := range []string{"Propose", "selectGloasProposal", "publishGloasBlock", "publishExecutionPayloadEnvelope"} {
+		attributes, exists := spanAttributes[spanName]
+		require.True(t, exists, "missing span %s", spanName)
+		require.Equal(t, int64(1), attributes["slot"])
+		require.NotEmpty(t, attributes["request_id"])
+		require.Equal(t, "stable-provider", attributes["provider"])
+		require.NotEmpty(t, attributes["proposal_root"])
+	}
+	require.Equal(t, int64(11), spanAttributes["selectGloasProposal"]["requested_min_bid"])
+	require.Equal(t, int64(100), spanAttributes["selectGloasProposal"]["builder_boost_factor"])
+	require.Equal(t, "value_maximizing", spanAttributes["selectGloasProposal"]["requested_preference"])
+	require.Equal(t, true, spanAttributes["selectGloasProposal"]["payload_requested"])
+}
+
+func TestProposeGloasBuilderSelectionObservability(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	monitor, err := prometheusmetrics.New(ctx,
+		prometheusmetrics.WithLogLevel(zerolog.Disabled),
+		prometheusmetrics.WithAddress("localhost:0"),
+	)
+	require.NoError(t, err)
+	before := gloasSelectionCount(t, "best", "value_maximizing", "p2p_builder")
+	service, duty, _, _, _, _ := newGloasProposerForProposalSource(ctx, t, false, monitor)
+
+	require.NoError(t, service.Propose(ctx, duty))
+	require.Equal(t, before+1, gloasSelectionCount(t, "best", "value_maximizing", "p2p_builder"))
+	require.True(t, capture.HasLog(map[string]any{
+		"message":           "Selected Gloas proposal",
+		"source":            "p2p_builder",
+		"publication_path":  "block_only",
+		"selected_provider": "stable-provider",
+	}))
+}
+
+func TestProposeGloasFailureCorrelation(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+	previousTracerProvider := otel.GetTracerProvider()
+	otel.SetTracerProvider(tracerProvider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		require.NoError(t, tracerProvider.Shutdown(ctx))
+	})
+	service, duty, _, _, envelopeSubmitter, _ := newGloasProposerForProposalSource(ctx, t, true, nullmetrics.New())
+	envelopeSubmitter.err = errors.New("submission failed")
+
+	err := service.Propose(ctx, duty)
+	require.EqualError(t, err, "failed to propose block: failed to submit execution payload envelope after block publication: submission failed")
+
+	var terminalEntry map[string]any
+	for _, entry := range capture.Entries() {
+		if entry["message"] == "Execution payload envelope submission completed" {
+			terminalEntry = entry
+			break
+		}
+	}
+	require.NotNil(t, terminalEntry)
+	require.NotEmpty(t, terminalEntry["request_id"])
+	require.NotEmpty(t, terminalEntry["beacon_block_root"])
+	require.Equal(t, "failed", terminalEntry["status"])
+
+	var blockRequestID, envelopeRequestID string
+	var blockRoot, envelopeRoot string
+	for _, recordedSpan := range spanRecorder.Ended() {
+		attributes := make(map[string]any)
+		for _, attr := range recordedSpan.Attributes() {
+			attributes[string(attr.Key)] = attr.Value.AsInterface()
+		}
+		switch recordedSpan.Name() {
+		case "publishGloasBlock":
+			blockRequestID, _ = attributes["request_id"].(string)
+			blockRoot, _ = attributes["proposal_root"].(string)
+		case "publishExecutionPayloadEnvelope":
+			envelopeRequestID, _ = attributes["request_id"].(string)
+			envelopeRoot, _ = attributes["proposal_root"].(string)
+		}
+	}
+	require.NotEmpty(t, blockRequestID)
+	require.Equal(t, blockRequestID, envelopeRequestID)
+	require.NotEmpty(t, blockRoot)
+	require.Equal(t, blockRoot, envelopeRoot)
+}
+
 func TestProposeGloasProposalSource(t *testing.T) {
 	ctx := context.Background()
 
@@ -553,6 +686,11 @@ func newGloasProposerForProposalSource(
 		} else {
 			setBuilderBackedProposal(t, response.Data, 7)
 		}
+		response.Metadata = map[string]any{
+			beaconblockproposer.MetadataStrategy: "best",
+			beaconblockproposer.MetadataProvider: "stable-provider",
+			beaconblockproposer.MetadataSource:   map[bool]string{true: "self_build", false: "p2p_builder"}[executionPayloadIncluded],
+		}
 
 		return response, nil
 	}
@@ -563,11 +701,15 @@ func newGloasProposerForProposalSource(
 	envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: phase0.BLSSignature{0x03}}
 	envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
 	service, err := standard.New(ctx,
-		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithLogLevel(zerolog.TraceLevel),
 		standard.WithMonitor(monitor),
 		standard.WithProposalDataProvider(proposalClient),
 		standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{
 			FeeRecipient: bellatrix.ExecutionAddress{0x07},
+			EPBSBuilderConfig: &beaconblockproposer.EPBSBuilderConfig{
+				MinBid:             11,
+				BuilderBoostFactor: 100,
+			},
 		}}),
 		standard.WithChainTime(&forkChainTime{gloasForkEpoch: 0}),
 		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
@@ -585,6 +727,29 @@ func newGloasProposerForProposalSource(
 	duty.SetRandaoReveal(phase0.BLSSignature{0x02})
 
 	return service, duty, blockSigner, envelopeSigner, envelopeSubmitter, proposalSubmitter
+}
+
+func gloasSelectionCount(t *testing.T, strategy string, requestedPreference string, source string) float64 {
+	t.Helper()
+
+	metricFamilies, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, metricFamily := range metricFamilies {
+		if metricFamily.GetName() != "vouch_beaconblockproposal_process_gloas_selections_total" {
+			continue
+		}
+		for _, metric := range metricFamily.GetMetric() {
+			labels := make(map[string]string)
+			for _, label := range metric.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+			if labels["strategy"] == strategy && labels["requested_preference"] == requestedPreference && labels["source"] == source {
+				return metric.GetCounter().GetValue()
+			}
+		}
+	}
+
+	return 0
 }
 
 func beaconBlockProposalSourceCount(t *testing.T, source string) float64 {
