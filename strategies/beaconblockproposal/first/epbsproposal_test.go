@@ -251,9 +251,9 @@ func TestEPBSProposalDoesNotLeaveLateProvidersBlocked(t *testing.T) {
 
 func TestEPBSProposalGatesBuilderBidsByProviderReadiness(t *testing.T) {
 	builderBid := func(proposerIndex phase0.ValidatorIndex) *api.VersionedEPBSProposal {
-		proposal := gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})
-		proposal.GloasContents.Block.ProposerIndex = proposerIndex
-		proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = 1
+		proposal := gloasEPBSProposalWithoutPayload(bellatrix.ExecutionAddress{0x01})
+		proposal.Gloas.ProposerIndex = proposerIndex
+		proposal.Gloas.Body.SignedExecutionPayloadBid.Message.BuilderIndex = 1
 
 		return proposal
 	}
@@ -513,6 +513,8 @@ func newTestService(ctx context.Context,
 	return service
 }
 
+// gloasEPBSProposal returns a self-built proposal: it carries the payload, which only the
+// beacon node's own build can do.
 func gloasEPBSProposal(feeRecipient bellatrix.ExecutionAddress) *api.VersionedEPBSProposal {
 	return &api.VersionedEPBSProposal{
 		Version:                  spec.DataVersionGloas,
@@ -554,6 +556,7 @@ type epbsProposalProvider struct {
 	proposalErr                 error
 	waitForCancellation         bool
 	proposalWaitForCancellation bool
+	opts                        *api.EPBSProposalOpts
 }
 
 func (p *epbsProposalProvider) Proposal(ctx context.Context, opts *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
@@ -577,6 +580,7 @@ func (p *epbsProposalProvider) EPBSProposal(ctx context.Context,
 	*api.Response[*api.VersionedEPBSProposal],
 	error,
 ) {
+	p.opts = opts
 	if p.release != nil {
 		<-p.release
 	}
@@ -599,4 +603,112 @@ func (p *epbsProposalProvider) EPBSProposal(ctx context.Context,
 
 func (p *epbsProposalProvider) NodeClient(context.Context) (*api.Response[string], error) {
 	return &api.Response[string]{Data: p.client}, nil
+}
+
+// TestEPBSProposalAcceptsBuilderBackedProposal proves that a proposal the beacon node
+// awarded to a P2P builder is a valid result even though Vouch asked for the payload: the
+// node never holds a builder's payload, so it cannot return one.
+func TestEPBSProposalAcceptsBuilderBackedProposal(t *testing.T) {
+	ctx := context.Background()
+	includePayload := true
+	proposal := gloasEPBSProposalWithoutPayload(bellatrix.ExecutionAddress{0x01})
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"builder": &epbsProposalProvider{proposal: proposal},
+		}),
+		first.WithProviderReadiness(&providerReadiness{ready: map[readyDuty]bool{{provider: "builder", slot: 1}: true}}),
+		first.WithTimeout(time.Second),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, IncludePayload: &includePayload})
+	require.NoError(t, err)
+	require.Same(t, proposal, response.Data)
+}
+
+// TestEPBSProposalSkipsBuilderBackedProposalWithPayload proves that a builder-backed
+// proposal claiming to carry an execution payload is rejected: the two cannot both be true.
+func TestEPBSProposalSkipsBuilderBackedProposalWithPayload(t *testing.T) {
+	ctx := context.Background()
+	includePayload := true
+	inconsistent := gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})
+	inconsistent.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = 7
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"inconsistent": &epbsProposalProvider{proposal: inconsistent},
+		}),
+		first.WithTimeout(10*time.Millisecond),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, IncludePayload: &includePayload})
+	require.Nil(t, response)
+	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal: inconsistent: builder-backed ePBS proposal carries an execution payload")
+}
+
+// gloasEPBSProposalWithoutPayload returns a builder-backed proposal, which carries only
+// the block: the winning builder reveals the payload itself.
+func gloasEPBSProposalWithoutPayload(feeRecipient bellatrix.ExecutionAddress) *api.VersionedEPBSProposal {
+	proposal := gloasEPBSProposal(feeRecipient)
+	proposal.Gloas = proposal.GloasContents.Block
+	proposal.GloasContents = nil
+	proposal.ExecutionPayloadIncluded = false
+	proposal.Gloas.Body.SignedExecutionPayloadBid.Message.BuilderIndex = 7
+
+	return proposal
+}
+
+// TestEPBSProposalForwardsBuilderConfigUnchanged proves that the strategy passes the
+// operator's auction policy to each beacon node as given: the boost is the beacon node's to
+// apply, and applying it again here would express a preference nobody configured.
+func TestEPBSProposalForwardsBuilderConfigUnchanged(t *testing.T) {
+	ctx := context.Background()
+	provider := &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})}
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"one": provider,
+		}),
+		first.WithTimeout(time.Second),
+	)
+	require.NoError(t, err)
+
+	builderConfig := &gloas.BuilderConfig{
+		MinBid:             phase0.Gwei(12345),
+		BuilderBoostFactor: 91,
+		Builders:           []*gloas.BuilderEntry{},
+	}
+	_, err = service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, BuilderConfig: builderConfig})
+	require.NoError(t, err)
+
+	require.NotNil(t, provider.opts)
+	require.Equal(t, builderConfig, provider.opts.BuilderConfig)
+}
+
+// TestEPBSProposalSkipsSelfBuiltProposalWithoutPayload proves that a self-built proposal
+// that did not carry the requested payload is discarded: only its producing node could
+// publish it, so it is unusable here.
+func TestEPBSProposalSkipsSelfBuiltProposalWithoutPayload(t *testing.T) {
+	ctx := context.Background()
+	includePayload := true
+	selfBuilt := gloasEPBSProposalWithoutPayload(bellatrix.ExecutionAddress{0x01})
+	selfBuilt.Gloas.Body.SignedExecutionPayloadBid.Message.BuilderIndex = gloas.BuilderIndexSelfBuild
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"self-built": &epbsProposalProvider{proposal: selfBuilt},
+		}),
+		first.WithTimeout(10*time.Millisecond),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, IncludePayload: &includePayload})
+	require.Nil(t, response)
+	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal: self-built: ePBS proposal excludes requested execution payload")
 }
