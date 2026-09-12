@@ -1,0 +1,329 @@
+// Copyright © 2026 Attestant Limited.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package standard_test
+
+import (
+	"context"
+	"math"
+	"testing"
+
+	consensusapi "github.com/attestantio/go-eth2-client/api"
+	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
+	"github.com/attestantio/vouch/services/beaconblockproposer/standard"
+	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	mocksigner "github.com/attestantio/vouch/services/signer/mock"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
+)
+
+// TestProposeGloasSendsConfiguredBuilderConfig proves that the proposer asks each beacon
+// node to run its auction under the configured policy: the minimum bid and builder boost
+// factor travel with the request, with no direct builder entries.  It also proves that a
+// self-built result is signed and published exactly once.
+func TestProposeGloasSendsConfiguredBuilderConfig(t *testing.T) {
+	ctx := context.Background()
+
+	proposalClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	responseClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	var epbsOpts *consensusapi.EPBSProposalOpts
+	proposalClient.EPBSProposalFunc = func(ctx context.Context, opts *consensusapi.EPBSProposalOpts) (*consensusapi.Response[*consensusapi.VersionedEPBSProposal], error) {
+		epbsOpts = opts
+		response, err := responseClient.EPBSProposal(ctx, opts)
+		require.NoError(t, err)
+		response.Data.GloasContents.KZGProofs = []deneb.KZGProof{}
+		response.Data.GloasContents.Blobs = []deneb.Blob{}
+		setSelfBuildProposal(t, response.Data)
+		blockRoot, err := response.Data.GloasContents.Block.HashTreeRoot()
+		require.NoError(t, err)
+		response.Data.GloasContents.ExecutionPayloadEnvelope.BeaconBlockRoot = blockRoot
+
+		return response, nil
+	}
+
+	signer := mocksigner.New()
+	proposalSubmitter := &capturingProposalSubmitter{}
+	blockSigner := &capturingBeaconBlockSigner{signature: phase0.BLSSignature{0x01}}
+	envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: phase0.BLSSignature{0x03}}
+	envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
+	service, err := standard.New(ctx,
+		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithProposalDataProvider(proposalClient),
+		standard.WithChainTime(&forkChainTime{}),
+		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
+		standard.WithProposalSubmitter(proposalSubmitter),
+		standard.WithRANDAORevealSigner(signer),
+		standard.WithBeaconBlockSigner(blockSigner),
+		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
+		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
+		standard.WithBlobSidecarSigner(signer),
+		standard.WithBuilderBoostFactor(91),
+		standard.WithBuilderMinBid(phase0.Gwei(12345)),
+	)
+	require.NoError(t, err)
+
+	duty := beaconblockproposer.NewDuty(1, 0)
+	duty.SetAccount(&testAccount{})
+	duty.SetRandaoReveal(phase0.BLSSignature{0x02})
+
+	require.NoError(t, service.Propose(ctx, duty))
+
+	require.NotNil(t, epbsOpts)
+	require.NotNil(t, epbsOpts.IncludePayload)
+	require.True(t, *epbsOpts.IncludePayload)
+	require.NotNil(t, epbsOpts.BuilderConfig)
+	require.Equal(t, phase0.Gwei(12345), epbsOpts.BuilderConfig.MinBid)
+	require.Equal(t, uint64(91), epbsOpts.BuilderConfig.BuilderBoostFactor)
+	require.NotNil(t, epbsOpts.BuilderConfig.Builders)
+	require.Empty(t, epbsOpts.BuilderConfig.Builders)
+	require.Equal(t, 1, blockSigner.calls)
+	require.Equal(t, 1, envelopeSigner.calls)
+	require.Equal(t, 1, proposalSubmitter.calls)
+	require.Equal(t, 1, envelopeSubmitter.calls)
+}
+
+// TestProposeGloasBuilderBackedPublishesBlockOnly proves that a proposal the beacon node
+// awarded to a P2P builder is a complete duty on its own: Vouch signs and publishes the
+// block, and does no envelope work, because the builder reveals the payload itself.
+func TestProposeGloasBuilderBackedPublishesBlockOnly(t *testing.T) {
+	ctx := context.Background()
+
+	proposalClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	responseClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	var responseProposal *consensusapi.VersionedEPBSProposal
+	proposalClient.EPBSProposalFunc = func(ctx context.Context, opts *consensusapi.EPBSProposalOpts) (*consensusapi.Response[*consensusapi.VersionedEPBSProposal], error) {
+		response, err := responseClient.EPBSProposal(ctx, builderBackedOpts(opts))
+		require.NoError(t, err)
+		setBuilderBackedProposal(t, response.Data, 7)
+		responseProposal = response.Data
+
+		return response, nil
+	}
+
+	signer := mocksigner.New()
+	proposalSubmitter := &capturingProposalSubmitter{}
+	blockSigner := &capturingBeaconBlockSigner{signature: phase0.BLSSignature{0x01}}
+	envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: phase0.BLSSignature{0x03}}
+	envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
+	service, err := standard.New(ctx,
+		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithProposalDataProvider(proposalClient),
+		standard.WithChainTime(&forkChainTime{}),
+		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
+		standard.WithProposalSubmitter(proposalSubmitter),
+		standard.WithRANDAORevealSigner(signer),
+		standard.WithBeaconBlockSigner(blockSigner),
+		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
+		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
+		standard.WithBlobSidecarSigner(signer),
+	)
+	require.NoError(t, err)
+
+	duty := beaconblockproposer.NewDuty(1, 0)
+	duty.SetAccount(&testAccount{})
+	duty.SetRandaoReveal(phase0.BLSSignature{0x02})
+
+	require.NoError(t, service.Propose(ctx, duty))
+
+	require.Equal(t, 1, proposalSubmitter.calls)
+	require.NotNil(t, proposalSubmitter.proposal)
+	require.NotNil(t, proposalSubmitter.proposal.Gloas)
+	require.Same(t, responseProposal.Gloas, proposalSubmitter.proposal.Gloas.Message)
+	require.Equal(t, phase0.BLSSignature{0x01}, proposalSubmitter.proposal.Gloas.Signature)
+	require.Equal(t, *responseProposal.BeaconBlockBodyRoot, blockSigner.bodyRoot)
+	require.Equal(t, 1, blockSigner.calls)
+	require.Zero(t, envelopeSigner.calls)
+	require.Zero(t, envelopeSubmitter.calls)
+	require.Nil(t, envelopeSubmitter.opts)
+}
+
+// TestProposeGloasSelfBuiltWithoutPayloadFails proves that a self-built proposal that
+// arrives without the payload envelope Vouch asked for fails the duty: the envelope stayed
+// cached on the producing node, so nothing here can reveal the payload.
+func TestProposeGloasSelfBuiltWithoutPayloadFails(t *testing.T) {
+	ctx := context.Background()
+
+	proposalClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	responseClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	proposalClient.EPBSProposalFunc = func(ctx context.Context, opts *consensusapi.EPBSProposalOpts) (*consensusapi.Response[*consensusapi.VersionedEPBSProposal], error) {
+		response, err := responseClient.EPBSProposal(ctx, builderBackedOpts(opts))
+		require.NoError(t, err)
+		bid := response.Data.Gloas.Body.SignedExecutionPayloadBid.Message
+		bid.BuilderIndex = gloas.BuilderIndex(math.MaxUint64)
+		bid.FeeRecipient = bellatrix.ExecutionAddress{0x07}
+
+		return response, nil
+	}
+
+	signer := mocksigner.New()
+	proposalSubmitter := &capturingProposalSubmitter{}
+	blockSigner := &capturingBeaconBlockSigner{signature: phase0.BLSSignature{0x01}}
+	envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: phase0.BLSSignature{0x03}}
+	envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
+	service, err := standard.New(ctx,
+		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithProposalDataProvider(proposalClient),
+		standard.WithChainTime(&forkChainTime{}),
+		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
+		standard.WithProposalSubmitter(proposalSubmitter),
+		standard.WithRANDAORevealSigner(signer),
+		standard.WithBeaconBlockSigner(blockSigner),
+		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
+		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
+		standard.WithBlobSidecarSigner(signer),
+	)
+	require.NoError(t, err)
+
+	duty := beaconblockproposer.NewDuty(1, 0)
+	duty.SetAccount(&testAccount{})
+	duty.SetRandaoReveal(phase0.BLSSignature{0x02})
+
+	require.EqualError(t, service.Propose(ctx, duty),
+		"failed to propose block: ePBS proposal excludes requested execution payload")
+	require.Zero(t, blockSigner.calls)
+	require.Zero(t, envelopeSigner.calls)
+	require.Zero(t, proposalSubmitter.calls)
+	require.Zero(t, envelopeSubmitter.calls)
+}
+
+// TestProposeGloasRejectsInconsistentProposals proves that a proposal whose metadata does
+// not hold together is rejected before anything is signed, whichever arm it arrives on.
+func TestProposeGloasRejectsInconsistentProposals(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name    string
+		mutate  func(*testing.T, *consensusapi.VersionedEPBSProposal)
+		version spec.DataVersion
+		err     string
+	}{
+		{
+			name: "BidForIncorrectSlot",
+			mutate: func(_ *testing.T, proposal *consensusapi.VersionedEPBSProposal) {
+				proposal.Gloas.Body.SignedExecutionPayloadBid.Message.Slot++
+			},
+			err: "failed to propose block: ePBS execution payload bid for incorrect slot",
+		},
+		{
+			name: "BidForIncorrectParentBlock",
+			mutate: func(_ *testing.T, proposal *consensusapi.VersionedEPBSProposal) {
+				proposal.Gloas.Body.SignedExecutionPayloadBid.Message.ParentBlockRoot[0] ^= 0xff
+			},
+			err: "failed to propose block: ePBS execution payload bid for incorrect parent block",
+		},
+		{
+			name: "PreGloasVersion",
+			mutate: func(_ *testing.T, proposal *consensusapi.VersionedEPBSProposal) {
+				proposal.Version = spec.DataVersionElectra
+			},
+			err: "failed to propose block: failed to obtain ePBS proposal slot: no epbs proposal in electra",
+		},
+		{
+			name: "MissingBlock",
+			mutate: func(_ *testing.T, proposal *consensusapi.VersionedEPBSProposal) {
+				proposal.Gloas.Body.SignedExecutionPayloadBid = nil
+			},
+			err: "failed to propose block: ePBS proposal has no execution payload bid",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			proposalClient, err := mockconsensusclient.New(ctx)
+			require.NoError(t, err)
+			responseClient, err := mockconsensusclient.New(ctx)
+			require.NoError(t, err)
+			proposalClient.EPBSProposalFunc = func(ctx context.Context, opts *consensusapi.EPBSProposalOpts) (*consensusapi.Response[*consensusapi.VersionedEPBSProposal], error) {
+				response, err := responseClient.EPBSProposal(ctx, builderBackedOpts(opts))
+				require.NoError(t, err)
+				setBuilderBackedProposal(t, response.Data, 7)
+				test.mutate(t, response.Data)
+
+				return response, nil
+			}
+
+			signer := mocksigner.New()
+			proposalSubmitter := &capturingProposalSubmitter{}
+			blockSigner := &capturingBeaconBlockSigner{signature: phase0.BLSSignature{0x01}}
+			envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: phase0.BLSSignature{0x03}}
+			envelopeSubmitter := &capturingExecutionPayloadEnvelopeSubmitter{}
+			service, err := standard.New(ctx,
+				standard.WithLogLevel(zerolog.Disabled),
+				standard.WithMonitor(nullmetrics.New()),
+				standard.WithProposalDataProvider(proposalClient),
+				standard.WithChainTime(&forkChainTime{}),
+				standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
+				standard.WithProposalSubmitter(proposalSubmitter),
+				standard.WithRANDAORevealSigner(signer),
+				standard.WithBeaconBlockSigner(blockSigner),
+				standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
+				standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
+				standard.WithBlobSidecarSigner(signer),
+			)
+			require.NoError(t, err)
+
+			duty := beaconblockproposer.NewDuty(1, 0)
+			duty.SetAccount(&testAccount{})
+			duty.SetRandaoReveal(phase0.BLSSignature{0x02})
+
+			require.EqualError(t, service.Propose(ctx, duty), test.err)
+			require.Zero(t, blockSigner.calls)
+			require.Zero(t, envelopeSigner.calls)
+			require.Zero(t, proposalSubmitter.calls)
+			require.Zero(t, envelopeSubmitter.calls)
+		})
+	}
+}
+
+// builderBackedOpts copies opts with the payload excluded, as a beacon node that awarded
+// the slot to a P2P builder responds however the payload was requested.
+func builderBackedOpts(opts *consensusapi.EPBSProposalOpts) *consensusapi.EPBSProposalOpts {
+	excluded := false
+	responseOpts := *opts
+	responseOpts.IncludePayload = &excluded
+
+	return &responseOpts
+}
+
+// setBuilderBackedProposal marks a mock proposal as won by the given P2P builder and gives
+// its bid a fee recipient, which the mock leaves zero and Vouch rejects.  The retained body
+// root is recalculated so that the proposal is signed over the block it now describes.
+func setBuilderBackedProposal(t *testing.T, proposal *consensusapi.VersionedEPBSProposal, builderIndex gloas.BuilderIndex) {
+	t.Helper()
+
+	require.NotNil(t, proposal.Gloas)
+	bid := proposal.Gloas.Body.SignedExecutionPayloadBid.Message
+	bid.BuilderIndex = builderIndex
+	bid.FeeRecipient = bellatrix.ExecutionAddress{0x07}
+	proposal.BuilderIndex = &builderIndex
+	bodyRoot, err := proposal.Gloas.Body.HashTreeRoot()
+	require.NoError(t, err)
+	retainedBodyRoot := phase0.Root(bodyRoot)
+	proposal.BeaconBlockBodyRoot = &retainedBodyRoot
+}

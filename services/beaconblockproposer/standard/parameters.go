@@ -17,6 +17,7 @@ import (
 	"errors"
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/cache"
@@ -45,6 +46,7 @@ type parameters struct {
 	logLevel                          zerolog.Level
 	unblindFromAllRelays              bool
 	builderBoostFactor                uint64
+	builderMinBid                     phase0.Gwei
 }
 
 // Parameter is the interface for service parameters.
@@ -167,6 +169,13 @@ func WithUnblindFromAllRelays(unblindFromAll bool) Parameter {
 func WithBuilderBoostFactor(factor uint64) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.builderBoostFactor = factor
+	})
+}
+
+// WithBuilderMinBid sets the minimum bid, in Gwei, that a beacon node accepts from a P2P builder.
+func WithBuilderMinBid(minBid phase0.Gwei) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.builderMinBid = minBid
 	})
 }
 
