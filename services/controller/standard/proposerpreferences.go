@@ -22,6 +22,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/attestantio/vouch/util"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // recordProposerPreferencesDependentRoot retains the root used to derive proposer duties for an epoch.
@@ -93,82 +94,130 @@ func (s *Service) publishProposerPreferences(ctx context.Context, rootEpoch phas
 		return
 	}
 	s.proposerPreferences.Prune(s.chainTimeService.CurrentSlot())
-	if dependentRoot == (phase0.Root{}) {
+	proposalEpoch, ok := s.proposerPreferencesTargetEpoch(rootEpoch, dependentRoot)
+	if !ok {
 		return
 	}
-
-	proposalEpoch := rootEpoch + phase0.Epoch(s.proposerPreferencesLookahead)
-	if proposalEpoch < s.gloasForkEpoch || proposalEpoch < s.chainTimeService.CurrentEpoch() {
-		return
-	}
-
-	response, err := s.proposerDutiesProvider.ProposerDuties(ctx, &api.ProposerDutiesOpts{Epoch: proposalEpoch})
-	if err != nil {
-		s.log.Error().Err(err).Uint64("epoch", uint64(proposalEpoch)).Msg("Failed to fetch proposer preferences duties")
-		return
-	}
-	if response == nil || len(response.Data) == 0 {
-		return
-	}
-	responseDependentRoot, ok := response.Metadata["dependent_root"].(phase0.Root)
-	if !ok || responseDependentRoot == (phase0.Root{}) {
-		s.log.Error().Uint64("epoch", uint64(proposalEpoch)).Msg("No dependent root for proposer preferences duties")
-		return
-	}
-	if responseDependentRoot != dependentRoot {
-		s.log.Error().Uint64("epoch", uint64(proposalEpoch)).Msg("Stale dependent root for proposer preferences duties")
-		return
-	}
-
-	firstSlot := s.chainTimeService.FirstSlotOfEpoch(proposalEpoch)
-	lastSlot := s.chainTimeService.FirstSlotOfEpoch(proposalEpoch+1) - 1
-	currentSlot := s.chainTimeService.CurrentSlot()
-	duties := make([]*apiv1.ProposerDuty, 0, len(response.Data))
-	indices := make([]phase0.ValidatorIndex, 0, len(response.Data))
-	seenIndices := make(map[phase0.ValidatorIndex]struct{})
-	for _, duty := range response.Data {
-		if duty == nil || duty.Slot < firstSlot || duty.Slot > lastSlot || duty.Slot <= currentSlot {
-			continue
-		}
-		duties = append(duties, duty)
-		if _, exists := seenIndices[duty.ValidatorIndex]; !exists {
-			seenIndices[duty.ValidatorIndex] = struct{}{}
-			indices = append(indices, duty.ValidatorIndex)
-		}
-	}
+	duties, responseDependentRoot := s.proposerPreferencesDuties(ctx, proposalEpoch, dependentRoot)
 	if len(duties) == 0 {
 		return
 	}
 
-	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, proposalEpoch, indices)
+	s.publishProposerPreferencesDuties(ctx, proposalEpoch, responseDependentRoot, duties)
+}
+
+func (s *Service) proposerPreferencesTargetEpoch(rootEpoch phase0.Epoch, dependentRoot phase0.Root) (phase0.Epoch, bool) {
+	if dependentRoot == (phase0.Root{}) {
+		return 0, false
+	}
+	proposalEpoch := rootEpoch + phase0.Epoch(s.proposerPreferencesLookahead)
+	if proposalEpoch < s.gloasForkEpoch || proposalEpoch < s.chainTimeService.CurrentEpoch() {
+		return 0, false
+	}
+
+	return proposalEpoch, true
+}
+
+func (s *Service) proposerPreferencesDuties(
+	ctx context.Context,
+	proposalEpoch phase0.Epoch,
+	dependentRoot phase0.Root,
+) ([]*apiv1.ProposerDuty, phase0.Root) {
+	response, err := s.proposerDutiesProvider.ProposerDuties(ctx, &api.ProposerDutiesOpts{Epoch: proposalEpoch})
+	if err != nil {
+		s.log.Error().Err(err).Uint64("epoch", uint64(proposalEpoch)).Msg("Failed to fetch proposer preferences duties")
+		return nil, phase0.Root{}
+	}
+	if response == nil || len(response.Data) == 0 {
+		return nil, phase0.Root{}
+	}
+	responseDependentRoot, ok := response.Metadata["dependent_root"].(phase0.Root)
+	if !ok || responseDependentRoot == (phase0.Root{}) {
+		s.log.Error().Uint64("epoch", uint64(proposalEpoch)).Msg("No dependent root for proposer preferences duties")
+		return nil, phase0.Root{}
+	}
+	if responseDependentRoot != dependentRoot {
+		s.log.Error().Uint64("epoch", uint64(proposalEpoch)).Msg("Stale dependent root for proposer preferences duties")
+		return nil, phase0.Root{}
+	}
+
+	return s.currentProposerPreferencesDuties(response.Data, proposalEpoch), responseDependentRoot
+}
+
+func (s *Service) currentProposerPreferencesDuties(
+	duties []*apiv1.ProposerDuty,
+	proposalEpoch phase0.Epoch,
+) []*apiv1.ProposerDuty {
+	firstSlot := s.chainTimeService.FirstSlotOfEpoch(proposalEpoch)
+	lastSlot := s.chainTimeService.FirstSlotOfEpoch(proposalEpoch+1) - 1
+	currentSlot := s.chainTimeService.CurrentSlot()
+	result := make([]*apiv1.ProposerDuty, 0, len(duties))
+	for _, duty := range duties {
+		if duty != nil && duty.Slot >= firstSlot && duty.Slot <= lastSlot && duty.Slot > currentSlot {
+			result = append(result, duty)
+		}
+	}
+
+	return result
+}
+
+func (s *Service) publishProposerPreferencesDuties(
+	ctx context.Context,
+	proposalEpoch phase0.Epoch,
+	dependentRoot phase0.Root,
+	duties []*apiv1.ProposerDuty,
+) {
+	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, proposalEpoch, proposerPreferencesIndices(duties))
 	if err != nil {
 		s.log.Error().Err(err).Uint64("epoch", uint64(proposalEpoch)).Msg("Failed to obtain proposer preferences accounts")
 		return
 	}
 	for _, duty := range duties {
-		account, exists := accounts[duty.ValidatorIndex]
-		if !exists {
-			s.log.Error().Uint64("validator_index", uint64(duty.ValidatorIndex)).Msg("No account for proposer preferences duty")
-			continue
+		s.publishProposerPreferencesDuty(ctx, dependentRoot, duty, accounts)
+	}
+}
+
+func proposerPreferencesIndices(duties []*apiv1.ProposerDuty) []phase0.ValidatorIndex {
+	indices := make([]phase0.ValidatorIndex, 0, len(duties))
+	seen := make(map[phase0.ValidatorIndex]struct{})
+	for _, duty := range duties {
+		if _, exists := seen[duty.ValidatorIndex]; !exists {
+			seen[duty.ValidatorIndex] = struct{}{}
+			indices = append(indices, duty.ValidatorIndex)
 		}
-		config, err := s.executionConfigProvider.ProposerConfig(ctx, account, util.ValidatorPubkey(account))
-		if err != nil {
-			s.log.Error().Err(err).Uint64("validator_index", uint64(duty.ValidatorIndex)).Msg("Failed to obtain proposer preferences execution configuration")
-			continue
-		}
-		if config == nil {
-			s.log.Error().Uint64("validator_index", uint64(duty.ValidatorIndex)).Msg("No proposer preferences execution configuration")
-			continue
-		}
-		if err := s.proposerPreferences.Publish(ctx, proposerpreferences.NewDuty(
-			responseDependentRoot,
-			duty.Slot,
-			duty.ValidatorIndex,
-			account,
-			config.FeeRecipient,
-			config.GasLimit,
-		)); err != nil {
-			s.log.Error().Err(err).Uint64("proposal_slot", uint64(duty.Slot)).Msg("Failed to publish proposer preferences")
-		}
+	}
+
+	return indices
+}
+
+func (s *Service) publishProposerPreferencesDuty(
+	ctx context.Context,
+	dependentRoot phase0.Root,
+	duty *apiv1.ProposerDuty,
+	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
+) {
+	account, exists := accounts[duty.ValidatorIndex]
+	if !exists {
+		s.log.Error().Uint64("validator_index", uint64(duty.ValidatorIndex)).Msg("No account for proposer preferences duty")
+		return
+	}
+	config, err := s.executionConfigProvider.ProposerConfig(ctx, account, util.ValidatorPubkey(account))
+	if err != nil {
+		s.log.Error().Err(err).Uint64("validator_index", uint64(duty.ValidatorIndex)).Msg("Failed to obtain proposer preferences execution configuration")
+		return
+	}
+	if config == nil {
+		s.log.Error().Uint64("validator_index", uint64(duty.ValidatorIndex)).Msg("No proposer preferences execution configuration")
+		return
+	}
+	if err := s.proposerPreferences.Publish(ctx, proposerpreferences.NewDuty(
+		dependentRoot,
+		duty.Slot,
+		duty.ValidatorIndex,
+		account,
+		config.FeeRecipient,
+		config.GasLimit,
+	)); err != nil {
+		s.log.Error().Err(err).Uint64("proposal_slot", uint64(duty.Slot)).Msg("Failed to publish proposer preferences")
 	}
 }
