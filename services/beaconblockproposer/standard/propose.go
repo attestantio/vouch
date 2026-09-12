@@ -344,8 +344,11 @@ func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
 		return err
 	}
 	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
+		s.log.Warn().Err(err).Time("proposal_submission_completed_at", time.Now()).Msg("Failed to submit builder-backed ePBS beacon block proposal")
+
 		return errors.Wrap(err, "failed to submit proposal")
 	}
+	s.log.Trace().Time("proposal_submission_completed_at", time.Now()).Msg("Submitted builder-backed ePBS beacon block proposal")
 	monitorBeaconBlockProposalSource("builder")
 
 	return nil

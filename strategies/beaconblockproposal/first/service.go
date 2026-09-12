@@ -15,6 +15,7 @@ package first
 
 import (
 	"context"
+	"math"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -130,34 +131,9 @@ func (s *Service) acceptableEPBSProposal(provider string, proposal *api.Versione
 
 		return false
 	}
-	builderBacked := false
-	if proposal.Version == spec.DataVersionGloas {
-		block := proposal.Gloas
-		if proposal.ExecutionPayloadIncluded {
-			if proposal.GloasContents == nil {
-				s.log.Warn().Msg("Discarding malformed ePBS proposal")
-
-				return false
-			}
-			block = proposal.GloasContents.Block
-		}
-		if block == nil || block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
-			s.log.Warn().Msg("Discarding malformed ePBS proposal")
-
-			return false
-		}
-		bid := block.Body.SignedExecutionPayloadBid.Message
-		builderBacked = bid.BuilderIndex != gloas.BuilderIndex(^uint64(0))
-		if builderBacked && s.providerReadiness != nil && !s.providerReadiness.ProviderReady(provider, opts.Slot, block.ProposerIndex) {
-			s.log.Warn().Str("provider", provider).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
-
-			return false
-		}
-		if bid.FeeRecipient.IsZero() {
-			s.log.Warn().Msg("Discarding ePBS proposal with 0 fee recipient")
-
-			return false
-		}
+	builderBacked, acceptable := s.acceptableEPBSBid(provider, proposal, opts)
+	if !acceptable {
+		return false
 	}
 	// The beacon node cannot return a builder's payload, so only a self-built proposal can
 	// carry the payload that was requested.
@@ -167,13 +143,74 @@ func (s *Service) acceptableEPBSProposal(provider string, proposal *api.Versione
 
 			return false
 		}
-	} else if opts.IncludePayload != nil && *opts.IncludePayload && !proposal.ExecutionPayloadIncluded {
+
+		return true
+	}
+	if opts.IncludePayload != nil && *opts.IncludePayload && !proposal.ExecutionPayloadIncluded {
 		s.log.Warn().Msg("Discarding ePBS proposal without requested execution payload")
 
 		return false
 	}
 
 	return true
+}
+
+// acceptableEPBSBid reports whether the auction result a Gloas proposal's bid carries is
+// builder-backed, and whether the bid is usable at all.  A proposal from before Gloas carries no
+// bid, so it is self-built and acceptable by default.
+func (s *Service) acceptableEPBSBid(provider string,
+	proposal *api.VersionedEPBSProposal,
+	opts *api.EPBSProposalOpts,
+) (
+	bool,
+	bool,
+) {
+	if proposal.Version != spec.DataVersionGloas {
+		return false, true
+	}
+	block := epbsProposalBlock(proposal)
+	if block == nil {
+		s.log.Warn().Msg("Discarding malformed ePBS proposal")
+
+		return false, false
+	}
+	bid := block.Body.SignedExecutionPayloadBid.Message
+	builderBacked := bid.BuilderIndex != selfBuiltBuilderIndex
+	if builderBacked && s.providerReadiness != nil && !s.providerReadiness.ProviderReady(provider, opts.Slot, block.ProposerIndex) {
+		s.log.Warn().Str("provider", provider).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
+
+		return false, false
+	}
+	if bid.FeeRecipient.IsZero() {
+		s.log.Warn().Msg("Discarding ePBS proposal with 0 fee recipient")
+
+		return false, false
+	}
+
+	return builderBacked, true
+}
+
+// selfBuiltBuilderIndex is the builder index a beacon node sets on a bid for its own build.
+const selfBuiltBuilderIndex = gloas.BuilderIndex(math.MaxUint64)
+
+// epbsProposalBlock returns the Gloas block of a proposal, or nil if the proposal does not carry
+// one with an execution payload bid.
+func epbsProposalBlock(proposal *api.VersionedEPBSProposal) *gloas.BeaconBlock {
+	if proposal.Version != spec.DataVersionGloas {
+		return nil
+	}
+	block := proposal.Gloas
+	if proposal.ExecutionPayloadIncluded {
+		if proposal.GloasContents == nil {
+			return nil
+		}
+		block = proposal.GloasContents.Block
+	}
+	if block == nil || block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
+		return nil
+	}
+
+	return block
 }
 
 // New creates a new beacon block proposal strategy.
