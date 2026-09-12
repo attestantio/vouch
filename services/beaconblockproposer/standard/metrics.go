@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -29,6 +29,7 @@ var (
 	beaconBlockProposalMarkTimer         prometheus.Histogram
 	beaconBlockProposalProcessLatestSlot prometheus.Gauge
 	beaconBlockProposalSource            *prometheus.CounterVec
+	gloasProposalSelections              *prometheus.CounterVec
 )
 
 func registerMetrics(ctx context.Context, monitor metrics.Service) error {
@@ -115,6 +116,16 @@ func registerPrometheusMetrics(_ context.Context) error {
 		return err
 	}
 
+	gloasProposalSelections = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "vouch",
+		Subsystem: "beaconblockproposal_process",
+		Name:      "gloas_selections_total",
+		Help:      "The number of selected Gloas proposals by bounded policy and source classes.",
+	}, []string{"strategy", "requested_preference", "source"})
+	if err := prometheus.Register(gloasProposalSelections); err != nil {
+		return err
+	}
+
 	bestBidRelayCount = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "vouch",
 		Subsystem: "beaconblockproposer",
@@ -153,6 +164,29 @@ func monitorBeaconBlockProposalCompleted(started time.Time, slot phase0.Slot, st
 		beaconBlockProposalProcessLatestSlot.Set(float64(slot))
 	}
 	beaconBlockProposalProcessRequests.WithLabelValues(result).Inc()
+}
+
+func monitorGloasProposalSelection(strategy string, requestedPreference string, source string) {
+	if gloasProposalSelections == nil {
+		return
+	}
+
+	switch strategy {
+	case "best", "first", "simple":
+	default:
+		strategy = "unknown"
+	}
+	switch requestedPreference {
+	case "self_build_preferred", "value_maximizing", "builder_preferred":
+	default:
+		requestedPreference = "unknown"
+	}
+	switch source {
+	case "self_build", "p2p_builder", "builder_api":
+	default:
+		source = "unknown"
+	}
+	gloasProposalSelections.WithLabelValues(strategy, requestedPreference, source).Inc()
 }
 
 // monitorBeaconBlockProposalSource is called to tag the source of a beacon block proposal.
