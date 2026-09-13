@@ -195,6 +195,7 @@ func TestEPBSProposalBuilderConfigTransports(t *testing.T) {
 	require.NoError(t, err)
 	response, err := responseClient.EPBSProposal(ctx, opts)
 	require.NoError(t, err)
+	response.Data.Gloas.Body.SignedExecutionPayloadBid.Message.Value = config.MinBid
 
 	tests := []struct {
 		name        string
