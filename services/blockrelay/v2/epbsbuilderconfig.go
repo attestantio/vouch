@@ -80,6 +80,7 @@ func (c *EPBSBuilderConfig) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
+// skipcq: GO-R1005
 func (c *EPBSBuilderConfig) UnmarshalJSON(input []byte) error {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(input, &fields); err != nil {

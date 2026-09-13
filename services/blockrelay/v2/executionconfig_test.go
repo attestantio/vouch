@@ -238,17 +238,17 @@ func TestExecutionConfigResolvesEPBSOverrides(t *testing.T) {
 	}{
 		{
 			name:           "ScalarInheritanceAndOmittedList",
-			input:          fmt.Sprintf(`{"version":2,"epbs_builder_config":{"min_bid":"10","builder_boost_factor":120,"builders":[%s]},"proposers":[{"proposer":"%s","epbs_builder_config":{"builder_boost_factor":80}}]}`, directBuilder, pubkeyString),
+			input:          fmt.Sprintf(`{"version":2,"epbs_builder_config":{"min_bid":"10","builder_boost_factor":120,"builders":[%s]},"proposers":[{"proposer":%q,"epbs_builder_config":{"builder_boost_factor":80}}]}`, directBuilder, pubkeyString),
 			expectedMinBid: 10, expectedBoost: 80, expectedBuilders: []string{"https://root-builder.example"},
 		},
 		{
 			name:           "ExplicitEmptyListDisables",
-			input:          fmt.Sprintf(`{"version":2,"epbs_builder_config":{"builders":[%s]},"proposers":[{"proposer":"%s","epbs_builder_config":{"builders":[]}}]}`, directBuilder, pubkeyString),
+			input:          fmt.Sprintf(`{"version":2,"epbs_builder_config":{"builders":[%s]},"proposers":[{"proposer":%q,"epbs_builder_config":{"builders":[]}}]}`, directBuilder, pubkeyString),
 			expectedMinBid: 0, expectedBoost: 100, expectedBuilders: []string{},
 		},
 		{
 			name:           "ProposerListReplacesRoot",
-			input:          fmt.Sprintf(`{"version":2,"epbs_builder_config":{"builders":[%s]},"proposers":[{"proposer":"%s","epbs_builder_config":{"builders":[%s]}}]}`, directBuilder, pubkeyString, replacementBuilder),
+			input:          fmt.Sprintf(`{"version":2,"epbs_builder_config":{"builders":[%s]},"proposers":[{"proposer":%q,"epbs_builder_config":{"builders":[%s]}}]}`, directBuilder, pubkeyString, replacementBuilder),
 			expectedMinBid: 0, expectedBoost: 100, expectedBuilders: []string{"https://proposer-builder.example"},
 		},
 		{
@@ -258,7 +258,7 @@ func TestExecutionConfigResolvesEPBSOverrides(t *testing.T) {
 		},
 		{
 			name:           "ExplicitEPBSMinimumWinsOverLegacy",
-			input:          fmt.Sprintf(`{"version":2,"epbs_builder_config":{"min_bid":"11"},"proposers":[{"proposer":"%s","min_value":"0.0000000012"}]}`, pubkeyString),
+			input:          fmt.Sprintf(`{"version":2,"epbs_builder_config":{"min_bid":"11"},"proposers":[{"proposer":%q,"min_value":"0.0000000012"}]}`, pubkeyString),
 			expectedMinBid: 11, expectedBoost: 100, expectedBuilders: []string{},
 		},
 		{
@@ -278,12 +278,12 @@ func TestExecutionConfigResolvesEPBSOverrides(t *testing.T) {
 		},
 		{
 			name:           "ProposerLegacyMinimumOverridesRoot",
-			input:          fmt.Sprintf(`{"version":2,"min_value":"0.000000001","proposers":[{"proposer":"%s","min_value":"0.0000000021"}]}`, pubkeyString),
+			input:          fmt.Sprintf(`{"version":2,"min_value":"0.000000001","proposers":[{"proposer":%q,"min_value":"0.0000000021"}]}`, pubkeyString),
 			expectedMinBid: 3, expectedBoost: 100, expectedBuilders: []string{},
 		},
 		{
 			name:           "RelayMinimumDoesNotBecomeEPBSPolicy",
-			input:          fmt.Sprintf(`{"version":2,"relays":{"https://relay.example":{"min_value":"99"}},"proposers":[{"proposer":"%s","relays":{"https://relay.example":{"min_value":"100"}}}]}`, pubkeyString),
+			input:          fmt.Sprintf(`{"version":2,"relays":{"https://relay.example":{"min_value":"99"}},"proposers":[{"proposer":%q,"relays":{"https://relay.example":{"min_value":"100"}}}]}`, pubkeyString),
 			expectedMinBid: 0, expectedBoost: 100, expectedBuilders: []string{},
 		},
 	}

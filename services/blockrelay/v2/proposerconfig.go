@@ -91,6 +91,7 @@ func (p *ProposerConfig) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
+// skipcq: GO-R1005
 func (p *ProposerConfig) UnmarshalJSON(input []byte) error {
 	var data proposerConfigJSON
 	if err := json.Unmarshal(input, &data); err != nil {

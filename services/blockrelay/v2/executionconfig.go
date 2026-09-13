@@ -91,6 +91,7 @@ func (e *ExecutionConfig) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
+// skipcq: GO-R1005
 func (e *ExecutionConfig) UnmarshalJSON(input []byte) error {
 	var data executionConfigJSON
 	if err := json.Unmarshal(input, &data); err != nil {
@@ -414,6 +415,7 @@ func (e *ExecutionConfig) setProposerConfigOptions(_ context.Context,
 
 // generateRelayConfig generates a relay configuration from the various
 // tiers of existing information.
+// skipcq: GO-R1005
 func (e *ExecutionConfig) generateRelayConfig(
 	address string,
 	proposerConfig *ProposerConfig,
