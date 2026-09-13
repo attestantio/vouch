@@ -89,6 +89,8 @@ func TestPrepare(t *testing.T) {
 				standard.WithBeaconBlockSigner(signer),
 				standard.WithExecutionPayloadEnvelopeSigner(signer),
 				standard.WithBlobSidecarSigner(signer),
+				standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{}),
+				standard.WithBuilderRequestAuthSigner(&capturingBuilderRequestAuthSigner{}),
 				standard.WithBlockAuctioneer(blockAuctioneer),
 				standard.WithExecutionChainHeadProvider(cacheService.(cache.ExecutionChainHeadProvider)),
 			)

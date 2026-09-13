@@ -45,6 +45,7 @@ type Service struct {
 	beaconBuilderDomainType               *phase0.DomainType
 	ptcAttesterDomainType                 *phase0.DomainType
 	proposerPreferencesDomainType         *phase0.DomainType
+	builderRequestAuthDomain              *phase0.Domain
 }
 
 // Module-wide log.
@@ -149,6 +150,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		beaconBuilderDomainType:               beaconBuilderDomainType,
 		ptcAttesterDomainType:                 ptcAttesterDomainType,
 		proposerPreferencesDomainType:         proposerPreferencesDomainType,
+		builderRequestAuthDomain:              builderRequestAuthDomain(spec),
 	}
 
 	return s, nil

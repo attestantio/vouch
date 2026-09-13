@@ -27,6 +27,17 @@ import (
 // Service is the generic signer service.
 type Service interface{}
 
+// BuilderRequestAuthSigner provides methods to sign direct-builder request authorization.
+type BuilderRequestAuthSigner interface {
+	SignBuilderRequestAuth(ctx context.Context,
+		account e2wtypes.Account,
+		auth *gloas.BuilderRequestAuth,
+	) (
+		phase0.BLSSignature,
+		error,
+	)
+}
+
 // ProposerPreferencesSigner provides methods to sign proposer preferences.
 type ProposerPreferencesSigner interface {
 	SignProposerPreferences(ctx context.Context,

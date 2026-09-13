@@ -99,6 +99,8 @@ func TestProposerConfig(t *testing.T) {
 	require.NoError(t, os.WriteFile(configFile, []byte(`{"default_config":{"fee_recipient":"0x0200000000000000000000000000000000000000","gas_limit":"20000000","builder":{"enabled":false}}}`), 0o600))
 	badConfigFile := filepath.Join(base, "badconfig.json")
 	require.NoError(t, os.WriteFile(badConfigFile, []byte(`bad`), 0o600))
+	epbsConfigFile := filepath.Join(base, "epbsconfig.json")
+	require.NoError(t, os.WriteFile(epbsConfigFile, []byte(`{"version":2,"epbs_builder_config":{"builders":[{"url":"https://builder.example","auth_data":"0xdeadbeef","builder_pubkeys":[],"max_execution_payment":"0","min_bid":"1","builder_boost_factor":100}]}}`), 0o600))
 
 	tests := []struct {
 		name           string
@@ -106,6 +108,7 @@ func TestProposerConfig(t *testing.T) {
 		proposerConfig string
 		gasLimit       uint64
 		err            string
+		notInLogs      string
 		logEntries     []map[string]interface{}
 	}{
 		{
@@ -126,7 +129,7 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithReleaseVersion("test"),
 				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
 			},
-			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","relays":[]}`,
+			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","epbs_builder_config":{"min_bid":"0","builder_boost_factor":100,"builders":[]},"relays":[]}`,
 			gasLimit:       10000000,
 		},
 		{
@@ -156,6 +159,28 @@ func TestProposerConfig(t *testing.T) {
 			},
 		},
 		{
+			name: "EPBSAuthRedacted",
+			params: []standard.Parameter{
+				standard.WithMonitor(nullmetrics.New()),
+				standard.WithMajordomo(majordomoSvc),
+				standard.WithScheduler(mockScheduler),
+				standard.WithListenAddress(listenAddress),
+				standard.WithChainTime(chainTime),
+				standard.WithConfigURL(fmt.Sprintf("file://%s", epbsConfigFile)),
+				standard.WithFallbackFeeRecipient(bellatrix.ExecutionAddress{0x01}),
+				standard.WithFallbackGasLimit(10000000),
+				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithAccountsProvider(mockAccountsProvider),
+				standard.WithValidatorsProvider(mockValidatorsProvider),
+				standard.WithValidatorRegistrationSigner(mockSigner),
+				standard.WithReleaseVersion("test"),
+				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
+			},
+			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","epbs_builder_config":{"min_bid":"0","builder_boost_factor":100,"builders":[{"url":"https://builder.example","auth_data":"redacted","builder_pubkeys":[],"max_execution_payment":"0","min_bid":"1","builder_boost_factor":100}]},"relays":[]}`,
+			gasLimit:       10000000,
+			notInLogs:      "deadbeef",
+		},
+		{
 			name: "BadFile",
 			params: []standard.Parameter{
 				standard.WithMonitor(nullmetrics.New()),
@@ -173,7 +198,7 @@ func TestProposerConfig(t *testing.T) {
 				standard.WithReleaseVersion("test"),
 				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
 			},
-			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","relays":[]}`,
+			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","epbs_builder_config":{"min_bid":"0","builder_boost_factor":100,"builders":[]},"relays":[]}`,
 			gasLimit:       10000000,
 			logEntries: []map[string]interface{}{
 				{
@@ -202,6 +227,9 @@ func TestProposerConfig(t *testing.T) {
 				if !capture.HasLog(logEntry) {
 					require.Fail(t, fmt.Sprintf("Missing log entry %v in %v", logEntry, capture.Entries()))
 				}
+			}
+			if test.notInLogs != "" {
+				require.NotContains(t, fmt.Sprint(capture.Entries()), test.notInLogs)
 			}
 		})
 	}

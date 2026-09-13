@@ -31,24 +31,26 @@ import (
 // ProposerConfig contains proposer-specific configuration for validators
 // proposing execution payloads.
 type ProposerConfig struct {
-	Validator    phase0.BLSPubKey
-	Account      *regexp.Regexp
-	FeeRecipient *bellatrix.ExecutionAddress
-	GasLimit     *uint64
-	Grace        *time.Duration
-	MinValue     *decimal.Decimal
-	ResetRelays  bool
-	Relays       map[string]*ProposerRelayConfig
+	Validator         phase0.BLSPubKey
+	Account           *regexp.Regexp
+	FeeRecipient      *bellatrix.ExecutionAddress
+	GasLimit          *uint64
+	Grace             *time.Duration
+	MinValue          *decimal.Decimal
+	EPBSBuilderConfig *EPBSBuilderConfig
+	ResetRelays       bool
+	Relays            map[string]*ProposerRelayConfig
 }
 
 type proposerConfigJSON struct {
-	Proposer     string                          `json:"proposer"`
-	FeeRecipient string                          `json:"fee_recipient,omitempty"`
-	GasLimit     string                          `json:"gas_limit,omitempty"`
-	Grace        string                          `json:"grace,omitempty"`
-	MinValue     string                          `json:"min_value,omitempty"`
-	ResetRelays  bool                            `json:"reset_relays,omitempty"`
-	Relays       map[string]*ProposerRelayConfig `json:"relays,omitempty"`
+	Proposer          string                          `json:"proposer"`
+	FeeRecipient      string                          `json:"fee_recipient,omitempty"`
+	GasLimit          string                          `json:"gas_limit,omitempty"`
+	Grace             string                          `json:"grace,omitempty"`
+	MinValue          string                          `json:"min_value,omitempty"`
+	EPBSBuilderConfig *EPBSBuilderConfig              `json:"epbs_builder_config,omitempty"`
+	ResetRelays       bool                            `json:"reset_relays,omitempty"`
+	Relays            map[string]*ProposerRelayConfig `json:"relays,omitempty"`
 }
 
 // MarshalJSON implements json.Marshaler.
@@ -77,13 +79,14 @@ func (p *ProposerConfig) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(&proposerConfigJSON{
-		Proposer:     proposer,
-		FeeRecipient: feeRecipient,
-		GasLimit:     gasLimit,
-		Grace:        grace,
-		MinValue:     minValue,
-		ResetRelays:  p.ResetRelays,
-		Relays:       p.Relays,
+		Proposer:          proposer,
+		FeeRecipient:      feeRecipient,
+		GasLimit:          gasLimit,
+		Grace:             grace,
+		MinValue:          minValue,
+		EPBSBuilderConfig: p.EPBSBuilderConfig,
+		ResetRelays:       p.ResetRelays,
+		Relays:            p.Relays,
 	})
 }
 
@@ -92,6 +95,13 @@ func (p *ProposerConfig) UnmarshalJSON(input []byte) error {
 	var data proposerConfigJSON
 	if err := json.Unmarshal(input, &data); err != nil {
 		return errors.Wrap(err, "invalid JSON")
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(input, &fields); err != nil {
+		return errors.Wrap(err, "invalid JSON")
+	}
+	if epbsConfig, exists := fields["epbs_builder_config"]; exists && string(epbsConfig) == "null" {
+		return errors.New("invalid JSON: ePBS builder config must be an object")
 	}
 
 	if data.Proposer == "" {
@@ -161,6 +171,7 @@ func (p *ProposerConfig) UnmarshalJSON(input []byte) error {
 		minValue = minValue.Mul(weiPerETH)
 		p.MinValue = &minValue
 	}
+	p.EPBSBuilderConfig = data.EPBSBuilderConfig
 	p.ResetRelays = data.ResetRelays
 	p.Relays = data.Relays
 
