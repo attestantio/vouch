@@ -315,3 +315,24 @@ func TestRejectionReason(t *testing.T) {
 	}
 	require.Equal(t, "invalid_proposal", beaconblockproposal.RejectionReason(errors.New("other")))
 }
+
+func TestEPBSProposalSource(t *testing.T) {
+	builderURL := map[string]any{"eth-builder-url": "https://builder.example"}
+	tests := []struct {
+		name     string
+		proposal *api.VersionedEPBSProposal
+		metadata map[string]any
+		source   string
+	}{
+		{name: "PreGloas", proposal: &api.VersionedEPBSProposal{Version: spec.DataVersionFulu}, metadata: builderURL, source: "self_build"},
+		{name: "SelfBuild", proposal: withPayload(gloas.BuilderIndexSelfBuild), metadata: builderURL, source: "self_build"},
+		{name: "BuilderAPI", proposal: withoutPayload(1), metadata: builderURL, source: "builder_api"},
+		{name: "P2PBuilder", proposal: withoutPayload(1), source: "p2p_builder"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.source, beaconblockproposal.EPBSProposalSource(test.proposal, test.metadata))
+		})
+	}
+}
