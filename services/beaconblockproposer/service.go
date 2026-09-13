@@ -28,6 +28,17 @@ type ProposalDataProvider interface {
 	eth2client.EPBSProposalProvider
 }
 
+// ExecutionConfigProvider provides resolved execution configuration for a proposer.
+type ExecutionConfigProvider interface {
+	ProposerConfig(ctx context.Context,
+		account e2wtypes.Account,
+		pubkey phase0.BLSPubKey,
+	) (
+		*ProposerConfig,
+		error,
+	)
+}
+
 // Duty contains information about a beacon block proposal duty.
 type Duty struct {
 	// Details for the duty.

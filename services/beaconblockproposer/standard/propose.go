@@ -251,19 +251,16 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	// so asking for it is what keeps the reveal publishable through any beacon node
 	// rather than only the one that built the payload.
 	includePayload := true
-	// The beacon node runs the auction between its own build and the P2P builders, using the
-	// operator's bid floor and boost.  Direct builder entries are empty: Vouch talks to no
-	// builder itself, so every bid it can win comes over P2P.
+	builderConfig, err := s.builderConfig(ctx, duty)
+	if err != nil {
+		return err
+	}
 	proposalResponse, err := s.proposalProvider.EPBSProposal(ctx, &api.EPBSProposalOpts{
 		Slot:           duty.Slot(),
 		RandaoReveal:   duty.RANDAOReveal(),
 		Graffiti:       graffiti,
 		IncludePayload: &includePayload,
-		BuilderConfig: &gloas.BuilderConfig{
-			MinBid:             s.builderMinBid,
-			BuilderBoostFactor: s.builderBoostFactor,
-			Builders:           []*gloas.BuilderEntry{},
-		},
+		BuilderConfig:  builderConfig,
 	})
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain ePBS proposal")

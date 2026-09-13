@@ -98,7 +98,49 @@ It is also possible to add the gas limit here:
 }
 ```
 
-So far, all execution block building will be local.  If use of MEV relays is required to obtain blocks this can be added as follows:
+## Gloas ePBS builder configuration
+
+From Gloas onwards the beacon node runs the auction between its local build, P2P bids, and any direct builders configured by Vouch. Version 2 execution configuration accepts an optional `epbs_builder_config` at the root and in proposer entries:
+
+```json
+{
+  "version": 2,
+  "epbs_builder_config": {
+    "min_bid": "10000000",
+    "builder_boost_factor": 100,
+    "builders": [
+      {
+        "url": "https://builder.example",
+        "auth_data": "0x…",
+        "builder_pubkeys": [],
+        "max_execution_payment": "0",
+        "min_bid": "10000000",
+        "builder_boost_factor": 100
+      }
+    ]
+  }
+}
+```
+
+The top-level `min_bid` is the minimum P2P bid, in Gwei. It is a decimal integer string and defaults to `0`. If it is omitted, Vouch derives it from the resolved root or proposer `min_value`, which is denominated in Ether, converting to Gwei and rounding up. An explicit ePBS `min_bid` takes precedence. Relay-specific `min_value` values are not used for ePBS.
+
+`builder_boost_factor` is an unsigned 64-bit percentage applied by the beacon node. Its ePBS default is `100`, independent of the legacy `beaconblockproposer.builder-boost-factor` default of `91`. A value of `0` prefers the local build but still permits a P2P fallback when the local build is unviable. A value of `100` selects the highest-value viable bid. Vouch does not apply the factor again after the beacon node returns its auction result.
+
+Each direct-builder entry requires every field shown above:
+
+- `url` is an absolute HTTP or HTTPS URL, at most 2048 bytes.
+- `auth_data` is non-empty, `0x`-prefixed opaque hex agreed with the builder, at most 4096 decoded bytes. Vouch binds it to the proposal slot and signs it through the validator signer. It is emitted only in that authenticated request. Logs, metrics, errors, configuration dumps, and `--proposer-config-check` never expose its value, hash, or length. Configuration output shows `"redacted"` instead.
+- `builder_pubkeys` contains at most 64 BLS public keys. An empty list accepts a bid signed by any builder key returned by that endpoint.
+- `max_execution_payment` and `min_bid` are decimal Gwei integer strings in the unsigned 64-bit range.
+- `builder_boost_factor` is an unsigned 64-bit integer with the same weighting semantics as the top-level factor.
+
+A builder list contains at most 64 entries. Entries sharing both URL and authorization are invalid.
+
+Resolution starts with the ePBS fallbacks of minimum bid `0`, boost `100`, and no direct builders. Root values then override those fallbacks, followed by the first matching proposer entry. The scalar fields inherit independently. An omitted proposer `builders` field inherits the root list, an explicit empty list disables direct builders for that proposer, and a non-empty proposer list replaces the root list as a whole. Builder entries are never merged by URL or public key.
+
+An empty direct-builder list does not disable P2P bids. The Beacon API has no switch that absolutely disables P2P bidding.
+
+So far, all pre-Gloas execution block building will be local. If use of MEV relays is required to obtain pre-Gloas blocks this can be added as follows:
 
 ```json
 {

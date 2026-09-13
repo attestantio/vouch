@@ -17,7 +17,6 @@ import (
 	"errors"
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
-	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/cache"
@@ -32,6 +31,7 @@ import (
 type parameters struct {
 	monitor                           metrics.Service
 	proposalProvider                  beaconblockproposer.ProposalDataProvider
+	executionConfigProvider           beaconblockproposer.ExecutionConfigProvider
 	validatingAccountsProvider        accountmanager.ValidatingAccountsProvider
 	executionChainHeadProvider        cache.ExecutionChainHeadProvider
 	graffitiProvider                  graffitiprovider.Service
@@ -39,6 +39,7 @@ type parameters struct {
 	executionPayloadEnvelopeSubmitter submitter.ExecutionPayloadEnvelopeSubmitter
 	randaoRevealSigner                signer.RANDAORevealSigner
 	beaconBlockSigner                 signer.BeaconBlockSigner
+	builderRequestAuthSigner          signer.BuilderRequestAuthSigner
 	executionPayloadEnvelopeSigner    signer.ExecutionPayloadEnvelopeSigner
 	blobSidecarSigner                 signer.BlobSidecarSigner
 	chainTime                         chaintime.Service
@@ -46,7 +47,6 @@ type parameters struct {
 	logLevel                          zerolog.Level
 	unblindFromAllRelays              bool
 	builderBoostFactor                uint64
-	builderMinBid                     phase0.Gwei
 }
 
 // Parameter is the interface for service parameters.
@@ -85,6 +85,13 @@ func WithBlockAuctioneer(auctioneer blockauctioneer.BlockAuctioneer) Parameter {
 func WithProposalDataProvider(provider beaconblockproposer.ProposalDataProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalProvider = provider
+	})
+}
+
+// WithExecutionConfigProvider sets the execution configuration provider.
+func WithExecutionConfigProvider(provider beaconblockproposer.ExecutionConfigProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.executionConfigProvider = provider
 	})
 }
 
@@ -144,6 +151,13 @@ func WithBeaconBlockSigner(signer signer.BeaconBlockSigner) Parameter {
 	})
 }
 
+// WithBuilderRequestAuthSigner sets the direct-builder request authorization signer.
+func WithBuilderRequestAuthSigner(authSigner signer.BuilderRequestAuthSigner) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.builderRequestAuthSigner = authSigner
+	})
+}
+
 // WithExecutionPayloadEnvelopeSigner sets the execution payload envelope signer.
 func WithExecutionPayloadEnvelopeSigner(signer signer.ExecutionPayloadEnvelopeSigner) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -169,13 +183,6 @@ func WithUnblindFromAllRelays(unblindFromAll bool) Parameter {
 func WithBuilderBoostFactor(factor uint64) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.builderBoostFactor = factor
-	})
-}
-
-// WithBuilderMinBid sets the minimum bid, in Gwei, that a beacon node accepts from a P2P builder.
-func WithBuilderMinBid(minBid phase0.Gwei) Parameter {
-	return parameterFunc(func(p *parameters) {
-		p.builderMinBid = minBid
 	})
 }
 

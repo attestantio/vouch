@@ -39,6 +39,7 @@ import (
 type Service struct {
 	log                               zerolog.Logger
 	proposalProvider                  beaconblockproposer.ProposalDataProvider
+	executionConfigProvider           beaconblockproposer.ExecutionConfigProvider
 	validatingAccountsProvider        accountmanager.ValidatingAccountsProvider
 	executionChainHeadProvider        cache.ExecutionChainHeadProvider
 	graffitiProvider                  graffitiprovider.Service
@@ -46,13 +47,13 @@ type Service struct {
 	executionPayloadEnvelopeSubmitter submitter.ExecutionPayloadEnvelopeSubmitter
 	randaoRevealSigner                signer.RANDAORevealSigner
 	beaconBlockSigner                 signer.BeaconBlockSigner
+	builderRequestAuthSigner          signer.BuilderRequestAuthSigner
 	executionPayloadEnvelopeSigner    signer.ExecutionPayloadEnvelopeSigner
 	blobSidecarSigner                 signer.BlobSidecarSigner
 	chainTime                         chaintime.Service
 	blockAuctioneer                   blockauctioneer.BlockAuctioneer
 	unblindFromAllRelays              bool
 	builderBoostFactor                uint64
-	builderMinBid                     phase0.Gwei
 }
 
 // New creates a new beacon block proposer.
@@ -77,6 +78,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		chainTime:                         parameters.chainTime,
 		blockAuctioneer:                   parameters.blockAuctioneer,
 		proposalProvider:                  parameters.proposalProvider,
+		executionConfigProvider:           parameters.executionConfigProvider,
 		validatingAccountsProvider:        parameters.validatingAccountsProvider,
 		executionChainHeadProvider:        parameters.executionChainHeadProvider,
 		graffitiProvider:                  parameters.graffitiProvider,
@@ -84,11 +86,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		executionPayloadEnvelopeSubmitter: parameters.executionPayloadEnvelopeSubmitter,
 		randaoRevealSigner:                parameters.randaoRevealSigner,
 		beaconBlockSigner:                 parameters.beaconBlockSigner,
+		builderRequestAuthSigner:          parameters.builderRequestAuthSigner,
 		executionPayloadEnvelopeSigner:    parameters.executionPayloadEnvelopeSigner,
 		blobSidecarSigner:                 parameters.blobSidecarSigner,
 		unblindFromAllRelays:              parameters.unblindFromAllRelays,
 		builderBoostFactor:                parameters.builderBoostFactor,
-		builderMinBid:                     parameters.builderMinBid,
 	}
 
 	return s, nil

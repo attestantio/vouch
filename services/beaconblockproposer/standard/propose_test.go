@@ -15,6 +15,7 @@ package standard_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -70,6 +71,7 @@ func TestPropose(t *testing.T) {
 	require.NoError(t, err)
 	blockAuctioneer := mockblockauctioneer.New()
 	cacheService := mockcache.New(map[phase0.Root]phase0.Slot{})
+	executionConfigProvider := &recordingExecutionConfigProvider{err: errors.New("must not be called before Gloas")}
 
 	// Create an account.
 	require.NoError(t, e2types.InitBLS())
@@ -118,6 +120,7 @@ func TestPropose(t *testing.T) {
 			s, err := standard.New(ctx,
 				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(consensusClient),
+				standard.WithExecutionConfigProvider(executionConfigProvider),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
 				standard.WithProposalSubmitter(consensusClient),
@@ -144,4 +147,5 @@ func TestPropose(t *testing.T) {
 			}
 		})
 	}
+	require.Zero(t, executionConfigProvider.calls)
 }

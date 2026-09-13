@@ -17,6 +17,7 @@ import (
 	"context"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,6 +33,71 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
+
+func TestEPBSProposalFansOutTheSameBuilderConfig(t *testing.T) {
+	ctx := context.Background()
+	config := &gloas.BuilderConfig{MinBid: 12, BuilderBoostFactor: 100, Builders: []*gloas.BuilderEntry{}}
+	ready := make(chan struct{})
+	var readyOnce sync.Once
+	var mu sync.Mutex
+	received := make([]*api.EPBSProposalOpts, 0, 2)
+	provider := func(feeRecipient byte) beaconblockproposer.ProposalDataProvider {
+		return &fanoutEPBSProposalProvider{
+			proposal:  gloasEPBSProposal(bellatrix.ExecutionAddress{feeRecipient}),
+			ready:     ready,
+			readyOnce: &readyOnce,
+			mu:        &mu,
+			received:  &received,
+		}
+	}
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			"one": provider(0x01),
+			"two": provider(0x02),
+		}),
+		first.WithTimeout(time.Second),
+	)
+	require.NoError(t, err)
+
+	_, err = service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, BuilderConfig: config})
+	require.NoError(t, err)
+	require.Len(t, received, 2)
+	for i := range received {
+		require.Same(t, config, received[i].BuilderConfig)
+	}
+}
+
+type fanoutEPBSProposalProvider struct {
+	proposal  *api.VersionedEPBSProposal
+	ready     chan struct{}
+	readyOnce *sync.Once
+	mu        *sync.Mutex
+	received  *[]*api.EPBSProposalOpts
+}
+
+func (p *fanoutEPBSProposalProvider) EPBSProposal(ctx context.Context, opts *api.EPBSProposalOpts) (*api.Response[*api.VersionedEPBSProposal], error) {
+	p.mu.Lock()
+	*p.received = append(*p.received, opts)
+	if len(*p.received) == cap(*p.received) {
+		p.readyOnce.Do(func() {
+			close(p.ready)
+		})
+	}
+	p.mu.Unlock()
+
+	select {
+	case <-p.ready:
+		return &api.Response[*api.VersionedEPBSProposal]{Data: p.proposal}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (p *fanoutEPBSProposalProvider) Proposal(context.Context, *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
+	return nil, nil
+}
 
 func TestEPBSProposalAcceptsUnknownValue(t *testing.T) {
 	ctx := context.Background()
