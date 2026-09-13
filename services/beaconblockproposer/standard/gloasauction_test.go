@@ -32,12 +32,12 @@ import (
 	mocksigner "github.com/attestantio/vouch/services/signer/mock"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
-// TestProposeGloasSendsConfiguredBuilderConfig proves that the proposer asks each beacon
-// node to run its auction under the configured policy: the minimum bid and builder boost
-// factor travel with the request, with no direct builder entries.  It also proves that a
-// self-built result is signed and published exactly once.
+// TestProposeGloasSendsConfiguredBuilderConfig proves that the proposer resolves the
+// validator's ePBS policy, binds direct-builder authorization to the proposal slot and
+// sends the resulting non-nil config with a self-built request.
 func TestProposeGloasSendsConfiguredBuilderConfig(t *testing.T) {
 	ctx := context.Background()
 
@@ -61,6 +61,21 @@ func TestProposeGloasSendsConfiguredBuilderConfig(t *testing.T) {
 	}
 
 	signer := mocksigner.New()
+	authSigner := &capturingBuilderRequestAuthSigner{signature: phase0.BLSSignature{0x04}}
+	executionConfigProvider := &recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{
+		EPBSBuilderConfig: &beaconblockproposer.EPBSBuilderConfig{
+			MinBid:             12345,
+			BuilderBoostFactor: 100,
+			Builders: []*beaconblockproposer.EPBSBuilder{{
+				URL:                 "https://builder.example",
+				AuthData:            []byte{0x12, 0x34},
+				BuilderPubkeys:      []phase0.BLSPubKey{{0x05}},
+				MaxExecutionPayment: 6,
+				MinBid:              7,
+				BuilderBoostFactor:  80,
+			}},
+		},
+	}}
 	proposalSubmitter := &capturingProposalSubmitter{}
 	blockSigner := &capturingBeaconBlockSigner{signature: phase0.BLSSignature{0x01}}
 	envelopeSigner := &capturingExecutionPayloadEnvelopeSigner{signature: phase0.BLSSignature{0x03}}
@@ -69,16 +84,16 @@ func TestProposeGloasSendsConfiguredBuilderConfig(t *testing.T) {
 		standard.WithLogLevel(zerolog.Disabled),
 		standard.WithMonitor(nullmetrics.New()),
 		standard.WithProposalDataProvider(proposalClient),
+		standard.WithExecutionConfigProvider(executionConfigProvider),
 		standard.WithChainTime(&forkChainTime{}),
 		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
 		standard.WithProposalSubmitter(proposalSubmitter),
 		standard.WithRANDAORevealSigner(signer),
 		standard.WithBeaconBlockSigner(blockSigner),
+		standard.WithBuilderRequestAuthSigner(authSigner),
 		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
 		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
 		standard.WithBlobSidecarSigner(signer),
-		standard.WithBuilderBoostFactor(91),
-		standard.WithBuilderMinBid(phase0.Gwei(12345)),
 	)
 	require.NoError(t, err)
 
@@ -93,13 +108,59 @@ func TestProposeGloasSendsConfiguredBuilderConfig(t *testing.T) {
 	require.True(t, *epbsOpts.IncludePayload)
 	require.NotNil(t, epbsOpts.BuilderConfig)
 	require.Equal(t, phase0.Gwei(12345), epbsOpts.BuilderConfig.MinBid)
-	require.Equal(t, uint64(91), epbsOpts.BuilderConfig.BuilderBoostFactor)
-	require.NotNil(t, epbsOpts.BuilderConfig.Builders)
-	require.Empty(t, epbsOpts.BuilderConfig.Builders)
+	require.Equal(t, uint64(100), epbsOpts.BuilderConfig.BuilderBoostFactor)
+	require.Len(t, epbsOpts.BuilderConfig.Builders, 1)
+	require.Equal(t, []byte("https://builder.example"), epbsOpts.BuilderConfig.Builders[0].URL)
+	require.Equal(t, []phase0.BLSPubKey{{0x05}}, epbsOpts.BuilderConfig.Builders[0].BuilderPubkeys)
+	require.Equal(t, phase0.Gwei(6), epbsOpts.BuilderConfig.Builders[0].MaxExecutionPayment)
+	require.Equal(t, phase0.Gwei(7), epbsOpts.BuilderConfig.Builders[0].MinBid)
+	require.Equal(t, uint64(80), epbsOpts.BuilderConfig.Builders[0].BuilderBoostFactor)
+	require.Equal(t, phase0.Slot(1), epbsOpts.BuilderConfig.Builders[0].Auth.Message.Slot)
+	require.Equal(t, []byte{0x12, 0x34}, epbsOpts.BuilderConfig.Builders[0].Auth.Message.Data)
+	require.Equal(t, phase0.BLSSignature{0x04}, epbsOpts.BuilderConfig.Builders[0].Auth.Signature)
+	require.Equal(t, phase0.Slot(1), authSigner.auth.Slot)
+	require.Equal(t, []byte{0x12, 0x34}, authSigner.auth.Data)
+	jsonEncoded, err := epbsOpts.BuilderConfig.MarshalJSON()
+	require.NoError(t, err)
+	var jsonDecoded gloas.BuilderConfig
+	require.NoError(t, jsonDecoded.UnmarshalJSON(jsonEncoded))
+	require.Equal(t, epbsOpts.BuilderConfig, &jsonDecoded)
+	sszEncoded, err := epbsOpts.BuilderConfig.MarshalSSZ()
+	require.NoError(t, err)
+	var sszDecoded gloas.BuilderConfig
+	require.NoError(t, sszDecoded.UnmarshalSSZ(sszEncoded))
+	require.Equal(t, epbsOpts.BuilderConfig, &sszDecoded)
+	require.Equal(t, 1, authSigner.calls)
+	require.Equal(t, 1, executionConfigProvider.calls)
 	require.Equal(t, 1, blockSigner.calls)
 	require.Equal(t, 1, envelopeSigner.calls)
 	require.Equal(t, 1, proposalSubmitter.calls)
 	require.Equal(t, 1, envelopeSubmitter.calls)
+}
+
+type recordingExecutionConfigProvider struct {
+	config *beaconblockproposer.ProposerConfig
+	err    error
+	calls  int
+}
+
+func (p *recordingExecutionConfigProvider) ProposerConfig(_ context.Context, _ e2wtypes.Account, _ phase0.BLSPubKey) (*beaconblockproposer.ProposerConfig, error) {
+	p.calls++
+
+	return p.config, p.err
+}
+
+type capturingBuilderRequestAuthSigner struct {
+	auth      *gloas.BuilderRequestAuth
+	signature phase0.BLSSignature
+	calls     int
+}
+
+func (s *capturingBuilderRequestAuthSigner) SignBuilderRequestAuth(_ context.Context, _ e2wtypes.Account, auth *gloas.BuilderRequestAuth) (phase0.BLSSignature, error) {
+	s.calls++
+	s.auth = auth
+
+	return s.signature, nil
 }
 
 // TestProposeGloasBuilderBackedPublishesBlockOnly proves that a proposal the beacon node

@@ -56,7 +56,6 @@ func TestProposeGloas(t *testing.T) {
 		name                       string
 		executionPayloadIncluded   bool
 		blockAuctioneer            bool
-		builderBoostFactor         uint64
 		proposerIndexMismatch      bool
 		builderIndexMismatch       bool
 		foreignBuilderIndex        bool
@@ -76,7 +75,6 @@ func TestProposeGloas(t *testing.T) {
 		{
 			name:                     "PayloadIncluded",
 			executionPayloadIncluded: true,
-			builderBoostFactor:       100,
 		},
 		{
 			name:                     "ForkEpochAvailableAfterConstruction",
@@ -241,7 +239,6 @@ func TestProposeGloas(t *testing.T) {
 				standard.WithBeaconBlockSigner(blockSigner),
 				standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
 				standard.WithBlobSidecarSigner(signer),
-				standard.WithBuilderBoostFactor(test.builderBoostFactor),
 			}
 			if test.cancelEnvelopeSubmission {
 				var cancel context.CancelFunc
@@ -279,7 +276,7 @@ func TestProposeGloas(t *testing.T) {
 			require.NotNil(t, epbsOpts.IncludePayload)
 			require.True(t, *epbsOpts.IncludePayload)
 			require.NotNil(t, epbsOpts.BuilderConfig)
-			require.Equal(t, test.builderBoostFactor, epbsOpts.BuilderConfig.BuilderBoostFactor)
+			require.Equal(t, uint64(100), epbsOpts.BuilderConfig.BuilderBoostFactor)
 			require.Empty(t, epbsOpts.BuilderConfig.Builders)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
@@ -1261,7 +1258,19 @@ func (*testAccount) Name() string {
 }
 
 func (*testAccount) PublicKey() e2types.PublicKey {
-	return nil
+	return &testPublicKey{}
 }
 
 var _ e2wtypes.Account = (*testAccount)(nil)
+
+type testPublicKey struct{}
+
+func (*testPublicKey) Marshal() []byte {
+	return make([]byte, phase0.PublicKeyLength)
+}
+
+func (*testPublicKey) Aggregate(e2types.PublicKey) {}
+
+func (*testPublicKey) Copy() e2types.PublicKey {
+	return &testPublicKey{}
+}

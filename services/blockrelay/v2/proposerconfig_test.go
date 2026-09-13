@@ -130,6 +130,15 @@ func TestProposerConfig(t *testing.T) {
 			name:  "GoodPubkey",
 			input: []byte(`{"proposer":"0x222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222","fee_recipient":"0x1111111111111111111111111111111111111111","gas_limit":"30000000","grace":"1000","min_value":"0.5"}`),
 		},
+		{
+			name:  "EPBSBuilderConfigNull",
+			input: []byte(`{"proposer":"^Wallet/Account$","epbs_builder_config":null}`),
+			err:   "invalid JSON: ePBS builder config must be an object",
+		},
+		{
+			name:  "EPBSBuilderConfig",
+			input: []byte(`{"proposer":"^Wallet/Account$","epbs_builder_config":{"min_bid":"10","builder_boost_factor":100,"builders":[]}}`),
+		},
 	}
 
 	for _, test := range tests {

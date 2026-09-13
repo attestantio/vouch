@@ -276,7 +276,6 @@ func fetchConfig() error {
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.0005))
 	viper.SetDefault("beaconblockproposer.builder-boost-factor", 91)
-	viper.SetDefault("beaconblockproposer.builder-min-bid", uint64(0))
 	viper.SetDefault("strategies.builderbid.deadline.deadline", time.Second)
 	viper.SetDefault("strategies.builderbid.deadline.bid-gap", 100*time.Millisecond)
 	// Payload attestation data is due 75% of the way through the slot, so default tighter than the
@@ -908,6 +907,7 @@ func startSigningServices(ctx context.Context,
 		standardbeaconblockproposer.WithLogLevel(util.LogLevel("beaconblockproposer")),
 		standardbeaconblockproposer.WithChainTime(chainTime),
 		standardbeaconblockproposer.WithProposalDataProvider(proposalProvider),
+		standardbeaconblockproposer.WithExecutionConfigProvider(blockRelay.(blockrelay.ExecutionConfigProvider)),
 		standardbeaconblockproposer.WithBlockAuctioneer(blockRelay.(blockauctioneer.BlockAuctioneer)),
 		standardbeaconblockproposer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardbeaconblockproposer.WithExecutionChainHeadProvider(cacheSvc.(cache.ExecutionChainHeadProvider)),
@@ -917,11 +917,11 @@ func startSigningServices(ctx context.Context,
 		standardbeaconblockproposer.WithExecutionPayloadEnvelopeSubmitter(submitterStrategy.(submitter.ExecutionPayloadEnvelopeSubmitter)),
 		standardbeaconblockproposer.WithRANDAORevealSigner(signerSvc.(signer.RANDAORevealSigner)),
 		standardbeaconblockproposer.WithBeaconBlockSigner(signerSvc.(signer.BeaconBlockSigner)),
+		standardbeaconblockproposer.WithBuilderRequestAuthSigner(signerSvc.(signer.BuilderRequestAuthSigner)),
 		standardbeaconblockproposer.WithExecutionPayloadEnvelopeSigner(signerSvc.(signer.ExecutionPayloadEnvelopeSigner)),
 		standardbeaconblockproposer.WithBlobSidecarSigner(signerSvc.(signer.BlobSidecarSigner)),
 		standardbeaconblockproposer.WithUnblindFromAllRelays(viper.GetBool("beaconblockproposer.unblind-from-all-relays")),
 		standardbeaconblockproposer.WithBuilderBoostFactor(viper.GetUint64("beaconblockproposer.builder-boost-factor")),
-		standardbeaconblockproposer.WithBuilderMinBid(phase0.Gwei(viper.GetUint64("beaconblockproposer.builder-min-bid"))),
 	)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to start beacon block proposer service")

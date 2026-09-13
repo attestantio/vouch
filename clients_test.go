@@ -16,6 +16,9 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
+	"fmt"
+	"io"
 	nethttp "net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -27,6 +30,7 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	apiv1gloas "github.com/attestantio/go-eth2-client/api/v1/gloas"
+	httpclient "github.com/attestantio/go-eth2-client/http"
 	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
@@ -35,8 +39,10 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/payloadattester"
+	"github.com/attestantio/vouch/testing/logger"
 	"github.com/attestantio/vouch/testutil"
 	dynssz "github.com/pk910/dynamic-ssz"
+	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -105,6 +111,151 @@ func TestFetchClientCustomSpecSupport(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, spec.DataVersionGloas, response.Data.Version)
 	require.Equal(t, block.Slot, response.Data.Gloas.Slot)
+}
+
+func TestFetchClientDoesNotLogEPBSBuilderAuth(t *testing.T) {
+	ctx := context.Background()
+	var proposalRequests atomic.Int64
+	server := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		switch r.URL.Path {
+		case "/eth/v1/node/version":
+			_, _ = w.Write([]byte(`{"data":{"version":"test"}}`))
+		case "/eth/v1/node/syncing":
+			_, _ = w.Write([]byte(`{"data":{"is_syncing":false,"is_optimistic":false,"el_offline":false,"head_slot":"1","sync_distance":"0"}}`))
+		case "/eth/v4/validator/blocks/1":
+			if r.Method != nethttp.MethodPost {
+				t.Errorf("unexpected method %s", r.Method)
+				w.WriteHeader(nethttp.StatusMethodNotAllowed)
+				return
+			}
+			proposalRequests.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(nethttp.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"code":500,"message":"failed"}`))
+		default:
+			t.Errorf("unexpected request %s", r.URL.Path)
+			w.WriteHeader(nethttp.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	viper.Set("eth2client.log-level", "trace")
+	viper.Set("eth2client.timeout", "2s")
+	t.Cleanup(func() {
+		viper.Reset()
+		knownClientsMu.Lock()
+		delete(knownClients, server.URL)
+		knownClientsMu.Unlock()
+	})
+	capture := logger.NewLogCapture()
+	service, err := fetchClient(ctx, null.New(), server.URL)
+	require.NoError(t, err)
+	includePayload := false
+	sensitive := "private-auth-value"
+	_, err = service.(client.EPBSProposalProvider).EPBSProposal(ctx, &api.EPBSProposalOpts{
+		Slot:           1,
+		IncludePayload: &includePayload,
+		BuilderConfig: &gloas.BuilderConfig{Builders: []*gloas.BuilderEntry{{
+			URL: []byte("https://builder.example"),
+			Auth: &gloas.SignedBuilderRequestAuth{
+				Message: &gloas.BuilderRequestAuth{Data: []byte(sensitive), Slot: 1},
+			},
+		}}},
+	})
+	require.Error(t, err)
+	require.Equal(t, int64(1), proposalRequests.Load())
+	require.NotEmpty(t, capture.Entries())
+	require.NotContains(t, fmt.Sprint(capture.Entries()), sensitive)
+}
+
+func TestEPBSProposalBuilderConfigTransports(t *testing.T) {
+	ctx := context.Background()
+	includePayload := false
+	config := &gloas.BuilderConfig{
+		MinBid:             12,
+		BuilderBoostFactor: 100,
+		Builders: []*gloas.BuilderEntry{{
+			URL: []byte("https://builder.example"),
+			Auth: &gloas.SignedBuilderRequestAuth{
+				Message:   &gloas.BuilderRequestAuth{Data: []byte{0x12, 0x34}, Slot: 1},
+				Signature: phase0.BLSSignature{0x56},
+			},
+			BuilderPubkeys:      []phase0.BLSPubKey{{0x78}},
+			MaxExecutionPayment: 90,
+			MinBid:              11,
+			BuilderBoostFactor:  80,
+		}},
+	}
+	opts := &api.EPBSProposalOpts{
+		Slot:           1,
+		IncludePayload: &includePayload,
+		BuilderConfig:  config,
+	}
+	responseClient, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	response, err := responseClient.EPBSProposal(ctx, opts)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name        string
+		enforceJSON bool
+		contentType string
+	}{
+		{name: "JSON", enforceJSON: true, contentType: "application/json"},
+		{name: "SSZ", contentType: "application/octet-stream"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var received *gloas.BuilderConfig
+			server := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+				switch r.URL.Path {
+				case "/eth/v1/node/version":
+					_, _ = w.Write([]byte(`{"data":{"version":"test"}}`))
+				case "/eth/v1/node/syncing":
+					_, _ = w.Write([]byte(`{"data":{"is_syncing":false,"is_optimistic":false,"el_offline":false,"head_slot":"1","sync_distance":"0"}}`))
+				case "/eth/v4/validator/blocks/1":
+					require.Equal(t, test.contentType, r.Header.Get("Content-Type"))
+					received = new(gloas.BuilderConfig)
+					if test.enforceJSON {
+						require.NoError(t, json.NewDecoder(r.Body).Decode(received))
+						data, err := response.Data.Gloas.MarshalJSON()
+						require.NoError(t, err)
+						w.Header().Set("Content-Type", "application/json")
+						w.Header().Set("Eth-Consensus-Version", "gloas")
+						_, _ = w.Write([]byte(`{"execution_payload_included":false,"data":`))
+						_, _ = w.Write(data)
+						_, _ = w.Write([]byte(`}`))
+					} else {
+						data, err := io.ReadAll(r.Body)
+						require.NoError(t, err)
+						require.NoError(t, received.UnmarshalSSZ(data))
+						responseData, err := response.Data.Gloas.MarshalSSZ()
+						require.NoError(t, err)
+						w.Header().Set("Content-Type", "application/octet-stream")
+						w.Header().Set("Eth-Consensus-Version", "gloas")
+						w.Header().Set("Eth-Execution-Payload-Included", "false")
+						_, _ = w.Write(responseData)
+					}
+				default:
+					t.Errorf("unexpected request %s", r.URL.Path)
+					w.WriteHeader(nethttp.StatusNotFound)
+				}
+			}))
+			defer server.Close()
+
+			service, err := httpclient.New(ctx,
+				httpclient.WithAddress(server.URL),
+				httpclient.WithTimeout(2*time.Second),
+				httpclient.WithEnforceJSON(test.enforceJSON),
+				httpclient.WithLogLevel(zerolog.Disabled),
+			)
+			require.NoError(t, err)
+			proposalResponse, err := service.(client.EPBSProposalProvider).EPBSProposal(ctx, opts)
+			require.NoError(t, err)
+			require.Equal(t, config, received)
+			require.Equal(t, phase0.Slot(1), proposalResponse.Data.Gloas.Slot)
+		})
+	}
 }
 
 func TestPayloadAttesterUsesConfiguredPayloadAttestationDataProviders(t *testing.T) {

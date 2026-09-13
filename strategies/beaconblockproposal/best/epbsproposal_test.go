@@ -61,6 +61,8 @@ func TestEPBSProposal(t *testing.T) {
 	)
 	require.NoError(t, err)
 	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	providerOne := &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x01})}
+	providerTwo := &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x02})}
 
 	service, err := best.New(ctx,
 		best.WithLogLevel(zerolog.Disabled),
@@ -69,20 +71,24 @@ func TestEPBSProposal(t *testing.T) {
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
 		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
-			"one": &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x01})},
-			"two": &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x02})},
+			"one": providerOne,
+			"two": providerTwo,
 		}),
 		best.WithTimeout(time.Second),
 		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
 	)
 	require.NoError(t, err)
 
+	builderConfig := &gloas.BuilderConfig{MinBid: 12, BuilderBoostFactor: 100, Builders: []*gloas.BuilderEntry{}}
 	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{
-		Slot: phase0.Slot(1),
+		Slot:          phase0.Slot(1),
+		BuilderConfig: builderConfig,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, response)
 	require.NotNil(t, response.Data)
+	require.Same(t, builderConfig, providerOne.opts.BuilderConfig)
+	require.Same(t, builderConfig, providerTwo.opts.BuilderConfig)
 
 	var epbsProposalSpan sdktrace.ReadOnlySpan
 	providerSpans := make(map[string]sdktrace.ReadOnlySpan)
