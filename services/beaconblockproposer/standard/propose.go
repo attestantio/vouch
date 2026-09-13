@@ -295,13 +295,13 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	strategy := boundedGloasStrategy(responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataStrategy, "unknown"))
 	provider := beaconblockproposer.StableProviderName(responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataProvider, "unknown"))
 	source := boundedGloasSource(responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataSource, ""))
-	if source == "unknown" {
-		source = "p2p_builder"
-		if bid.BuilderIndex == selfBuiltBuilderIndex {
-			source = "self_build"
-		} else if beaconblockproposer.BuilderURLPresent(proposalResponse.Metadata) {
-			source = "builder_api"
-		}
+	if source == "unknown" && bid.BuilderIndex == selfBuiltBuilderIndex {
+		// The proposer can recover self-building from the bid, but telling builder_api apart from
+		// p2p_builder needs the beacon node's response headers, and the strategies replace those
+		// with their own metadata before returning.  Leave the label "unknown" rather than
+		// guessing: a strategy that stops setting vouch.source should show up in the metric
+		// instead of being silently counted as p2p_builder.
+		source = "self_build"
 	}
 	publicationPath := "block_only"
 	if bid.BuilderIndex == selfBuiltBuilderIndex {
