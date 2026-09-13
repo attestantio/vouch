@@ -17,6 +17,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/stretchr/testify/require"
 )
@@ -43,6 +44,15 @@ func TestSafeError(t *testing.T) {
 			err:       errors.New("dial user:secret@example.com failed"),
 			sensitive: []string{"user:secret@example.com"},
 			expected:  "dial <redacted> failed",
+		},
+		{
+			name: "RemoteResponseBody",
+			err: api.Error{
+				Method:     "POST",
+				StatusCode: 500,
+				Data:       []byte(`{"auth_data":"private-auth-value"}`),
+			},
+			expected: "POST failed with status 500",
 		},
 	}
 

@@ -134,6 +134,7 @@ func TestEPBSProposalObservability(t *testing.T) {
 	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
 	proposal := testGloasProposalWithoutPayload(1, bellatrix.ExecutionAddress{0x01})
 	proposal.ExecutionValue = big.NewInt(123)
+	proposal.Gloas.Body.SignedExecutionPayloadBid.Message.Value = 123
 	bodyRoot := phase0.Root{0x42}
 	proposal.BeaconBlockBodyRoot = &bodyRoot
 

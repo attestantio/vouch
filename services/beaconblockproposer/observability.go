@@ -17,9 +17,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/google/uuid"
 )
 
@@ -57,6 +60,14 @@ func RequestID(ctx context.Context) string {
 func SafeError(err error, sensitiveValues ...string) string {
 	if err == nil {
 		return ""
+	}
+	var responseError api.Error
+	if errors.As(err, &responseError) {
+		return fmt.Sprintf("%s failed with status %d", responseError.Method, responseError.StatusCode)
+	}
+	var responseErrorPtr *api.Error
+	if errors.As(err, &responseErrorPtr) {
+		return fmt.Sprintf("%s failed with status %d", responseErrorPtr.Method, responseErrorPtr.StatusCode)
 	}
 	message := err.Error()
 	for _, value := range sensitiveValues {
