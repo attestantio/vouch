@@ -253,7 +253,7 @@ func TestExecutionConfigResolvesEPBSOverrides(t *testing.T) {
 		},
 		{
 			name:           "FirstMatchingProposerWins",
-			input:          fmt.Sprintf(`{"version":2,"proposers":[{"proposer":"%s","epbs_builder_config":{"min_bid":"7"}},{"proposer":"%s","epbs_builder_config":{"min_bid":"9"}}]}`, pubkeyString, pubkeyString),
+			input:          fmt.Sprintf(`{"version":2,"proposers":[{"proposer":%q,"epbs_builder_config":{"min_bid":"7"}},{"proposer":%q,"epbs_builder_config":{"min_bid":"9"}}]}`, pubkeyString, pubkeyString),
 			expectedMinBid: 7, expectedBoost: 100, expectedBuilders: []string{},
 		},
 		{

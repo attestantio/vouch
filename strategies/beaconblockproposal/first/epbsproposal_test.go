@@ -95,7 +95,7 @@ func (p *fanoutEPBSProposalProvider) EPBSProposal(ctx context.Context, opts *api
 	}
 }
 
-func (p *fanoutEPBSProposalProvider) Proposal(context.Context, *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
+func (*fanoutEPBSProposalProvider) Proposal(context.Context, *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
 	return nil, nil
 }
 
