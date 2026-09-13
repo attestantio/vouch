@@ -58,7 +58,6 @@ func TestProposeGloas(t *testing.T) {
 		nilProposalResponse        bool
 		nilProposalData            bool
 		blockAuctioneer            bool
-		builderBoostFactor         uint64
 		proposerIndexMismatch      bool
 		builderIndexMismatch       bool
 		foreignBuilderIndex        bool
@@ -79,7 +78,6 @@ func TestProposeGloas(t *testing.T) {
 		{
 			name:                     "PayloadIncluded",
 			executionPayloadIncluded: true,
-			builderBoostFactor:       100,
 		},
 		{
 			name:                "NilProposalResponse",
@@ -358,7 +356,8 @@ func TestProposeGloas(t *testing.T) {
 				standard.WithBeaconBlockSigner(blockSigner),
 				standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
 				standard.WithBlobSidecarSigner(signer),
-				standard.WithBuilderBoostFactor(test.builderBoostFactor),
+				standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{}),
+				standard.WithBuilderRequestAuthSigner(&capturingBuilderRequestAuthSigner{}),
 			}
 			if test.cancelEnvelopeSubmission {
 				var cancel context.CancelFunc
@@ -395,7 +394,7 @@ func TestProposeGloas(t *testing.T) {
 			require.NotNil(t, epbsOpts.IncludePayload)
 			require.True(t, *epbsOpts.IncludePayload)
 			require.NotNil(t, epbsOpts.BuilderConfig)
-			require.Equal(t, test.builderBoostFactor, epbsOpts.BuilderConfig.BuilderBoostFactor)
+			require.Equal(t, uint64(100), epbsOpts.BuilderConfig.BuilderBoostFactor)
 			require.Empty(t, epbsOpts.BuilderConfig.Builders)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
@@ -718,6 +717,8 @@ func newGloasProposerForProposalSource(
 		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
 		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
 		standard.WithBlobSidecarSigner(signer),
+		standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{}),
+		standard.WithBuilderRequestAuthSigner(&capturingBuilderRequestAuthSigner{}),
 	)
 	require.NoError(t, err)
 
@@ -819,6 +820,8 @@ func TestProposeGloasSignsRetainedBodyRoot(t *testing.T) {
 		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
 		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
 		standard.WithBlobSidecarSigner(signer),
+		standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{}),
+		standard.WithBuilderRequestAuthSigner(&capturingBuilderRequestAuthSigner{}),
 	)
 	require.NoError(t, err)
 
@@ -890,6 +893,8 @@ func TestProposeGloasMissingBodyRootFails(t *testing.T) {
 		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
 		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
 		standard.WithBlobSidecarSigner(signer),
+		standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{}),
+		standard.WithBuilderRequestAuthSigner(&capturingBuilderRequestAuthSigner{}),
 	)
 	require.NoError(t, err)
 
@@ -965,6 +970,8 @@ func TestProposeGloasStartsBothSignaturesBeforePublication(t *testing.T) {
 		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
 		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
 		standard.WithBlobSidecarSigner(signer),
+		standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{}),
+		standard.WithBuilderRequestAuthSigner(&capturingBuilderRequestAuthSigner{}),
 	)
 	require.NoError(t, err)
 
@@ -1047,6 +1054,8 @@ func TestProposeGloasCancelsPeerSigningAfterFailure(t *testing.T) {
 		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
 		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
 		standard.WithBlobSidecarSigner(signer),
+		standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{}),
+		standard.WithBuilderRequestAuthSigner(&capturingBuilderRequestAuthSigner{}),
 	)
 	require.NoError(t, err)
 
@@ -1137,6 +1146,8 @@ func TestProposeGloasCancelsBlockedBlockSigningAfterEnvelopeFailure(t *testing.T
 		standard.WithExecutionPayloadEnvelopeSigner(envelopeSigner),
 		standard.WithExecutionPayloadEnvelopeSubmitter(envelopeSubmitter),
 		standard.WithBlobSidecarSigner(signer),
+		standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{}),
+		standard.WithBuilderRequestAuthSigner(&capturingBuilderRequestAuthSigner{}),
 	)
 	require.NoError(t, err)
 
@@ -1200,6 +1211,8 @@ func TestProposePreGloas(t *testing.T) {
 		standard.WithBeaconBlockSigner(blockSigner),
 		standard.WithExecutionPayloadEnvelopeSigner(signer),
 		standard.WithBlobSidecarSigner(signer),
+		standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{}),
+		standard.WithBuilderRequestAuthSigner(&capturingBuilderRequestAuthSigner{}),
 	)
 	require.NoError(t, err)
 
@@ -1410,7 +1423,19 @@ func (*testAccount) Name() string {
 }
 
 func (*testAccount) PublicKey() e2types.PublicKey {
-	return nil
+	return &testPublicKey{}
 }
 
 var _ e2wtypes.Account = (*testAccount)(nil)
+
+type testPublicKey struct{}
+
+func (*testPublicKey) Marshal() []byte {
+	return make([]byte, phase0.PublicKeyLength)
+}
+
+func (*testPublicKey) Aggregate(e2types.PublicKey) {}
+
+func (*testPublicKey) Copy() e2types.PublicKey {
+	return &testPublicKey{}
+}

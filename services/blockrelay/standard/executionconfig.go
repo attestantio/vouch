@@ -14,7 +14,6 @@
 package standard
 
 import (
-	"bytes"
 	"context"
 	"net/http"
 	"strings"
@@ -143,7 +142,7 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to obtain execution configuration")
 	}
 
-	s.log.Trace().RawJSON("res", bytes.ReplaceAll(res, []byte("\n"), []byte(""))).Msg("Received response")
+	s.log.Trace().Msg("Received response")
 
 	executionConfig, err := blockrelay.UnmarshalJSON(res)
 	if err != nil {
