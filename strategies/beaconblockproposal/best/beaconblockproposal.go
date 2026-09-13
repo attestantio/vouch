@@ -118,7 +118,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 
 	selection.hardDeadlineReached = selection.hardDeadlineReached || errors.Is(ctx.Err(), context.DeadlineExceeded)
 	if selection.proposal == nil {
-		s.logEPBSSelectionFailed(selection, log)
+		logEPBSSelectionFailed(selection, log)
 		return nil, errors.New("no ePBS proposals received")
 	}
 
@@ -261,7 +261,7 @@ func (s *Service) timeOutPendingEPBSProviders(selection *epbsSelection, reason s
 }
 
 // logEPBSSelectionFailed reports a round that produced no usable proposal.
-func (s *Service) logEPBSSelectionFailed(selection *epbsSelection, log zerolog.Logger) {
+func logEPBSSelectionFailed(selection *epbsSelection, log zerolog.Logger) {
 	outcome := "no_valid_proposal"
 	if selection.hardDeadlineReached {
 		outcome = "timeout"
