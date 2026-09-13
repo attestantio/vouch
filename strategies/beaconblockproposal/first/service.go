@@ -123,6 +123,7 @@ type epbsProposalResponse struct {
 // acceptableEPBSProposal reports whether proposal is usable, discarding and logging it if it is
 // nil, lacks a requested execution payload, comes from an unready builder provider, or (for Gloas)
 // is structurally malformed or pays a zero fee recipient.
+// skipcq: GO-R1005
 func (s *Service) acceptableEPBSProposal(provider string, proposal *api.VersionedEPBSProposal, opts *api.EPBSProposalOpts) bool {
 	if proposal == nil {
 		s.log.Warn().Msg("Discarding empty ePBS proposal")

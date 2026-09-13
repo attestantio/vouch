@@ -317,20 +317,91 @@ func (s *Service) Proposal(ctx context.Context,
 
 	started := time.Now()
 	log := util.LogWithID(ctx, s.log, "strategy_id").With().Uint64("slot", uint64(opts.Slot)).Logger()
-	ctx = log.WithContext(ctx)
+	results := s.collectBeaconBlockProposalResponses(log.WithContext(ctx), started, opts, log)
+	if results.bestProposal == nil {
+		return nil, errors.New("no proposals received")
+	}
 
-	// We have two timeouts: a soft timeout and a hard timeout.
-	// At the soft timeout, we return if we have any responses so far.
-	// At the hard timeout, we return unconditionally.
-	// The soft timeout is half the duration of the hard timeout.
+	log.Trace().Str("provider", results.bestProvider).Stringer("proposal", results.bestProposal).Float64("score", results.bestScore).Dur("elapsed", time.Since(started)).Msg("Selected best proposal")
+	if results.bestProvider != "" {
+		s.clientMonitor.StrategyOperation("best", results.bestProvider, "beacon block proposal", time.Since(started))
+	}
+
+	span.SetAttributes(
+		attribute.String("value", new(big.Int).Add(results.bestProposal.ConsensusValue, results.bestProposal.ExecutionValue).String()),
+		attribute.Bool("blinded", results.bestProposal.Blinded),
+	)
+	return &api.Response[*api.VersionedProposal]{
+		Data:     results.bestProposal,
+		Metadata: make(map[string]any),
+	}, nil
+}
+
+type beaconBlockProposalResults struct {
+	bestProvider string
+	bestProposal *api.VersionedProposal
+	requests     int
+	responded    int
+	errored      int
+	timedOut     int
+	softTimedOut int
+	bestScore    float64
+}
+
+func (s *Service) collectBeaconBlockProposalResponses(ctx context.Context,
+	started time.Time,
+	opts *api.ProposalOpts,
+	log zerolog.Logger,
+) *beaconBlockProposalResults {
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
 	softCtx, softCancel := context.WithTimeout(ctx, s.timeout/2)
+	defer softCancel()
 
-	requests := len(s.proposalProviders)
+	results := &beaconBlockProposalResults{requests: len(s.proposalProviders)}
+	respCh, errCh := s.startBeaconBlockProposalRequests(ctx, started, opts, log, results.requests)
+	for results.responded+results.errored+results.timedOut+results.softTimedOut != results.requests {
+		select {
+		case response := <-respCh:
+			results.selectProposal(response, started, log)
+		case responseErr := <-errCh:
+			results.recordError(responseErr, started, log)
+		case <-softCtx.Done():
+			results.softTimeout(started, log)
+		}
+	}
+	softCancel()
 
+	for results.responded+results.errored+results.timedOut != results.requests {
+		select {
+		case response := <-respCh:
+			results.selectProposal(response, started, log)
+		case responseErr := <-errCh:
+			results.recordError(responseErr, started, log)
+		case <-ctx.Done():
+			results.hardTimeout(started, log)
+		}
+	}
+	cancel()
+
+	log.Trace().
+		Dur("elapsed", time.Since(started)).
+		Int("responded", results.responded).
+		Int("errored", results.errored).
+		Int("timed_out", results.timedOut).
+		Msg("Results")
+
+	return results
+}
+
+func (s *Service) startBeaconBlockProposalRequests(ctx context.Context,
+	started time.Time,
+	opts *api.ProposalOpts,
+	log zerolog.Logger,
+	requests int,
+) (chan *beaconBlockResponse, chan *beaconBlockError) {
 	respCh := make(chan *beaconBlockResponse, requests)
 	errCh := make(chan *beaconBlockError, requests)
-	// Kick off the requests.
 	for name, provider := range s.proposalProviders {
 		providerOpts := *opts
 		providerGraffiti := providerOpts.Graffiti[:]
@@ -353,127 +424,63 @@ func (s *Service) Proposal(ctx context.Context,
 		go s.beaconBlockProposal(ctx, started, name, provider, respCh, errCh, &providerOpts)
 	}
 
-	// Wait for all responses (or context done).
-	responded := 0
-	errored := 0
-	timedOut := 0
-	softTimedOut := 0
-	bestScore := float64(0)
-	var bestProposal *api.VersionedProposal
-	var bestProvider string
+	return respCh, errCh
+}
 
-	// Loop 1: prior to soft timeout.
-	for responded+errored+timedOut+softTimedOut != requests {
-		select {
-		case resp := <-respCh:
-			responded++
-			log.Trace().
-				Dur("elapsed", time.Since(started)).
-				Str("provider", resp.provider).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Msg("Response received")
-			if bestProposal == nil || resp.score > bestScore {
-				bestProposal = resp.proposal
-				bestScore = resp.score
-				bestProvider = resp.provider
-			}
-		case err := <-errCh:
-			errored++
-			log.Debug().
-				Dur("elapsed", time.Since(started)).
-				Str("provider", err.provider).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Err(err.err).
-				Msg("Error received")
-		case <-softCtx.Done():
-			// If we have any responses at this point we consider the non-responders timed out.
-			if responded > 0 {
-				timedOut = requests - responded - errored
-				log.Debug().
-					Dur("elapsed", time.Since(started)).
-					Int("responded", responded).
-					Int("errored", errored).
-					Int("timed_out", timedOut).
-					Msg("Soft timeout reached with responses")
-			} else {
-				log.Debug().
-					Dur("elapsed", time.Since(started)).
-					Int("errored", errored).
-					Msg("Soft timeout reached with no responses")
-			}
-			// Set the number of requests that have soft timed out.
-			softTimedOut = requests - responded - errored - timedOut
-		}
-	}
-	softCancel()
-
-	// Loop 2: after soft timeout.
-	for responded+errored+timedOut != requests {
-		select {
-		case resp := <-respCh:
-			responded++
-			log.Trace().
-				Dur("elapsed", time.Since(started)).
-				Str("provider", resp.provider).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Msg("Response received")
-			if bestProposal == nil || resp.score > bestScore {
-				bestProposal = resp.proposal
-				bestScore = resp.score
-				bestProvider = resp.provider
-			}
-		case err := <-errCh:
-			errored++
-			log.Debug().
-				Dur("elapsed", time.Since(started)).
-				Str("provider", err.provider).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Err(err.err).
-				Msg("Error received")
-		case <-ctx.Done():
-			// Anyone not responded by now is considered errored.
-			timedOut = requests - responded - errored
-			log.Debug().
-				Dur("elapsed", time.Since(started)).
-				Int("responded", responded).
-				Int("errored", errored).
-				Int("timed_out", timedOut).
-				Msg("Hard timeout reached")
-		}
-	}
-	cancel()
-
+func (r *beaconBlockProposalResults) selectProposal(response *beaconBlockResponse, started time.Time, log zerolog.Logger) {
+	r.responded++
 	log.Trace().
 		Dur("elapsed", time.Since(started)).
-		Int("responded", responded).
-		Int("errored", errored).
-		Int("timed_out", timedOut).
-		Msg("Results")
-
-	if bestProposal == nil {
-		return nil, errors.New("no proposals received")
+		Str("provider", response.provider).
+		Int("responded", r.responded).
+		Int("errored", r.errored).
+		Int("timed_out", r.timedOut).
+		Msg("Response received")
+	if r.bestProposal == nil || response.score > r.bestScore {
+		r.bestProposal = response.proposal
+		r.bestScore = response.score
+		r.bestProvider = response.provider
 	}
-	log.Trace().Str("provider", bestProvider).Stringer("proposal", bestProposal).Float64("score", bestScore).Dur("elapsed", time.Since(started)).Msg("Selected best proposal")
-	if bestProvider != "" {
-		s.clientMonitor.StrategyOperation("best", bestProvider, "beacon block proposal", time.Since(started))
-	}
+}
 
-	span.SetAttributes(
-		attribute.String("value", new(big.Int).Add(bestProposal.ConsensusValue, bestProposal.ExecutionValue).String()),
-		attribute.Bool("blinded", bestProposal.Blinded),
-	)
-	return &api.Response[*api.VersionedProposal]{
-		Data:     bestProposal,
-		Metadata: make(map[string]any),
-	}, nil
+func (r *beaconBlockProposalResults) recordError(responseErr *beaconBlockError, started time.Time, log zerolog.Logger) {
+	r.errored++
+	log.Debug().
+		Dur("elapsed", time.Since(started)).
+		Str("provider", responseErr.provider).
+		Int("responded", r.responded).
+		Int("errored", r.errored).
+		Int("timed_out", r.timedOut).
+		Err(responseErr.err).
+		Msg("Error received")
+}
+
+func (r *beaconBlockProposalResults) softTimeout(started time.Time, log zerolog.Logger) {
+	if r.responded > 0 {
+		r.timedOut = r.requests - r.responded - r.errored
+		log.Debug().
+			Dur("elapsed", time.Since(started)).
+			Int("responded", r.responded).
+			Int("errored", r.errored).
+			Int("timed_out", r.timedOut).
+			Msg("Soft timeout reached with responses")
+	} else {
+		log.Debug().
+			Dur("elapsed", time.Since(started)).
+			Int("errored", r.errored).
+			Msg("Soft timeout reached with no responses")
+	}
+	r.softTimedOut = r.requests - r.responded - r.errored - r.timedOut
+}
+
+func (r *beaconBlockProposalResults) hardTimeout(started time.Time, log zerolog.Logger) {
+	r.timedOut = r.requests - r.responded - r.errored
+	log.Debug().
+		Dur("elapsed", time.Since(started)).
+		Int("responded", r.responded).
+		Int("errored", r.errored).
+		Int("timed_out", r.timedOut).
+		Msg("Hard timeout reached")
 }
 
 func (s *Service) beaconBlockProposal(ctx context.Context,

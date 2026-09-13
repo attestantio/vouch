@@ -367,34 +367,113 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	signedBeaconBlockProvider, beaconBlockHeaderProvider, err := startProviderServices(ctx, monitor)
+	services, err := startServiceFamily(ctx, majordomo, monitor, eth2Client, chainTime)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	var syncCommitteeSubscriber synccommitteesubscriber.Service
+	var syncCommitteeMessenger synccommitteemessenger.Service
+	var syncCommitteeAggregator synccommitteeaggregator.Service
+	if altairCapable {
+		syncCommitteeSubscriber, syncCommitteeMessenger, syncCommitteeAggregator, err = startAltairServices(ctx, monitor, eth2Client, services.submitter, services.signer, services.accountManager, chainTime, services.cache)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// We need to submit proposal preparations to all nodes that are acting as beacon block proposers.
+	proposalPreparer, err := initProposalPreparer(ctx, monitor, chainTime, bellatrixCapable, services.accountManager, services.blockRelay)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	multiInstance, err := startMultiInstance(ctx, monitor, chainTime, eth2Client, services.beaconBlockHeaderProvider)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	controller, err := initController(ctx,
+		monitor,
+		chainTime,
+		eth2Client,
+		services.scheduler,
+		services.attester,
+		services.cache,
+		waitedForGenesis,
+		services.accountManager,
+		services.beaconBlockProposer,
+		services.signedBeaconBlockProvider,
+		proposalPreparer,
+		services.attestationAggregator,
+		services.beaconCommitteeSubscriber,
+		syncCommitteeMessenger,
+		syncCommitteeAggregator,
+		syncCommitteeSubscriber,
+		services.beaconBlockHeaderProvider,
+		multiInstance,
+		services.payloadAttester,
+		services.proposerPreferences,
+		services.blockRelay,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return chainTime, controller, nil
+}
+
+type serviceFamily struct {
+	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider
+	beaconBlockHeaderProvider eth2client.BeaconBlockHeadersProvider
+	cache                     cache.Service
+	scheduler                 scheduler.Service
+	signer                    signer.Service
+	accountManager            accountmanager.Service
+	submitter                 submitter.Service
+	payloadAttester           payloadattester.Service
+	proposerPreferences       proposerpreferences.Service
+	blockRelay                blockrelay.Service
+	beaconBlockProposer       beaconblockproposer.Service
+	attester                  attester.Service
+	attestationAggregator     attestationaggregator.Service
+	beaconCommitteeSubscriber beaconcommitteesubscriber.Service
+}
+
+func startServiceFamily(ctx context.Context,
+	majordomo majordomo.Service,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+	chainTime chaintime.Service,
+) (*serviceFamily, error) {
+	signedBeaconBlockProvider, beaconBlockHeaderProvider, err := startProviderServices(ctx, monitor)
+	if err != nil {
+		return nil, err
 	}
 
 	schedulerSvc, cacheSvc, signerSvc, accountManager, err := startSharedServices(ctx, eth2Client, majordomo, chainTime, monitor, beaconBlockHeaderProvider, signedBeaconBlockProvider)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	submitter, err := selectSubmitterStrategy(ctx, monitor, eth2Client)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to select submitter")
+		return nil, errors.Wrap(err, "failed to select submitter")
 	}
 
 	payloadAttester, err := startPayloadAttester(ctx, monitor, signerSvc, submitter)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start payload attester")
+		return nil, errors.Wrap(err, "failed to start payload attester")
 	}
 
 	proposerPreferences, err := startProposerPreferences(ctx, monitor, signerSvc, submitter)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to start proposer preferences")
+		return nil, errors.Wrap(err, "failed to start proposer preferences")
 	}
 
 	blockRelay, err := startBlockRelay(ctx, majordomo, monitor, eth2Client, schedulerSvc, chainTime, accountManager, signerSvc, cacheSvc)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	beaconBlockProposer, attesterSvc, attestationAggregator, beaconCommitteeSubscriber, err := startSigningServices(ctx,
@@ -410,58 +489,25 @@ func startServices(ctx context.Context,
 		proposerPreferences,
 	)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	var syncCommitteeSubscriber synccommitteesubscriber.Service
-	var syncCommitteeMessenger synccommitteemessenger.Service
-	var syncCommitteeAggregator synccommitteeaggregator.Service
-	if altairCapable {
-		syncCommitteeSubscriber, syncCommitteeMessenger, syncCommitteeAggregator, err = startAltairServices(ctx, monitor, eth2Client, submitter, signerSvc, accountManager, chainTime, cacheSvc)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	// We need to submit proposal preparations to all nodes that are acting as beacon block proposers.
-	proposalPreparer, err := initProposalPreparer(ctx, monitor, chainTime, bellatrixCapable, accountManager, blockRelay)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	multiInstance, err := startMultiInstance(ctx, monitor, chainTime, eth2Client, beaconBlockHeaderProvider)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	controller, err := initController(ctx,
-		monitor,
-		chainTime,
-		eth2Client,
-		schedulerSvc,
-		attesterSvc,
-		cacheSvc,
-		waitedForGenesis,
-		accountManager,
-		beaconBlockProposer,
-		signedBeaconBlockProvider,
-		proposalPreparer,
-		attestationAggregator,
-		beaconCommitteeSubscriber,
-		syncCommitteeMessenger,
-		syncCommitteeAggregator,
-		syncCommitteeSubscriber,
-		beaconBlockHeaderProvider,
-		multiInstance,
-		payloadAttester,
-		proposerPreferences,
-		blockRelay,
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return chainTime, controller, nil
+	return &serviceFamily{
+		signedBeaconBlockProvider: signedBeaconBlockProvider,
+		beaconBlockHeaderProvider: beaconBlockHeaderProvider,
+		cache:                     cacheSvc,
+		scheduler:                 schedulerSvc,
+		signer:                    signerSvc,
+		accountManager:            accountManager,
+		submitter:                 submitter,
+		payloadAttester:           payloadAttester,
+		proposerPreferences:       proposerPreferences,
+		blockRelay:                blockRelay,
+		beaconBlockProposer:       beaconBlockProposer,
+		attester:                  attesterSvc,
+		attestationAggregator:     attestationAggregator,
+		beaconCommitteeSubscriber: beaconCommitteeSubscriber,
+	}, nil
 }
 
 func initController(ctx context.Context,
@@ -1870,86 +1916,29 @@ func startMultinodeSubmitter(ctx context.Context,
 	submitter.Service,
 	error,
 ) {
-	aggregateAttestationSubmitters, err := genericAddressToClientMapper[eth2client.AggregateAttestationsSubmitter](ctx, monitor,
-		"submitter.aggregateattestation.multinode",
-		"aggregate attestation submitter strategy")
+	attestationSubmitters, err := startMultinodeAttestationSubmitters(ctx, monitor)
 	if err != nil {
 		return nil, err
 	}
-
-	attestationsSubmitters, err := genericAddressToClientMapper[eth2client.AttestationsSubmitter](ctx, monitor,
-		"submitter.attestation.multinode",
-		"attestation submitter strategy")
+	proposalSubmitters, err := startMultinodeProposalSubmitters(ctx, monitor)
 	if err != nil {
 		return nil, err
 	}
-
-	proposalSubmitters, err := genericAddressToClientMapper[eth2client.ProposalSubmitter](ctx, monitor,
-		"submitter.proposal.multinode",
-		"proposal submitter strategy")
+	beaconSubscriptions, err := startMultinodeBeaconCommitteeSubmitters(ctx, monitor)
 	if err != nil {
 		return nil, err
 	}
-	executionPayloadEnvelopeSubmitters, err := genericAddressToClientMapper[eth2client.ExecutionPayloadEnvelopeSubmitter](ctx, monitor,
-		"submitter.proposal.multinode",
-		"execution payload envelope submitter strategy")
+	proposalPreparations, err := startMultinodeProposalPreparations(ctx, monitor)
 	if err != nil {
 		return nil, err
 	}
-
-	beaconCommitteeSubscriptionsSubmitters, err := genericAddressToClientMapper[eth2client.BeaconCommitteeSubscriptionsSubmitter](ctx, monitor,
-		"submitter.beaconcommitteesubscription.multinode",
-		"beacon committee subscription submitter strategy")
+	committeeSubmitters, err := startMultinodeCommitteeSubmitters(ctx, monitor)
 	if err != nil {
 		return nil, err
 	}
-
-	proposalPreparationSubmitters, err := genericAddressToClientMapper[eth2client.ProposalPreparationsSubmitter](ctx, monitor,
-		"submitter.proposalpreparation.multinode",
-		"proposal preparation submitter strategy")
+	optionalSubmitters, err := startMultinodeOptionalSubmitters(ctx, monitor, eth2Client)
 	if err != nil {
 		return nil, err
-	}
-
-	syncCommitteeContributionsSubmitters, err := genericAddressToClientMapper[eth2client.SyncCommitteeContributionsSubmitter](ctx, monitor,
-		"submitter.synccommitteecontribution.multinode",
-		"sync committee contribution submitter strategy")
-	if err != nil {
-		return nil, err
-	}
-
-	syncCommitteeMessagesSubmitters, err := genericAddressToClientMapper[eth2client.SyncCommitteeMessagesSubmitter](ctx, monitor,
-		"submitter.synccommitteemessage.multinode",
-		"sync committee message submitter strategy")
-	if err != nil {
-		return nil, err
-	}
-
-	syncCommitteeSubscriptionsSubmitters, err := genericAddressToClientMapper[eth2client.SyncCommitteeSubscriptionsSubmitter](ctx, monitor,
-		"submitter.synccommitteesubscription.multinode",
-		"sync committee subscription submitter strategy")
-	if err != nil {
-		return nil, err
-	}
-
-	var payloadAttestationMessagesSubmitters map[string]submitter.PayloadAttestationMessagesSubmitter
-	if _, ok := eth2Client.(eth2client.PayloadAttestationMessagesSubmitter); ok {
-		payloadAttestationMessagesSubmitters, err = genericAddressToClientMapper[submitter.PayloadAttestationMessagesSubmitter](ctx, monitor,
-			"submitter.payloadattestation.multinode",
-			"payload attestation message submitter strategy")
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	var proposerPreferencesSubmitters map[string]eth2client.ProposerPreferencesSubmitter
-	if _, ok := eth2Client.(eth2client.ProposerPreferencesSubmitter); ok {
-		proposerPreferencesSubmitters, err = addressToClientMapper[eth2client.ProposerPreferencesSubmitter](ctx, monitor,
-			util.BeaconNodeAddressesForBeaconBlockProposal(),
-			"proposer preferences submitter strategy")
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	params := []multinodesubmitter.Parameter{
@@ -1957,21 +1946,21 @@ func startMultinodeSubmitter(ctx context.Context,
 		multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
 		multinodesubmitter.WithLogLevel(util.LogLevel("submitter.multinode")),
 		multinodesubmitter.WithTimeout(util.Timeout("submitter.multinode")),
-		multinodesubmitter.WithProposalSubmitters(proposalSubmitters),
-		multinodesubmitter.WithExecutionPayloadEnvelopeSubmitters(executionPayloadEnvelopeSubmitters),
-		multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),
-		multinodesubmitter.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
-		multinodesubmitter.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-		multinodesubmitter.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
-		multinodesubmitter.WithAggregateAttestationsSubmitters(aggregateAttestationSubmitters),
-		multinodesubmitter.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
-		multinodesubmitter.WithProposalPreparationsSubmitters(proposalPreparationSubmitters),
+		multinodesubmitter.WithProposalSubmitters(proposalSubmitters.proposals),
+		multinodesubmitter.WithExecutionPayloadEnvelopeSubmitters(proposalSubmitters.executionPayloadEnvelopes),
+		multinodesubmitter.WithAttestationsSubmitters(attestationSubmitters.attestations),
+		multinodesubmitter.WithSyncCommitteeMessagesSubmitters(committeeSubmitters.messages),
+		multinodesubmitter.WithSyncCommitteeContributionsSubmitters(committeeSubmitters.contributions),
+		multinodesubmitter.WithSyncCommitteeSubscriptionsSubmitters(committeeSubmitters.subscriptions),
+		multinodesubmitter.WithAggregateAttestationsSubmitters(attestationSubmitters.aggregates),
+		multinodesubmitter.WithBeaconCommitteeSubscriptionsSubmitters(beaconSubscriptions),
+		multinodesubmitter.WithProposalPreparationsSubmitters(proposalPreparations),
 	}
-	if payloadAttestationMessagesSubmitters != nil {
-		params = append(params, multinodesubmitter.WithPayloadAttestationMessagesSubmitters(payloadAttestationMessagesSubmitters))
+	if optionalSubmitters.payloadAttestationMessages != nil {
+		params = append(params, multinodesubmitter.WithPayloadAttestationMessagesSubmitters(optionalSubmitters.payloadAttestationMessages))
 	}
-	if proposerPreferencesSubmitters != nil {
-		params = append(params, multinodesubmitter.WithProposerPreferencesSubmitters(proposerPreferencesSubmitters))
+	if optionalSubmitters.proposerPreferences != nil {
+		params = append(params, multinodesubmitter.WithProposerPreferencesSubmitters(optionalSubmitters.proposerPreferences))
 	}
 	submitterService, err := multinodesubmitter.New(ctx, params...)
 	if err != nil {
@@ -1979,6 +1968,126 @@ func startMultinodeSubmitter(ctx context.Context,
 	}
 
 	return submitterService, nil
+}
+
+type multinodeAttestationSubmitters struct {
+	aggregates   map[string]eth2client.AggregateAttestationsSubmitter
+	attestations map[string]eth2client.AttestationsSubmitter
+}
+
+func startMultinodeAttestationSubmitters(ctx context.Context, monitor metrics.Service) (*multinodeAttestationSubmitters, error) {
+	aggregates, err := genericAddressToClientMapper[eth2client.AggregateAttestationsSubmitter](ctx, monitor,
+		"submitter.aggregateattestation.multinode",
+		"aggregate attestation submitter strategy")
+	if err != nil {
+		return nil, err
+	}
+	attestations, err := genericAddressToClientMapper[eth2client.AttestationsSubmitter](ctx, monitor,
+		"submitter.attestation.multinode",
+		"attestation submitter strategy")
+	if err != nil {
+		return nil, err
+	}
+
+	return &multinodeAttestationSubmitters{aggregates: aggregates, attestations: attestations}, nil
+}
+
+type multinodeProposalSubmitters struct {
+	proposals                 map[string]eth2client.ProposalSubmitter
+	executionPayloadEnvelopes map[string]eth2client.ExecutionPayloadEnvelopeSubmitter
+}
+
+func startMultinodeProposalSubmitters(ctx context.Context, monitor metrics.Service) (*multinodeProposalSubmitters, error) {
+	proposals, err := genericAddressToClientMapper[eth2client.ProposalSubmitter](ctx, monitor,
+		"submitter.proposal.multinode",
+		"proposal submitter strategy")
+	if err != nil {
+		return nil, err
+	}
+	executionPayloadEnvelopes, err := genericAddressToClientMapper[eth2client.ExecutionPayloadEnvelopeSubmitter](ctx, monitor,
+		"submitter.proposal.multinode",
+		"execution payload envelope submitter strategy")
+	if err != nil {
+		return nil, err
+	}
+	return &multinodeProposalSubmitters{
+		proposals:                 proposals,
+		executionPayloadEnvelopes: executionPayloadEnvelopes,
+	}, nil
+}
+
+func startMultinodeBeaconCommitteeSubmitters(ctx context.Context, monitor metrics.Service) (map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter, error) {
+	return genericAddressToClientMapper[eth2client.BeaconCommitteeSubscriptionsSubmitter](ctx, monitor,
+		"submitter.beaconcommitteesubscription.multinode",
+		"beacon committee subscription submitter strategy")
+}
+
+func startMultinodeProposalPreparations(ctx context.Context, monitor metrics.Service) (map[string]eth2client.ProposalPreparationsSubmitter, error) {
+	return genericAddressToClientMapper[eth2client.ProposalPreparationsSubmitter](ctx, monitor,
+		"submitter.proposalpreparation.multinode",
+		"proposal preparation submitter strategy")
+}
+
+type multinodeCommitteeSubmitters struct {
+	contributions map[string]eth2client.SyncCommitteeContributionsSubmitter
+	messages      map[string]eth2client.SyncCommitteeMessagesSubmitter
+	subscriptions map[string]eth2client.SyncCommitteeSubscriptionsSubmitter
+}
+
+func startMultinodeCommitteeSubmitters(ctx context.Context, monitor metrics.Service) (*multinodeCommitteeSubmitters, error) {
+	contributions, err := genericAddressToClientMapper[eth2client.SyncCommitteeContributionsSubmitter](ctx, monitor,
+		"submitter.synccommitteecontribution.multinode",
+		"sync committee contribution submitter strategy")
+	if err != nil {
+		return nil, err
+	}
+	messages, err := genericAddressToClientMapper[eth2client.SyncCommitteeMessagesSubmitter](ctx, monitor,
+		"submitter.synccommitteemessage.multinode",
+		"sync committee message submitter strategy")
+	if err != nil {
+		return nil, err
+	}
+	subscriptions, err := genericAddressToClientMapper[eth2client.SyncCommitteeSubscriptionsSubmitter](ctx, monitor,
+		"submitter.synccommitteesubscription.multinode",
+		"sync committee subscription submitter strategy")
+	if err != nil {
+		return nil, err
+	}
+
+	return &multinodeCommitteeSubmitters{
+		contributions: contributions,
+		messages:      messages,
+		subscriptions: subscriptions,
+	}, nil
+}
+
+type multinodeOptionalSubmitters struct {
+	payloadAttestationMessages map[string]submitter.PayloadAttestationMessagesSubmitter
+	proposerPreferences        map[string]eth2client.ProposerPreferencesSubmitter
+}
+
+func startMultinodeOptionalSubmitters(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (*multinodeOptionalSubmitters, error) {
+	optionalSubmitters := new(multinodeOptionalSubmitters)
+	if _, ok := eth2Client.(eth2client.PayloadAttestationMessagesSubmitter); ok {
+		payloadAttestationMessages, err := genericAddressToClientMapper[submitter.PayloadAttestationMessagesSubmitter](ctx, monitor,
+			"submitter.payloadattestation.multinode",
+			"payload attestation message submitter strategy")
+		if err != nil {
+			return nil, err
+		}
+		optionalSubmitters.payloadAttestationMessages = payloadAttestationMessages
+	}
+	if _, ok := eth2Client.(eth2client.ProposerPreferencesSubmitter); ok {
+		proposerPreferences, err := addressToClientMapper[eth2client.ProposerPreferencesSubmitter](ctx, monitor,
+			util.BeaconNodeAddressesForBeaconBlockProposal(),
+			"proposer preferences submitter strategy")
+		if err != nil {
+			return nil, err
+		}
+		optionalSubmitters.proposerPreferences = proposerPreferences
+	}
+
+	return optionalSubmitters, nil
 }
 
 // runCommands potentially runs commands.
