@@ -46,6 +46,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
@@ -382,6 +383,9 @@ func (s *Service) obtainEPBSProposal(ctx context.Context,
 
 	response, err := s.proposalProvider.EPBSProposal(ctx, opts)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to obtain ePBS proposal")
+
 		return nil, err
 	}
 	if response != nil && response.Data != nil {
@@ -504,8 +508,12 @@ func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
 		attribute.String("provider", correlation.provider),
 		attribute.String("proposal_root", proposalRoot),
 	}
-	_, publicationSpan := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishGloasBlock", trace.WithAttributes(publicationAttributes...))
-	err = s.proposalSubmitter.SubmitProposal(ctx, signedProposal)
+	publicationCtx, publicationSpan := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishGloasBlock", trace.WithAttributes(publicationAttributes...))
+	err = s.proposalSubmitter.SubmitProposal(publicationCtx, signedProposal)
+	if err != nil {
+		publicationSpan.RecordError(err)
+		publicationSpan.SetStatus(codes.Error, "failed to submit proposal")
+	}
 	publicationSpan.End()
 	if err != nil {
 		s.log.Warn().Str("error", beaconblockproposer.SafeError(err)).Str("request_id", beaconblockproposer.RequestID(ctx)).Time("proposal_submission_completed_at", time.Now()).Msg("Failed to submit builder-backed ePBS beacon block proposal")
@@ -566,13 +574,17 @@ func (s *Service) proposeSelfBuiltEPBSBlock(ctx context.Context,
 	}
 
 	correlation := gloasSelectionFromContext(ctx)
-	_, publicationSpan := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishGloasBlock", trace.WithAttributes(
+	publicationCtx, publicationSpan := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishGloasBlock", trace.WithAttributes(
 		attribute.Int64("slot", util.SlotToInt64(duty.Slot())),
 		attribute.String("request_id", beaconblockproposer.RequestID(ctx)),
 		attribute.String("provider", correlation.provider),
 		attribute.String("proposal_root", envelope.BeaconBlockRoot.String()),
 	))
-	err = s.proposalSubmitter.SubmitProposal(ctx, signedProposal)
+	err = s.proposalSubmitter.SubmitProposal(publicationCtx, signedProposal)
+	if err != nil {
+		publicationSpan.RecordError(err)
+		publicationSpan.SetStatus(codes.Error, "failed to submit proposal")
+	}
 	publicationSpan.End()
 	if err != nil {
 		log.Warn().Str("error", beaconblockproposer.SafeError(err)).Time("proposal_submission_completed_at", time.Now()).Msg("Failed to submit ePBS beacon block proposal")
@@ -617,7 +629,7 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	opts *api.SubmitExecutionPayloadEnvelopeOpts,
 ) error {
 	correlation := gloasSelectionFromContext(ctx)
-	_, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishExecutionPayloadEnvelope", trace.WithAttributes(
+	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishExecutionPayloadEnvelope", trace.WithAttributes(
 		attribute.Int64("slot", util.SlotToInt64(slot)),
 		attribute.String("request_id", beaconblockproposer.RequestID(ctx)),
 		attribute.String("provider", correlation.provider),
@@ -627,6 +639,8 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 
 	err := s.attemptExecutionPayloadEnvelopeSubmission(ctx, log, opts)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to submit execution payload envelope")
 		log.Warn().Str("error", beaconblockproposer.SafeError(err)).Str("status", "failed").Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission completed")
 
 		return errors.Wrap(err, "failed to submit execution payload envelope after block publication")
