@@ -48,6 +48,31 @@ type beaconBlockError struct {
 	rejectionReason string
 }
 
+// epbsSelection carries the state of one round of ePBS proposal selection across the
+// soft-deadline and hard-deadline collection phases.
+type epbsSelection struct {
+	provider string
+	opts     *api.EPBSProposalOpts
+
+	requestID string
+	started   time.Time
+	requests  int
+	pending   map[string]struct{}
+	proposal  *api.VersionedEPBSProposal
+	metadata  map[string]any
+
+	responded    int
+	errored      int
+	timedOut     int
+	softTimedOut int
+
+	softDeadlineReached bool
+	hardDeadlineReached bool
+
+	respCh chan *beaconBlockEPBSResponse
+	errCh  chan *beaconBlockError
+}
+
 // EPBSProposal provides the best ePBS proposal from a number of beacon nodes.
 func (s *Service) EPBSProposal(ctx context.Context,
 	opts *api.EPBSProposalOpts,
@@ -74,139 +99,44 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	defer softCancel()
 
 	requests := len(s.proposalProviders)
-	respCh := make(chan *beaconBlockEPBSResponse, requests)
-	errCh := make(chan *beaconBlockError, requests)
-	pendingProviders := make(map[string]struct{}, requests)
+	selection := &epbsSelection{
+		opts:      opts,
+		requestID: requestID,
+		started:   started,
+		requests:  requests,
+		respCh:    make(chan *beaconBlockEPBSResponse, requests),
+		errCh:     make(chan *beaconBlockError, requests),
+		pending:   make(map[string]struct{}, requests),
+	}
 	for name, provider := range s.proposalProviders {
-		pendingProviders[name] = struct{}{}
+		selection.pending[name] = struct{}{}
 		providerOpts := *opts
-		go s.epbsProposal(ctx, started, name, provider, respCh, errCh, &providerOpts, log)
+		go s.epbsProposal(ctx, started, name, provider, selection.respCh, selection.errCh, &providerOpts, log)
 	}
 
-	responded := 0
-	errored := 0
-	timedOut := 0
-	softTimedOut := 0
-	softDeadlineReached := false
-	hardDeadlineReached := false
-	var bestProposal *api.VersionedEPBSProposal
-	var bestProvider string
-	var bestMetadata map[string]any
-	for responded+errored+timedOut+softTimedOut != requests {
-		select {
-		case response := <-respCh:
-			responded++
-			delete(pendingProviders, response.provider)
-			previousBest := bestProposal
-			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
-			if bestProposal != previousBest {
-				// This response displaced the incumbent, so its metadata describes the new best.
-				bestMetadata = response.metadata
-			}
-			outcome := "accepted"
-			if response.rejectionReason != "" {
-				outcome = "rejected"
-			}
-			s.logEPBSProviderResult(opts.Slot, requestID, response, outcome, response.rejectionReason)
-		case err := <-errCh:
-			errored++
-			delete(pendingProviders, err.provider)
-			s.logEPBSProviderError(opts.Slot, requestID, err)
-		case <-softCtx.Done():
-			softDeadlineReached = true
-			if bestProposal != nil {
-				timedOut = requests - responded - errored
-				for provider := range pendingProviders {
-					s.logEPBSProviderTimeout(opts.Slot, requestID, provider, time.Since(started), "soft_deadline_reached")
-					delete(pendingProviders, provider)
-				}
-				log.Debug().
-					Dur("elapsed", time.Since(started)).
-					Int("responded", responded).
-					Int("errored", errored).
-					Int("timed_out", timedOut).
-					Msg("Soft timeout reached with responses")
-			} else {
-				log.Debug().
-					Dur("elapsed", time.Since(started)).
-					Int("errored", errored).
-					Msg("Soft timeout reached with no valid responses")
-			}
-			softTimedOut = requests - responded - errored - timedOut
-		}
-	}
-	softCancel()
+	s.gatherEPBSProposals(ctx, softCtx, softCancel, selection, log)
 
-	for responded+errored+timedOut != requests {
-		select {
-		case response := <-respCh:
-			responded++
-			delete(pendingProviders, response.provider)
-			previousBest := bestProposal
-			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
-			if bestProposal != previousBest {
-				// This response displaced the incumbent, so its metadata describes the new best.
-				bestMetadata = response.metadata
-			}
-			outcome := "accepted"
-			if response.rejectionReason != "" {
-				outcome = "rejected"
-			}
-			s.logEPBSProviderResult(opts.Slot, requestID, response, outcome, response.rejectionReason)
-		case err := <-errCh:
-			errored++
-			delete(pendingProviders, err.provider)
-			s.logEPBSProviderError(opts.Slot, requestID, err)
-		case <-ctx.Done():
-			hardDeadlineReached = true
-			timedOut = requests - responded - errored
-			for provider := range pendingProviders {
-				s.logEPBSProviderTimeout(opts.Slot, requestID, provider, time.Since(started), "deadline_reached")
-				delete(pendingProviders, provider)
-			}
-		}
-	}
-
-	hardDeadlineReached = hardDeadlineReached || errors.Is(ctx.Err(), context.DeadlineExceeded)
-	if bestProposal == nil {
-		outcome := "no_valid_proposal"
-		if hardDeadlineReached {
-			outcome = "timeout"
-		}
-		log.Info().
-			Uint64("slot", uint64(opts.Slot)).
-			Str("request_id", requestID).
-			Str("provider", "unknown").
-			Str("proposal_root", "unknown").
-			Dur("elapsed", time.Since(started)).
-			Int("responded", responded).
-			Int("errored", errored).
-			Int("timed_out", timedOut).
-			Bool("deadline_reached", hardDeadlineReached).
-			Bool("soft_deadline_reached", softDeadlineReached).
-			Bool("hard_deadline_reached", hardDeadlineReached).
-			Str("outcome", outcome).
-			Msg("ePBS proposal selection completed")
+	selection.hardDeadlineReached = selection.hardDeadlineReached || errors.Is(ctx.Err(), context.DeadlineExceeded)
+	if selection.proposal == nil {
+		s.logEPBSSelectionFailed(selection, log)
 		return nil, errors.New("no ePBS proposals received")
 	}
-	valueKnown := bestProposal.Value() != nil
-	source := epbsProposalSource(bestProposal, bestMetadata)
-	stableBestProvider := beaconblockproposer.StableProviderName(bestProvider)
-	proposalRootString := "unknown"
-	if proposalRoot, err := bestProposal.Root(); err == nil {
-		proposalRootString = proposalRoot.String()
-	}
+
+	valueKnown := selection.proposal.Value() != nil
+	source := epbsProposalSource(selection.proposal, selection.metadata)
+	stableBestProvider := beaconblockproposer.StableProviderName(selection.provider)
+	proposalRootString := epbsProposalRootString(selection.proposal)
 	span.SetAttributes(
 		attribute.String("proposal_root", proposalRootString),
 		attribute.String("provider", stableBestProvider),
 		attribute.String("source", source),
 		attribute.Bool("value_known", valueKnown),
 		attribute.Bool("fallback", !valueKnown),
-		attribute.Bool("soft_deadline_reached", softDeadlineReached),
-		attribute.Bool("hard_deadline_reached", hardDeadlineReached),
+		attribute.Bool("soft_deadline_reached", selection.softDeadlineReached),
+		attribute.Bool("hard_deadline_reached", selection.hardDeadlineReached),
 	)
-	if bestProvider != "" {
-		s.clientMonitor.StrategyOperation("best", bestProvider, "ePBS beacon block proposal", time.Since(started))
+	if selection.provider != "" {
+		s.clientMonitor.StrategyOperation("best", selection.provider, "ePBS beacon block proposal", time.Since(started))
 	}
 
 	log.Info().
@@ -216,14 +146,14 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		Str("proposal_root", proposalRootString).
 		Str("source", source).
 		Dur("elapsed", time.Since(started)).
-		Int("responded", responded).
-		Int("errored", errored).
-		Int("timed_out", timedOut).
+		Int("responded", selection.responded).
+		Int("errored", selection.errored).
+		Int("timed_out", selection.timedOut).
 		Bool("value_known", valueKnown).
 		Bool("fallback", !valueKnown).
-		Bool("deadline_reached", hardDeadlineReached).
-		Bool("soft_deadline_reached", softDeadlineReached).
-		Bool("hard_deadline_reached", hardDeadlineReached).
+		Bool("deadline_reached", selection.hardDeadlineReached).
+		Bool("soft_deadline_reached", selection.softDeadlineReached).
+		Bool("hard_deadline_reached", selection.hardDeadlineReached).
 		Str("outcome", "selected").
 		Msg("ePBS proposal selection completed")
 
@@ -233,9 +163,133 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	metadata[beaconblockproposer.MetadataSource] = source
 	metadata[beaconblockproposer.MetadataFallback] = !valueKnown
 	return &api.Response[*api.VersionedEPBSProposal]{
-		Data:     bestProposal,
+		Data:     selection.proposal,
 		Metadata: metadata,
 	}, nil
+}
+
+// gatherEPBSProposals collects provider responses in two phases: until the soft deadline, after
+// which a best proposal already in hand stands in for the stragglers, and then until the hard
+// deadline for the case where nothing has arrived yet.
+func (s *Service) gatherEPBSProposals(ctx context.Context,
+	softCtx context.Context,
+	softCancel context.CancelFunc,
+	selection *epbsSelection,
+	log zerolog.Logger,
+) {
+	for selection.responded+selection.errored+selection.timedOut+selection.softTimedOut != selection.requests {
+		select {
+		case response := <-selection.respCh:
+			s.considerEPBSResponse(selection, response, log)
+		case err := <-selection.errCh:
+			s.recordEPBSError(selection, err)
+		case <-softCtx.Done():
+			s.handleEPBSSoftDeadline(selection, log)
+		}
+	}
+	softCancel()
+
+	for selection.responded+selection.errored+selection.timedOut != selection.requests {
+		select {
+		case response := <-selection.respCh:
+			s.considerEPBSResponse(selection, response, log)
+		case err := <-selection.errCh:
+			s.recordEPBSError(selection, err)
+		case <-ctx.Done():
+			selection.hardDeadlineReached = true
+			selection.timedOut = selection.requests - selection.responded - selection.errored
+			s.timeOutPendingEPBSProviders(selection, "deadline_reached")
+		}
+	}
+}
+
+// considerEPBSResponse folds a provider response into the running best proposal.
+func (s *Service) considerEPBSResponse(selection *epbsSelection,
+	response *beaconBlockEPBSResponse,
+	log zerolog.Logger,
+) {
+	selection.responded++
+	delete(selection.pending, response.provider)
+	previousBest := selection.proposal
+	selection.proposal, selection.provider = s.considerEPBSProposal(selection.opts, response, selection.proposal, selection.provider, log)
+	if selection.proposal != previousBest {
+		// This response displaced the incumbent, so its metadata describes the new best.
+		selection.metadata = response.metadata
+	}
+	outcome := "accepted"
+	if response.rejectionReason != "" {
+		outcome = "rejected"
+	}
+	s.logEPBSProviderResult(selection.opts.Slot, selection.requestID, response, outcome, response.rejectionReason)
+}
+
+// recordEPBSError notes that a provider failed to supply a proposal.
+func (s *Service) recordEPBSError(selection *epbsSelection, providerError *beaconBlockError) {
+	selection.errored++
+	delete(selection.pending, providerError.provider)
+	s.logEPBSProviderError(selection.opts.Slot, selection.requestID, providerError)
+}
+
+// handleEPBSSoftDeadline stops waiting on providers that have not responded by the soft deadline,
+// but only counts them out once a usable proposal is already in hand.
+func (s *Service) handleEPBSSoftDeadline(selection *epbsSelection, log zerolog.Logger) {
+	selection.softDeadlineReached = true
+	if selection.proposal != nil {
+		selection.timedOut = selection.requests - selection.responded - selection.errored
+		s.timeOutPendingEPBSProviders(selection, "soft_deadline_reached")
+		log.Debug().
+			Dur("elapsed", time.Since(selection.started)).
+			Int("responded", selection.responded).
+			Int("errored", selection.errored).
+			Int("timed_out", selection.timedOut).
+			Msg("Soft timeout reached with responses")
+	} else {
+		log.Debug().
+			Dur("elapsed", time.Since(selection.started)).
+			Int("errored", selection.errored).
+			Msg("Soft timeout reached with no valid responses")
+	}
+	selection.softTimedOut = selection.requests - selection.responded - selection.errored - selection.timedOut
+}
+
+// timeOutPendingEPBSProviders logs and clears every provider still outstanding.
+func (s *Service) timeOutPendingEPBSProviders(selection *epbsSelection, reason string) {
+	for provider := range selection.pending {
+		s.logEPBSProviderTimeout(selection.opts.Slot, selection.requestID, provider, time.Since(selection.started), reason)
+		delete(selection.pending, provider)
+	}
+}
+
+// logEPBSSelectionFailed reports a round that produced no usable proposal.
+func (s *Service) logEPBSSelectionFailed(selection *epbsSelection, log zerolog.Logger) {
+	outcome := "no_valid_proposal"
+	if selection.hardDeadlineReached {
+		outcome = "timeout"
+	}
+	log.Info().
+		Uint64("slot", uint64(selection.opts.Slot)).
+		Str("request_id", selection.requestID).
+		Str("provider", "unknown").
+		Str("proposal_root", "unknown").
+		Dur("elapsed", time.Since(selection.started)).
+		Int("responded", selection.responded).
+		Int("errored", selection.errored).
+		Int("timed_out", selection.timedOut).
+		Bool("deadline_reached", selection.hardDeadlineReached).
+		Bool("soft_deadline_reached", selection.softDeadlineReached).
+		Bool("hard_deadline_reached", selection.hardDeadlineReached).
+		Str("outcome", outcome).
+		Msg("ePBS proposal selection completed")
+}
+
+// epbsProposalRootString renders a proposal's root for telemetry, or "unknown" if unavailable.
+func epbsProposalRootString(proposal *api.VersionedEPBSProposal) string {
+	proposalRoot, err := proposal.Root()
+	if err != nil {
+		return "unknown"
+	}
+
+	return proposalRoot.String()
 }
 
 // considerEPBSProposal updates the best proposal seen so far, ignoring proposals that are
