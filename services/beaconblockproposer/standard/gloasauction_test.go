@@ -192,6 +192,9 @@ func TestProposeGloasBuilderBackedPublishesBlockOnly(t *testing.T) {
 		standard.WithLogLevel(zerolog.Disabled),
 		standard.WithMonitor(nullmetrics.New()),
 		standard.WithProposalDataProvider(proposalClient),
+		standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{
+			FeeRecipient: bellatrix.ExecutionAddress{0x07},
+		}}),
 		standard.WithChainTime(&forkChainTime{}),
 		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
 		standard.WithProposalSubmitter(proposalSubmitter),
@@ -299,6 +302,13 @@ func TestProposeGloasRejectsInconsistentProposals(t *testing.T) {
 			err: "failed to propose block: ePBS execution payload bid for incorrect parent block",
 		},
 		{
+			name: "BidForIncorrectFeeRecipient",
+			mutate: func(_ *testing.T, proposal *consensusapi.VersionedEPBSProposal) {
+				proposal.Gloas.Body.SignedExecutionPayloadBid.Message.FeeRecipient = bellatrix.ExecutionAddress{0x08}
+			},
+			err: "failed to propose block: ePBS execution payload bid for incorrect fee recipient",
+		},
+		{
 			name: "PreGloasVersion",
 			mutate: func(_ *testing.T, proposal *consensusapi.VersionedEPBSProposal) {
 				proposal.Version = spec.DataVersionElectra
@@ -338,6 +348,9 @@ func TestProposeGloasRejectsInconsistentProposals(t *testing.T) {
 				standard.WithLogLevel(zerolog.Disabled),
 				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(proposalClient),
+				standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{
+					FeeRecipient: bellatrix.ExecutionAddress{0x07},
+				}}),
 				standard.WithChainTime(&forkChainTime{}),
 				standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
 				standard.WithProposalSubmitter(proposalSubmitter),

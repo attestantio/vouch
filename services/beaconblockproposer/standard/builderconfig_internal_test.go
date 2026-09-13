@@ -41,7 +41,7 @@ func TestBuilderConfigRejectsNilBuilder(t *testing.T) {
 
 	duty := beaconblockproposer.NewDuty(1, 0)
 	duty.SetAccount(accounts[1])
-	config, err := service.builderConfig(context.Background(), duty)
+	config, _, err := service.builderConfig(context.Background(), duty)
 	require.Nil(t, config)
 	require.EqualError(t, err, "direct builder 0 is missing")
 }
@@ -66,7 +66,7 @@ func TestBuilderConfigRequiresSignerForDirectBuilders(t *testing.T) {
 	duty := beaconblockproposer.NewDuty(1, 0)
 	duty.SetAccount(accounts[1])
 
-	config, err := service.builderConfig(context.Background(), duty)
+	config, _, err := service.builderConfig(context.Background(), duty)
 	require.Nil(t, config)
 	require.EqualError(t, err, "no builder request authorization signer available")
 }
@@ -88,7 +88,7 @@ func TestBuilderConfigBindsAuthToEachDutySlot(t *testing.T) {
 	for _, slot := range []phase0.Slot{1, 2} {
 		duty := beaconblockproposer.NewDuty(slot, 0)
 		duty.SetAccount(accounts[1])
-		config, err := service.builderConfig(context.Background(), duty)
+		config, _, err := service.builderConfig(context.Background(), duty)
 		require.NoError(t, err)
 		require.Equal(t, slot, config.Builders[0].Auth.Message.Slot)
 	}
@@ -114,7 +114,7 @@ func TestBuilderConfigRedactsSigningFailure(t *testing.T) {
 	duty := beaconblockproposer.NewDuty(1, 0)
 	duty.SetAccount(accounts[1])
 
-	config, err := service.builderConfig(context.Background(), duty)
+	config, _, err := service.builderConfig(context.Background(), duty)
 	require.Nil(t, config)
 	require.EqualError(t, err, "failed to sign direct-builder request authorization")
 	require.NotContains(t, err.Error(), sensitive)

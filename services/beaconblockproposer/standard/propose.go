@@ -251,7 +251,7 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	// so asking for it is what keeps the reveal publishable through any beacon node
 	// rather than only the one that built the payload.
 	includePayload := true
-	builderConfig, err := s.builderConfig(ctx, duty)
+	builderConfig, feeRecipient, err := s.builderConfig(ctx, duty)
 	if err != nil {
 		return err
 	}
@@ -296,6 +296,9 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		// where this slot's fees are paid.
 		if bid.FeeRecipient.IsZero() {
 			return errors.New("ePBS execution payload bid has 0 fee recipient")
+		}
+		if bid.FeeRecipient != feeRecipient {
+			return errors.New("ePBS execution payload bid for incorrect fee recipient")
 		}
 
 		return s.proposeBuilderBackedEPBSBlock(ctx, proposal, duty)

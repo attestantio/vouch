@@ -232,6 +232,9 @@ func TestProposeGloas(t *testing.T) {
 				standard.WithLogLevel(zerolog.TraceLevel),
 				standard.WithMonitor(monitor),
 				standard.WithProposalDataProvider(proposalClient),
+				standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{
+					FeeRecipient: bellatrix.ExecutionAddress{0x07},
+				}}),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
 				standard.WithProposalSubmitter(proposalSubmitter),
@@ -563,6 +566,9 @@ func newGloasProposerForProposalSource(
 		standard.WithLogLevel(zerolog.Disabled),
 		standard.WithMonitor(monitor),
 		standard.WithProposalDataProvider(proposalClient),
+		standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{
+			FeeRecipient: bellatrix.ExecutionAddress{0x07},
+		}}),
 		standard.WithChainTime(&forkChainTime{gloasForkEpoch: 0}),
 		standard.WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
 		standard.WithProposalSubmitter(proposalSubmitter),

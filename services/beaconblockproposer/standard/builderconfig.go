@@ -16,6 +16,7 @@ package standard
 import (
 	"context"
 
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
@@ -23,7 +24,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (s *Service) builderConfig(ctx context.Context, duty *beaconblockproposer.Duty) (*gloas.BuilderConfig, error) {
+func (s *Service) builderConfig(ctx context.Context, duty *beaconblockproposer.Duty) (*gloas.BuilderConfig, bellatrix.ExecutionAddress, error) {
+	feeRecipient := bellatrix.ExecutionAddress{}
 	resolved := &beaconblockproposer.EPBSBuilderConfig{
 		BuilderBoostFactor: 100,
 		Builders:           make([]*beaconblockproposer.EPBSBuilder, 0),
@@ -31,10 +33,13 @@ func (s *Service) builderConfig(ctx context.Context, duty *beaconblockproposer.D
 	if s.executionConfigProvider != nil {
 		proposerConfig, err := s.executionConfigProvider.ProposerConfig(ctx, duty.Account(), util.ValidatorPubkey(duty.Account()))
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to obtain ePBS builder configuration")
+			return nil, bellatrix.ExecutionAddress{}, errors.Wrap(err, "failed to obtain ePBS builder configuration")
 		}
-		if proposerConfig != nil && proposerConfig.EPBSBuilderConfig != nil {
-			resolved = proposerConfig.EPBSBuilderConfig
+		if proposerConfig != nil {
+			feeRecipient = proposerConfig.FeeRecipient
+			if proposerConfig.EPBSBuilderConfig != nil {
+				resolved = proposerConfig.EPBSBuilderConfig
+			}
 		}
 	}
 
@@ -45,10 +50,10 @@ func (s *Service) builderConfig(ctx context.Context, duty *beaconblockproposer.D
 	}
 	for i, builder := range resolved.Builders {
 		if builder == nil {
-			return nil, errors.Errorf("direct builder %d is missing", i)
+			return nil, bellatrix.ExecutionAddress{}, errors.Errorf("direct builder %d is missing", i)
 		}
 		if s.builderRequestAuthSigner == nil {
-			return nil, errors.New("no builder request authorization signer available")
+			return nil, bellatrix.ExecutionAddress{}, errors.New("no builder request authorization signer available")
 		}
 		auth := &gloas.BuilderRequestAuth{
 			Data: append([]byte(nil), builder.AuthData...),
@@ -56,7 +61,7 @@ func (s *Service) builderConfig(ctx context.Context, duty *beaconblockproposer.D
 		}
 		signature, err := s.builderRequestAuthSigner.SignBuilderRequestAuth(ctx, duty.Account(), auth)
 		if err != nil {
-			return nil, errors.New("failed to sign direct-builder request authorization")
+			return nil, bellatrix.ExecutionAddress{}, errors.New("failed to sign direct-builder request authorization")
 		}
 		config.Builders[i] = &gloas.BuilderEntry{
 			URL: append([]byte(nil), []byte(builder.URL)...),
@@ -71,5 +76,5 @@ func (s *Service) builderConfig(ctx context.Context, duty *beaconblockproposer.D
 		}
 	}
 
-	return config, nil
+	return config, feeRecipient, nil
 }
