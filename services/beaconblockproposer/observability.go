@@ -78,11 +78,18 @@ func StableProviderName(provider string) string {
 
 // BuilderURLPresent reports whether response metadata contains a non-empty builder URL.
 func BuilderURLPresent(metadata map[string]any) bool {
+	// Metadata keys come from response headers, which can arrive with any casing, so more than
+	// one spelling of the key can be present.  Map iteration order is random, so returning on the
+	// first match would make the answer depend on that order: keep looking until one carries a
+	// value.
 	for key, value := range metadata {
-		if strings.EqualFold(key, "Eth-Builder-Url") {
-			builderURL, isString := value.(string)
-			return isString && builderURL != ""
+		if !strings.EqualFold(key, "Eth-Builder-Url") {
+			continue
+		}
+		if builderURL, isString := value.(string); isString && builderURL != "" {
+			return true
 		}
 	}
+
 	return false
 }

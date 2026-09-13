@@ -105,7 +105,10 @@ func EPBSProposalBid(proposal *api.VersionedEPBSProposal) (*gloas.SignedExecutio
 
 // EPBSProposalSource returns the bounded source label of an ePBS proposal's execution payload bid.
 func EPBSProposalSource(proposal *api.VersionedEPBSProposal, metadata map[string]any) string {
-	if signedBid, err := EPBSProposalBid(proposal); err == nil && signedBid.Message.BuilderIndex == gloas.BuilderIndexSelfBuild {
+	// A proposal from before Gloas carries no bid, so there was no auction and the beacon node
+	// built it itself.  ValidateEPBSProposal has already rejected a Gloas proposal with no bid,
+	// so a missing bid here can only be that pre-Gloas case.
+	if signedBid, err := EPBSProposalBid(proposal); err != nil || signedBid.Message.BuilderIndex == gloas.BuilderIndexSelfBuild {
 		return "self_build"
 	}
 	if beaconblockproposer.BuilderURLPresent(metadata) {

@@ -212,15 +212,30 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	source := beaconblockproposal.EPBSProposalSource(response.proposal, response.metadata)
 	valueKnown := response.proposal.Value() != nil
 	stableProvider := beaconblockproposer.StableProviderName(response.provider)
+	proposalRootString := "unknown"
 	if proposalRoot, err := response.proposal.Root(); err == nil {
-		span.SetAttributes(attribute.String("proposal_root", proposalRoot.String()))
+		proposalRootString = proposalRoot.String()
 	}
 	span.SetAttributes(
+		attribute.String("proposal_root", proposalRootString),
 		attribute.String("provider", stableProvider),
 		attribute.String("source", source),
 		attribute.Bool("value_known", valueKnown),
 		attribute.Bool("fallback", false),
 	)
+	s.log.Info().
+		Uint64("slot", uint64(opts.Slot)).
+		Str("request_id", requestID).
+		Str("provider", stableProvider).
+		Str("proposal_root", proposalRootString).
+		Str("source", source).
+		Dur("elapsed", time.Since(started)).
+		Int("providers", len(s.proposalProviders)).
+		Bool("value_known", valueKnown).
+		Bool("fallback", false).
+		Str("outcome", "selected").
+		Bool("deadline_reached", false).
+		Msg("ePBS proposal selection completed")
 	metadata := make(map[string]any, 4)
 	metadata[beaconblockproposer.MetadataStrategy] = "first"
 	metadata[beaconblockproposer.MetadataProvider] = stableProvider

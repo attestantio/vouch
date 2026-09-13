@@ -206,7 +206,8 @@ func (s *Service) EPBSProposal(ctx context.Context,
 			delete(pendingProviders, response.provider)
 			previousBest := bestProposal
 			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
-			if bestProposal == response.proposal && bestProposal != previousBest {
+			if bestProposal != previousBest {
+				// This response displaced the incumbent, so its metadata describes the new best.
 				bestMetadata = response.metadata
 			}
 			outcome := "accepted"
@@ -250,7 +251,8 @@ func (s *Service) EPBSProposal(ctx context.Context,
 			delete(pendingProviders, response.provider)
 			previousBest := bestProposal
 			bestProposal, bestProvider = s.considerEPBSProposal(opts, response, bestProposal, bestProvider, log)
-			if bestProposal == response.proposal && bestProposal != previousBest {
+			if bestProposal != previousBest {
+				// This response displaced the incumbent, so its metadata describes the new best.
 				bestMetadata = response.metadata
 			}
 			outcome := "accepted"
@@ -297,10 +299,12 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	valueKnown := bestProposal.Value() != nil
 	source := beaconblockproposal.EPBSProposalSource(bestProposal, bestMetadata)
 	stableBestProvider := beaconblockproposer.StableProviderName(bestProvider)
+	proposalRootString := "unknown"
 	if proposalRoot, err := bestProposal.Root(); err == nil {
-		span.SetAttributes(attribute.String("proposal_root", proposalRoot.String()))
+		proposalRootString = proposalRoot.String()
 	}
 	span.SetAttributes(
+		attribute.String("proposal_root", proposalRootString),
 		attribute.String("provider", stableBestProvider),
 		attribute.String("source", source),
 		attribute.Bool("value_known", valueKnown),
@@ -311,6 +315,24 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	if bestProvider != "" {
 		s.clientMonitor.StrategyOperation("best", bestProvider, "ePBS beacon block proposal", time.Since(started))
 	}
+
+	log.Info().
+		Uint64("slot", uint64(opts.Slot)).
+		Str("request_id", requestID).
+		Str("provider", stableBestProvider).
+		Str("proposal_root", proposalRootString).
+		Str("source", source).
+		Dur("elapsed", time.Since(started)).
+		Int("responded", responded).
+		Int("errored", errored).
+		Int("timed_out", timedOut).
+		Bool("value_known", valueKnown).
+		Bool("fallback", !valueKnown).
+		Bool("deadline_reached", hardDeadlineReached).
+		Bool("soft_deadline_reached", softDeadlineReached).
+		Bool("hard_deadline_reached", hardDeadlineReached).
+		Str("outcome", "selected").
+		Msg("ePBS proposal selection completed")
 
 	metadata := make(map[string]any, 4)
 	metadata[beaconblockproposer.MetadataStrategy] = "best"
@@ -379,7 +401,7 @@ func (s *Service) epbsProposal(ctx context.Context,
 
 	providerGraffiti, err := beaconblockproposal.GraffitiForProvider(ctx, provider, opts.Graffiti)
 	if err != nil {
-		log.Warn().Msg("Failed to obtain node client; not updating graffiti")
+		log.Warn().Str("error", beaconblockproposer.SafeError(err, name)).Msg("Failed to obtain node client; not updating graffiti")
 	}
 	opts.Graffiti = providerGraffiti
 
