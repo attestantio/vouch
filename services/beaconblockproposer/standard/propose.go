@@ -143,7 +143,7 @@ func (s *Service) proposeBlock(ctx context.Context,
 	duty *beaconblockproposer.Duty,
 	graffiti [32]byte,
 ) error {
-	if s.chainTime.SlotToEpoch(duty.Slot()) >= s.chainTime.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH") {
+	if s.chainTime.SlotToEpoch(duty.Slot()) >= s.gloasForkEpoch {
 		return s.proposeEPBSBlock(ctx, duty, graffiti)
 	}
 

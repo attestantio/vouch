@@ -67,21 +67,12 @@ func TestProposeGloas(t *testing.T) {
 		envelopeSignerErr          error
 		envelopeSubmitterErr       error
 		forkEpochAtConstruction    phase0.Epoch
-		forkEpochAtUse             phase0.Epoch
-		updateForkEpochAtUse       bool
 		err                        string
 	}{
 		{
 			name:                     "PayloadIncluded",
 			executionPayloadIncluded: true,
 			builderBoostFactor:       100,
-		},
-		{
-			name:                     "ForkEpochAvailableAfterConstruction",
-			executionPayloadIncluded: true,
-			forkEpochAtConstruction:  phase0.Epoch(^uint64(0)),
-			forkEpochAtUse:           0,
-			updateForkEpochAtUse:     true,
 		},
 		{
 			name:                     "ConfiguredAuctioneer",
@@ -237,15 +228,14 @@ func TestProposeGloas(t *testing.T) {
 			}
 			service, err := standard.New(ctx, params...)
 			require.NoError(t, err)
-			if test.updateForkEpochAtUse {
-				chainTime.gloasForkEpoch = test.forkEpochAtUse
-			}
-
+			require.Equal(t, 1, chainTime.hardForkEpochCalls)
+			require.Equal(t, "GLOAS_FORK_EPOCH", chainTime.hardForkName)
 			duty := beaconblockproposer.NewDuty(1, 0)
 			duty.SetAccount(&testAccount{})
 			duty.SetRandaoReveal(phase0.BLSSignature{0x02})
 
 			err = service.Propose(ctx, duty)
+			require.Equal(t, 1, chainTime.hardForkEpochCalls)
 			if test.builderBoostFactor != 0 {
 				capture.AssertHasEntry(t, "Ignoring non-default builder boost factor on Gloas proposal path")
 			}
@@ -1100,7 +1090,9 @@ func (s *capturingBeaconBlockSigner) SignBeaconBlockProposal(
 }
 
 type forkChainTime struct {
-	gloasForkEpoch phase0.Epoch
+	gloasForkEpoch     phase0.Epoch
+	hardForkEpochCalls int
+	hardForkName       string
 }
 
 func (*forkChainTime) GenesisTime() time.Time {
@@ -1131,7 +1123,10 @@ func (*forkChainTime) FirstSlotOfEpoch(phase0.Epoch) phase0.Slot {
 	return 0
 }
 
-func (s *forkChainTime) HardForkEpoch(context.Context, string) phase0.Epoch {
+func (s *forkChainTime) HardForkEpoch(_ context.Context, hardForkName string) phase0.Epoch {
+	s.hardForkEpochCalls++
+	s.hardForkName = hardForkName
+
 	return s.gloasForkEpoch
 }
 
