@@ -52,6 +52,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	defer span.End()
 
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
 
 	proposalCh := make(chan *api.VersionedEPBSProposal, len(s.proposalProviders))
 	for name, provider := range s.proposalProviders {
@@ -61,14 +62,12 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	for {
 		select {
 		case <-ctx.Done():
-			cancel()
 			s.log.Debug().Msg("Failed to obtain ePBS beacon block proposal before timeout")
 			return nil, errors.New("failed to obtain ePBS beacon block proposal before timeout")
 		case proposal := <-proposalCh:
 			if !s.acceptableEPBSProposal(proposal, opts.IncludePayload) {
 				continue
 			}
-			cancel()
 
 			return &api.Response[*api.VersionedEPBSProposal]{
 				Data:     proposal,
