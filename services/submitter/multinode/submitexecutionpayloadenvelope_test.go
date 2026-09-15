@@ -15,6 +15,7 @@ package multinode_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -68,6 +69,52 @@ func TestSubmitExecutionPayloadEnvelopeReturnsPromptlyAfterImmediateSuccess(t *t
 	require.NoError(t, service.SubmitExecutionPayloadEnvelope(ctx, opts))
 	require.Less(t, time.Since(started), 100*time.Millisecond)
 	require.Same(t, opts, capture.opts)
+}
+
+func TestSubmitExecutionPayloadEnvelopeReturnsPerNodeErrors(t *testing.T) {
+	ctx := context.Background()
+	firstErr := errors.New("first submission failed")
+	secondErr := errors.New("second submission failed")
+	service, err := multinode.New(ctx,
+		multinode.WithLogLevel(zerolog.Disabled),
+		multinode.WithTimeout(time.Second),
+		multinode.WithProcessConcurrency(2),
+		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
+			"one": mock.NewProposalSubmitter(),
+		}),
+		multinode.WithExecutionPayloadEnvelopeSubmitters(map[string]eth2client.ExecutionPayloadEnvelopeSubmitter{
+			"one": &erroringExecutionPayloadEnvelopeSubmitter{err: firstErr},
+			"two": &erroringExecutionPayloadEnvelopeSubmitter{err: secondErr},
+		}),
+		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
+			"one": mock.NewAttestationsSubmitter(),
+		}),
+		multinode.WithBeaconCommitteeSubscriptionsSubmitters(map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter{
+			"one": mock.NewBeaconCommitteeSubscriptionsSubmitter(),
+		}),
+		multinode.WithAggregateAttestationsSubmitters(map[string]eth2client.AggregateAttestationsSubmitter{
+			"one": mock.NewAggregateAttestationsSubmitter(),
+		}),
+		multinode.WithProposalPreparationsSubmitters(map[string]eth2client.ProposalPreparationsSubmitter{
+			"one": mock.NewProposalPreparationsSubmitter(),
+		}),
+		multinode.WithSyncCommitteeMessagesSubmitters(map[string]eth2client.SyncCommitteeMessagesSubmitter{
+			"one": mock.NewSyncCommitteeMessagesSubmitter(),
+		}),
+		multinode.WithSyncCommitteeSubscriptionsSubmitters(map[string]eth2client.SyncCommitteeSubscriptionsSubmitter{
+			"one": mock.NewSyncCommitteeSubscriptionsSubmitter(),
+		}),
+		multinode.WithSyncCommitteeContributionsSubmitters(map[string]eth2client.SyncCommitteeContributionsSubmitter{
+			"one": mock.NewSyncCommitteeContributionsSubmitter(),
+		}),
+	)
+	require.NoError(t, err)
+
+	started := time.Now()
+	err = service.SubmitExecutionPayloadEnvelope(ctx, &api.SubmitExecutionPayloadEnvelopeOpts{})
+	require.ErrorIs(t, err, firstErr)
+	require.ErrorIs(t, err, secondErr)
+	require.Less(t, time.Since(started), 100*time.Millisecond)
 }
 
 func TestSubmitExecutionPayloadEnvelopeDoesNotWaitForNodeVersion(t *testing.T) {
@@ -131,15 +178,17 @@ func TestSubmitExecutionPayloadEnvelopeDoesNotWaitForNodeVersion(t *testing.T) {
 func TestSubmitExecutionPayloadEnvelopeCancelsOnDeadline(t *testing.T) {
 	ctx := context.Background()
 	canceled := make(chan struct{}, 1)
+	failure := errors.New("submission failed")
 	service, err := multinode.New(ctx,
 		multinode.WithLogLevel(zerolog.Disabled),
 		multinode.WithTimeout(50*time.Millisecond),
-		multinode.WithProcessConcurrency(1),
+		multinode.WithProcessConcurrency(2),
 		multinode.WithProposalSubmitters(map[string]eth2client.ProposalSubmitter{
 			"one": mock.NewProposalSubmitter(),
 		}),
 		multinode.WithExecutionPayloadEnvelopeSubmitters(map[string]eth2client.ExecutionPayloadEnvelopeSubmitter{
-			"one": &blockingExecutionPayloadEnvelopeSubmitter{canceled: canceled},
+			"blocking": &blockingExecutionPayloadEnvelopeSubmitter{canceled: canceled},
+			"erroring": &erroringExecutionPayloadEnvelopeSubmitter{err: failure},
 		}),
 		multinode.WithAttestationsSubmitters(map[string]eth2client.AttestationsSubmitter{
 			"one": mock.NewAttestationsSubmitter(),
@@ -166,7 +215,8 @@ func TestSubmitExecutionPayloadEnvelopeCancelsOnDeadline(t *testing.T) {
 	require.NoError(t, err)
 
 	err = service.SubmitExecutionPayloadEnvelope(ctx, &api.SubmitExecutionPayloadEnvelopeOpts{})
-	require.EqualError(t, err, "no successful submissions before timeout")
+	require.ErrorIs(t, err, failure)
+	require.ErrorContains(t, err, "no successful submissions before timeout")
 	require.Eventually(t, func() bool {
 		select {
 		case <-canceled:
@@ -242,6 +292,16 @@ type capturingExecutionPayloadEnvelopeSubmitter struct {
 func (s *capturingExecutionPayloadEnvelopeSubmitter) SubmitExecutionPayloadEnvelope(_ context.Context, opts *api.SubmitExecutionPayloadEnvelopeOpts) error {
 	s.opts = opts
 	return nil
+}
+
+type erroringExecutionPayloadEnvelopeSubmitter struct {
+	err error
+}
+
+func (s *erroringExecutionPayloadEnvelopeSubmitter) SubmitExecutionPayloadEnvelope(context.Context,
+	*api.SubmitExecutionPayloadEnvelopeOpts,
+) error {
+	return s.err
 }
 
 type blockingExecutionPayloadEnvelopeSubmitter struct {

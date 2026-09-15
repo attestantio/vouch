@@ -15,13 +15,13 @@ package multinode
 
 import (
 	"context"
-	"sync"
-	"sync/atomic"
+	"errors"
+	"fmt"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	"github.com/pkg/errors"
+	"github.com/attestantio/vouch/services/submitter"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -45,41 +45,42 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 
 	sem := semaphore.NewWeighted(s.processConcurrency)
-	submissionCompleted := make(chan struct{}, 1)
-	submissionSucceeded := &atomic.Bool{}
-	var wg sync.WaitGroup
+	results := make(chan error, len(s.executionPayloadEnvelopeSubmitters))
 	for name, submitter := range s.executionPayloadEnvelopeSubmitters {
-		wg.Go(func() {
-			s.submitExecutionPayloadEnvelope(ctx, sem, submissionCompleted, submissionSucceeded, name, opts, submitter)
-		})
-	}
-	// Release the timeout context once every submission has finished, rather than as soon as
-	// the first one succeeds, so that one node's success does not abort the others' in-flight
-	// submissions.
-	go func() {
-		wg.Wait()
-		cancel()
-	}()
-
-	select {
-	case <-submissionCompleted:
-	case <-ctx.Done():
+		go s.submitExecutionPayloadEnvelope(ctx, sem, results, name, opts, submitter)
 	}
 
-	// The context is released once every submission has finished, so both cases above can be
-	// ready at once and select picks between them at random.  Consult the success flag rather
-	// than the chosen case, otherwise a successful submission can report a timeout.
-	if !submissionSucceeded.Load() {
-		return errors.New("no successful submissions before timeout")
+	submissionErrors := make([]error, 0, len(s.executionPayloadEnvelopeSubmitters))
+	for completed := 0; completed < len(s.executionPayloadEnvelopeSubmitters); completed++ {
+		select {
+		case err := <-results:
+			if err == nil {
+				// Keep the timeout context active until the other nodes finish, so one
+				// node's success does not abort their in-flight submissions.
+				remaining := len(s.executionPayloadEnvelopeSubmitters) - completed - 1
+				go func() {
+					for range remaining {
+						<-results
+					}
+					cancel()
+				}()
+				return nil
+			}
+			submissionErrors = append(submissionErrors, err)
+		case <-ctx.Done():
+			cancel()
+			submissionErrors = append(submissionErrors, errors.New("no successful submissions before timeout"))
+			return submitter.NewSubmissionErrors(submissionErrors...)
+		}
 	}
 
-	return nil
+	cancel()
+	return submitter.NewSubmissionErrors(submissionErrors...)
 }
 
 func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	sem *semaphore.Weighted,
-	submissionCompleted chan<- struct{},
-	submissionSucceeded *atomic.Bool,
+	results chan<- error,
 	name string,
 	opts *api.SubmitExecutionPayloadEnvelopeOpts,
 	submitter eth2client.ExecutionPayloadEnvelopeSubmitter,
@@ -91,6 +92,7 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 
 	if err := sem.Acquire(ctx, 1); err != nil {
 		s.log.Error().Err(err).Msg("Failed to acquire semaphore")
+		results <- fmt.Errorf("%s: %w", name, err)
 		return
 	}
 	defer sem.Release(1)
@@ -104,13 +106,10 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	s.clientMonitor.ClientOperation(address, "submit execution payload envelope", err == nil, time.Since(started))
 	if err != nil {
 		s.log.Warn().Err(err).Msg("Failed to submit execution payload envelope")
+		results <- fmt.Errorf("%s: %w", name, err)
 		return
 	}
 
-	submissionSucceeded.Store(true)
-	select {
-	case submissionCompleted <- struct{}{}:
-	default:
-	}
+	results <- nil
 	s.log.Trace().Msg("Submitted execution payload envelope")
 }

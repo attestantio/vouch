@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
 	"strings"
 	"time"
 
@@ -41,6 +42,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	"github.com/attestantio/vouch/services/submitter"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -330,7 +332,11 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		if envelopeSubmissionErr == nil {
 			break
 		}
-		s.log.Warn().Err(envelopeSubmissionErr).Int("attempts_remaining", attempts-1).Msg("Failed to submit execution payload envelope after block publication")
+		if !isUnknownBeaconBlockError(envelopeSubmissionErr) {
+			s.log.Warn().Err(envelopeSubmissionErr).Msg("Failed to submit execution payload envelope after block publication")
+			break
+		}
+		s.log.Warn().Err(envelopeSubmissionErr).Int("attempts_remaining", attempts-1).Msg("Beacon node does not yet know execution payload envelope block")
 		if attempts > 1 {
 			select {
 			case <-ctx.Done():
@@ -345,6 +351,52 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	monitorBeaconBlockProposalSource("local")
 
 	return nil
+}
+
+func isUnknownBeaconBlockError(err error) bool {
+	var submissionErrors *submitter.SubmissionErrors
+	if errors.As(err, &submissionErrors) {
+		for _, submissionErr := range submissionErrors.Unwrap() {
+			if !containsUnknownBeaconBlockError(submissionErr) {
+				return false
+			}
+		}
+
+		return len(submissionErrors.Unwrap()) > 0
+	}
+
+	return containsUnknownBeaconBlockError(err)
+}
+
+func containsUnknownBeaconBlockError(err error) bool {
+	if joinedErr, isJoined := err.(interface{ Unwrap() []error }); isJoined {
+		for _, childErr := range joinedErr.Unwrap() {
+			if containsUnknownBeaconBlockError(childErr) {
+				return true
+			}
+		}
+
+		return false
+	}
+	if wrappedErr, isWrapped := err.(interface{ Unwrap() error }); isWrapped {
+		return containsUnknownBeaconBlockError(wrappedErr.Unwrap())
+	}
+
+	apiErr, isAPIError := err.(*api.Error)
+	if !isAPIError || (apiErr.StatusCode != http.StatusBadRequest && apiErr.StatusCode != http.StatusNotFound) {
+		return false
+	}
+
+	var response struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(apiErr.Data, &response); err != nil {
+		return false
+	}
+	message := strings.ToLower(response.Message)
+
+	return strings.Contains(message, "block") &&
+		(strings.Contains(message, "unknown") || strings.Contains(message, "not found"))
 }
 
 // epbsProposalEnvelope obtains the execution payload envelope and body root for a proposal,
