@@ -22,7 +22,6 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -200,7 +199,7 @@ type beaconBlockEPBSResponse struct {
 func (s *Service) epbsProposal(ctx context.Context,
 	started time.Time,
 	name string,
-	provider beaconblockproposer.ProposalDataProvider,
+	provider eth2client.MultiForkProposalProvider,
 	respCh chan *beaconBlockEPBSResponse,
 	errCh chan *beaconBlockError,
 	opts *api.EPBSProposalOpts,

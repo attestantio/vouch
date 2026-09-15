@@ -29,7 +29,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
-	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/cache"
 	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
@@ -67,7 +66,7 @@ func TestEPBSProposal(t *testing.T) {
 		best.WithProcessConcurrency(1),
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"one": &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x01})},
 			"two": &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x02})},
 		}),
@@ -124,7 +123,7 @@ func TestEPBSProposalReturnsIncludedCandidateAtSoftTimeout(t *testing.T) {
 		best.WithProcessConcurrency(1),
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"included": &testEPBSProposalProvider{proposal: candidate},
 			"error":    &testEPBSProposalProvider{err: errors.New("failed")},
 			"slow":     &testEPBSProposalProvider{waitForCancellation: true},
@@ -163,7 +162,7 @@ func TestEPBSProposalPrefersIncludedCandidate(t *testing.T) {
 		best.WithProcessConcurrency(1),
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"included": &testEPBSProposalProvider{proposal: includedCandidate},
 			"external": &testEPBSProposalProvider{proposal: &api.VersionedEPBSProposal{
 				ConsensusValue: big.NewInt(100),
@@ -197,7 +196,7 @@ func TestEPBSProposalRejectsZeroFeeRecipient(t *testing.T) {
 		best.WithProcessConcurrency(2),
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"zero-fee": &testEPBSProposalProvider{proposal: zeroFeeCandidate},
 			"valid":    &testEPBSProposalProvider{proposal: validCandidate},
 		}),
@@ -229,7 +228,7 @@ func TestEPBSProposalRejectsZeroFeeRecipientWithoutPayload(t *testing.T) {
 		best.WithProcessConcurrency(2),
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"zero-fee": &testEPBSProposalProvider{proposal: zeroFeeCandidate},
 			"valid":    &testEPBSProposalProvider{proposal: validCandidate},
 		}),
@@ -265,7 +264,7 @@ func TestEPBSProposalDoesNotWeightExecutionPayloadGas(t *testing.T) {
 		best.WithProcessConcurrency(2),
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"consensus": &testEPBSProposalProvider{proposal: consensusCandidate},
 			"execution": &testEPBSProposalProvider{proposal: executionCandidate},
 		}),
@@ -301,7 +300,7 @@ func TestEPBSProposalComparesLargeValuesExactly(t *testing.T) {
 		best.WithProcessConcurrency(2),
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"lower":  &testEPBSProposalProvider{proposal: lowerValueCandidate},
 			"higher": &testEPBSProposalProvider{proposal: higherValueCandidate, delay: 10 * time.Millisecond},
 		}),
@@ -332,7 +331,7 @@ func TestEPBSProposalRejectsNilData(t *testing.T) {
 		best.WithProcessConcurrency(2),
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"nil":   &testEPBSProposalProvider{},
 			"valid": &testEPBSProposalProvider{proposal: validCandidate},
 		}),
@@ -450,7 +449,7 @@ func TestEPBSProposalRejectsMalformedIncludedGloasProposal(t *testing.T) {
 				best.WithProcessConcurrency(2),
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
-				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+				best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 					"malformed": &testEPBSProposalProvider{proposal: test.proposal},
 					"valid":     &testEPBSProposalProvider{proposal: validCandidate},
 				}),
@@ -517,7 +516,7 @@ func TestEPBSProposalExpandsClientGraffitiPerProvider(t *testing.T) {
 		best.WithProcessConcurrency(2),
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"first":  firstProvider,
 			"second": secondProvider,
 		}),
@@ -558,7 +557,7 @@ func TestEPBSProposalPreservesGraffitiWhenClientLookupFails(t *testing.T) {
 		best.WithProcessConcurrency(1),
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"provider": provider,
 		}),
 		best.WithTimeout(time.Second),
@@ -606,7 +605,7 @@ func TestEPBSProposalStartsProvidersWhileGraffitiClientLookupIsSlow(t *testing.T
 		best.WithProcessConcurrency(2),
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"slow":    slowProvider,
 			"healthy": healthyProvider,
 		}),

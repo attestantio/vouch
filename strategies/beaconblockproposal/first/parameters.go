@@ -18,7 +18,7 @@ package first
 import (
 	"time"
 
-	"github.com/attestantio/vouch/services/beaconblockproposer"
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/pkg/errors"
@@ -28,7 +28,7 @@ import (
 type parameters struct {
 	logLevel          zerolog.Level
 	clientMonitor     metrics.ClientMonitor
-	proposalProviders map[string]beaconblockproposer.ProposalDataProvider
+	proposalProviders map[string]eth2client.MultiForkProposalProvider
 	timeout           time.Duration
 }
 
@@ -58,7 +58,7 @@ func WithClientMonitor(monitor metrics.ClientMonitor) Parameter {
 }
 
 // WithProposalProviders sets the beacon block proposal providers.
-func WithProposalProviders(providers map[string]beaconblockproposer.ProposalDataProvider) Parameter {
+func WithProposalProviders(providers map[string]eth2client.MultiForkProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalProviders = providers
 	})

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
@@ -38,7 +39,7 @@ import (
 // Service is a beacon block proposer.
 type Service struct {
 	log                               zerolog.Logger
-	proposalProvider                  beaconblockproposer.ProposalDataProvider
+	proposalProvider                  eth2client.MultiForkProposalProvider
 	validatingAccountsProvider        accountmanager.ValidatingAccountsProvider
 	executionChainHeadProvider        cache.ExecutionChainHeadProvider
 	graffitiProvider                  graffitiprovider.Service

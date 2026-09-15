@@ -671,7 +671,7 @@ func startProviders(ctx context.Context,
 	cache cache.Service,
 ) (
 	graffitiprovider.Service,
-	beaconblockproposer.ProposalDataProvider,
+	eth2client.MultiForkProposalProvider,
 	eth2client.AttestationDataProvider,
 	eth2client.AggregateAttestationProvider,
 	error,
@@ -1401,19 +1401,19 @@ func selectProposalProvider(ctx context.Context,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cacheSvc cache.Service,
-) (beaconblockproposer.ProposalDataProvider, error) {
-	var proposalProvider beaconblockproposer.ProposalDataProvider
+) (eth2client.MultiForkProposalProvider, error) {
+	var proposalProvider eth2client.MultiForkProposalProvider
 	var err error
 	switch viper.GetString("strategies.beaconblockproposal.style") {
 	case "best":
 		log.Info().Msg("Starting best beacon block proposal strategy")
-		proposalProviders := make(map[string]beaconblockproposer.ProposalDataProvider)
+		proposalProviders := make(map[string]eth2client.MultiForkProposalProvider)
 		for _, address := range util.BeaconNodeAddresses("strategies.beaconblockproposal.best") {
 			client, err := fetchClient(ctx, monitor, address)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block proposal strategy", address))
 			}
-			provider, isProvider := client.(beaconblockproposer.ProposalDataProvider)
+			provider, isProvider := client.(eth2client.MultiForkProposalProvider)
 			if !isProvider {
 				return nil, errors.New("beacon block proposal client does not support ePBS proposals")
 			}
@@ -1435,13 +1435,13 @@ func selectProposalProvider(ctx context.Context,
 		}
 	case "first":
 		log.Info().Msg("Starting first beacon block proposal strategy")
-		proposalProviders := make(map[string]beaconblockproposer.ProposalDataProvider)
+		proposalProviders := make(map[string]eth2client.MultiForkProposalProvider)
 		for _, address := range util.BeaconNodeAddresses("strategies.beaconblockproposal.first") {
 			client, err := fetchClient(ctx, monitor, address)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block proposal strategy", address))
 			}
-			provider, isProvider := client.(beaconblockproposer.ProposalDataProvider)
+			provider, isProvider := client.(eth2client.MultiForkProposalProvider)
 			if !isProvider {
 				return nil, errors.New("beacon block proposal client does not support ePBS proposals")
 			}
@@ -1462,14 +1462,14 @@ func selectProposalProvider(ctx context.Context,
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch clients for simple beacon block proposal strategy")
 		}
-		provider, isProvider := beaconBlockProposalClient.(beaconblockproposer.ProposalDataProvider)
+		provider, isProvider := beaconBlockProposalClient.(eth2client.MultiForkProposalProvider)
 		if !isProvider {
 			return nil, errors.New("beacon block proposal client does not support ePBS proposals")
 		}
 		proposalProvider, err = firstbeaconblockproposalstrategy.New(ctx,
 			firstbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.first")),
-			firstbeaconblockproposalstrategy.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+			firstbeaconblockproposalstrategy.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 				"simple": provider,
 			}),
 			firstbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.first")),

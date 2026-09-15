@@ -20,13 +20,13 @@ import (
 	"testing"
 	"time"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1gloas "github.com/attestantio/go-eth2-client/api/v1/gloas"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/beaconblockproposer"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/strategies/beaconblockproposal/first"
 	"github.com/rs/zerolog"
@@ -39,7 +39,7 @@ func TestEPBSProposal(t *testing.T) {
 	service, err := first.New(ctx,
 		first.WithLogLevel(zerolog.Disabled),
 		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"one": &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})},
 		}),
 		first.WithTimeout(time.Second),
@@ -60,7 +60,7 @@ func TestEPBSProposalDoesNotLeaveLateProvidersBlocked(t *testing.T) {
 	service, err := first.New(ctx,
 		first.WithLogLevel(zerolog.Disabled),
 		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"fast":  &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
 			"late1": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}, release: release},
 			"late2": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}, release: release},
@@ -87,7 +87,7 @@ func TestEPBSProposalSkipsProposalWithoutRequestedPayload(t *testing.T) {
 	service, err := first.New(ctx,
 		first.WithLogLevel(zerolog.Disabled),
 		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"excluded": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
 		}),
 		first.WithTimeout(10*time.Millisecond),
@@ -104,7 +104,7 @@ func TestEPBSProposalSkipsZeroFeeRecipient(t *testing.T) {
 	service, err := first.New(ctx,
 		first.WithLogLevel(zerolog.Disabled),
 		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"zero-fee": &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{})},
 		}),
 		first.WithTimeout(10*time.Millisecond),
@@ -121,7 +121,7 @@ func TestEPBSProposalSkipsNilResponse(t *testing.T) {
 	service, err := first.New(ctx,
 		first.WithLogLevel(zerolog.Disabled),
 		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"nil": &epbsProposalProvider{nilResponse: true},
 		}),
 		first.WithTimeout(10*time.Millisecond),
@@ -197,7 +197,7 @@ func TestEPBSProposalSkipsMalformedGloasProposal(t *testing.T) {
 			service, err := first.New(ctx,
 				first.WithLogLevel(zerolog.Disabled),
 				first.WithClientMonitor(nullmetrics.New()),
-				first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+				first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 					"malformed": &epbsProposalProvider{proposal: test.proposal},
 				}),
 				first.WithTimeout(10*time.Millisecond),
@@ -222,7 +222,7 @@ func TestEPBSProposalWaitsForProposalWithRequestedPayload(t *testing.T) {
 	service, err := first.New(ctx,
 		first.WithLogLevel(zerolog.Disabled),
 		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"excluded": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
 			"included": &epbsProposalProvider{proposal: included, release: release},
 		}),

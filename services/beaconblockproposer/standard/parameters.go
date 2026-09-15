@@ -17,8 +17,8 @@ import (
 	"errors"
 
 	"github.com/attestantio/go-block-relay/services/blockauctioneer"
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/accountmanager"
-	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/graffitiprovider"
@@ -30,7 +30,7 @@ import (
 
 type parameters struct {
 	monitor                           metrics.Service
-	proposalProvider                  beaconblockproposer.ProposalDataProvider
+	proposalProvider                  eth2client.MultiForkProposalProvider
 	validatingAccountsProvider        accountmanager.ValidatingAccountsProvider
 	executionChainHeadProvider        cache.ExecutionChainHeadProvider
 	graffitiProvider                  graffitiprovider.Service
@@ -80,7 +80,7 @@ func WithBlockAuctioneer(auctioneer blockauctioneer.BlockAuctioneer) Parameter {
 }
 
 // WithProposalDataProvider sets the proposal data provider.
-func WithProposalDataProvider(provider beaconblockproposer.ProposalDataProvider) Parameter {
+func WithProposalDataProvider(provider eth2client.MultiForkProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalProvider = provider
 	})

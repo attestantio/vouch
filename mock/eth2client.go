@@ -31,7 +31,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/beaconblockproposer"
 )
 
 // GenesisProvider is a mock for eth2client.GenesisProvider.
@@ -721,11 +720,11 @@ func (*ErroringProposalProvider) EPBSProposal(_ context.Context,
 // SleepyProposalProvider is a mock for eth2client.ProposalProvider.
 type SleepyProposalProvider struct {
 	wait time.Duration
-	next beaconblockproposer.ProposalDataProvider
+	next eth2client.MultiForkProposalProvider
 }
 
 // NewSleepyProposalProvider returns a mock beacon block proposal.
-func NewSleepyProposalProvider(wait time.Duration, next beaconblockproposer.ProposalDataProvider) *SleepyProposalProvider {
+func NewSleepyProposalProvider(wait time.Duration, next eth2client.MultiForkProposalProvider) *SleepyProposalProvider {
 	return &SleepyProposalProvider{
 		wait: wait,
 		next: next,
