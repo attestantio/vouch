@@ -66,6 +66,7 @@ func TestProposeGloas(t *testing.T) {
 		executionPayloadBidMissing bool
 		envelopeSignerErr          error
 		envelopeSubmitterErr       error
+		envelopeSubmissionAttempts int
 		forkEpochAtConstruction    phase0.Epoch
 		err                        string
 	}{
@@ -133,10 +134,76 @@ func TestProposeGloas(t *testing.T) {
 			err:                      "failed to propose block: failed to sign execution payload envelope: envelope signing failed",
 		},
 		{
-			name:                     "EnvelopeSubmissionFailure",
+			name:                       "EnvelopeSubmissionFailure",
+			executionPayloadIncluded:   true,
+			envelopeSubmitterErr:       errors.New("envelope submission failed"),
+			envelopeSubmissionAttempts: 1,
+			err:                        "failed to propose block: failed to submit execution payload envelope after block publication: envelope submission failed",
+		},
+		{
+			name:                     "InvalidEnvelopeSubmissionFailure",
 			executionPayloadIncluded: true,
-			envelopeSubmitterErr:     errors.New("envelope submission failed"),
-			err:                      "failed to propose block: failed to submit execution payload envelope after block publication: envelope submission failed",
+			envelopeSubmitterErr: &consensusapi.Error{
+				StatusCode: 400,
+				Data:       []byte(`{"code":400,"message":"invalid envelope signature"}`),
+			},
+			envelopeSubmissionAttempts: 1,
+			err:                        `failed to propose block: failed to submit execution payload envelope after block publication:  failed with status 400: {"code":400,"message":"invalid envelope signature"}`,
+		},
+		{
+			name:                     "UnknownBlockEnvelopeSubmissionFailure",
+			executionPayloadIncluded: true,
+			envelopeSubmitterErr: errors.Join(
+				errors.New("failed to submit execution payload envelope"),
+				&consensusapi.Error{
+					StatusCode: 400,
+					Data:       []byte(`{"code":400,"message":"unknown beacon block"}`),
+				},
+			),
+			envelopeSubmissionAttempts: 3,
+			err: "failed to propose block: failed to submit execution payload envelope after block publication: " +
+				"failed to submit execution payload envelope\n failed with status 400: {\"code\":400,\"message\":\"unknown beacon block\"}",
+		},
+		{
+			name:                     "UnknownBlockMultinodeEnvelopeSubmissionFailure",
+			executionPayloadIncluded: true,
+			envelopeSubmitterErr: submitter.NewSubmissionErrors(
+				errors.Join(
+					errors.New("failed to submit execution payload envelope"),
+					&consensusapi.Error{
+						StatusCode: 400,
+						Data:       []byte(`{"code":400,"message":"unknown beacon block"}`),
+					},
+				),
+				errors.Join(
+					errors.New("failed to submit execution payload envelope"),
+					&consensusapi.Error{
+						StatusCode: 404,
+						Data:       []byte(`{"code":404,"message":"beacon block not found"}`),
+					},
+				),
+			),
+			envelopeSubmissionAttempts: 3,
+			err: "failed to propose block: failed to submit execution payload envelope after block publication: " +
+				"failed to submit execution payload envelope\n failed with status 400: {\"code\":400,\"message\":\"unknown beacon block\"}\n" +
+				"failed to submit execution payload envelope\n failed with status 404: {\"code\":404,\"message\":\"beacon block not found\"}",
+		},
+		{
+			name:                     "MixedEnvelopeSubmissionFailure",
+			executionPayloadIncluded: true,
+			envelopeSubmitterErr: submitter.NewSubmissionErrors(
+				errors.Join(
+					errors.New("failed to submit execution payload envelope"),
+					&consensusapi.Error{
+						StatusCode: 400,
+						Data:       []byte(`{"code":400,"message":"unknown beacon block"}`),
+					},
+				),
+				errors.New("invalid envelope signature"),
+			),
+			envelopeSubmissionAttempts: 1,
+			err: "failed to propose block: failed to submit execution payload envelope after block publication: " +
+				"failed to submit execution payload envelope\n failed with status 400: {\"code\":400,\"message\":\"unknown beacon block\"}\ninvalid envelope signature",
 		},
 	}
 
@@ -255,7 +322,7 @@ func TestProposeGloas(t *testing.T) {
 				} else {
 					require.NotNil(t, proposalSubmitter.proposal)
 					require.Equal(t, 1, proposalSubmitter.calls)
-					require.Equal(t, 3, envelopeSubmitter.calls)
+					require.Equal(t, test.envelopeSubmissionAttempts, envelopeSubmitter.calls)
 				}
 				if test.envelopeRootMismatch || test.builderIndexMismatch || test.foreignBuilderIndex || test.envelopePayloadMissing || test.executionPayloadBidMissing {
 					require.Zero(t, blockSigner.calls)
