@@ -19,7 +19,6 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
-	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
@@ -34,7 +33,7 @@ type parameters struct {
 	processConcurrency     int64
 	chainTime              chaintime.Service
 	specProvider           eth2client.SpecProvider
-	proposalProviders      map[string]beaconblockproposer.ProposalDataProvider
+	proposalProviders      map[string]eth2client.MultiForkProposalProvider
 	timeout                time.Duration
 	blockRootToSlotCache   cache.BlockRootToSlotProvider
 	executionPayloadFactor float64
@@ -94,7 +93,7 @@ func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 }
 
 // WithProposalProviders sets the proposal providers.
-func WithProposalProviders(providers map[string]beaconblockproposer.ProposalDataProvider) Parameter {
+func WithProposalProviders(providers map[string]eth2client.MultiForkProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalProviders = providers
 	})

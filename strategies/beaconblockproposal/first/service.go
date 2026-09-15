@@ -20,7 +20,6 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
@@ -35,7 +34,7 @@ import (
 type Service struct {
 	log               zerolog.Logger
 	clientMonitor     metrics.ClientMonitor
-	proposalProviders map[string]beaconblockproposer.ProposalDataProvider
+	proposalProviders map[string]eth2client.MultiForkProposalProvider
 	timeout           time.Duration
 }
 
@@ -81,7 +80,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 // operation with the client monitor, and sends the result to ch unless ctx is done first.
 func (s *Service) fetchEPBSProposal(ctx context.Context,
 	name string,
-	provider beaconblockproposer.ProposalDataProvider,
+	provider eth2client.MultiForkProposalProvider,
 	opts *api.EPBSProposalOpts,
 	ch chan *api.VersionedEPBSProposal,
 ) {

@@ -18,10 +18,10 @@ import (
 	"testing"
 	"time"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
-	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/cache"
 	mockcache "github.com/attestantio/vouch/services/cache/mock"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
@@ -64,7 +64,7 @@ func TestProposal(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
-				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+				best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 					"good": mock.NewProposalProvider(),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
@@ -80,7 +80,7 @@ func TestProposal(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
-				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+				best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 					"sleepy": mock.NewSleepyProposalProvider(5*time.Second, mock.NewProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
@@ -97,7 +97,7 @@ func TestProposal(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
-				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+				best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 					"error":  mock.NewErroringProposalProvider(),
 					"sleepy": mock.NewSleepyProposalProvider(time.Second, mock.NewProposalProvider()),
 				}),
@@ -114,7 +114,7 @@ func TestProposal(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
-				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+				best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 					"good":   mock.NewProposalProvider(),
 					"sleepy": mock.NewSleepyProposalProvider(2*time.Second, mock.NewProposalProvider()),
 				}),
@@ -132,7 +132,7 @@ func TestProposal(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
-				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+				best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 					"sleepy": mock.NewSleepyProposalProvider(2*time.Second, mock.NewProposalProvider()),
 				}),
 				best.WithBlockRootToSlotCache(blockToSlotCache),
@@ -149,7 +149,7 @@ func TestProposal(t *testing.T) {
 				best.WithChainTimeService(chainTime),
 				best.WithSpecProvider(specProvider),
 				best.WithProcessConcurrency(2),
-				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+				best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 					"error":  mock.NewErroringProposalProvider(),
 					"sleepy": mock.NewSleepyProposalProvider(2*time.Second, mock.NewProposalProvider()),
 				}),
@@ -214,7 +214,7 @@ func TestProposalExpandsShortClientGraffiti(t *testing.T) {
 		best.WithProcessConcurrency(2),
 		best.WithChainTimeService(chainTime),
 		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"prysm":  provider,
 			"nimbus": secondProvider,
 		}),

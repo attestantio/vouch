@@ -82,7 +82,7 @@ func TestPrepare(t *testing.T) {
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithProposalSubmitter(consensusClient),
+				standard.WithProposalSubmitter(&capturingProposalSubmitter{}),
 				standard.WithExecutionPayloadEnvelopeSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithGraffitiProvider(graffitiProvider),
