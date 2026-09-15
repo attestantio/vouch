@@ -49,6 +49,7 @@ type Service struct {
 	executionPayloadEnvelopeSigner    signer.ExecutionPayloadEnvelopeSigner
 	blobSidecarSigner                 signer.BlobSidecarSigner
 	chainTime                         chaintime.Service
+	gloasForkEpoch                    phase0.Epoch
 	blockAuctioneer                   blockauctioneer.BlockAuctioneer
 	unblindFromAllRelays              bool
 	builderBoostFactor                uint64
@@ -74,6 +75,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	s := &Service{
 		log:                               log,
 		chainTime:                         parameters.chainTime,
+		gloasForkEpoch:                    parameters.chainTime.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH"),
 		blockAuctioneer:                   parameters.blockAuctioneer,
 		proposalProvider:                  parameters.proposalProvider,
 		validatingAccountsProvider:        parameters.validatingAccountsProvider,
