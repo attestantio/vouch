@@ -89,13 +89,12 @@ func (s *Service) publishProposerPreferencesForKnownRoots(ctx context.Context) {
 }
 
 // publishProposerPreferences publishes preferences for the proposal epoch whose duties share the supplied dependent root.
-func (s *Service) publishProposerPreferences(ctx context.Context, rootEpoch phase0.Epoch, dependentRoot phase0.Root) {
+func (s *Service) publishProposerPreferences(ctx context.Context, proposalEpoch phase0.Epoch, dependentRoot phase0.Root) {
 	if s.proposerPreferences == nil || s.executionConfigProvider == nil || s.proposerPreferencesLookahead == 0 {
 		return
 	}
 	s.proposerPreferences.Prune(s.chainTimeService.CurrentSlot())
-	proposalEpoch, ok := s.proposerPreferencesTargetEpoch(rootEpoch, dependentRoot)
-	if !ok {
+	if dependentRoot == (phase0.Root{}) || proposalEpoch < s.gloasForkEpoch || proposalEpoch < s.chainTimeService.CurrentEpoch() {
 		return
 	}
 	duties, responseDependentRoot := s.proposerPreferencesDuties(ctx, proposalEpoch, dependentRoot)
@@ -104,18 +103,6 @@ func (s *Service) publishProposerPreferences(ctx context.Context, rootEpoch phas
 	}
 
 	s.publishProposerPreferencesDuties(ctx, proposalEpoch, responseDependentRoot, duties)
-}
-
-func (s *Service) proposerPreferencesTargetEpoch(rootEpoch phase0.Epoch, dependentRoot phase0.Root) (phase0.Epoch, bool) {
-	if dependentRoot == (phase0.Root{}) {
-		return 0, false
-	}
-	proposalEpoch := rootEpoch + phase0.Epoch(s.proposerPreferencesLookahead)
-	if proposalEpoch < s.gloasForkEpoch || proposalEpoch < s.chainTimeService.CurrentEpoch() {
-		return 0, false
-	}
-
-	return proposalEpoch, true
 }
 
 func (s *Service) proposerPreferencesDuties(
