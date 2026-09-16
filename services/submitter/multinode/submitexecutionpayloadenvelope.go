@@ -51,7 +51,7 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 	}
 
 	submissionErrors := make([]error, 0, len(s.executionPayloadEnvelopeSubmitters))
-	for completed := 0; completed < len(s.executionPayloadEnvelopeSubmitters); completed++ {
+	for completed := range len(s.executionPayloadEnvelopeSubmitters) {
 		select {
 		case err := <-results:
 			if err == nil {
@@ -70,12 +70,12 @@ func (s *Service) SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.
 		case <-ctx.Done():
 			cancel()
 			submissionErrors = append(submissionErrors, errors.New("no successful submissions before timeout"))
-			return submitter.NewSubmissionErrors(submissionErrors...)
+			return submitter.NewSubmissionError(submissionErrors...)
 		}
 	}
 
 	cancel()
-	return submitter.NewSubmissionErrors(submissionErrors...)
+	return submitter.NewSubmissionError(submissionErrors...)
 }
 
 func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,

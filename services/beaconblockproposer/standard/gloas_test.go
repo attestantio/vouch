@@ -167,7 +167,7 @@ func TestProposeGloas(t *testing.T) {
 		{
 			name:                     "UnknownBlockMultinodeEnvelopeSubmissionFailure",
 			executionPayloadIncluded: true,
-			envelopeSubmitterErr: submitter.NewSubmissionErrors(
+			envelopeSubmitterErr: submitter.NewSubmissionError(
 				errors.Join(
 					errors.New("failed to submit execution payload envelope"),
 					&consensusapi.Error{
@@ -191,7 +191,7 @@ func TestProposeGloas(t *testing.T) {
 		{
 			name:                     "MixedEnvelopeSubmissionFailure",
 			executionPayloadIncluded: true,
-			envelopeSubmitterErr: submitter.NewSubmissionErrors(
+			envelopeSubmitterErr: submitter.NewSubmissionError(
 				errors.Join(
 					errors.New("failed to submit execution payload envelope"),
 					&consensusapi.Error{
