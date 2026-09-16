@@ -62,7 +62,7 @@ func (s *Service) HandleHeadEvent(ctx context.Context, data *apiv1.HeadEvent) {
 		}
 	}
 
-	s.checkEventForReorg(ctx, epoch, data.Slot, data.PreviousDutyDependentRoot, data.CurrentDutyDependentRoot)
+	s.checkEventForReorg(ctx, epoch, data.Slot, data.Block, data.PreviousDutyDependentRoot, data.CurrentDutyDependentRoot)
 	if s.proposerPreferences != nil && s.executionConfigProvider != nil && s.proposerPreferencesLookahead != 0 {
 		s.queueProposerPreferencesPublication(ctx)
 	}
@@ -89,6 +89,7 @@ func (s *Service) HandleHeadEvent(ctx context.Context, data *apiv1.HeadEvent) {
 func (s *Service) checkEventForReorg(ctx context.Context,
 	epoch phase0.Epoch,
 	slot phase0.Slot,
+	block phase0.Root,
 	previousDutyDependentRoot phase0.Root,
 	currentDutyDependentRoot phase0.Root,
 ) {
@@ -143,10 +144,8 @@ func (s *Service) checkEventForReorg(ctx context.Context,
 	s.previousDutyDependentRoot = previousDutyDependentRoot
 	s.currentDutyDependentRoot = currentDutyDependentRoot
 	if s.proposerPreferences != nil && s.executionConfigProvider != nil && s.proposerPreferencesLookahead != 0 {
-		if epoch > 0 {
-			s.recordProposerPreferencesDependentRoot(epoch-1, previousDutyDependentRoot)
-		}
 		s.recordProposerPreferencesDependentRoot(epoch, currentDutyDependentRoot)
+		s.recordProposerPreferencesDependentRoot(epoch+1, block)
 	}
 }
 
