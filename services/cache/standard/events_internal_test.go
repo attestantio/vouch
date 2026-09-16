@@ -14,11 +14,14 @@
 package standard
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
 	consensusclient "github.com/attestantio/go-eth2-client"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/rs/zerolog"
@@ -67,4 +70,51 @@ func TestHandleHead(t *testing.T) {
 			require.Equal(t, phase0.Slot(100), cachedSlot, "slot should come from head event")
 		})
 	}
+}
+
+func TestUpdateFromBlockGloas(t *testing.T) {
+	ctx := context.Background()
+	var logs bytes.Buffer
+	previousRoot := phase0.Hash32{0x01}
+	previousHeight := uint64(123)
+	previousGasLimit := uint64(30_000_000)
+
+	s := &Service{
+		log:                      zerolog.New(&logs),
+		executionChainHeadRoot:   previousRoot,
+		executionChainHeadHeight: previousHeight,
+		blockGasLimits: map[uint64]uint64{
+			previousHeight: previousGasLimit,
+		},
+	}
+
+	s.updateFromBlock(&spec.VersionedSignedBeaconBlock{
+		Version: spec.DataVersionGloas,
+		Gloas: &gloas.SignedBeaconBlock{
+			Message: &gloas.BeaconBlock{
+				Body: &gloas.BeaconBlockBody{
+					SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{
+						Message: &gloas.ExecutionPayloadBid{
+							BlockHash: phase0.Hash32{0x02},
+							GasLimit:  31_000_000,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	require.NotContains(t, logs.String(), "Unhandled block version")
+
+	actualRoot, actualHeight := s.ExecutionChainHead(ctx)
+	require.Equal(t, previousRoot, actualRoot)
+	require.Equal(t, previousHeight, actualHeight)
+
+	actualGasLimit, exists := s.BlockGasLimit(ctx, previousHeight)
+	require.True(t, exists)
+	require.Equal(t, previousGasLimit, actualGasLimit)
+
+	s.blockGasLimitMu.RLock()
+	defer s.blockGasLimitMu.RUnlock()
+	require.Equal(t, map[uint64]uint64{previousHeight: previousGasLimit}, s.blockGasLimits)
 }

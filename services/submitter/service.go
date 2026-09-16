@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -34,6 +34,12 @@ type AttestationsSubmitter interface {
 type ProposalSubmitter interface {
 	// SubmitProposal submits a proposal.
 	SubmitProposal(ctx context.Context, proposal *api.VersionedSignedProposal) error
+}
+
+// ExecutionPayloadEnvelopeSubmitter is the interface for a submitter of execution payload envelopes.
+type ExecutionPayloadEnvelopeSubmitter interface {
+	// SubmitExecutionPayloadEnvelope submits a signed execution payload envelope.
+	SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.SubmitExecutionPayloadEnvelopeOpts) error
 }
 
 // BeaconCommitteeSubscriptionsSubmitter is the interface for a submitter of beacon committee subscriptions.

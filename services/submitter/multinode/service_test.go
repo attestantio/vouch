@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,6 +19,7 @@ import (
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/attestantio/vouch/services/submitter/multinode"
@@ -27,6 +28,12 @@ import (
 )
 
 func TestService(t *testing.T) {
+	ctx := context.Background()
+	executionPayloadEnvelopeSubmitter, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
+	executionPayloadEnvelopeSubmitters := map[string]eth2client.ExecutionPayloadEnvelopeSubmitter{
+		"1": executionPayloadEnvelopeSubmitter,
+	}
 	attestationsSubmitters := map[string]eth2client.AttestationsSubmitter{
 		"1": mock.NewAttestationsSubmitter(),
 	}
@@ -373,6 +380,41 @@ func TestService(t *testing.T) {
 			err: "problem with parameters: no sync committee contributions submitters specified",
 		},
 		{
+			name: "ExecutionPayloadEnvelopeSubmittersMissing",
+			params: []multinode.Parameter{
+				multinode.WithLogLevel(zerolog.Disabled),
+				multinode.WithTimeout(2 * time.Second),
+				multinode.WithProcessConcurrency(2),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
+				multinode.WithAttestationsSubmitters(attestationsSubmitters),
+				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
+				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
+				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
+				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
+				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
+			},
+			err: "problem with parameters: no execution payload envelope submitters specified",
+		},
+		{
+			name: "ExecutionPayloadEnvelopeSubmittersEmpty",
+			params: []multinode.Parameter{
+				multinode.WithLogLevel(zerolog.Disabled),
+				multinode.WithTimeout(2 * time.Second),
+				multinode.WithProcessConcurrency(2),
+				multinode.WithProposalSubmitters(beaconBlockSubmitters),
+				multinode.WithExecutionPayloadEnvelopeSubmitters(map[string]eth2client.ExecutionPayloadEnvelopeSubmitter{}),
+				multinode.WithAttestationsSubmitters(attestationsSubmitters),
+				multinode.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
+				multinode.WithAggregateAttestationsSubmitters(aggregateAttestationsSubmitters),
+				multinode.WithProposalPreparationsSubmitters(proposalPrepartionsSubmitters),
+				multinode.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
+				multinode.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
+				multinode.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
+			},
+			err: "problem with parameters: no execution payload envelope submitters specified",
+		},
+		{
 			name: "Good",
 			params: []multinode.Parameter{
 				multinode.WithLogLevel(zerolog.Disabled),
@@ -392,7 +434,11 @@ func TestService(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := multinode.New(context.Background(), test.params...)
+			params := test.params
+			if test.name != "ExecutionPayloadEnvelopeSubmittersMissing" && test.name != "ExecutionPayloadEnvelopeSubmittersEmpty" {
+				params = append(params, multinode.WithExecutionPayloadEnvelopeSubmitters(executionPayloadEnvelopeSubmitters))
+			}
+			_, err := multinode.New(ctx, params...)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
@@ -402,8 +448,20 @@ func TestService(t *testing.T) {
 	}
 }
 
+func newTestService(ctx context.Context, params ...multinode.Parameter) (*multinode.Service, error) {
+	executionPayloadEnvelopeSubmitter, err := mockconsensusclient.New(ctx)
+	if err != nil {
+		return nil, err
+	}
+	params = append(params, multinode.WithExecutionPayloadEnvelopeSubmitters(map[string]eth2client.ExecutionPayloadEnvelopeSubmitter{
+		"1": executionPayloadEnvelopeSubmitter,
+	}))
+
+	return multinode.New(ctx, params...)
+}
+
 func TestInterfaces(t *testing.T) {
-	s, err := multinode.New(context.Background(),
+	s, err := newTestService(context.Background(),
 		multinode.WithLogLevel(zerolog.Disabled),
 		multinode.WithTimeout(2*time.Second),
 		multinode.WithProcessConcurrency(2),

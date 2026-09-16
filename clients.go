@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -50,6 +50,7 @@ func fetchClient(ctx context.Context, monitor metrics.Service, address string) (
 			httpclient.WithMonitor(monitor),
 			httpclient.WithTimeout(util.Timeout(fmt.Sprintf("eth2client.%s", address))),
 			httpclient.WithAddress(address),
+			httpclient.WithCustomSpecSupport(viper.GetBool("eth2client.custom-spec-support")),
 			httpclient.WithAllowDelayedStart(viper.GetBool("eth2client.allow-delayed-start")),
 			httpclient.WithExtraHeaders(map[string]string{
 				"User-Agent": fmt.Sprintf("Vouch/%s", ReleaseVersion),

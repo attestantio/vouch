@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2022 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -31,6 +31,7 @@ type parameters struct {
 	clientMonitor                          metrics.ClientMonitor
 	processConcurrency                     int64
 	proposalSubmitters                     map[string]eth2client.ProposalSubmitter
+	executionPayloadEnvelopeSubmitters     map[string]eth2client.ExecutionPayloadEnvelopeSubmitter
 	attestationsSubmitters                 map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters        map[string]eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitters         map[string]eth2client.ProposalPreparationsSubmitter
@@ -83,6 +84,13 @@ func WithProcessConcurrency(concurrency int64) Parameter {
 func WithProposalSubmitters(submitters map[string]eth2client.ProposalSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalSubmitters = submitters
+	})
+}
+
+// WithExecutionPayloadEnvelopeSubmitters sets the execution payload envelope submitters.
+func WithExecutionPayloadEnvelopeSubmitters(submitters map[string]eth2client.ExecutionPayloadEnvelopeSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.executionPayloadEnvelopeSubmitters = submitters
 	})
 }
 
@@ -158,6 +166,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if len(parameters.proposalSubmitters) == 0 {
 		return nil, errors.New("no proposal submitters specified")
+	}
+	if len(parameters.executionPayloadEnvelopeSubmitters) == 0 {
+		return nil, errors.New("no execution payload envelope submitters specified")
 	}
 	if len(parameters.attestationsSubmitters) == 0 {
 		return nil, errors.New("no attestations submitters specified")

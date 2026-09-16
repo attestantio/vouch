@@ -1,4 +1,4 @@
-// Copyright © 2021, 2022 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -82,10 +82,12 @@ func TestPrepare(t *testing.T) {
 				standard.WithProposalDataProvider(consensusClient),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithProposalSubmitter(consensusClient),
+				standard.WithProposalSubmitter(&capturingProposalSubmitter{}),
+				standard.WithExecutionPayloadEnvelopeSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithGraffitiProvider(graffitiProvider),
 				standard.WithBeaconBlockSigner(signer),
+				standard.WithExecutionPayloadEnvelopeSigner(signer),
 				standard.WithBlobSidecarSigner(signer),
 				standard.WithBlockAuctioneer(blockAuctioneer),
 				standard.WithExecutionChainHeadProvider(cacheService.(cache.ExecutionChainHeadProvider)),

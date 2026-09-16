@@ -1,3 +1,15 @@
+gloas:
+  - add gloas self-build beacon block proposal path: request an ePBS proposal with its payload, sign the beacon block and matching execution payload envelope, then publish the block followed by its envelope
+  - refuse a self-build gloas proposal whose execution payload pays no fee recipient, before its envelope is signed
+  - extend the first and best beaconblockproposal strategies for ePBS proposals, rejecting malformed or payload-excluded responses when payload inclusion was requested
+  - route the simple beaconblockproposal style through the first strategy; beacon node clients that do not support ePBS proposals now fail at startup
+  - skip the relay auction under gloas and warn operators that their relay settings are ignored
+  - add eth2client.custom-spec-support to enable dynamic SSZ encoding and decoding for beacon nodes using a non-mainnet preset
+  - cache the hard fork schedule in chaintime; known-fork lookups are allocation-free and unknown forks trigger a coalesced refresh
+  - do not update execution chain head state from gloas blocks, as an execution payload bid carries no execution block number
+  - report "builder" as a beacon block proposal source method
+  - update go-eth2-client to a gloas pseudo-version
+
 1.13.1:
   - initialise sync committee verification metrics to 0
   - use dynssz v1.3.2 and corresponding lib updates
