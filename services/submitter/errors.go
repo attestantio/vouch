@@ -15,22 +15,22 @@ package submitter
 
 import "errors"
 
-// SubmissionErrors contains errors returned by individual submitters.
-type SubmissionErrors struct {
+// SubmissionError contains errors returned by individual submitters.
+type SubmissionError struct {
 	errors []error
 }
 
-// NewSubmissionErrors creates an aggregate of individual submission errors.
-func NewSubmissionErrors(errs ...error) *SubmissionErrors {
-	return &SubmissionErrors{errors: errs}
+// NewSubmissionError creates an aggregate of individual submission errors.
+func NewSubmissionError(errs ...error) *SubmissionError {
+	return &SubmissionError{errors: errs}
 }
 
 // Error returns the combined submission error messages.
-func (e *SubmissionErrors) Error() string {
+func (e *SubmissionError) Error() string {
 	return errors.Join(e.errors...).Error()
 }
 
 // Unwrap returns the individual submission errors.
-func (e *SubmissionErrors) Unwrap() []error {
+func (e *SubmissionError) Unwrap() []error {
 	return e.errors
 }

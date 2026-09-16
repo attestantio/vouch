@@ -354,7 +354,7 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 }
 
 func isUnknownBeaconBlockError(err error) bool {
-	var submissionErrors *submitter.SubmissionErrors
+	var submissionErrors *submitter.SubmissionError
 	if errors.As(err, &submissionErrors) {
 		for _, submissionErr := range submissionErrors.Unwrap() {
 			if !containsUnknownBeaconBlockError(submissionErr) {
@@ -382,8 +382,8 @@ func containsUnknownBeaconBlockError(err error) bool {
 		return containsUnknownBeaconBlockError(wrappedErr.Unwrap())
 	}
 
-	apiErr, isAPIError := err.(*api.Error)
-	if !isAPIError || (apiErr.StatusCode != http.StatusBadRequest && apiErr.StatusCode != http.StatusNotFound) {
+	var apiErr *api.Error
+	if !errors.As(err, &apiErr) || (apiErr.StatusCode != http.StatusBadRequest && apiErr.StatusCode != http.StatusNotFound) {
 		return false
 	}
 
