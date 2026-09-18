@@ -30,13 +30,14 @@ import (
 
 // Service is the standard proposer-preferences service.
 type Service struct {
-	monitor   metrics.Service
-	cache     map[gloas.ProposerPreferences]*cachedPreference
-	current   map[preferenceDuty]gloas.ProposerPreferences
-	inFlight  map[gloas.ProposerPreferences]chan struct{}
-	signer    signer.ProposerPreferencesSigner
-	submitter submitter.ProposerPreferencesSubmitter
-	mutex     sync.Mutex
+	monitor        metrics.Service
+	cache          map[gloas.ProposerPreferences]*cachedPreference
+	current        map[preferenceDuty]gloas.ProposerPreferences
+	dependentRoots map[phase0.Slot]phase0.Root
+	inFlight       map[gloas.ProposerPreferences]chan struct{}
+	signer         signer.ProposerPreferencesSigner
+	submitter      submitter.ProposerPreferencesSubmitter
+	mutex          sync.Mutex
 }
 
 type preferenceDuty struct {
@@ -70,12 +71,13 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}
 
 	return &Service{
-		monitor:   parameters.monitor,
-		signer:    parameters.signer,
-		submitter: parameters.submitter,
-		cache:     make(map[gloas.ProposerPreferences]*cachedPreference),
-		current:   make(map[preferenceDuty]gloas.ProposerPreferences),
-		inFlight:  make(map[gloas.ProposerPreferences]chan struct{}),
+		monitor:        parameters.monitor,
+		signer:         parameters.signer,
+		submitter:      parameters.submitter,
+		cache:          make(map[gloas.ProposerPreferences]*cachedPreference),
+		current:        make(map[preferenceDuty]gloas.ProposerPreferences),
+		dependentRoots: make(map[phase0.Slot]phase0.Root),
+		inFlight:       make(map[gloas.ProposerPreferences]chan struct{}),
 	}, nil
 }
 
@@ -100,6 +102,21 @@ func (s *Service) ProviderReady(provider string, proposalSlot phase0.Slot, valid
 	return exists
 }
 
+// UpdateDependentRoot updates the authoritative root for proposer duties in the supplied slot range.
+func (s *Service) UpdateDependentRoot(fromSlot phase0.Slot, toSlot phase0.Slot, root phase0.Root) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	for slot := fromSlot; slot <= toSlot; slot++ {
+		s.dependentRoots[slot] = root
+	}
+	for duty, preferences := range s.current {
+		if duty.proposalSlot >= fromSlot && duty.proposalSlot <= toSlot && preferences.DependentRoot != root {
+			delete(s.current, duty)
+		}
+	}
+}
+
 // Prune discards preferences for proposal slots that have passed.
 func (s *Service) Prune(slot phase0.Slot) {
 	s.mutex.Lock()
@@ -110,6 +127,11 @@ func (s *Service) Prune(slot phase0.Slot) {
 			if _, exists := s.inFlight[preferences]; !exists {
 				delete(s.current, duty)
 			}
+		}
+	}
+	for proposalSlot := range s.dependentRoots {
+		if proposalSlot < slot {
+			delete(s.dependentRoots, proposalSlot)
 		}
 	}
 	for preferences := range s.cache {
@@ -156,8 +178,13 @@ func (s *Service) claimPublication(preferences gloas.ProposerPreferences, dutyKe
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
+	if dependentRoot, exists := s.dependentRoots[dutyKey.proposalSlot]; exists && dependentRoot != preferences.DependentRoot {
+		monitorProposerPreferencesProcess("stale")
+		return nil, nil
+	}
 	cached, exists := s.cache[preferences]
 	if exists && cached.published {
+		s.current[dutyKey] = preferences
 		monitorProposerPreferencesProcess("replayed")
 		return nil, nil
 	}

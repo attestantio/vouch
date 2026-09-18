@@ -172,7 +172,6 @@ func TestEPBSProposalBuilderConfigTransports(t *testing.T) {
 	ctx := context.Background()
 	includePayload := false
 	config := &gloas.BuilderConfig{
-		MinBid:             12,
 		BuilderBoostFactor: 100,
 		Builders: []*gloas.BuilderEntry{{
 			URL: []byte("https://builder.example"),

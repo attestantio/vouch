@@ -123,7 +123,7 @@ func TestPropose(t *testing.T) {
 				standard.WithExecutionConfigProvider(executionConfigProvider),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithProposalSubmitter(consensusClient),
+				standard.WithProposalSubmitter(&proposalSubmitter{client: consensusClient}),
 				standard.WithExecutionPayloadEnvelopeSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithGraffitiProvider(graffitiProvider),

@@ -57,6 +57,7 @@ type ProviderReadiness interface {
 
 // Publisher publishes proposer preferences.
 type Publisher interface {
+	UpdateDependentRoot(fromSlot phase0.Slot, toSlot phase0.Slot, root phase0.Root)
 	Prune(slot phase0.Slot)
 	Publish(ctx context.Context, duty *Duty) error
 }

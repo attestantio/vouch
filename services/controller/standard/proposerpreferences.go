@@ -31,7 +31,6 @@ func (s *Service) recordProposerPreferencesDependentRoot(epoch phase0.Epoch, roo
 		return
 	}
 	s.proposerPreferencesDependentRootMutex.Lock()
-	defer s.proposerPreferencesDependentRootMutex.Unlock()
 	if s.proposerPreferencesDependentRoots == nil {
 		s.proposerPreferencesDependentRoots = make(map[phase0.Epoch]phase0.Root)
 	}
@@ -40,6 +39,12 @@ func (s *Service) recordProposerPreferencesDependentRoot(epoch phase0.Epoch, roo
 		if storedEpoch+phase0.Epoch(s.proposerPreferencesLookahead) < s.chainTimeService.CurrentEpoch() {
 			delete(s.proposerPreferencesDependentRoots, storedEpoch)
 		}
+	}
+	s.proposerPreferencesDependentRootMutex.Unlock()
+
+	if s.proposerPreferences != nil {
+		fromSlot := s.chainTimeService.FirstSlotOfEpoch(epoch)
+		s.proposerPreferences.UpdateDependentRoot(fromSlot, s.chainTimeService.FirstSlotOfEpoch(epoch+1)-1, root)
 	}
 }
 
@@ -110,7 +115,7 @@ func (s *Service) proposerPreferencesDuties(
 	proposalEpoch phase0.Epoch,
 	dependentRoot phase0.Root,
 ) ([]*apiv1.ProposerDuty, phase0.Root) {
-	response, err := s.proposerDutiesProvider.ProposerDuties(ctx, &api.ProposerDutiesOpts{Epoch: proposalEpoch})
+	response, err := s.proposerDutiesV2Provider.ProposerDutiesV2(ctx, &api.ProposerDutiesOpts{Epoch: proposalEpoch})
 	if err != nil {
 		s.log.Error().Err(err).Uint64("epoch", uint64(proposalEpoch)).Msg("Failed to fetch proposer preferences duties")
 		return nil, phase0.Root{}

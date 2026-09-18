@@ -87,10 +87,24 @@ func (*ProposerDutiesProvider) ProposerDuties(_ context.Context,
 	*api.Response[[]*apiv1.ProposerDuty],
 	error,
 ) {
+	return emptyProposerDutiesResponse(), nil
+}
+
+// ProposerDutiesV2 is a mock.
+func (*ProposerDutiesProvider) ProposerDutiesV2(_ context.Context,
+	_ *api.ProposerDutiesOpts,
+) (
+	*api.Response[[]*apiv1.ProposerDuty],
+	error,
+) {
+	return emptyProposerDutiesResponse(), nil
+}
+
+func emptyProposerDutiesResponse() *api.Response[[]*apiv1.ProposerDuty] {
 	return &api.Response[[]*apiv1.ProposerDuty]{
 		Data:     make([]*apiv1.ProposerDuty, 0),
 		Metadata: make(map[string]any),
-	}, nil
+	}
 }
 
 // AttesterDutiesProvider is a mock for eth2client.AttesterDutiesProvider.

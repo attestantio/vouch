@@ -46,6 +46,7 @@ type parameters struct {
 	chainTimeService              chaintime.Service
 	executionConfigProvider       blockrelay.ExecutionConfigProvider
 	proposerDutiesProvider        eth2client.ProposerDutiesProvider
+	proposerDutiesV2Provider      eth2client.ProposerDutiesV2Provider
 	attesterDutiesProvider        eth2client.AttesterDutiesProvider
 	syncCommitteeDutiesProvider   eth2client.SyncCommitteeDutiesProvider
 	ptcDutiesProvider             eth2client.PTCDutiesProvider
@@ -133,6 +134,7 @@ func WithWaitedForGenesis(waitedForGenesis bool) Parameter {
 func WithProposerDutiesProvider(provider eth2client.ProposerDutiesProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposerDutiesProvider = provider
+		p.proposerDutiesV2Provider, _ = provider.(eth2client.ProposerDutiesV2Provider)
 	})
 }
 
@@ -371,6 +373,7 @@ func (p *parameters) validate() error {
 		{p.specProvider != nil, "no spec provider specified"},
 		{p.chainTimeService != nil, "no chain time service specified"},
 		{p.proposerDutiesProvider != nil, "no proposer duties provider specified"},
+		{p.proposerPreferences == nil || p.proposerDutiesV2Provider != nil, "proposer duties provider does not support v2"},
 		{p.attesterDutiesProvider != nil, "no attester duties provider specified"},
 		{p.eventsProvider != nil, "no events provider specified"},
 		{p.validatingAccountsProvider != nil, "no validating accounts provider specified"},

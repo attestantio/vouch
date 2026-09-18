@@ -198,6 +198,81 @@ func TestProviderReadyAfterAcceptedSubmission(t *testing.T) {
 	require.False(t, service.ProviderReady("rejected", 64, 3))
 }
 
+func TestDependentRootChangeRejectsStalePreferenceReplay(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	service, err := standard.New(ctx,
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithSigner(&recordingSigner{signature: phase0.BLSSignature{0x01}}),
+		standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"accepted": nil}}),
+	)
+	require.NoError(t, err)
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(
+		phase0.Root{0x01},
+		64,
+		3,
+		accounts[3],
+		bellatrix.ExecutionAddress{0x02},
+		30_000_000,
+	)))
+	require.True(t, service.ProviderReady("accepted", 64, 3))
+
+	service.UpdateDependentRoot(64, 95, phase0.Root{0x02})
+
+	require.False(t, service.ProviderReady("accepted", 64, 3))
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(
+		phase0.Root{0x01},
+		64,
+		3,
+		accounts[3],
+		bellatrix.ExecutionAddress{0x02},
+		30_000_000,
+	)))
+	require.False(t, service.ProviderReady("accepted", 64, 3))
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(
+		phase0.Root{0x02},
+		64,
+		3,
+		accounts[3],
+		bellatrix.ExecutionAddress{0x02},
+		30_000_000,
+	)))
+	require.True(t, service.ProviderReady("accepted", 64, 3))
+}
+
+func TestDependentRootChangeKeepsInFlightStalePreferenceUnready(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	submitter := &blockingSubmitter{started: make(chan struct{}), release: make(chan struct{})}
+	service, err := standard.New(ctx,
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithSigner(&recordingSigner{signature: phase0.BLSSignature{0x01}}),
+		standard.WithSubmitter(submitter),
+	)
+	require.NoError(t, err)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- service.Publish(ctx, proposerpreferences.NewDuty(
+			phase0.Root{0x01},
+			64,
+			3,
+			accounts[3],
+			bellatrix.ExecutionAddress{0x02},
+			30_000_000,
+		))
+	}()
+	<-submitter.started
+
+	service.UpdateDependentRoot(64, 95, phase0.Root{0x02})
+	close(submitter.release)
+	require.NoError(t, <-errCh)
+
+	require.False(t, service.ProviderReady("accepted", 64, 3))
+}
+
 func TestSimpleProviderReadyAfterAllPreferencesAccepted(t *testing.T) {
 	ctx := context.Background()
 	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
