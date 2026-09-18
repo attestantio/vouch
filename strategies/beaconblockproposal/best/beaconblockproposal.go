@@ -544,7 +544,7 @@ func epbsProposalSource(proposal *api.VersionedEPBSProposal, metadata map[string
 	return "p2p_builder"
 }
 
-// validateEPBSProposal confirms that an ePBS proposal is structurally sound and pays a fee recipient.
+// validateEPBSProposal confirms that an ePBS proposal is structurally sound and has a valid fee recipient.
 // The caller must have already excluded a nil proposal.
 func validateEPBSProposal(proposal *api.VersionedEPBSProposal) error {
 	if proposal.Version != spec.DataVersionGloas {
@@ -556,7 +556,9 @@ func validateEPBSProposal(proposal *api.VersionedEPBSProposal) error {
 		return errors.New("beacon node returned malformed ePBS proposal")
 	}
 
-	if block.Body.SignedExecutionPayloadBid.Message.FeeRecipient.IsZero() {
+	signedBid := block.Body.SignedExecutionPayloadBid
+	bid := signedBid.Message
+	if bid.FeeRecipient.IsZero() && (bid.BuilderIndex != selfBuiltBuilderIndex || bid.Value != 0 || bid.ExecutionPayment != 0 || !signedBid.Signature.IsInfinity()) {
 		return errors.New("beacon block obtained with 0 fee recipient")
 	}
 

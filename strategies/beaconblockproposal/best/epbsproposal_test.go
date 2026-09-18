@@ -504,7 +504,7 @@ func TestEPBSProposalPrefersIncludedCandidate(t *testing.T) {
 	require.Same(t, includedCandidate, response.Data)
 }
 
-func TestEPBSProposalRejectsZeroFeeRecipient(t *testing.T) {
+func TestEPBSProposalHandlesZeroFeeRecipient(t *testing.T) {
 	ctx := context.Background()
 	specProvider := mock.NewSpecProvider()
 	chainTime, err := standardchaintime.New(ctx,
@@ -513,27 +513,70 @@ func TestEPBSProposalRejectsZeroFeeRecipient(t *testing.T) {
 		standardchaintime.WithSpecProvider(specProvider),
 	)
 	require.NoError(t, err)
-	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
-	zeroFeeCandidate := testGloasProposal(100, bellatrix.ExecutionAddress{})
-	validCandidate := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
-	service, err := best.New(ctx,
-		best.WithLogLevel(zerolog.Disabled),
-		best.WithClientMonitor(nullmetrics.New()),
-		best.WithProcessConcurrency(2),
-		best.WithChainTimeService(chainTime),
-		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
-			"zero-fee": &testEPBSProposalProvider{proposal: zeroFeeCandidate},
-			"valid":    &testEPBSProposalProvider{proposal: validCandidate},
-		}),
-		best.WithTimeout(time.Second),
-		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
-	)
-	require.NoError(t, err)
+	tests := []struct {
+		name   string
+		mutate func(*gloas.SignedExecutionPayloadBid)
+		valid  bool
+	}{
+		{
+			name: "ValidSelfBuild",
+			mutate: func(bid *gloas.SignedExecutionPayloadBid) {
+				bid.Signature[0] = 0xc0
+			},
+			valid: true,
+		},
+		{
+			name: "NonZeroValue",
+			mutate: func(bid *gloas.SignedExecutionPayloadBid) {
+				bid.Message.Value = 1
+				bid.Signature[0] = 0xc0
+			},
+		},
+		{
+			name: "NonZeroExecutionPayment",
+			mutate: func(bid *gloas.SignedExecutionPayloadBid) {
+				bid.Message.ExecutionPayment = 1
+				bid.Signature[0] = 0xc0
+			},
+		},
+		{
+			name:   "NonInfinitySignature",
+			mutate: func(*gloas.SignedExecutionPayloadBid) {},
+		},
+	}
 
-	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
-	require.NoError(t, err)
-	require.Same(t, validCandidate, response.Data)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+			zeroFeeCandidate := testGloasProposal(100, bellatrix.ExecutionAddress{})
+			zeroFeeCandidate.ExecutionValue = big.NewInt(0)
+			test.mutate(zeroFeeCandidate.GloasContents.Block.Body.SignedExecutionPayloadBid)
+			validCandidate := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
+			validCandidate.ExecutionValue = big.NewInt(0)
+			service, err := best.New(ctx,
+				best.WithLogLevel(zerolog.Disabled),
+				best.WithClientMonitor(nullmetrics.New()),
+				best.WithProcessConcurrency(2),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
+				best.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+					"zero-fee": &testEPBSProposalProvider{proposal: zeroFeeCandidate},
+					"valid":    &testEPBSProposalProvider{proposal: validCandidate},
+				}),
+				best.WithTimeout(time.Second),
+				best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+			)
+			require.NoError(t, err)
+
+			response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+			require.NoError(t, err)
+			if test.valid {
+				require.Same(t, zeroFeeCandidate, response.Data)
+			} else {
+				require.Same(t, validCandidate, response.Data)
+			}
+		})
+	}
 }
 
 func TestEPBSProposalRejectsZeroFeeRecipientWithoutPayload(t *testing.T) {
