@@ -59,6 +59,7 @@ type Service struct {
 	chainTimeService             chaintime.Service
 	executionConfigProvider      blockrelay.ExecutionConfigProvider
 	proposerDutiesProvider       eth2client.ProposerDutiesProvider
+	proposerDutiesV2Provider     eth2client.ProposerDutiesV2Provider
 	attesterDutiesProvider       eth2client.AttesterDutiesProvider
 	syncCommitteeDutiesProvider  eth2client.SyncCommitteeDutiesProvider
 	ptcDutiesProvider            eth2client.PTCDutiesProvider
@@ -154,6 +155,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		epochsPerSyncCommitteePeriod:      epochsPerSyncCommitteePeriod,
 		chainTimeService:                  parameters.chainTimeService,
 		proposerDutiesProvider:            parameters.proposerDutiesProvider,
+		proposerDutiesV2Provider:          parameters.proposerDutiesV2Provider,
 		attesterDutiesProvider:            parameters.attesterDutiesProvider,
 		syncCommitteeDutiesProvider:       parameters.syncCommitteeDutiesProvider,
 		syncCommitteesSubscriber:          parameters.syncCommitteesSubscriber,
@@ -202,9 +204,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	// This also allows us to re-request duties if the dependent roots change.
 	// Also subscribe to block events.  This allows us to keep the cache for the block roots to slot number up to date.
 	if err := parameters.eventsProvider.Events(ctx, &api.EventsOpts{
-		Topics:       []string{"block", "head"},
-		HeadHandler:  s.HandleHeadEvent,
-		BlockHandler: s.HandleBlockEvent,
+		Topics:        []string{"block", "head", "head_v2"},
+		HeadHandler:   s.HandleHeadEvent,
+		HeadV2Handler: s.HandleHeadV2Event,
+		BlockHandler:  s.HandleBlockEvent,
 	}); err != nil {
 		return nil, errors.Wrap(err, "failed to add events handler")
 	}

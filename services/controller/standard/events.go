@@ -62,7 +62,7 @@ func (s *Service) HandleHeadEvent(ctx context.Context, data *apiv1.HeadEvent) {
 		}
 	}
 
-	s.checkEventForReorg(ctx, epoch, data.Slot, data.Block, data.PreviousDutyDependentRoot, data.CurrentDutyDependentRoot)
+	s.checkEventForReorg(ctx, epoch, data.Slot, data.PreviousDutyDependentRoot, data.CurrentDutyDependentRoot)
 	if s.proposerPreferences != nil && s.executionConfigProvider != nil && s.proposerPreferencesLookahead != 0 {
 		s.queueProposerPreferencesPublication(ctx)
 	}
@@ -84,12 +84,25 @@ func (s *Service) HandleHeadEvent(ctx context.Context, data *apiv1.HeadEvent) {
 	}
 }
 
+// HandleHeadV2Event handles the "head_v2" events from the beacon node.
+func (s *Service) HandleHeadV2Event(ctx context.Context, data *apiv1.HeadEventV2) {
+	if data.Slot != s.chainTimeService.CurrentSlot() {
+		return
+	}
+
+	epoch := s.chainTimeService.SlotToEpoch(data.Slot)
+	s.recordProposerPreferencesDependentRoot(epoch, data.CurrentEpochDependentRoot)
+	s.recordProposerPreferencesDependentRoot(epoch+1, data.NextEpochDependentRoot)
+	if s.proposerPreferences != nil && s.executionConfigProvider != nil && s.proposerPreferencesLookahead != 0 {
+		s.queueProposerPreferencesPublication(ctx)
+	}
+}
+
 // checkEventForReorg check data in the event against information that we already have to see if
 // a chain reorg may have occurred, and if so handle it.
 func (s *Service) checkEventForReorg(ctx context.Context,
 	epoch phase0.Epoch,
 	slot phase0.Slot,
-	block phase0.Root,
 	previousDutyDependentRoot phase0.Root,
 	currentDutyDependentRoot phase0.Root,
 ) {
@@ -143,10 +156,6 @@ func (s *Service) checkEventForReorg(ctx context.Context,
 	s.lastBlockEpoch = epoch
 	s.previousDutyDependentRoot = previousDutyDependentRoot
 	s.currentDutyDependentRoot = currentDutyDependentRoot
-	if s.proposerPreferences != nil && s.executionConfigProvider != nil && s.proposerPreferencesLookahead != 0 {
-		s.recordProposerPreferencesDependentRoot(epoch, currentDutyDependentRoot)
-		s.recordProposerPreferencesDependentRoot(epoch+1, block)
-	}
 }
 
 // fastTrackJobs kicks off jobs when a block has been seen early.
