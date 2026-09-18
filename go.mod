@@ -7,7 +7,7 @@ require (
 	github.com/attestantio/go-block-relay v0.6.0
 	github.com/attestantio/go-builder-client v0.8.0
 	github.com/attestantio/go-certmanager v0.2.0
-	github.com/attestantio/go-eth2-client v0.29.1-0.20260929181918-8ab546820f6b
+	github.com/attestantio/go-eth2-client v0.29.1-0.20260930050333-77b260ef4472
 	github.com/aws/aws-sdk-go v1.55.6
 	github.com/google/uuid v1.6.0
 	github.com/holiman/uint256 v1.3.2
@@ -15,6 +15,7 @@ require (
 	github.com/pk910/dynamic-ssz v1.3.2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
+	github.com/prometheus/client_model v0.6.2
 	github.com/rs/zerolog v1.35.0
 	github.com/sasha-s/go-deadlock v0.3.6
 	github.com/shopspring/decimal v1.4.0
@@ -96,7 +97,6 @@ require (
 	github.com/petermattis/goid v0.0.0-20250813065127-a731cc31b4fe // indirect
 	github.com/pk910/hashtree-bindings v0.2.2 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/r3labs/sse/v2 v2.10.0 // indirect

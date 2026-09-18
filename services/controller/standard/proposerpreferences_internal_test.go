@@ -42,6 +42,7 @@ func TestPublishProposerPreferencesPublishesFirstGloasEpoch(t *testing.T) {
 	service := &Service{
 		chainTimeService:             &recordingChainTime{currentEpoch: 4, slotDuration: time.Second, slotsPerEpoch: 32},
 		proposerDutiesProvider:       provider,
+		proposerDutiesV2Provider:     provider,
 		validatingAccountsProvider:   &proposerPreferencesAccountsProvider{accounts: accounts},
 		executionConfigProvider:      &recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{FeeRecipient: bellatrix.ExecutionAddress{0x02}, GasLimit: 30_000_000}},
 		proposerPreferences:          preferences,
@@ -51,6 +52,8 @@ func TestPublishProposerPreferencesPublishesFirstGloasEpoch(t *testing.T) {
 
 	service.publishProposerPreferences(ctx, 5, phase0.Root{0x01})
 
+	require.Zero(t, provider.v1Calls)
+	require.Equal(t, 1, provider.v2Calls)
 	require.Equal(t, phase0.Epoch(5), provider.epoch)
 	require.Equal(t, []*proposerpreferences.Duty{proposerpreferences.NewDuty(
 		phase0.Root{0x01},
@@ -62,24 +65,36 @@ func TestPublishProposerPreferencesPublishesFirstGloasEpoch(t *testing.T) {
 	)}, preferences.duties)
 }
 
-func TestHandleHeadEventPublishesAndRefreshesProposerPreferences(t *testing.T) {
+func TestHandleHeadV2EventUsesEpochDependentRootsAcrossBoundary(t *testing.T) {
 	ctx := context.Background()
 	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{100}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
 	require.NoError(t, err)
+
+	rootA := testutil.HexToRoot("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	rootB := testutil.HexToRoot("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	rootC := testutil.HexToRoot("0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+	require.NotZero(t, rootA)
+	require.NotZero(t, rootB)
+	require.NotZero(t, rootC)
+	require.NotEqual(t, rootA, rootB)
+	require.NotEqual(t, rootB, rootC)
+	require.NotEqual(t, rootA, rootC)
 
 	const gasLimit = 30_000_000
 	feeRecipient := bellatrix.ExecutionAddress{0x89, 0x43, 0x54, 0x51, 0x77, 0x80, 0x6e, 0xd1, 0x7b, 0x9f, 0x23, 0xf0, 0xa2, 0x1e, 0xe5, 0x94, 0x8e, 0xca, 0xa7, 0x76}
 	provider := &headEventProposerDutiesProvider{
 		responses: map[phase0.Epoch]*api.Response[[]*apiv1.ProposerDuty]{
-			6: {Data: []*apiv1.ProposerDuty{{Slot: 209, ValidatorIndex: 100}}, Metadata: map[string]any{"dependent_root": phase0.Root{0x06}}},
-			7: {Data: []*apiv1.ProposerDuty{{Slot: 225, ValidatorIndex: 100}}, Metadata: map[string]any{"dependent_root": phase0.Root{0x07}}},
+			6: {Data: []*apiv1.ProposerDuty{{Slot: 209, ValidatorIndex: 100}}, Metadata: map[string]any{"dependent_root": rootA}},
+			7: {Data: []*apiv1.ProposerDuty{{Slot: 225, ValidatorIndex: 100}}, Metadata: map[string]any{"dependent_root": rootB}},
+			8: {Data: []*apiv1.ProposerDuty{{Slot: 257, ValidatorIndex: 100}}, Metadata: map[string]any{"dependent_root": rootC}},
 		},
 		epochs: make(chan phase0.Epoch, 16),
 	}
 	preferences := &headEventProposerPreferences{duties: make(chan *proposerpreferences.Duty, 16)}
+	chainTime := &recordingChainTime{currentEpoch: 6, slotsPerEpoch: 32}
 	service := &Service{
-		chainTimeService:             &recordingChainTime{currentEpoch: 6, slotsPerEpoch: 32},
-		proposerDutiesProvider:       provider,
+		chainTimeService:             chainTime,
+		proposerDutiesV2Provider:     provider,
 		validatingAccountsProvider:   &proposerPreferencesAccountsProvider{accounts: accounts},
 		executionConfigProvider:      &recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{FeeRecipient: feeRecipient, GasLimit: gasLimit}},
 		proposerPreferences:          preferences,
@@ -88,45 +103,80 @@ func TestHandleHeadEventPublishesAndRefreshesProposerPreferences(t *testing.T) {
 		slotsPerEpoch:                32,
 	}
 
-	service.HandleHeadEvent(ctx, &apiv1.HeadEvent{
+	service.HandleHeadV2Event(ctx, &apiv1.HeadEventV2{
 		Slot:                      192,
-		Block:                     phase0.Root{0x07},
-		PreviousDutyDependentRoot: phase0.Root{0x05},
-		CurrentDutyDependentRoot:  phase0.Root{0x06},
+		CurrentEpochDependentRoot: rootA,
+		NextEpochDependentRoot:    rootB,
 	})
 
 	require.Equal(t, phase0.Epoch(6), receiveProposerPreferencesEpoch(t, provider.epochs))
-	require.Equal(t, proposerpreferences.NewDuty(phase0.Root{0x06}, 209, 100, accounts[100], feeRecipient, gasLimit), receiveProposerPreferencesDuty(t, preferences.duties))
+	require.Equal(t, proposerpreferences.NewDuty(rootA, 209, 100, accounts[100], feeRecipient, gasLimit), receiveProposerPreferencesDuty(t, preferences.duties))
 	require.Equal(t, phase0.Epoch(7), receiveProposerPreferencesEpoch(t, provider.epochs))
-	require.Equal(t, proposerpreferences.NewDuty(phase0.Root{0x07}, 225, 100, accounts[100], feeRecipient, gasLimit), receiveProposerPreferencesDuty(t, preferences.duties))
+	require.Equal(t, proposerpreferences.NewDuty(rootB, 225, 100, accounts[100], feeRecipient, gasLimit), receiveProposerPreferencesDuty(t, preferences.duties))
 	waitForProposerPreferencesPublication(t, service)
 
-	provider.responses[7] = &api.Response[[]*apiv1.ProposerDuty]{Data: []*apiv1.ProposerDuty{{Slot: 225, ValidatorIndex: 100}}, Metadata: map[string]any{"dependent_root": phase0.Root{0x07}}}
-	service.HandleHeadEvent(ctx, &apiv1.HeadEvent{
-		Slot:                      192,
-		Block:                     phase0.Root{0x08},
-		PreviousDutyDependentRoot: phase0.Root{0x05},
-		CurrentDutyDependentRoot:  phase0.Root{0x06},
+	chainTime.currentEpoch = 7
+	service.HandleHeadV2Event(ctx, &apiv1.HeadEventV2{
+		Slot:                      224,
+		CurrentEpochDependentRoot: rootB,
+		NextEpochDependentRoot:    rootC,
 	})
 
-	require.Equal(t, phase0.Epoch(6), receiveProposerPreferencesEpoch(t, provider.epochs))
-	require.Equal(t, proposerpreferences.NewDuty(phase0.Root{0x06}, 209, 100, accounts[100], feeRecipient, gasLimit), receiveProposerPreferencesDuty(t, preferences.duties))
 	require.Equal(t, phase0.Epoch(7), receiveProposerPreferencesEpoch(t, provider.epochs))
+	require.Equal(t, proposerpreferences.NewDuty(rootB, 225, 100, accounts[100], feeRecipient, gasLimit), receiveProposerPreferencesDuty(t, preferences.duties))
+	require.Equal(t, phase0.Epoch(8), receiveProposerPreferencesEpoch(t, provider.epochs))
+	require.Equal(t, proposerpreferences.NewDuty(rootC, 257, 100, accounts[100], feeRecipient, gasLimit), receiveProposerPreferencesDuty(t, preferences.duties))
+	waitForProposerPreferencesPublication(t, service)
+}
+
+func TestChangedHeadV2RootInvalidatesUntilClassicHeadRefreshesCorrectedPreferences(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{100}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+
+	rootA := testutil.HexToRoot("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	rootB := testutil.HexToRoot("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	rootC := testutil.HexToRoot("0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+	provider := &headEventProposerDutiesProvider{
+		responses: map[phase0.Epoch]*api.Response[[]*apiv1.ProposerDuty]{
+			6: {Data: []*apiv1.ProposerDuty{{Slot: 209, ValidatorIndex: 100}}, Metadata: map[string]any{"dependent_root": rootA}},
+		},
+		epochs: make(chan phase0.Epoch, 16),
+	}
+	preferences := &headEventProposerPreferences{
+		duties:      make(chan *proposerpreferences.Duty, 16),
+		invalidated: make(chan slotRange, 4),
+	}
+	chainTime := &recordingChainTime{currentEpoch: 6, slotsPerEpoch: 32}
+	service := &Service{
+		chainTimeService:                  chainTime,
+		proposerDutiesV2Provider:          provider,
+		validatingAccountsProvider:        &proposerPreferencesAccountsProvider{accounts: accounts},
+		executionConfigProvider:           &recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{}},
+		proposerPreferences:               preferences,
+		gloasForkEpoch:                    5,
+		proposerPreferencesLookahead:      1,
+		slotsPerEpoch:                     32,
+		proposerPreferencesDependentRoots: map[phase0.Epoch]phase0.Root{6: rootA},
+	}
+
+	service.HandleHeadV2Event(ctx, &apiv1.HeadEventV2{
+		Slot:                      192,
+		CurrentEpochDependentRoot: rootB,
+		NextEpochDependentRoot:    rootC,
+	})
+
+	require.Equal(t, slotRange{from: 192, to: 223, root: rootB}, receiveInvalidatedSlotRange(t, preferences.invalidated))
 	waitForProposerPreferencesPublication(t, service)
 	assertNoProposerPreferencesDuty(t, preferences.duties)
 
-	provider.responses[7] = &api.Response[[]*apiv1.ProposerDuty]{Data: []*apiv1.ProposerDuty{{Slot: 225, ValidatorIndex: 100}}, Metadata: map[string]any{"dependent_root": phase0.Root{0x09}}}
-	service.HandleHeadEvent(ctx, &apiv1.HeadEvent{
-		Slot:                      192,
-		Block:                     phase0.Root{0x09},
-		PreviousDutyDependentRoot: phase0.Root{0x05},
-		CurrentDutyDependentRoot:  phase0.Root{0x06},
-	})
+	provider.responses[6] = &api.Response[[]*apiv1.ProposerDuty]{
+		Data:     []*apiv1.ProposerDuty{{Slot: 209, ValidatorIndex: 100}},
+		Metadata: map[string]any{"dependent_root": rootB},
+	}
+	service.HandleHeadEvent(ctx, &apiv1.HeadEvent{Slot: 192})
 
-	require.Equal(t, phase0.Epoch(6), receiveProposerPreferencesEpoch(t, provider.epochs))
-	require.Equal(t, proposerpreferences.NewDuty(phase0.Root{0x06}, 209, 100, accounts[100], feeRecipient, gasLimit), receiveProposerPreferencesDuty(t, preferences.duties))
-	require.Equal(t, phase0.Epoch(7), receiveProposerPreferencesEpoch(t, provider.epochs))
-	require.Equal(t, proposerpreferences.NewDuty(phase0.Root{0x09}, 225, 100, accounts[100], feeRecipient, gasLimit), receiveProposerPreferencesDuty(t, preferences.duties))
+	require.Equal(t, proposerpreferences.NewDuty(rootB, 209, 100, accounts[100], bellatrix.ExecutionAddress{}, 0), receiveProposerPreferencesDuty(t, preferences.duties))
 	waitForProposerPreferencesPublication(t, service)
 }
 
@@ -135,6 +185,7 @@ func TestPublishProposerPreferencesPrunesPastSlots(t *testing.T) {
 	service := &Service{
 		chainTimeService:             &recordingChainTime{currentEpoch: 4, slotsPerEpoch: 32},
 		proposerDutiesProvider:       &recordingProposerDutiesProvider{},
+		proposerDutiesV2Provider:     &recordingProposerDutiesProvider{},
 		proposerPreferences:          preferences,
 		executionConfigProvider:      &recordingExecutionConfigProvider{},
 		gloasForkEpoch:               5,
@@ -152,6 +203,7 @@ func TestPublishProposerPreferencesRejectsDutiesWithoutDependentRoot(t *testing.
 	service := &Service{
 		chainTimeService:             &recordingChainTime{currentEpoch: 4, slotsPerEpoch: 32},
 		proposerDutiesProvider:       provider,
+		proposerDutiesV2Provider:     provider,
 		proposerPreferences:          preferences,
 		executionConfigProvider:      &recordingExecutionConfigProvider{},
 		gloasForkEpoch:               5,
@@ -176,6 +228,7 @@ func TestPublishProposerPreferencesRejectsStaleDependentRoot(t *testing.T) {
 	service := &Service{
 		chainTimeService:             &recordingChainTime{currentEpoch: 4, slotsPerEpoch: 32},
 		proposerDutiesProvider:       provider,
+		proposerDutiesV2Provider:     provider,
 		validatingAccountsProvider:   &proposerPreferencesAccountsProvider{accounts: accounts},
 		executionConfigProvider:      &recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{}},
 		proposerPreferences:          preferences,
@@ -193,6 +246,7 @@ func TestPublishProposerPreferencesDoesNotPublishBeforeGloas(t *testing.T) {
 	service := &Service{
 		chainTimeService:             &recordingChainTime{currentEpoch: 4, slotsPerEpoch: 32},
 		proposerDutiesProvider:       provider,
+		proposerDutiesV2Provider:     provider,
 		proposerPreferences:          &recordingProposerPreferences{},
 		executionConfigProvider:      &recordingExecutionConfigProvider{},
 		gloasForkEpoch:               5,
@@ -206,13 +260,22 @@ func TestPublishProposerPreferencesDoesNotPublishBeforeGloas(t *testing.T) {
 
 type recordingProposerDutiesProvider struct {
 	calls    int
+	v1Calls  int
+	v2Calls  int
 	duties   []*apiv1.ProposerDuty
 	metadata map[string]any
 	epoch    phase0.Epoch
 }
 
-func (p *recordingProposerDutiesProvider) ProposerDuties(_ context.Context, opts *api.ProposerDutiesOpts) (*api.Response[[]*apiv1.ProposerDuty], error) {
+func (p *recordingProposerDutiesProvider) ProposerDuties(_ context.Context, _ *api.ProposerDutiesOpts) (*api.Response[[]*apiv1.ProposerDuty], error) {
 	p.calls++
+	p.v1Calls++
+	return &api.Response[[]*apiv1.ProposerDuty]{Data: p.duties, Metadata: p.metadata}, nil
+}
+
+func (p *recordingProposerDutiesProvider) ProposerDutiesV2(_ context.Context, opts *api.ProposerDutiesOpts) (*api.Response[[]*apiv1.ProposerDuty], error) {
+	p.calls++
+	p.v2Calls++
 	p.epoch = opts.Epoch
 	return &api.Response[[]*apiv1.ProposerDuty]{Data: p.duties, Metadata: p.metadata}, nil
 }
@@ -223,6 +286,14 @@ type headEventProposerDutiesProvider struct {
 }
 
 func (p *headEventProposerDutiesProvider) ProposerDuties(_ context.Context, opts *api.ProposerDutiesOpts) (*api.Response[[]*apiv1.ProposerDuty], error) {
+	return p.response(opts)
+}
+
+func (p *headEventProposerDutiesProvider) ProposerDutiesV2(_ context.Context, opts *api.ProposerDutiesOpts) (*api.Response[[]*apiv1.ProposerDuty], error) {
+	return p.response(opts)
+}
+
+func (p *headEventProposerDutiesProvider) response(opts *api.ProposerDutiesOpts) (*api.Response[[]*apiv1.ProposerDuty], error) {
 	response := p.responses[opts.Epoch]
 	p.epochs <- opts.Epoch
 
@@ -230,7 +301,14 @@ func (p *headEventProposerDutiesProvider) ProposerDuties(_ context.Context, opts
 }
 
 type headEventProposerPreferences struct {
-	duties chan *proposerpreferences.Duty
+	duties      chan *proposerpreferences.Duty
+	invalidated chan slotRange
+}
+
+func (p *headEventProposerPreferences) UpdateDependentRoot(fromSlot phase0.Slot, toSlot phase0.Slot, root phase0.Root) {
+	if p.invalidated != nil {
+		p.invalidated <- slotRange{from: fromSlot, to: toSlot, root: root}
+	}
 }
 
 func (*headEventProposerPreferences) Prune(phase0.Slot) {}
@@ -239,6 +317,23 @@ func (p *headEventProposerPreferences) Publish(_ context.Context, duty *proposer
 	p.duties <- duty
 
 	return nil
+}
+
+type slotRange struct {
+	from phase0.Slot
+	to   phase0.Slot
+	root phase0.Root
+}
+
+func receiveInvalidatedSlotRange(t *testing.T, invalidated <-chan slotRange) slotRange {
+	t.Helper()
+	select {
+	case slots := <-invalidated:
+		return slots
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for proposer preferences invalidation")
+		return slotRange{}
+	}
 }
 
 func receiveProposerPreferencesEpoch(t *testing.T, epochs <-chan phase0.Epoch) phase0.Epoch {
@@ -322,6 +417,8 @@ type recordingProposerPreferences struct {
 	duties      []*proposerpreferences.Duty
 	prunedSlots []phase0.Slot
 }
+
+func (*recordingProposerPreferences) UpdateDependentRoot(phase0.Slot, phase0.Slot, phase0.Root) {}
 
 func (p *recordingProposerPreferences) Prune(slot phase0.Slot) {
 	p.prunedSlots = append(p.prunedSlots, slot)
