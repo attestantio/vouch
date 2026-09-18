@@ -383,21 +383,71 @@ func TestEPBSProposalSkipsProposalWithoutRequestedPayload(t *testing.T) {
 	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
 }
 
-func TestEPBSProposalSkipsZeroFeeRecipient(t *testing.T) {
+func TestEPBSProposalHandlesZeroFeeRecipient(t *testing.T) {
 	ctx := context.Background()
-	service, err := first.New(ctx,
-		first.WithLogLevel(zerolog.Disabled),
-		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
-			"zero-fee": &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{})},
-		}),
-		first.WithTimeout(10*time.Millisecond),
-	)
-	require.NoError(t, err)
+	tests := []struct {
+		name   string
+		mutate func(*gloas.SignedExecutionPayloadBid)
+		valid  bool
+	}{
+		{
+			name: "ValidSelfBuild",
+			mutate: func(bid *gloas.SignedExecutionPayloadBid) {
+				bid.Signature[0] = 0xc0
+			},
+			valid: true,
+		},
+		{
+			name: "BuilderBacked",
+			mutate: func(bid *gloas.SignedExecutionPayloadBid) {
+				bid.Message.BuilderIndex = 7
+				bid.Signature[0] = 0xc0
+			},
+		},
+		{
+			name: "NonZeroValue",
+			mutate: func(bid *gloas.SignedExecutionPayloadBid) {
+				bid.Message.Value = 1
+				bid.Signature[0] = 0xc0
+			},
+		},
+		{
+			name: "NonZeroExecutionPayment",
+			mutate: func(bid *gloas.SignedExecutionPayloadBid) {
+				bid.Message.ExecutionPayment = 1
+				bid.Signature[0] = 0xc0
+			},
+		},
+		{
+			name:   "NonInfinitySignature",
+			mutate: func(*gloas.SignedExecutionPayloadBid) {},
+		},
+	}
 
-	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
-	require.Nil(t, response)
-	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			proposal := gloasEPBSProposal(bellatrix.ExecutionAddress{})
+			test.mutate(proposal.GloasContents.Block.Body.SignedExecutionPayloadBid)
+			service, err := first.New(ctx,
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithClientMonitor(nullmetrics.New()),
+				first.WithProposalProviders(map[string]beaconblockproposer.ProposalDataProvider{
+					"zero-fee": &epbsProposalProvider{proposal: proposal},
+				}),
+				first.WithTimeout(10*time.Millisecond),
+			)
+			require.NoError(t, err)
+
+			response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+			if test.valid {
+				require.NoError(t, err)
+				require.Same(t, proposal, response.Data)
+			} else {
+				require.Nil(t, response)
+				require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+			}
+		})
+	}
 }
 
 func TestEPBSProposalSkipsNilResponse(t *testing.T) {

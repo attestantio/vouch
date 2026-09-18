@@ -331,7 +331,7 @@ func epbsProposalSource(proposal *api.VersionedEPBSProposal, metadata map[string
 
 // acceptableEPBSProposal reports whether proposal is usable, discarding and logging it if it is
 // nil, is inconsistent with the auction result its bid reports, comes from an unready builder
-// provider, or (for Gloas) is structurally malformed or pays a zero fee recipient.
+// provider, or (for Gloas) is structurally malformed or has an invalid zero fee recipient.
 // skipcq: GO-R1005
 func (s *Service) acceptableEPBSProposal(provider string,
 	proposal *api.VersionedEPBSProposal,
@@ -384,14 +384,15 @@ func (s *Service) acceptableEPBSBid(provider string,
 
 		return false, false, "malformed_proposal"
 	}
-	bid := block.Body.SignedExecutionPayloadBid.Message
+	signedBid := block.Body.SignedExecutionPayloadBid
+	bid := signedBid.Message
 	builderBacked := bid.BuilderIndex != selfBuiltBuilderIndex
 	if builderBacked && s.providerReadiness != nil && !s.providerReadiness.ProviderReady(provider, opts.Slot, block.ProposerIndex) {
 		s.log.Warn().Str("provider", beaconblockproposer.StableProviderName(provider)).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
 
 		return false, false, "provider_preferences_not_ready"
 	}
-	if bid.FeeRecipient.IsZero() {
+	if bid.FeeRecipient.IsZero() && (builderBacked || bid.Value != 0 || bid.ExecutionPayment != 0 || !signedBid.Signature.IsInfinity()) {
 		s.log.Warn().Msg("Discarding ePBS proposal with 0 fee recipient")
 
 		return false, false, "zero_fee_recipient"
