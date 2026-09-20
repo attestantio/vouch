@@ -32,6 +32,11 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
+const (
+	payloadAttestationDataRetryInterval = 50 * time.Millisecond
+	payloadAttestationDataRetryWindow   = 500 * time.Millisecond
+)
+
 // Service is the standard payload attester.
 type Service struct {
 	log                                 zerolog.Logger
@@ -96,7 +101,7 @@ func (s *Service) Attest(ctx context.Context, duty *payloadattester.Duty) ([]*sp
 		return []*spec.VersionedPayloadAttestationMessage{}, nil
 	}
 
-	response, err := s.payloadAttestationDataProvider.PayloadAttestationData(ctx, &api.PayloadAttestationDataOpts{Slot: duty.Slot()})
+	response, err := s.payloadAttestationData(ctx, duty.Slot())
 	if err != nil {
 		monitorPayloadAttestationProcess("failed", len(accounts))
 		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to produce payload attestation data")
@@ -159,4 +164,27 @@ func (s *Service) Attest(ctx context.Context, duty *payloadattester.Duty) ([]*sp
 	s.log.Trace().Uint64("slot", uint64(duty.Slot())).Int("count", len(messages)).Dur("elapsed", time.Since(started)).Msg("Submitted payload attestation messages")
 
 	return messages, nil
+}
+
+func (s *Service) payloadAttestationData(ctx context.Context, slot phase0.Slot) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+	retryDeadline := time.Now().Add(payloadAttestationDataRetryWindow)
+	for {
+		response, err := s.payloadAttestationDataProvider.PayloadAttestationData(ctx, &api.PayloadAttestationDataOpts{Slot: slot})
+		if err == nil || !errors.Is(err, eth2client.ErrNoPayloadAttestationData) {
+			return response, err
+		}
+		if time.Now().Add(payloadAttestationDataRetryInterval).After(retryDeadline) {
+			return nil, err
+		}
+
+		timer := time.NewTimer(payloadAttestationDataRetryInterval)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return nil, err
+		case <-timer.C:
+		}
+	}
 }
