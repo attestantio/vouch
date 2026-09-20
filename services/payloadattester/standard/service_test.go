@@ -18,6 +18,7 @@ import (
 	"errors"
 	"testing"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	mocketh2client "github.com/attestantio/go-eth2-client/mock"
@@ -84,6 +85,40 @@ func TestAttestFetchesSignsAndSubmitsVersionedMessages(t *testing.T) {
 	require.True(t, capture.HasLog(map[string]any{"message": "Produced payload attestation data", "slot": uint64(12)}))
 	require.True(t, capture.HasLog(map[string]any{"message": "Signed payload attestation messages", "slot": uint64(12), "count": 2}))
 	require.True(t, capture.HasLog(map[string]any{"message": "Submitted payload attestation messages", "slot": uint64(12), "count": 2}))
+}
+
+func TestAttestRetriesUnavailablePayloadAttestationData(t *testing.T) {
+	ctx := context.Background()
+	client, err := mocketh2client.New(ctx)
+	require.NoError(t, err)
+	calls := 0
+	client.PayloadAttestationDataFunc = func(_ context.Context, _ *api.PayloadAttestationDataOpts) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+		calls++
+		if calls == 1 {
+			return nil, eth2client.ErrNoPayloadAttestationData
+		}
+		return &api.Response[*spec.VersionedPayloadAttestationData]{Data: &spec.VersionedPayloadAttestationData{
+			Version: spec.DataVersionGloas,
+			Gloas:   &gloas.PayloadAttestationData{Slot: 12},
+		}}, nil
+	}
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{1}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	service, err := standard.New(ctx,
+		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithMonitor(prometheusMonitor{}),
+		standard.WithPayloadAttestationDataProvider(client),
+		standard.WithPayloadAttestationDataSigner(&recordingSigner{}),
+		standard.WithPayloadAttestationMessagesSubmitter(&recordingSubmitter{}),
+	)
+	require.NoError(t, err)
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 12, ValidatorIndex: 1})
+	duty.SetAccount(1, accounts[1])
+
+	_, err = service.Attest(ctx, duty)
+
+	require.NoError(t, err)
+	require.Equal(t, 2, calls)
 }
 
 func TestAttestRejectsDataForDifferentSlotBeforeSigningOrSubmitting(t *testing.T) {

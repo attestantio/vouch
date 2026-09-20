@@ -18,6 +18,8 @@ import (
 	"testing"
 	"time"
 
+	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
@@ -72,6 +74,8 @@ func TestService(t *testing.T) {
 	mockAccountsRefresher := mockaccountmanager.NewRefresher()
 	mockBeaconBlockProposer := mockbeaconblockproposer.New()
 	mockEventsProvider := mock.NewEventsProvider()
+	generalEventsRecorder := &recordingEventsProvider{}
+	payloadEventsRecorder := &recordingEventsProvider{}
 	mockBeaconCommitteeSubscriber := mockbeaconcommitteesubscriber.New()
 	mockBlockToSlotSetter := mockcache.New(map[phase0.Root]phase0.Slot{}).(cache.BlockRootToSlotSetter)
 
@@ -743,7 +747,8 @@ func TestService(t *testing.T) {
 				standard.WithProposerDutiesProvider(proposerDutiesProvider),
 				standard.WithAttesterDutiesProvider(attesterDutiesProvider),
 				standard.WithSyncCommitteeDutiesProvider(syncCommitteeDutiesProvider),
-				standard.WithEventsProvider(mockEventsProvider),
+				standard.WithEventsProvider(generalEventsRecorder),
+				standard.WithPayloadEventsProvider(payloadEventsRecorder),
 				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
 				standard.WithProposalsPreparer(mockProposalsPreparer),
 				standard.WithScheduler(mockScheduler),
@@ -813,4 +818,20 @@ func TestService(t *testing.T) {
 			}
 		})
 	}
+
+	require.ElementsMatch(t, []string{"block", "head", "head_v2"}, generalEventsRecorder.opts.Topics)
+	require.NotNil(t, payloadEventsRecorder.opts)
+	require.Equal(t, []string{"execution_payload_available"}, payloadEventsRecorder.opts.Topics)
+	require.NotNil(t, payloadEventsRecorder.opts.ExecutionPayloadAvailableHandler)
 }
+
+type recordingEventsProvider struct {
+	opts *api.EventsOpts
+}
+
+func (p *recordingEventsProvider) Events(_ context.Context, opts *api.EventsOpts) error {
+	p.opts = opts
+	return nil
+}
+
+var _ eth2client.EventsProvider = (*recordingEventsProvider)(nil)
