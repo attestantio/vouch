@@ -111,6 +111,7 @@ type Service struct {
 	previousDutyDependentRoot phase0.Root
 	// Tracking for attestations.
 	pendingAttestations                   map[phase0.Slot]bool
+	payloadAttestations                   map[phase0.Slot]*payloadAttestation
 	proposerPreferencesDependentRoots     map[phase0.Epoch]phase0.Root
 	proposerPreferencesPublicationRunning bool
 	proposerPreferencesPublicationPending bool
@@ -118,6 +119,7 @@ type Service struct {
 	proposerPreferencesDependentRootMutex sync.RWMutex
 	proposerPreferencesPublicationMutex   sync.Mutex
 	pendingAttestationsMutex              sync.RWMutex
+	payloadAttestationsMutex              sync.Mutex
 }
 
 // New creates a new controller.
@@ -196,6 +198,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		gloasForkEpoch:                    gloasForkEpoch,
 		proposerPreferencesLookahead:      proposerPreferencesLookahead,
 		pendingAttestations:               make(map[phase0.Slot]bool),
+		payloadAttestations:               make(map[phase0.Slot]*payloadAttestation),
 		proposerPreferencesDependentRoots: make(map[phase0.Epoch]phase0.Root),
 	}
 
@@ -210,6 +213,14 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		BlockHandler:  s.HandleBlockEvent,
 	}); err != nil {
 		return nil, errors.Wrap(err, "failed to add events handler")
+	}
+	if parameters.payloadEventsProvider != nil {
+		if err := parameters.payloadEventsProvider.Events(ctx, &api.EventsOpts{
+			Topics:                           []string{"execution_payload_available"},
+			ExecutionPayloadAvailableHandler: s.HandleExecutionPayloadAvailableEvent,
+		}); err != nil {
+			return nil, errors.Wrap(err, "failed to add payload events handler")
+		}
 	}
 
 	// Start tickers, to carry out periodic operations.
