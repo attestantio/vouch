@@ -510,6 +510,18 @@ func startServiceFamily(ctx context.Context,
 	}, nil
 }
 
+func payloadEventsProvider(ctx context.Context, monitor metrics.Service) (eth2client.EventsProvider, error) {
+	client, err := fetchMultiClient(ctx, monitor, "payload events", util.BeaconNodeAddressesForPayloadAttestationData())
+	if err != nil {
+		return nil, err
+	}
+	provider, ok := client.(eth2client.EventsProvider)
+	if !ok {
+		return nil, errors.New("payload attestation data client does not provide events")
+	}
+	return provider, nil
+}
+
 func initController(ctx context.Context,
 	monitor metrics.Service,
 	chainTime chaintime.Service,
@@ -541,6 +553,10 @@ func initController(ctx context.Context,
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch multiclient for controller")
 	}
+	payloadEvents, err := payloadEventsProvider(ctx, monitor)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch payload events provider for controller")
+	}
 
 	log.Trace().Msg("Starting controller")
 	controllerParams := []standardcontroller.Parameter{
@@ -553,6 +569,7 @@ func initController(ctx context.Context,
 		standardcontroller.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),
 		standardcontroller.WithSyncCommitteeDutiesProvider(eth2Client.(eth2client.SyncCommitteeDutiesProvider)),
 		standardcontroller.WithEventsProvider(eventsConsensusClient.(eth2client.EventsProvider)),
+		standardcontroller.WithPayloadEventsProvider(payloadEvents),
 		standardcontroller.WithScheduler(schedulerSvc),
 		standardcontroller.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardcontroller.WithAttester(attesterSvc),

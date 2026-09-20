@@ -52,6 +52,7 @@ type parameters struct {
 	ptcDutiesProvider             eth2client.PTCDutiesProvider
 	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
 	eventsProvider                eth2client.EventsProvider
+	payloadEventsProvider         eth2client.EventsProvider
 	beaconBlockHeadersProvider    eth2client.BeaconBlockHeadersProvider
 	signedBeaconBlockProvider     eth2client.SignedBeaconBlockProvider
 	logLevel                      zerolog.Level
@@ -163,6 +164,13 @@ func WithSyncCommitteeSubscriber(subscriber synccommitteesubscriber.Service) Par
 func WithEventsProvider(provider eth2client.EventsProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.eventsProvider = provider
+	})
+}
+
+// WithPayloadEventsProvider sets the payload events provider.
+func WithPayloadEventsProvider(provider eth2client.EventsProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.payloadEventsProvider = provider
 	})
 }
 

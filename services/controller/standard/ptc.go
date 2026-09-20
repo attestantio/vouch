@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/api"
@@ -26,16 +27,17 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
-// payloadAttestationGrace is added to the payload attestation deadline before the vote is cast.  A
-// beacon node does not serve payload attestation data it does not yet consider final, and one whose
-// clock trails ours has not reached the deadline when we do, so firing exactly on the deadline can
-// return nothing at all.  This covers that skew and still leaves the rest of the slot for the vote
-// to propagate.
-const payloadAttestationGrace = 250 * time.Millisecond
-
 // payloadAttestationJobName provides the scheduler job name for a slot's payload attestations.
 func payloadAttestationJobName(slot phase0.Slot) string {
 	return fmt.Sprintf("Payload attestations for slot %d", slot)
+}
+
+type payloadAttestation struct {
+	duty           *payloadattester.Duty
+	deadline       time.Time
+	eventAttempted  bool
+	attemptFinished bool
+	mutex           sync.Mutex
 }
 
 // schedulePayloadAttestations schedules payload attestation duties.
@@ -135,7 +137,6 @@ func payloadAttestationDuties(data []*apiv1.PTCDuty,
 	return dutiesBySlot, indices
 }
 
-//nolint:godox // The TODO below is tracked as follow-up work, not left as a loose end.
 func (s *Service) schedulePayloadAttestation(ctx context.Context,
 	duty *payloadattester.Duty,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
@@ -149,15 +150,15 @@ func (s *Service) schedulePayloadAttestation(ctx context.Context,
 		duty.SetAccount(index, account)
 	}
 
-	// TODO: take the payload-available event once go-eth2-client exposes the SSE topic.
-	// The vote would then be cast as soon as the beacon node reports the payload available, keeping
-	// this deadline as the backstop.  Prysm's validator waits on that event or this deadline,
-	// whichever comes first, which votes earlier in the common case without ever asking before the
-	// answer is final.
-	jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.payloadAttestationDelay).Add(payloadAttestationGrace)
+	jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.payloadAttestationDelay)
 	// The vote is cast at the attestation deadline, so its context runs to the end of the slot:
 	// bounding it at that deadline would cut off the signing and submission the vote depends on.
 	deadline := s.chainTimeService.StartOfSlot(duty.Slot() + 1)
+	attestation := &payloadAttestation{duty: duty, deadline: jobTime}
+	s.payloadAttestationsMutex.Lock()
+	if s.payloadAttestations == nil {
+		s.payloadAttestations = make(map[phase0.Slot]*payloadAttestation)
+	}
 	if err := s.scheduler.ScheduleJob(ctx,
 		"Payload attestation",
 		payloadAttestationJobName(duty.Slot()),
@@ -165,21 +166,42 @@ func (s *Service) schedulePayloadAttestation(ctx context.Context,
 		func(ctx context.Context) {
 			ctx, cancel := context.WithDeadline(ctx, deadline)
 			defer cancel()
-			s.attestPayload(ctx, duty)
+			attestation.mutex.Lock()
+			if !attestation.attemptFinished {
+				_ = s.attestPayload(ctx, duty)
+				attestation.attemptFinished = true
+			}
+			attestation.mutex.Unlock()
+			s.removePayloadAttestation(duty.Slot(), attestation)
 		},
 	); err != nil {
+		s.payloadAttestationsMutex.Unlock()
 		s.log.Error().Err(err).Msg("Failed to schedule payload attestation")
 		return
 	}
+	s.payloadAttestations[duty.Slot()] = attestation
+	s.payloadAttestationsMutex.Unlock()
 	if err := s.payloadAttester.Prepare(ctx, duty); err != nil {
 		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to prepare payload attestation")
 	}
 }
 
-func (s *Service) attestPayload(ctx context.Context, duty *payloadattester.Duty) {
+func (s *Service) attestPayload(ctx context.Context, duty *payloadattester.Duty) error {
 	if _, err := s.payloadAttester.Attest(ctx, duty); err != nil {
 		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to attest to payload timeliness")
+		return err
 	}
+	return nil
+}
+
+func (s *Service) removePayloadAttestation(slot phase0.Slot, attestation *payloadAttestation) bool {
+	s.payloadAttestationsMutex.Lock()
+	defer s.payloadAttestationsMutex.Unlock()
+	if s.payloadAttestations[slot] != attestation {
+		return false
+	}
+	delete(s.payloadAttestations, slot)
+	return true
 }
 
 func (s *Service) refreshPayloadAttestationDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {
@@ -191,8 +213,20 @@ func (s *Service) refreshPayloadAttestationDutiesForEpoch(ctx context.Context, e
 
 	cancelledJobs := make(map[phase0.Slot]bool)
 	for slot := s.chainTimeService.FirstSlotOfEpoch(epoch); slot < s.chainTimeService.FirstSlotOfEpoch(epoch+1); slot++ {
+		s.payloadAttestationsMutex.Lock()
+		attestation := s.payloadAttestations[slot]
+		s.payloadAttestationsMutex.Unlock()
+		if attestation != nil {
+			attestation.mutex.Lock()
+		}
 		if err := s.scheduler.CancelJob(ctx, payloadAttestationJobName(slot)); err == nil {
-			cancelledJobs[slot] = true
+			cancelledJobs[slot] = attestation == nil || !attestation.attemptFinished
+			if attestation != nil {
+				s.removePayloadAttestation(slot, attestation)
+			}
+		}
+		if attestation != nil {
+			attestation.mutex.Unlock()
 		}
 	}
 

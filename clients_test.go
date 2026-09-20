@@ -311,6 +311,48 @@ func TestPayloadAttesterUsesConfiguredPayloadAttestationDataProviders(t *testing
 	require.Zero(t, globalRequests.Load())
 }
 
+func TestPayloadEventsProviderUsesConfiguredPayloadAttestationDataProviders(t *testing.T) {
+	ctx := context.Background()
+	newServer := func() *httptest.Server {
+		return httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+			switch r.URL.Path {
+			case "/eth/v1/node/version":
+				_, _ = w.Write([]byte(`{"data":{"version":"test"}}`))
+			case "/eth/v1/node/syncing":
+				_, _ = w.Write([]byte(`{"data":{"is_syncing":false,"is_optimistic":false,"el_offline":false,"head_slot":"12","sync_distance":"0"}}`))
+			default:
+				w.WriteHeader(nethttp.StatusNotFound)
+			}
+		}))
+	}
+	configuredServer := newServer()
+	defer configuredServer.Close()
+	globalServer := newServer()
+	defer globalServer.Close()
+
+	viper.Set("timeout", time.Second)
+	viper.Set("beacon-node-addresses", []string{globalServer.URL})
+	viper.Set("strategies.payloadattestationdata.beacon-node-addresses", []string{configuredServer.URL})
+	t.Cleanup(func() {
+		viper.Reset()
+		knownClientsMu.Lock()
+		delete(knownClients, configuredServer.URL)
+		delete(knownClients, globalServer.URL)
+		delete(knownClients, "multi:"+configuredServer.URL)
+		knownClientsMu.Unlock()
+	})
+
+	provider, err := payloadEventsProvider(ctx, null.New())
+	require.NoError(t, err)
+	require.NotNil(t, provider)
+	knownClientsMu.Lock()
+	configuredProvider := knownClients["multi:"+configuredServer.URL]
+	_, globalProviderCreated := knownClients["multi:"+globalServer.URL]
+	knownClientsMu.Unlock()
+	require.Same(t, configuredProvider, provider)
+	require.False(t, globalProviderCreated)
+}
+
 func TestFirstPayloadAttestationDataStrategyRejectsInvalidResponses(t *testing.T) {
 	ctx := context.Background()
 	invalidAddress := "http://payload-data-invalid.test"

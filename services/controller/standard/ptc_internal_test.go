@@ -6,9 +6,14 @@ package standard
 import (
 	"context"
 	"errors"
+	"runtime"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -18,6 +23,148 @@ import (
 	"github.com/stretchr/testify/require"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
+
+func TestExecutionPayloadAvailableRetainsDeadlineAfterDataUnavailable(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{}
+	payloadService := &recordingPayloadAttester{err: eth2client.ErrNoPayloadAttestationData}
+	service := &Service{
+		chainTimeService:        currentSlotRecordingChainTime(10),
+		scheduler:               schedulerService,
+		payloadAttester:         payloadService,
+		payloadAttestationDelay: 9 * time.Second,
+	}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})
+
+	service.schedulePayloadAttestation(ctx, duty, map[phase0.ValidatorIndex]e2wtypes.Account{1: nil})
+	service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 10})
+
+	require.Len(t, payloadService.duties, 1)
+	require.True(t, schedulerService.JobExists(ctx, payloadAttestationJobName(10)))
+}
+
+func TestPayloadAttestationDeadlineRetriesAfterEventDataUnavailable(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{}
+	payloadService := &recordingPayloadAttester{err: eth2client.ErrNoPayloadAttestationData}
+	service := &Service{
+		chainTimeService:        currentSlotRecordingChainTime(10),
+		scheduler:               schedulerService,
+		payloadAttester:         payloadService,
+		payloadAttestationDelay: 9 * time.Second,
+	}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})
+
+	service.schedulePayloadAttestation(ctx, duty, map[phase0.ValidatorIndex]e2wtypes.Account{1: nil})
+	service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 10})
+	payloadService.err = nil
+	schedulerService.RunJobIfExists(ctx, payloadAttestationJobName(10))
+
+	require.Len(t, payloadService.duties, 2)
+}
+
+func TestExecutionPayloadAvailableDoesNotRetryNonDataErrorAtDeadline(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{}
+	payloadService := &recordingPayloadAttester{err: errors.New("signing failed")}
+	service := &Service{
+		chainTimeService:        currentSlotRecordingChainTime(10),
+		scheduler:               schedulerService,
+		payloadAttester:         payloadService,
+		payloadAttestationDelay: 9 * time.Second,
+	}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})
+
+	service.schedulePayloadAttestation(ctx, duty, map[phase0.ValidatorIndex]e2wtypes.Account{1: nil})
+	service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 10})
+	schedulerService.RunJobIfExists(ctx, payloadAttestationJobName(10))
+
+	require.Len(t, payloadService.duties, 1)
+}
+
+func TestExecutionPayloadAvailableRunsScheduledPayloadAttestation(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{}
+	payloadService := &recordingPayloadAttester{}
+	service := &Service{
+		chainTimeService:        currentSlotRecordingChainTime(10),
+		scheduler:               schedulerService,
+		payloadAttester:         payloadService,
+		payloadAttestationDelay: 9 * time.Second,
+	}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})
+
+	service.schedulePayloadAttestation(ctx, duty, map[phase0.ValidatorIndex]e2wtypes.Account{1: nil})
+	service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 10})
+
+	require.Len(t, payloadService.duties, 1)
+	require.False(t, schedulerService.JobExists(ctx, payloadAttestationJobName(10)))
+}
+
+func TestExecutionPayloadAvailableAttemptRunsToEndOfSlot(t *testing.T) {
+	ctx := context.Background()
+	chainTime := currentSlotRecordingChainTime(10)
+	payloadService := &recordingPayloadAttester{}
+	service := &Service{
+		chainTimeService:        chainTime,
+		scheduler:               &recordingScheduler{},
+		payloadAttester:         payloadService,
+		payloadAttestationDelay: 9 * time.Second,
+	}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})
+
+	service.schedulePayloadAttestation(ctx, duty, map[phase0.ValidatorIndex]e2wtypes.Account{1: nil})
+	service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 10})
+
+	require.Equal(t, chainTime.StartOfSlot(11), payloadService.deadline)
+}
+
+func TestDuplicateExecutionPayloadAvailableDoesNotRerunPayloadAttestation(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{}
+	payloadService := &recordingPayloadAttester{}
+	service := &Service{
+		chainTimeService:        currentSlotRecordingChainTime(10),
+		scheduler:               schedulerService,
+		payloadAttester:         payloadService,
+		payloadAttestationDelay: 9 * time.Second,
+	}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})
+	event := &apiv1.ExecutionPayloadAvailableEvent{Slot: 10}
+
+	service.schedulePayloadAttestation(ctx, duty, map[phase0.ValidatorIndex]e2wtypes.Account{1: nil})
+	service.HandleExecutionPayloadAvailableEvent(ctx, event)
+	service.HandleExecutionPayloadAvailableEvent(ctx, event)
+
+	require.Len(t, payloadService.duties, 1)
+}
+
+func TestLateExecutionPayloadAvailableDoesNothing(t *testing.T) {
+	payloadService := &recordingPayloadAttester{}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})
+	service := &Service{
+		chainTimeService: &recordingChainTime{slotDuration: 12 * time.Second, slotsPerEpoch: 32},
+		scheduler:        &recordingScheduler{},
+		payloadAttester:  payloadService,
+		payloadAttestations: map[phase0.Slot]*payloadAttestation{
+			10: {duty: duty, deadline: time.Now().Add(-time.Second)},
+		},
+	}
+
+	service.HandleExecutionPayloadAvailableEvent(context.Background(), &apiv1.ExecutionPayloadAvailableEvent{Slot: 10})
+
+	require.Empty(t, payloadService.duties)
+}
+
+func TestExecutionPayloadAvailableWithoutDutyDoesNothing(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{existing: make(map[string]bool)}
+	service := &Service{scheduler: schedulerService}
+
+	service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 10})
+
+	require.Empty(t, schedulerService.cancelled)
+}
 
 func TestSchedulePayloadAttestationsGroupsDutiesAndCallsService(t *testing.T) {
 	ctx := context.Background()
@@ -98,7 +245,7 @@ func TestSchedulePayloadAttestationVotesAtTheAttestationDeadline(t *testing.T) {
 	service.schedulePayloadAttestations(ctx, 0, []phase0.ValidatorIndex{1}, false)
 
 	require.Len(t, schedulerService.jobs, 1)
-	require.Equal(t, chainTime.StartOfSlot(10).Add(9*time.Second+250*time.Millisecond), schedulerService.jobs[0].runtime)
+	require.Equal(t, chainTime.StartOfSlot(10).Add(9*time.Second), schedulerService.jobs[0].runtime)
 }
 
 // TestSchedulePayloadAttestationDeadlineRunsToTheEndOfTheSlot confirms that the vote's context runs
@@ -143,8 +290,117 @@ func TestSchedulePayloadAttestationsIsInactiveBeforeGloas(t *testing.T) {
 	require.Empty(t, service.scheduler.(*recordingScheduler).jobs)
 }
 
-func TestRefreshPayloadAttestationsReschedulesAfterDependentRootChange(t *testing.T) {
+func TestRefreshPayloadAttestationsDoesNotReplaceInFlightSuccessfulAttempt(t *testing.T) {
+	ctx := context.Background()
 	schedulerService := &recordingScheduler{}
+	payloadService := &blockingPayloadAttester{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	service := &Service{
+		chainTimeService:           currentSlotRecordingChainTime(0),
+		ptcDutiesProvider:          &recordingPTCDutiesProvider{duties: []*apiv1.PTCDuty{{Slot: 0, ValidatorIndex: 1}}},
+		validatingAccountsProvider: &recordingAccountsProvider{epochIndices: []phase0.ValidatorIndex{1}},
+		scheduler:                  schedulerService,
+		payloadAttester:            payloadService,
+		payloadAttestationDelay:    9 * time.Second,
+		gloasForkEpoch:             0,
+	}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 0, ValidatorIndex: 1})
+	service.schedulePayloadAttestation(ctx, duty, map[phase0.ValidatorIndex]e2wtypes.Account{1: nil})
+
+	eventDone := make(chan struct{})
+	go func() {
+		service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 0})
+		close(eventDone)
+	}()
+	<-payloadService.started
+	refreshDone := make(chan struct{})
+	go func() {
+		service.refreshPayloadAttestationDutiesForEpoch(ctx, 0)
+		close(refreshDone)
+	}()
+	select {
+	case <-refreshDone:
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(payloadService.release)
+	<-eventDone
+	<-refreshDone
+
+	service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 0})
+
+	require.Equal(t, int32(1), payloadService.calls.Load())
+}
+
+func TestRefreshPayloadAttestationsReplacesDutyBeforeWaitingEventRuns(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{}
+	payloadService := &recordingPayloadAttester{}
+	service := &Service{
+		chainTimeService:           currentSlotRecordingChainTime(0),
+		ptcDutiesProvider:          &recordingPTCDutiesProvider{duties: []*apiv1.PTCDuty{{Slot: 0, ValidatorIndex: 2}}},
+		validatingAccountsProvider: &recordingAccountsProvider{epochIndices: []phase0.ValidatorIndex{2}},
+		scheduler:                  schedulerService,
+		payloadAttester:            payloadService,
+		payloadAttestationDelay:    9 * time.Second,
+		gloasForkEpoch:             0,
+	}
+	oldDuty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 0, ValidatorIndex: 1})
+	service.schedulePayloadAttestation(ctx, oldDuty, map[phase0.ValidatorIndex]e2wtypes.Account{1: nil})
+	oldAttestation := service.payloadAttestations[0]
+	oldAttestation.mutex.Lock()
+
+	refreshDone := make(chan struct{})
+	go func() {
+		service.refreshPayloadAttestationDutiesForEpoch(ctx, 0)
+		close(refreshDone)
+	}()
+	require.Eventually(t, func() bool {
+		return goroutineBlockedOnMutex("refreshPayloadAttestationDutiesForEpoch")
+	}, time.Second, time.Millisecond)
+
+	eventDone := make(chan struct{})
+	go func() {
+		service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 0})
+		close(eventDone)
+	}()
+	require.Eventually(t, func() bool {
+		return goroutineBlockedOnMutex("HandleExecutionPayloadAvailableEvent")
+	}, time.Second, time.Millisecond)
+
+	oldAttestation.mutex.Unlock()
+	<-refreshDone
+	<-eventDone
+	service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 0})
+
+	require.Len(t, payloadService.duties, 1)
+	require.Equal(t, []phase0.ValidatorIndex{2}, payloadService.duties[0].ValidatorIndices())
+}
+
+func TestRefreshPayloadAttestationsRemovesCancelledEventAttempt(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{}
+	payloadService := &recordingPayloadAttester{}
+	service := &Service{
+		chainTimeService:           &recordingChainTime{currentEpoch: 0, slotDuration: time.Second, slotsPerEpoch: 32},
+		ptcDutiesProvider:          &recordingPTCDutiesProvider{},
+		validatingAccountsProvider: &recordingAccountsProvider{},
+		scheduler:                  schedulerService,
+		payloadAttester:            payloadService,
+		gloasForkEpoch:             0,
+	}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})
+	service.schedulePayloadAttestation(ctx, duty, map[phase0.ValidatorIndex]e2wtypes.Account{1: nil})
+
+	service.refreshPayloadAttestationDutiesForEpoch(ctx, 0)
+	service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 10})
+
+	require.Empty(t, payloadService.duties)
+}
+
+func TestRefreshPayloadAttestationsReschedulesAfterDependentRootChange(t *testing.T) {
+	schedulerService := &recordingScheduler{existing: map[string]bool{payloadAttestationJobName(10): true}}
 	service := &Service{
 		chainTimeService:           &recordingChainTime{currentEpoch: 0, slotsPerEpoch: 32},
 		ptcDutiesProvider:          &recordingPTCDutiesProvider{duties: []*apiv1.PTCDuty{{Slot: 10, ValidatorIndex: 1}}},
@@ -267,7 +523,7 @@ func TestRefreshPayloadAttestationsDoesNotRerunTheCurrentSlot(t *testing.T) {
 	service.refreshPayloadAttestationDutiesForEpoch(context.Background(), 1)
 
 	require.Len(t, schedulerService.jobs, 1)
-	require.Equal(t, service.chainTimeService.StartOfSlot(33).Add(payloadAttestationGrace), schedulerService.jobs[0].runtime)
+	require.Equal(t, service.chainTimeService.StartOfSlot(33), schedulerService.jobs[0].runtime)
 }
 
 // TestRefreshPayloadAttestationsWaitsForEpochPreparation confirms that a refresh of an epoch that
@@ -332,6 +588,7 @@ func (*recordingAccountsProvider) SyncCommitteeAccountsForEpochByIndex(_ context
 }
 
 type recordingScheduler struct {
+	mutex     sync.Mutex
 	jobs      []recordedJob
 	cancelled []string
 	err       error
@@ -342,15 +599,22 @@ type recordingScheduler struct {
 }
 
 type recordedJob struct {
+	name    string
 	runtime time.Time
 	job     scheduler.JobFunc
 }
 
-func (s *recordingScheduler) ScheduleJob(_ context.Context, _ string, _ string, runtime time.Time, job scheduler.JobFunc) error {
+func (s *recordingScheduler) ScheduleJob(_ context.Context, _ string, name string, runtime time.Time, job scheduler.JobFunc) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	if s.err != nil {
 		return s.err
 	}
-	s.jobs = append(s.jobs, recordedJob{runtime: runtime, job: job})
+	if s.existing == nil {
+		s.existing = make(map[string]bool)
+	}
+	s.existing[name] = true
+	s.jobs = append(s.jobs, recordedJob{name: name, runtime: runtime, job: job})
 	return nil
 }
 
@@ -359,25 +623,74 @@ func (*recordingScheduler) SchedulePeriodicJob(context.Context, string, string, 
 }
 
 func (s *recordingScheduler) CancelJob(_ context.Context, name string) error {
-	if s.missing[name] {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if s.missing[name] || !s.existing[name] {
 		return scheduler.ErrNoSuchJob
 	}
+	delete(s.existing, name)
 	s.cancelled = append(s.cancelled, name)
 	return nil
 }
 func (s *recordingScheduler) CancelJobIfExists(_ context.Context, name string) {
-	s.cancelled = append(s.cancelled, name)
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if s.existing[name] {
+		s.cancelled = append(s.cancelled, name)
+		delete(s.existing, name)
+	}
 }
-func (*recordingScheduler) CancelJobs(context.Context, string)              {}
-func (*recordingScheduler) RunJob(context.Context, string) error            { return nil }
-func (s *recordingScheduler) JobExists(_ context.Context, name string) bool { return s.existing[name] }
-func (*recordingScheduler) RunJobIfExists(context.Context, string)          {}
-func (*recordingScheduler) ListJobs(context.Context) []string               { return nil }
+func (*recordingScheduler) CancelJobs(context.Context, string)   {}
+func (*recordingScheduler) RunJob(context.Context, string) error { return nil }
+func (s *recordingScheduler) JobExists(_ context.Context, name string) bool {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	return s.existing[name]
+}
+func (s *recordingScheduler) RunJobIfExists(ctx context.Context, name string) {
+	s.mutex.Lock()
+	if !s.existing[name] {
+		s.mutex.Unlock()
+		return
+	}
+	delete(s.existing, name)
+	var jobFunc scheduler.JobFunc
+	for _, job := range s.jobs {
+		if job.name == name {
+			jobFunc = job.job
+			break
+		}
+	}
+	s.mutex.Unlock()
+	if jobFunc != nil {
+		jobFunc(ctx)
+	}
+}
+func (*recordingScheduler) ListJobs(context.Context) []string { return nil }
+
+type blockingPayloadAttester struct {
+	calls   atomic.Int32
+	started chan struct{}
+	release chan struct{}
+}
+
+func (*blockingPayloadAttester) Prepare(context.Context, *payloadattester.Duty) error {
+	return nil
+}
+
+func (s *blockingPayloadAttester) Attest(context.Context, *payloadattester.Duty) ([]*spec.VersionedPayloadAttestationMessage, error) {
+	if s.calls.Add(1) == 1 {
+		close(s.started)
+		<-s.release
+	}
+	return nil, nil
+}
 
 type recordingPayloadAttester struct {
 	duties   []*payloadattester.Duty
 	prepared []*payloadattester.Duty
 	deadline time.Time
+	err      error
 }
 
 func (s *recordingPayloadAttester) Prepare(_ context.Context, duty *payloadattester.Duty) error {
@@ -388,18 +701,24 @@ func (s *recordingPayloadAttester) Prepare(_ context.Context, duty *payloadattes
 func (s *recordingPayloadAttester) Attest(ctx context.Context, duty *payloadattester.Duty) ([]*spec.VersionedPayloadAttestationMessage, error) {
 	s.deadline, _ = ctx.Deadline()
 	s.duties = append(s.duties, duty)
-	return nil, nil
+	return nil, s.err
 }
 
 type recordingChainTime struct {
+	genesisTime   time.Time
 	currentEpoch  phase0.Epoch
 	slotDuration  time.Duration
 	slotsPerEpoch uint64
 }
 
-func (*recordingChainTime) GenesisTime() time.Time { return time.Unix(0, 0) }
+func (s *recordingChainTime) GenesisTime() time.Time {
+	if s.genesisTime.IsZero() {
+		return time.Unix(0, 0)
+	}
+	return s.genesisTime
+}
 func (s *recordingChainTime) StartOfSlot(slot phase0.Slot) time.Time {
-	return time.Unix(0, 0).Add(time.Duration(slot) * s.slotDuration)
+	return s.GenesisTime().Add(time.Duration(slot) * s.slotDuration)
 }
 func (s *recordingChainTime) StartOfEpoch(epoch phase0.Epoch) time.Time {
 	return s.StartOfSlot(phase0.Slot(uint64(epoch) * s.slotsPerEpoch))
@@ -415,3 +734,23 @@ func (s *recordingChainTime) FirstSlotOfEpoch(epoch phase0.Epoch) phase0.Slot {
 	return phase0.Slot(uint64(epoch) * s.slotsPerEpoch)
 }
 func (*recordingChainTime) HardForkEpoch(context.Context, string) phase0.Epoch { return 0 }
+
+func goroutineBlockedOnMutex(function string) bool {
+	stacks := make([]byte, 1<<20)
+	length := runtime.Stack(stacks, true)
+	for _, stack := range strings.Split(string(stacks[:length]), "\n\n") {
+		if strings.Contains(stack, function) && strings.Contains(stack, "sync.(*Mutex).Lock") {
+			return true
+		}
+	}
+	return false
+}
+
+func currentSlotRecordingChainTime(slot phase0.Slot) *recordingChainTime {
+	slotDuration := 12 * time.Second
+	return &recordingChainTime{
+		genesisTime:   time.Now().Add(-time.Duration(slot) * slotDuration),
+		slotDuration:  slotDuration,
+		slotsPerEpoch: 32,
+	}
+}
