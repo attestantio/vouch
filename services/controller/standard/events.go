@@ -16,9 +16,11 @@ package standard
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
@@ -34,6 +36,38 @@ func (s *Service) HandleBlockEvent(_ context.Context, data *apiv1.BlockEvent) {
 	// We update the block to slot cache here, in an attempt to avoid
 	// unnecessary lookups.
 	s.blockToSlotSetter.SetBlockRootToSlot(data.Block, data.Slot)
+}
+
+// HandleExecutionPayloadAvailableEvent handles the "execution_payload_available" events from the beacon node.
+func (s *Service) HandleExecutionPayloadAvailableEvent(ctx context.Context, data *apiv1.ExecutionPayloadAvailableEvent) {
+	s.payloadAttestationsMutex.Lock()
+	attestation := s.payloadAttestations[data.Slot]
+	s.payloadAttestationsMutex.Unlock()
+	if attestation == nil {
+		return
+	}
+
+	attestation.mutex.Lock()
+	s.payloadAttestationsMutex.Lock()
+	currentAttestation := s.payloadAttestations[data.Slot] == attestation
+	s.payloadAttestationsMutex.Unlock()
+	if !currentAttestation || !time.Now().Before(attestation.deadline) || attestation.eventAttempted || attestation.attemptFinished {
+		attestation.mutex.Unlock()
+		return
+	}
+	attestation.eventAttempted = true
+	ctx, cancel := context.WithDeadline(ctx, s.chainTimeService.StartOfSlot(data.Slot+1))
+	err := s.attestPayload(ctx, attestation.duty)
+	cancel()
+	if err == nil || !errors.Is(err, eth2client.ErrNoPayloadAttestationData) {
+		attestation.attemptFinished = true
+	}
+	attemptFinished := attestation.attemptFinished
+	attestation.mutex.Unlock()
+
+	if attemptFinished && s.removePayloadAttestation(data.Slot, attestation) {
+		s.scheduler.CancelJobIfExists(ctx, payloadAttestationJobName(data.Slot))
+	}
 }
 
 // HandleHeadEvent handles the "head" events from the beacon node.

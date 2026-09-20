@@ -111,6 +111,7 @@ type Service struct {
 	previousDutyDependentRoot phase0.Root
 	// Tracking for attestations.
 	pendingAttestations                   map[phase0.Slot]bool
+	payloadAttestations                   map[phase0.Slot]*payloadAttestation
 	proposerPreferencesDependentRoots     map[phase0.Epoch]phase0.Root
 	proposerPreferencesPublicationRunning bool
 	proposerPreferencesPublicationPending bool
@@ -118,6 +119,7 @@ type Service struct {
 	proposerPreferencesDependentRootMutex sync.RWMutex
 	proposerPreferencesPublicationMutex   sync.Mutex
 	pendingAttestationsMutex              sync.RWMutex
+	payloadAttestationsMutex              sync.Mutex
 }
 
 // eventsOpts returns the controller's event subscription.
@@ -135,6 +137,28 @@ func (s *Service) eventsOpts() *api.EventsOpts {
 	}
 
 	return opts
+}
+
+// subscribeEvents subscribes to the controller's events, and to payload availability events if a
+// payload events provider is configured.
+func (s *Service) subscribeEvents(ctx context.Context,
+	eventsProvider eth2client.EventsProvider,
+	payloadEventsProvider eth2client.EventsProvider,
+) error {
+	if err := eventsProvider.Events(ctx, s.eventsOpts()); err != nil {
+		return errors.Wrap(err, "failed to add events handler")
+	}
+	if payloadEventsProvider == nil {
+		return nil
+	}
+	if err := payloadEventsProvider.Events(ctx, &api.EventsOpts{
+		Topics:                           []string{"execution_payload_available"},
+		ExecutionPayloadAvailableHandler: s.HandleExecutionPayloadAvailableEvent,
+	}); err != nil {
+		return errors.Wrap(err, "failed to add payload events handler")
+	}
+
+	return nil
 }
 
 // New creates a new controller.
@@ -213,6 +237,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		gloasForkEpoch:                    gloasForkEpoch,
 		proposerPreferencesLookahead:      proposerPreferencesLookahead,
 		pendingAttestations:               make(map[phase0.Slot]bool),
+		payloadAttestations:               make(map[phase0.Slot]*payloadAttestation),
 		proposerPreferencesDependentRoots: make(map[phase0.Epoch]phase0.Root),
 	}
 
@@ -220,8 +245,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	// re-request duties if there is a change in beacon block.
 	// This also allows us to re-request duties if the dependent roots change.
 	// Also subscribe to block events.  This allows us to keep the cache for the block roots to slot number up to date.
-	if err := parameters.eventsProvider.Events(ctx, s.eventsOpts()); err != nil {
-		return nil, errors.Wrap(err, "failed to add events handler")
+	if err := s.subscribeEvents(ctx, parameters.eventsProvider, parameters.payloadEventsProvider); err != nil {
+		return nil, err
 	}
 	if s.proposerPreferencesEnabled() {
 		go s.seedProposerPreferencesDependentRoots(ctx)
