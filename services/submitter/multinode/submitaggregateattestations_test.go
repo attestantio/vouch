@@ -137,8 +137,11 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 	require.NoError(t, err)
 
 	// Return happens prior to the log message, so wait before asserting.
-	time.Sleep(time.Millisecond)
-	capture.AssertHasEntry(t, "Submitted aggregate attestations")
+	require.Eventually(t, func() bool {
+		return capture.HasLog(map[string]any{
+			"message": "Submitted aggregate attestations",
+		})
+	}, time.Second, time.Millisecond)
 }
 
 func TestSubmitAggregateAttestationsErroring(t *testing.T) {
