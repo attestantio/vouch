@@ -42,12 +42,12 @@ type beaconBlockError struct {
 }
 
 type beaconBlockProposalResults struct {
+	bestProvider string
 	responded    int
 	errored      int
 	timedOut     int
 	bestScore    float64
 	bestProposal *api.VersionedProposal
-	bestProvider string
 }
 
 func waitForProposalResponses(ctx context.Context,
