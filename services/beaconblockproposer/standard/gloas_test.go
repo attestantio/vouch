@@ -55,6 +55,8 @@ func TestProposeGloas(t *testing.T) {
 	tests := []struct {
 		name                       string
 		executionPayloadIncluded   bool
+		nilProposalResponse        bool
+		nilProposalData            bool
 		blockAuctioneer            bool
 		builderBoostFactor         uint64
 		proposerIndexMismatch      bool
@@ -63,6 +65,7 @@ func TestProposeGloas(t *testing.T) {
 		envelopeRootMismatch       bool
 		envelopePayloadMissing     bool
 		envelopeZeroFeeRecipient   bool
+		bidZeroFeeRecipient        bool
 		executionPayloadBidMissing bool
 		envelopeSignerErr          error
 		envelopeSubmitterErr       error
@@ -74,6 +77,16 @@ func TestProposeGloas(t *testing.T) {
 			name:                     "PayloadIncluded",
 			executionPayloadIncluded: true,
 			builderBoostFactor:       100,
+		},
+		{
+			name:                "NilProposalResponse",
+			nilProposalResponse: true,
+			err:                 "failed to propose block: beacon node returned no ePBS proposal response",
+		},
+		{
+			name:            "NilProposalData",
+			nilProposalData: true,
+			err:             "failed to propose block: beacon node returned no ePBS proposal",
 		},
 		{
 			name:                     "ConfiguredAuctioneer",
@@ -109,6 +122,12 @@ func TestProposeGloas(t *testing.T) {
 			executionPayloadIncluded: true,
 			envelopeZeroFeeRecipient: true,
 			err:                      "failed to propose block: ePBS execution payload envelope has 0 fee recipient",
+		},
+		{
+			name:                     "ZeroBidFeeRecipient",
+			executionPayloadIncluded: true,
+			bidZeroFeeRecipient:      true,
+			err:                      "failed to propose block: beacon block obtained with 0 fee recipient",
 		},
 		{
 			name:                       "MissingExecutionPayloadBid",
@@ -221,6 +240,12 @@ func TestProposeGloas(t *testing.T) {
 			var responseProposal *consensusapi.VersionedEPBSProposal
 			proposalClient.EPBSProposalFunc = func(ctx context.Context, opts *consensusapi.EPBSProposalOpts) (*consensusapi.Response[*consensusapi.VersionedEPBSProposal], error) {
 				epbsOpts = opts
+				if test.nilProposalResponse {
+					return nil, nil
+				}
+				if test.nilProposalData {
+					return &consensusapi.Response[*consensusapi.VersionedEPBSProposal]{}, nil
+				}
 				responseOpts := *opts
 				responseOpts.IncludePayload = &test.executionPayloadIncluded
 
@@ -250,6 +275,9 @@ func TestProposeGloas(t *testing.T) {
 					}
 					if test.envelopeZeroFeeRecipient {
 						response.Data.GloasContents.ExecutionPayloadEnvelope.Payload.FeeRecipient = bellatrix.ExecutionAddress{}
+					}
+					if test.bidZeroFeeRecipient {
+						executionPayloadBid(t, response.Data).FeeRecipient = bellatrix.ExecutionAddress{}
 					}
 					if test.executionPayloadBidMissing {
 						response.Data.GloasContents.Block.Body.SignedExecutionPayloadBid = nil
@@ -324,7 +352,7 @@ func TestProposeGloas(t *testing.T) {
 					require.Equal(t, 1, proposalSubmitter.calls)
 					require.Equal(t, test.envelopeSubmissionAttempts, envelopeSubmitter.calls)
 				}
-				if test.envelopeRootMismatch || test.builderIndexMismatch || test.foreignBuilderIndex || test.envelopePayloadMissing || test.executionPayloadBidMissing {
+				if test.envelopeRootMismatch || test.builderIndexMismatch || test.foreignBuilderIndex || test.envelopePayloadMissing || test.bidZeroFeeRecipient || test.executionPayloadBidMissing {
 					require.Zero(t, blockSigner.calls)
 					require.Zero(t, envelopeSigner.calls)
 					require.Nil(t, envelopeSubmitter.opts)
@@ -452,12 +480,27 @@ func TestProposeGloasProposalSourceSubmissionFailure(t *testing.T) {
 	require.Nil(t, envelopeSubmitter.opts)
 }
 
-// setSelfBuildProposal marks a mock proposal as self-built and gives its payload a
-// fee recipient.  The mock leaves the fee recipient zero, which the proposer rejects.
+func executionPayloadBid(t *testing.T, proposal *consensusapi.VersionedEPBSProposal) *gloas.ExecutionPayloadBid {
+	t.Helper()
+
+	require.NotNil(t, proposal)
+	require.NotNil(t, proposal.GloasContents)
+	require.NotNil(t, proposal.GloasContents.Block)
+	require.NotNil(t, proposal.GloasContents.Block.Body)
+	require.NotNil(t, proposal.GloasContents.Block.Body.SignedExecutionPayloadBid)
+	require.NotNil(t, proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message)
+
+	return proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message
+}
+
+// setSelfBuildProposal marks a mock proposal as self-built and gives its bid and payload
+// fee recipients.  The mock leaves the fee recipients zero, which the proposer rejects.
 func setSelfBuildProposal(t *testing.T, proposal *consensusapi.VersionedEPBSProposal) {
 	t.Helper()
 
-	proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = gloas.BuilderIndex(math.MaxUint64)
+	bid := executionPayloadBid(t, proposal)
+	bid.BuilderIndex = gloas.BuilderIndex(math.MaxUint64)
+	bid.FeeRecipient = bellatrix.ExecutionAddress{0x06}
 	proposal.GloasContents.ExecutionPayloadEnvelope.BuilderIndex = gloas.BuilderIndex(math.MaxUint64)
 	proposal.GloasContents.ExecutionPayloadEnvelope.Payload.FeeRecipient = bellatrix.ExecutionAddress{0x06}
 	bodyRoot, err := proposal.GloasContents.Block.Body.HashTreeRoot()
