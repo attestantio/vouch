@@ -27,7 +27,12 @@ func NewSubmissionError(errs ...error) *SubmissionError {
 
 // Error returns the combined submission error messages.
 func (e *SubmissionError) Error() string {
-	return errors.Join(e.errors...).Error()
+	err := errors.Join(e.errors...)
+	if err == nil {
+		return ""
+	}
+
+	return err.Error()
 }
 
 // Unwrap returns the individual submission errors.
