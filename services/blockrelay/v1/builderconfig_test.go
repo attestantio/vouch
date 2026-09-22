@@ -24,9 +24,10 @@ import (
 
 func TestBuilderConfig(t *testing.T) {
 	tests := []struct {
-		name  string
-		input []byte
-		err   string
+		name           string
+		input          []byte
+		err            string
+		alternativeErr string
 	}{
 		{
 			name: "Empty",
@@ -68,9 +69,10 @@ func TestBuilderConfig(t *testing.T) {
 			err:   "invalid JSON: json: cannot unmarshal bool into Go struct field builderConfigJSON.relays of type []string",
 		},
 		{
-			name:  "RelayWrongType",
-			input: []byte(`{"enabled":true,"grace":"123","relays":[true, true]}`),
-			err:   "invalid JSON: json: cannot unmarshal bool into Go struct field builderConfigJSON.relays of type string",
+			name:           "RelayWrongType",
+			input:          []byte(`{"enabled":true,"grace":"123","relays":[true, true]}`),
+			err:            "invalid JSON: json: cannot unmarshal bool into Go struct field builderConfigJSON.relays of type string",
+			alternativeErr: "invalid JSON: json: cannot unmarshal bool into builderConfigJSON.relays.0 of type string",
 		},
 		{
 			name:  "Good",
@@ -91,7 +93,12 @@ func TestBuilderConfig(t *testing.T) {
 			var res v1.BuilderConfig
 			err := json.Unmarshal(test.input, &res)
 			if test.err != "" {
-				require.EqualError(t, err, test.err)
+				if test.alternativeErr == "" {
+					require.EqualError(t, err, test.err)
+				} else {
+					require.Error(t, err)
+					require.Contains(t, []string{test.err, test.alternativeErr}, err.Error())
+				}
 			} else {
 				require.NoError(t, err)
 				rt := res.String()
