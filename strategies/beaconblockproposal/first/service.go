@@ -51,9 +51,9 @@ func proposalResults[P any, T any](providers map[string]P,
 ) <-chan *proposalResult[T] {
 	results := make(chan *proposalResult[T], len(providers))
 	for name, provider := range providers {
-		go func() {
+		go func(name string, provider P) {
 			results <- request(name, provider)
-		}()
+		}(name, provider)
 	}
 
 	return results
