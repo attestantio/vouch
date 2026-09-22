@@ -37,7 +37,7 @@ import (
 func TestEPBSProposal(t *testing.T) {
 	ctx := context.Background()
 
-	service := newTestService(t, ctx,
+	service := newTestService(ctx, t,
 		map[string]eth2client.MultiForkProposalProvider{
 			"one": &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})},
 		},
@@ -65,7 +65,7 @@ func TestNewRejectsEmptyProviders(t *testing.T) {
 func TestProposalReturnsProviderError(t *testing.T) {
 	ctx := context.Background()
 	providerErr := errors.New("proposal failed")
-	service := newTestService(t, ctx,
+	service := newTestService(ctx, t,
 		map[string]eth2client.MultiForkProposalProvider{
 			"one": &epbsProposalProvider{proposalErr: providerErr},
 		},
@@ -80,7 +80,7 @@ func TestProposalReturnsProviderError(t *testing.T) {
 func TestProposalReturnsProposalAfterProviderError(t *testing.T) {
 	ctx := context.Background()
 	proposal := &api.VersionedProposal{}
-	service := newTestService(t, ctx,
+	service := newTestService(ctx, t,
 		map[string]eth2client.MultiForkProposalProvider{
 			"error": &epbsProposalProvider{proposalErr: errors.New("proposal failed")},
 			"valid": &epbsProposalProvider{legacyProposal: proposal},
@@ -96,7 +96,7 @@ func TestProposalReturnsProposalAfterProviderError(t *testing.T) {
 func TestProposalReturnsCompletedErrorsAtTimeout(t *testing.T) {
 	ctx := context.Background()
 	providerErr := errors.New("proposal failed")
-	service := newTestService(t, ctx,
+	service := newTestService(ctx, t,
 		map[string]eth2client.MultiForkProposalProvider{
 			"error":   &epbsProposalProvider{proposalErr: providerErr},
 			"pending": &epbsProposalProvider{proposalWaitForCancellation: true},
@@ -114,7 +114,7 @@ func TestProposalReturnsAllProviderErrors(t *testing.T) {
 	ctx := context.Background()
 	firstErr := errors.New("first proposal failed")
 	secondErr := errors.New("second proposal failed")
-	service := newTestService(t, ctx,
+	service := newTestService(ctx, t,
 		map[string]eth2client.MultiForkProposalProvider{
 			"one": &epbsProposalProvider{proposalErr: firstErr},
 			"two": &epbsProposalProvider{proposalErr: secondErr},
@@ -151,7 +151,7 @@ func TestProposalExpandsClientGraffiti(t *testing.T) {
 				client:         "prysm",
 				graffiti:       make(chan [32]byte, 1),
 			}
-			service := newTestService(t, ctx,
+			service := newTestService(ctx, t,
 				map[string]eth2client.MultiForkProposalProvider{
 					"one": provider,
 				},
@@ -177,7 +177,7 @@ func TestProposalExpandsClientGraffiti(t *testing.T) {
 func TestEPBSProposalReturnsProviderError(t *testing.T) {
 	ctx := context.Background()
 	providerErr := errors.New("proposal failed")
-	service := newTestService(t, ctx,
+	service := newTestService(ctx, t,
 		map[string]eth2client.MultiForkProposalProvider{
 			"one": &epbsProposalProvider{err: providerErr},
 		},
@@ -192,7 +192,7 @@ func TestEPBSProposalReturnsProviderError(t *testing.T) {
 func TestEPBSProposalReturnsCompletedErrorsAtTimeout(t *testing.T) {
 	ctx := context.Background()
 	providerErr := errors.New("proposal failed")
-	service := newTestService(t, ctx,
+	service := newTestService(ctx, t,
 		map[string]eth2client.MultiForkProposalProvider{
 			"error":   &epbsProposalProvider{err: providerErr},
 			"pending": &epbsProposalProvider{waitForCancellation: true},
@@ -210,7 +210,7 @@ func TestEPBSProposalReturnsAllProviderErrors(t *testing.T) {
 	ctx := context.Background()
 	firstErr := errors.New("first proposal failed")
 	secondErr := errors.New("second proposal failed")
-	service := newTestService(t, ctx,
+	service := newTestService(ctx, t,
 		map[string]eth2client.MultiForkProposalProvider{
 			"one": &epbsProposalProvider{err: firstErr},
 			"two": &epbsProposalProvider{err: secondErr},
@@ -227,7 +227,7 @@ func TestEPBSProposalReturnsAllProviderErrors(t *testing.T) {
 func TestEPBSProposalDoesNotLeaveLateProvidersBlocked(t *testing.T) {
 	ctx := context.Background()
 	release := make(chan struct{})
-	service := newTestService(t, ctx,
+	service := newTestService(ctx, t,
 		map[string]eth2client.MultiForkProposalProvider{
 			"fast":  &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
 			"late1": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}, release: release},
@@ -251,7 +251,7 @@ func TestEPBSProposalDoesNotLeaveLateProvidersBlocked(t *testing.T) {
 func TestEPBSProposalSkipsProposalWithoutRequestedPayload(t *testing.T) {
 	ctx := context.Background()
 	includePayload := true
-	service := newTestService(t, ctx,
+	service := newTestService(ctx, t,
 		map[string]eth2client.MultiForkProposalProvider{
 			"excluded": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
 		},
@@ -265,7 +265,7 @@ func TestEPBSProposalSkipsProposalWithoutRequestedPayload(t *testing.T) {
 
 func TestEPBSProposalSkipsZeroFeeRecipient(t *testing.T) {
 	ctx := context.Background()
-	service := newTestService(t, ctx,
+	service := newTestService(ctx, t,
 		map[string]eth2client.MultiForkProposalProvider{
 			"zero-fee": &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{})},
 		},
@@ -279,7 +279,7 @@ func TestEPBSProposalSkipsZeroFeeRecipient(t *testing.T) {
 
 func TestEPBSProposalSkipsNilResponse(t *testing.T) {
 	ctx := context.Background()
-	service := newTestService(t, ctx,
+	service := newTestService(ctx, t,
 		map[string]eth2client.MultiForkProposalProvider{
 			"nil": &epbsProposalProvider{nilResponse: true},
 		},
@@ -360,7 +360,7 @@ func TestEPBSProposalSkipsMalformedGloasProposal(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			service := newTestService(t, ctx,
+			service := newTestService(ctx, t,
 				map[string]eth2client.MultiForkProposalProvider{
 					"malformed": &epbsProposalProvider{proposal: test.proposal},
 				},
@@ -382,7 +382,7 @@ func TestEPBSProposalWaitsForProposalWithRequestedPayload(t *testing.T) {
 	time.AfterFunc(20*time.Millisecond, func() {
 		close(release)
 	})
-	service := newTestService(t, ctx,
+	service := newTestService(ctx, t,
 		map[string]eth2client.MultiForkProposalProvider{
 			"excluded": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
 			"included": &epbsProposalProvider{proposal: included, release: release},
@@ -395,8 +395,8 @@ func TestEPBSProposalWaitsForProposalWithRequestedPayload(t *testing.T) {
 	require.Same(t, included, response.Data)
 }
 
-func newTestService(t *testing.T,
-	ctx context.Context,
+func newTestService(ctx context.Context,
+	t *testing.T,
 	providers map[string]eth2client.MultiForkProposalProvider,
 	timeout time.Duration,
 ) *first.Service {
