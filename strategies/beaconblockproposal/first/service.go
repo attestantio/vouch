@@ -55,7 +55,8 @@ func (s *Service) EPBSProposal(ctx context.Context,
 
 	proposalCh := make(chan *api.VersionedEPBSProposal, len(s.proposalProviders))
 	for name, provider := range s.proposalProviders {
-		go s.fetchEPBSProposal(ctx, name, provider, opts, proposalCh)
+		providerOpts := *opts
+		go s.fetchEPBSProposal(ctx, name, provider, &providerOpts, proposalCh)
 	}
 
 	for {
@@ -85,6 +86,11 @@ func (s *Service) fetchEPBSProposal(ctx context.Context,
 	ch chan *api.VersionedEPBSProposal,
 ) {
 	log := s.log.With().Str("provider", name).Uint64("slot", uint64(opts.Slot)).Logger()
+	providerGraffiti, err := beaconblockproposal.GraffitiForProvider(ctx, provider, opts.Graffiti)
+	if err != nil {
+		s.log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
+	}
+	opts.Graffiti = providerGraffiti
 
 	started := time.Now()
 	proposalResponse, err := provider.EPBSProposal(ctx, opts)
@@ -162,11 +168,22 @@ func (s *Service) Proposal(ctx context.Context,
 
 	proposalCh := make(chan *api.VersionedProposal, 1)
 	for name, provider := range s.proposalProviders {
-		go func(ctx context.Context, name string, provider eth2client.ProposalProvider, ch chan *api.VersionedProposal) {
-			log := s.log.With().Str("provider", name).Uint64("slot", uint64(opts.Slot)).Logger()
+		providerOpts := *opts
+		providerGraffiti, err := beaconblockproposal.GraffitiForProvider(ctx, provider, providerOpts.Graffiti)
+		if err != nil {
+			s.log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
+		}
+		providerOpts.Graffiti = providerGraffiti
+		go func(ctx context.Context,
+			name string,
+			provider eth2client.ProposalProvider,
+			providerOpts *api.ProposalOpts,
+			ch chan *api.VersionedProposal,
+		) {
+			log := s.log.With().Str("provider", name).Uint64("slot", uint64(providerOpts.Slot)).Logger()
 
 			started := time.Now()
-			proposalResponse, err := provider.Proposal(ctx, opts)
+			proposalResponse, err := provider.Proposal(ctx, providerOpts)
 			s.clientMonitor.ClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
@@ -179,7 +196,7 @@ func (s *Service) Proposal(ctx context.Context,
 			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
 
 			ch <- proposal
-		}(ctx, name, provider, proposalCh)
+		}(ctx, name, provider, &providerOpts, proposalCh)
 	}
 
 	select {
