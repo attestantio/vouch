@@ -83,7 +83,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 		}
 	}
 
-	if parameters.proposalProviders == nil {
+	if len(parameters.proposalProviders) == 0 {
 		return nil, errors.New("no beacon block proposal providers specified")
 	}
 
