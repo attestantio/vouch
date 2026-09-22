@@ -54,6 +54,54 @@ func TestEPBSProposal(t *testing.T) {
 	require.NotNil(t, response.Data)
 }
 
+func TestProposalExpandsClientGraffiti(t *testing.T) {
+	tests := []struct {
+		name string
+		epbs bool
+	}{
+		{
+			name: "Proposal",
+		},
+		{
+			name: "EPBSProposal",
+			epbs: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			provider := &epbsProposalProvider{
+				proposal:       gloasEPBSProposal(bellatrix.ExecutionAddress{0x01}),
+				legacyProposal: &api.VersionedProposal{},
+				client:         "prysm",
+				graffiti:       make(chan [32]byte, 1),
+			}
+			service, err := first.New(ctx,
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithClientMonitor(nullmetrics.New()),
+				first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+					"one": provider,
+				}),
+				first.WithTimeout(time.Second),
+			)
+			require.NoError(t, err)
+			var graffiti [32]byte
+			copy(graffiti[:], "configured {{CLIENT}}")
+
+			if test.epbs {
+				_, err = service.EPBSProposal(ctx, &api.EPBSProposalOpts{Graffiti: graffiti})
+			} else {
+				_, err = service.Proposal(ctx, &api.ProposalOpts{Graffiti: graffiti})
+			}
+			require.NoError(t, err)
+			var expected [32]byte
+			copy(expected[:], "configured prysm")
+			require.Equal(t, expected, <-provider.graffiti)
+		})
+	}
+}
+
 func TestEPBSProposalDoesNotLeaveLateProvidersBlocked(t *testing.T) {
 	ctx := context.Background()
 	release := make(chan struct{})
@@ -252,17 +300,24 @@ func gloasEPBSProposal(feeRecipient bellatrix.ExecutionAddress) *api.VersionedEP
 }
 
 type epbsProposalProvider struct {
-	proposal    *api.VersionedEPBSProposal
-	release     <-chan struct{}
-	nilResponse bool
+	proposal       *api.VersionedEPBSProposal
+	legacyProposal *api.VersionedProposal
+	release        <-chan struct{}
+	nilResponse    bool
+	client         string
+	graffiti       chan [32]byte
 }
 
-func (*epbsProposalProvider) Proposal(_ context.Context, _ *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
-	return nil, nil
+func (p *epbsProposalProvider) Proposal(_ context.Context, opts *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
+	if p.graffiti != nil {
+		p.graffiti <- opts.Graffiti
+	}
+
+	return &api.Response[*api.VersionedProposal]{Data: p.legacyProposal}, nil
 }
 
 func (p *epbsProposalProvider) EPBSProposal(_ context.Context,
-	_ *api.EPBSProposalOpts,
+	opts *api.EPBSProposalOpts,
 ) (
 	*api.Response[*api.VersionedEPBSProposal],
 	error,
@@ -270,9 +325,16 @@ func (p *epbsProposalProvider) EPBSProposal(_ context.Context,
 	if p.release != nil {
 		<-p.release
 	}
+	if p.graffiti != nil {
+		p.graffiti <- opts.Graffiti
+	}
 	if p.nilResponse {
 		return nil, nil
 	}
 
 	return &api.Response[*api.VersionedEPBSProposal]{Data: p.proposal}, nil
+}
+
+func (p *epbsProposalProvider) NodeClient(context.Context) (*api.Response[string], error) {
+	return &api.Response[string]{Data: p.client}, nil
 }

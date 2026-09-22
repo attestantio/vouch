@@ -14,7 +14,6 @@
 package best
 
 import (
-	"bytes"
 	"context"
 	"math/big"
 	"time"
@@ -211,23 +210,11 @@ func (s *Service) epbsProposal(ctx context.Context,
 	))
 	defer span.End()
 
-	providerGraffiti := opts.Graffiti[:]
-	if bytes.Contains(providerGraffiti, []byte("{{CLIENT}}")) {
-		if nodeClientProvider, isProvider := provider.(eth2client.NodeClientProvider); isProvider {
-			nodeClientResponse, err := nodeClientProvider.NodeClient(ctx)
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
-			} else {
-				providerGraffiti = bytes.ReplaceAll(providerGraffiti, []byte("{{CLIENT}}"), []byte(nodeClientResponse.Data))
-			}
-			if len(providerGraffiti) > 32 {
-				providerGraffiti = providerGraffiti[0:32]
-			}
-			var graffiti [32]byte
-			copy(graffiti[:], providerGraffiti)
-			opts.Graffiti = graffiti
-		}
+	providerGraffiti, err := beaconblockproposal.GraffitiForProvider(ctx, provider, opts.Graffiti)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
 	}
+	opts.Graffiti = providerGraffiti
 
 	proposalResponse, err := provider.EPBSProposal(ctx, opts)
 	s.clientMonitor.ClientOperation(name, "ePBS beacon block proposal", err == nil, time.Since(started))
@@ -294,23 +281,11 @@ func (s *Service) Proposal(ctx context.Context,
 	// Kick off the requests.
 	for name, provider := range s.proposalProviders {
 		providerOpts := *opts
-		providerGraffiti := providerOpts.Graffiti[:]
-		if bytes.Contains(providerGraffiti, []byte("{{CLIENT}}")) {
-			if nodeClientProvider, isProvider := provider.(eth2client.NodeClientProvider); isProvider {
-				nodeClientResponse, err := nodeClientProvider.NodeClient(ctx)
-				if err != nil {
-					log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
-				} else {
-					providerGraffiti = bytes.ReplaceAll(providerGraffiti, []byte("{{CLIENT}}"), []byte(nodeClientResponse.Data))
-				}
-				if len(providerGraffiti) > 32 {
-					providerGraffiti = providerGraffiti[0:32]
-				}
-				var graffiti [32]byte
-				copy(graffiti[:], providerGraffiti)
-				providerOpts.Graffiti = graffiti
-			}
+		providerGraffiti, err := beaconblockproposal.GraffitiForProvider(ctx, provider, providerOpts.Graffiti)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
 		}
+		providerOpts.Graffiti = providerGraffiti
 		go s.beaconBlockProposal(ctx, started, name, provider, respCh, errCh, &providerOpts)
 	}
 
