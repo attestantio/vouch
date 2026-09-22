@@ -15,6 +15,8 @@ package first
 
 import (
 	"context"
+	stderrors "errors"
+	"fmt"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -38,6 +40,114 @@ type Service struct {
 	timeout           time.Duration
 }
 
+type proposalResult[T any] struct {
+	provider string
+	proposal T
+	err      error
+}
+
+func proposalResults[P any, T any](providers map[string]P,
+	request func(string, P) *proposalResult[T],
+) <-chan *proposalResult[T] {
+	results := make(chan *proposalResult[T], len(providers))
+	for name, provider := range providers {
+		go func() {
+			results <- request(name, provider)
+		}()
+	}
+
+	return results
+}
+
+func fetchProviderProposal[T any](s *Service,
+	log zerolog.Logger,
+	name string,
+	operation string,
+	request func() (*api.Response[T], error),
+	proposal func(*api.Response[T]) (T, error),
+) *proposalResult[T] {
+	result := &proposalResult[T]{provider: name}
+	started := time.Now()
+	response, err := request()
+	s.clientMonitor.ClientOperation(name, operation, err == nil, time.Since(started))
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			log.Debug().Err(err).Msg("Failed to obtain " + operation)
+		}
+		result.err = err
+
+		return result
+	}
+
+	result.proposal, result.err = proposal(response)
+	if result.err == nil {
+		log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained " + operation)
+	}
+
+	return result
+}
+
+func firstProposal[T any](ctx context.Context,
+	log zerolog.Logger,
+	results <-chan *proposalResult[T],
+	providers int,
+	validate func(T) error,
+	failure string,
+	timeoutMessage string,
+) (
+	T,
+	error,
+) {
+	var zero T
+	proposalErrors := make([]error, 0, providers)
+	processResult := func(result *proposalResult[T]) (T, bool) {
+		if result.err != nil {
+			proposalErrors = append(proposalErrors, fmt.Errorf("%s: %w", result.provider, result.err))
+
+			return zero, false
+		}
+		if validate != nil {
+			if err := validate(result.proposal); err != nil {
+				proposalErrors = append(proposalErrors, fmt.Errorf("%s: %w", result.provider, err))
+
+				return zero, false
+			}
+		}
+
+		return result.proposal, true
+	}
+
+	completed := 0
+	for completed < providers {
+		select {
+		case result := <-results:
+			completed++
+			if proposal, valid := processResult(result); valid {
+				return proposal, nil
+			}
+		case <-ctx.Done():
+			log.Debug().Msg(timeoutMessage)
+			for {
+				select {
+				case result := <-results:
+					completed++
+					if proposal, valid := processResult(result); valid {
+						return proposal, nil
+					}
+				default:
+					if completed < providers {
+						proposalErrors = append(proposalErrors, ctx.Err())
+					}
+
+					return zero, errors.Wrap(stderrors.Join(proposalErrors...), failure)
+				}
+			}
+		}
+	}
+
+	return zero, errors.Wrap(stderrors.Join(proposalErrors...), failure)
+}
+
 // EPBSProposal provides the first ePBS proposal from a number of beacon nodes.
 func (s *Service) EPBSProposal(ctx context.Context,
 	opts *api.EPBSProposalOpts,
@@ -53,78 +163,61 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	proposalCh := make(chan *api.VersionedEPBSProposal, len(s.proposalProviders))
-	for name, provider := range s.proposalProviders {
+	results := proposalResults(s.proposalProviders, func(name string,
+		provider eth2client.MultiForkProposalProvider,
+	) *proposalResult[*api.VersionedEPBSProposal] {
 		providerOpts := *opts
-		go s.fetchEPBSProposal(ctx, name, provider, &providerOpts, proposalCh)
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			s.log.Debug().Msg("Failed to obtain ePBS beacon block proposal before timeout")
-			return nil, errors.New("failed to obtain ePBS beacon block proposal before timeout")
-		case proposal := <-proposalCh:
-			if !s.acceptableEPBSProposal(proposal, opts.IncludePayload) {
-				continue
-			}
-
-			return &api.Response[*api.VersionedEPBSProposal]{
-				Data:     proposal,
-				Metadata: make(map[string]any),
-			}, nil
+		providerGraffiti, err := beaconblockproposal.GraffitiForProvider(ctx, provider, providerOpts.Graffiti)
+		if err != nil {
+			s.log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
 		}
+		providerOpts.Graffiti = providerGraffiti
+		log := s.log.With().Str("provider", name).Uint64("slot", uint64(providerOpts.Slot)).Logger()
+
+		return fetchProviderProposal(s,
+			log,
+			name,
+			"ePBS beacon block proposal",
+			func() (*api.Response[*api.VersionedEPBSProposal], error) {
+				return provider.EPBSProposal(ctx, &providerOpts)
+			},
+			func(response *api.Response[*api.VersionedEPBSProposal]) (*api.VersionedEPBSProposal, error) {
+				if response == nil {
+					return nil, errors.New("beacon node returned no ePBS proposal response")
+				}
+
+				return response.Data, nil
+			},
+		)
+	})
+
+	proposal, err := firstProposal(ctx,
+		s.log,
+		results,
+		len(s.proposalProviders),
+		func(proposal *api.VersionedEPBSProposal) error {
+			return s.validateEPBSProposal(proposal, opts.IncludePayload)
+		},
+		"failed to obtain ePBS beacon block proposal",
+		"Failed to obtain ePBS beacon block proposal before timeout",
+	)
+	if err != nil {
+		return nil, err
 	}
+
+	return &api.Response[*api.VersionedEPBSProposal]{
+		Data:     proposal,
+		Metadata: make(map[string]any),
+	}, nil
 }
 
-// fetchEPBSProposal obtains an ePBS beacon block proposal from a single provider, recording the
-// operation with the client monitor, and sends the result to ch unless ctx is done first.
-func (s *Service) fetchEPBSProposal(ctx context.Context,
-	name string,
-	provider eth2client.MultiForkProposalProvider,
-	opts *api.EPBSProposalOpts,
-	ch chan *api.VersionedEPBSProposal,
-) {
-	log := s.log.With().Str("provider", name).Uint64("slot", uint64(opts.Slot)).Logger()
-	providerGraffiti, err := beaconblockproposal.GraffitiForProvider(ctx, provider, opts.Graffiti)
+func (s *Service) validateEPBSProposal(proposal *api.VersionedEPBSProposal, includePayload *bool) error {
+	err := beaconblockproposal.ValidateEPBSProposal(proposal, includePayload)
 	if err != nil {
-		s.log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
-	}
-	opts.Graffiti = providerGraffiti
-
-	started := time.Now()
-	proposalResponse, err := provider.EPBSProposal(ctx, opts)
-	s.clientMonitor.ClientOperation(name, "ePBS beacon block proposal", err == nil, time.Since(started))
-	if err != nil {
-		if !errors.Is(err, context.Canceled) {
-			log.Debug().Err(err).Msg("Failed to obtain ePBS beacon block proposal")
-		}
-
-		return
-	}
-	if proposalResponse == nil {
-		log.Warn().Msg("Discarding empty ePBS proposal response")
-
-		return
-	}
-	proposal := proposalResponse.Data
-	log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained ePBS beacon block proposal")
-
-	select {
-	case ch <- proposal:
-	case <-ctx.Done():
-	}
-}
-
-// acceptableEPBSProposal reports whether proposal is usable, logging it if it is not.
-func (s *Service) acceptableEPBSProposal(proposal *api.VersionedEPBSProposal, includePayload *bool) bool {
-	if err := beaconblockproposal.ValidateEPBSProposal(proposal, includePayload); err != nil {
 		s.log.Warn().Err(err).Msg("Discarding invalid ePBS proposal")
-
-		return false
 	}
 
-	return true
+	return err
 }
 
 // New creates a new beacon block proposal strategy.
@@ -162,53 +255,51 @@ func (s *Service) Proposal(ctx context.Context,
 	))
 	defer span.End()
 
-	// We create a cancelable context with a timeout.  As soon as the first provider has responded we
-	// cancel the context to cancel the other requests.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
 
-	proposalCh := make(chan *api.VersionedProposal, 1)
-	for name, provider := range s.proposalProviders {
+	results := proposalResults(s.proposalProviders, func(name string,
+		provider eth2client.MultiForkProposalProvider,
+	) *proposalResult[*api.VersionedProposal] {
 		providerOpts := *opts
 		providerGraffiti, err := beaconblockproposal.GraffitiForProvider(ctx, provider, providerOpts.Graffiti)
 		if err != nil {
 			s.log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
 		}
 		providerOpts.Graffiti = providerGraffiti
-		go func(ctx context.Context,
-			name string,
-			provider eth2client.ProposalProvider,
-			providerOpts *api.ProposalOpts,
-			ch chan *api.VersionedProposal,
-		) {
-			log := s.log.With().Str("provider", name).Uint64("slot", uint64(providerOpts.Slot)).Logger()
+		log := s.log.With().Str("provider", name).Uint64("slot", uint64(providerOpts.Slot)).Logger()
 
-			started := time.Now()
-			proposalResponse, err := provider.Proposal(ctx, providerOpts)
-			s.clientMonitor.ClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
-			if err != nil {
-				if !errors.Is(err, context.Canceled) {
-					log.Debug().Err(err).Msg("Failed to obtain beacon block proposal")
+		return fetchProviderProposal(s,
+			log,
+			name,
+			"beacon block proposal",
+			func() (*api.Response[*api.VersionedProposal], error) {
+				return provider.Proposal(ctx, &providerOpts)
+			},
+			func(response *api.Response[*api.VersionedProposal]) (*api.VersionedProposal, error) {
+				if response == nil || response.Data == nil {
+					return nil, errors.New("beacon node returned no beacon block proposal")
 				}
 
-				return
-			}
-			proposal := proposalResponse.Data
-			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
+				return response.Data, nil
+			},
+		)
+	})
 
-			ch <- proposal
-		}(ctx, name, provider, &providerOpts, proposalCh)
+	proposal, err := firstProposal(ctx,
+		s.log,
+		results,
+		len(s.proposalProviders),
+		nil,
+		"failed to obtain beacon block proposal",
+		"Failed to obtain beacon block proposal before timeout",
+	)
+	if err != nil {
+		return nil, err
 	}
 
-	select {
-	case <-ctx.Done():
-		cancel()
-		s.log.Debug().Msg("Failed to obtain beacon block proposal before timeout")
-		return nil, errors.New("failed to obtain beacon block proposal before timeout")
-	case proposal := <-proposalCh:
-		cancel()
-		return &api.Response[*api.VersionedProposal]{
-			Data:     proposal,
-			Metadata: make(map[string]any),
-		}, nil
-	}
+	return &api.Response[*api.VersionedProposal]{
+		Data:     proposal,
+		Metadata: make(map[string]any),
+	}, nil
 }

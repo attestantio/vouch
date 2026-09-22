@@ -15,6 +15,7 @@ package first_test
 
 import (
 	"context"
+	"errors"
 	"runtime"
 	"strings"
 	"testing"
@@ -36,15 +37,12 @@ import (
 func TestEPBSProposal(t *testing.T) {
 	ctx := context.Background()
 
-	service, err := first.New(ctx,
-		first.WithLogLevel(zerolog.Disabled),
-		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+	service := newTestService(t, ctx,
+		map[string]eth2client.MultiForkProposalProvider{
 			"one": &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})},
-		}),
-		first.WithTimeout(time.Second),
+		},
+		time.Second,
 	)
-	require.NoError(t, err)
 
 	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{
 		Slot: phase0.Slot(1),
@@ -52,6 +50,82 @@ func TestEPBSProposal(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, response)
 	require.NotNil(t, response.Data)
+}
+
+func TestNewRejectsEmptyProviders(t *testing.T) {
+	ctx := context.Background()
+
+	service, err := first.New(ctx,
+		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{}),
+	)
+	require.Nil(t, service)
+	require.EqualError(t, err, "problem with parameters: no beacon block proposal providers specified")
+}
+
+func TestProposalReturnsProviderError(t *testing.T) {
+	ctx := context.Background()
+	providerErr := errors.New("proposal failed")
+	service := newTestService(t, ctx,
+		map[string]eth2client.MultiForkProposalProvider{
+			"one": &epbsProposalProvider{proposalErr: providerErr},
+		},
+		100*time.Millisecond,
+	)
+
+	response, err := service.Proposal(ctx, &api.ProposalOpts{})
+	require.Nil(t, response)
+	require.ErrorIs(t, err, providerErr)
+}
+
+func TestProposalReturnsProposalAfterProviderError(t *testing.T) {
+	ctx := context.Background()
+	proposal := &api.VersionedProposal{}
+	service := newTestService(t, ctx,
+		map[string]eth2client.MultiForkProposalProvider{
+			"error": &epbsProposalProvider{proposalErr: errors.New("proposal failed")},
+			"valid": &epbsProposalProvider{legacyProposal: proposal},
+		},
+		time.Second,
+	)
+
+	response, err := service.Proposal(ctx, &api.ProposalOpts{})
+	require.NoError(t, err)
+	require.Same(t, proposal, response.Data)
+}
+
+func TestProposalReturnsCompletedErrorsAtTimeout(t *testing.T) {
+	ctx := context.Background()
+	providerErr := errors.New("proposal failed")
+	service := newTestService(t, ctx,
+		map[string]eth2client.MultiForkProposalProvider{
+			"error":   &epbsProposalProvider{proposalErr: providerErr},
+			"pending": &epbsProposalProvider{proposalWaitForCancellation: true},
+		},
+		20*time.Millisecond,
+	)
+
+	response, err := service.Proposal(ctx, &api.ProposalOpts{})
+	require.Nil(t, response)
+	require.ErrorIs(t, err, providerErr)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestProposalReturnsAllProviderErrors(t *testing.T) {
+	ctx := context.Background()
+	firstErr := errors.New("first proposal failed")
+	secondErr := errors.New("second proposal failed")
+	service := newTestService(t, ctx,
+		map[string]eth2client.MultiForkProposalProvider{
+			"one": &epbsProposalProvider{proposalErr: firstErr},
+			"two": &epbsProposalProvider{proposalErr: secondErr},
+		},
+		time.Second,
+	)
+
+	response, err := service.Proposal(ctx, &api.ProposalOpts{})
+	require.Nil(t, response)
+	require.ErrorIs(t, err, firstErr)
+	require.ErrorIs(t, err, secondErr)
 }
 
 func TestProposalExpandsClientGraffiti(t *testing.T) {
@@ -77,18 +151,16 @@ func TestProposalExpandsClientGraffiti(t *testing.T) {
 				client:         "prysm",
 				graffiti:       make(chan [32]byte, 1),
 			}
-			service, err := first.New(ctx,
-				first.WithLogLevel(zerolog.Disabled),
-				first.WithClientMonitor(nullmetrics.New()),
-				first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			service := newTestService(t, ctx,
+				map[string]eth2client.MultiForkProposalProvider{
 					"one": provider,
-				}),
-				first.WithTimeout(time.Second),
+				},
+				time.Second,
 			)
-			require.NoError(t, err)
 			var graffiti [32]byte
 			copy(graffiti[:], "configured {{CLIENT}}")
 
+			var err error
 			if test.epbs {
 				_, err = service.EPBSProposal(ctx, &api.EPBSProposalOpts{Graffiti: graffiti})
 			} else {
@@ -102,20 +174,67 @@ func TestProposalExpandsClientGraffiti(t *testing.T) {
 	}
 }
 
+func TestEPBSProposalReturnsProviderError(t *testing.T) {
+	ctx := context.Background()
+	providerErr := errors.New("proposal failed")
+	service := newTestService(t, ctx,
+		map[string]eth2client.MultiForkProposalProvider{
+			"one": &epbsProposalProvider{err: providerErr},
+		},
+		100*time.Millisecond,
+	)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.Nil(t, response)
+	require.ErrorIs(t, err, providerErr)
+}
+
+func TestEPBSProposalReturnsCompletedErrorsAtTimeout(t *testing.T) {
+	ctx := context.Background()
+	providerErr := errors.New("proposal failed")
+	service := newTestService(t, ctx,
+		map[string]eth2client.MultiForkProposalProvider{
+			"error":   &epbsProposalProvider{err: providerErr},
+			"pending": &epbsProposalProvider{waitForCancellation: true},
+		},
+		20*time.Millisecond,
+	)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.Nil(t, response)
+	require.ErrorIs(t, err, providerErr)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestEPBSProposalReturnsAllProviderErrors(t *testing.T) {
+	ctx := context.Background()
+	firstErr := errors.New("first proposal failed")
+	secondErr := errors.New("second proposal failed")
+	service := newTestService(t, ctx,
+		map[string]eth2client.MultiForkProposalProvider{
+			"one": &epbsProposalProvider{err: firstErr},
+			"two": &epbsProposalProvider{err: secondErr},
+		},
+		time.Second,
+	)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.Nil(t, response)
+	require.ErrorIs(t, err, firstErr)
+	require.ErrorIs(t, err, secondErr)
+}
+
 func TestEPBSProposalDoesNotLeaveLateProvidersBlocked(t *testing.T) {
 	ctx := context.Background()
 	release := make(chan struct{})
-	service, err := first.New(ctx,
-		first.WithLogLevel(zerolog.Disabled),
-		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+	service := newTestService(t, ctx,
+		map[string]eth2client.MultiForkProposalProvider{
 			"fast":  &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
 			"late1": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}, release: release},
 			"late2": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}, release: release},
-		}),
-		first.WithTimeout(time.Second),
+		},
+		time.Second,
 	)
-	require.NoError(t, err)
 
 	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
 	require.NoError(t, err)
@@ -132,53 +251,44 @@ func TestEPBSProposalDoesNotLeaveLateProvidersBlocked(t *testing.T) {
 func TestEPBSProposalSkipsProposalWithoutRequestedPayload(t *testing.T) {
 	ctx := context.Background()
 	includePayload := true
-	service, err := first.New(ctx,
-		first.WithLogLevel(zerolog.Disabled),
-		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+	service := newTestService(t, ctx,
+		map[string]eth2client.MultiForkProposalProvider{
 			"excluded": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
-		}),
-		first.WithTimeout(10*time.Millisecond),
+		},
+		10*time.Millisecond,
 	)
-	require.NoError(t, err)
 
 	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{IncludePayload: &includePayload})
 	require.Nil(t, response)
-	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal: excluded: ePBS proposal excludes requested execution payload")
 }
 
 func TestEPBSProposalSkipsZeroFeeRecipient(t *testing.T) {
 	ctx := context.Background()
-	service, err := first.New(ctx,
-		first.WithLogLevel(zerolog.Disabled),
-		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+	service := newTestService(t, ctx,
+		map[string]eth2client.MultiForkProposalProvider{
 			"zero-fee": &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{})},
-		}),
-		first.WithTimeout(10*time.Millisecond),
+		},
+		10*time.Millisecond,
 	)
-	require.NoError(t, err)
 
 	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
 	require.Nil(t, response)
-	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal: zero-fee: beacon block obtained with 0 fee recipient")
 }
 
 func TestEPBSProposalSkipsNilResponse(t *testing.T) {
 	ctx := context.Background()
-	service, err := first.New(ctx,
-		first.WithLogLevel(zerolog.Disabled),
-		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+	service := newTestService(t, ctx,
+		map[string]eth2client.MultiForkProposalProvider{
 			"nil": &epbsProposalProvider{nilResponse: true},
-		}),
-		first.WithTimeout(10*time.Millisecond),
+		},
+		10*time.Millisecond,
 	)
-	require.NoError(t, err)
 
 	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
 	require.Nil(t, response)
-	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal: nil: beacon node returned no ePBS proposal response")
 }
 
 func TestEPBSProposalSkipsMalformedGloasProposal(t *testing.T) {
@@ -186,15 +296,18 @@ func TestEPBSProposalSkipsMalformedGloasProposal(t *testing.T) {
 	tests := []struct {
 		name     string
 		proposal *api.VersionedEPBSProposal
+		err      string
 	}{
 		{
 			name: "Nil",
+			err:  "failed to obtain ePBS beacon block proposal: malformed: beacon node returned no ePBS proposal",
 		},
 		{
 			name: "GloasWithoutBlock",
 			proposal: &api.VersionedEPBSProposal{
 				Version: spec.DataVersionGloas,
 			},
+			err: "failed to obtain ePBS beacon block proposal: malformed: ePBS proposal has no execution payload bid",
 		},
 		{
 			name: "GloasContentsWithoutBlock",
@@ -203,6 +316,7 @@ func TestEPBSProposalSkipsMalformedGloasProposal(t *testing.T) {
 				ExecutionPayloadIncluded: true,
 				GloasContents:            &apiv1gloas.BlockContents{},
 			},
+			err: "failed to obtain ePBS beacon block proposal: malformed: ePBS proposal has no execution payload bid",
 		},
 		{
 			name: "GloasContentsNil",
@@ -210,6 +324,7 @@ func TestEPBSProposalSkipsMalformedGloasProposal(t *testing.T) {
 				Version:                  spec.DataVersionGloas,
 				ExecutionPayloadIncluded: true,
 			},
+			err: "failed to obtain ePBS beacon block proposal: malformed: ePBS proposal has no execution payload bid",
 		},
 		{
 			name: "BlockWithoutBody",
@@ -217,6 +332,7 @@ func TestEPBSProposalSkipsMalformedGloasProposal(t *testing.T) {
 				Version: spec.DataVersionGloas,
 				Gloas:   &gloas.BeaconBlock{},
 			},
+			err: "failed to obtain ePBS beacon block proposal: malformed: ePBS proposal has no execution payload bid",
 		},
 		{
 			name: "BodyWithoutBid",
@@ -226,6 +342,7 @@ func TestEPBSProposalSkipsMalformedGloasProposal(t *testing.T) {
 					Body: &gloas.BeaconBlockBody{},
 				},
 			},
+			err: "failed to obtain ePBS beacon block proposal: malformed: ePBS proposal has no execution payload bid",
 		},
 		{
 			name: "BidWithoutMessage",
@@ -237,24 +354,22 @@ func TestEPBSProposalSkipsMalformedGloasProposal(t *testing.T) {
 					},
 				},
 			},
+			err: "failed to obtain ePBS beacon block proposal: malformed: ePBS proposal has no execution payload bid",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			service, err := first.New(ctx,
-				first.WithLogLevel(zerolog.Disabled),
-				first.WithClientMonitor(nullmetrics.New()),
-				first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			service := newTestService(t, ctx,
+				map[string]eth2client.MultiForkProposalProvider{
 					"malformed": &epbsProposalProvider{proposal: test.proposal},
-				}),
-				first.WithTimeout(10*time.Millisecond),
+				},
+				10*time.Millisecond,
 			)
-			require.NoError(t, err)
 
 			response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
 			require.Nil(t, response)
-			require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+			require.EqualError(t, err, test.err)
 		})
 	}
 }
@@ -267,20 +382,35 @@ func TestEPBSProposalWaitsForProposalWithRequestedPayload(t *testing.T) {
 	time.AfterFunc(20*time.Millisecond, func() {
 		close(release)
 	})
-	service, err := first.New(ctx,
-		first.WithLogLevel(zerolog.Disabled),
-		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+	service := newTestService(t, ctx,
+		map[string]eth2client.MultiForkProposalProvider{
 			"excluded": &epbsProposalProvider{proposal: &api.VersionedEPBSProposal{}},
 			"included": &epbsProposalProvider{proposal: included, release: release},
-		}),
-		first.WithTimeout(time.Second),
+		},
+		time.Second,
 	)
-	require.NoError(t, err)
 
 	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{IncludePayload: &includePayload})
 	require.NoError(t, err)
 	require.Same(t, included, response.Data)
+}
+
+func newTestService(t *testing.T,
+	ctx context.Context,
+	providers map[string]eth2client.MultiForkProposalProvider,
+	timeout time.Duration,
+) *first.Service {
+	t.Helper()
+
+	service, err := first.New(ctx,
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithClientMonitor(nullmetrics.New()),
+		first.WithProposalProviders(providers),
+		first.WithTimeout(timeout),
+	)
+	require.NoError(t, err)
+
+	return service
 }
 
 func gloasEPBSProposal(feeRecipient bellatrix.ExecutionAddress) *api.VersionedEPBSProposal {
@@ -300,23 +430,34 @@ func gloasEPBSProposal(feeRecipient bellatrix.ExecutionAddress) *api.VersionedEP
 }
 
 type epbsProposalProvider struct {
-	proposal       *api.VersionedEPBSProposal
-	legacyProposal *api.VersionedProposal
-	release        <-chan struct{}
-	nilResponse    bool
-	client         string
-	graffiti       chan [32]byte
+	proposal                    *api.VersionedEPBSProposal
+	legacyProposal              *api.VersionedProposal
+	release                     <-chan struct{}
+	nilResponse                 bool
+	client                      string
+	graffiti                    chan [32]byte
+	err                         error
+	proposalErr                 error
+	waitForCancellation         bool
+	proposalWaitForCancellation bool
 }
 
-func (p *epbsProposalProvider) Proposal(_ context.Context, opts *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
+func (p *epbsProposalProvider) Proposal(ctx context.Context, opts *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
+	if p.proposalWaitForCancellation {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	if p.graffiti != nil {
 		p.graffiti <- opts.Graffiti
+	}
+	if p.proposalErr != nil {
+		return nil, p.proposalErr
 	}
 
 	return &api.Response[*api.VersionedProposal]{Data: p.legacyProposal}, nil
 }
 
-func (p *epbsProposalProvider) EPBSProposal(_ context.Context,
+func (p *epbsProposalProvider) EPBSProposal(ctx context.Context,
 	opts *api.EPBSProposalOpts,
 ) (
 	*api.Response[*api.VersionedEPBSProposal],
@@ -325,8 +466,15 @@ func (p *epbsProposalProvider) EPBSProposal(_ context.Context,
 	if p.release != nil {
 		<-p.release
 	}
+	if p.waitForCancellation {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	if p.graffiti != nil {
 		p.graffiti <- opts.Graffiti
+	}
+	if p.err != nil {
+		return nil, p.err
 	}
 	if p.nilResponse {
 		return nil, nil
