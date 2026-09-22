@@ -361,12 +361,12 @@ func isUnknownBeaconBlockError(err error) bool {
 	var submissionErrors *submitter.SubmissionError
 	if errors.As(err, &submissionErrors) {
 		for _, submissionErr := range submissionErrors.Unwrap() {
-			if !containsUnknownBeaconBlockError(submissionErr) {
-				return false
+			if containsUnknownBeaconBlockError(submissionErr) {
+				return true
 			}
 		}
 
-		return len(submissionErrors.Unwrap()) > 0
+		return false
 	}
 
 	return containsUnknownBeaconBlockError(err)

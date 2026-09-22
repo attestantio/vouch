@@ -220,9 +220,23 @@ func TestProposeGloas(t *testing.T) {
 				),
 				errors.New("invalid envelope signature"),
 			),
-			envelopeSubmissionAttempts: 1,
+			envelopeSubmissionAttempts: 3,
 			err: "failed to propose block: failed to submit execution payload envelope after block publication: " +
 				"failed to submit execution payload envelope\n failed with status 400: {\"code\":400,\"message\":\"unknown beacon block\"}\ninvalid envelope signature",
+		},
+		{
+			name:                     "UnknownBlockAndTimeoutEnvelopeSubmissionFailure",
+			executionPayloadIncluded: true,
+			envelopeSubmitterErr: submitter.NewSubmissionError(
+				&consensusapi.Error{
+					StatusCode: 404,
+					Data:       []byte(`{"code":404,"message":"beacon block not found"}`),
+				},
+				errors.New("no successful submissions before timeout"),
+			),
+			envelopeSubmissionAttempts: 3,
+			err: "failed to propose block: failed to submit execution payload envelope after block publication: " +
+				" failed with status 404: {\"code\":404,\"message\":\"beacon block not found\"}\nno successful submissions before timeout",
 		},
 	}
 
