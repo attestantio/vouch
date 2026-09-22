@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	nethttp "net/http"
 	"net/http/httptest"
 	"testing"
@@ -24,11 +25,9 @@ import (
 	bitfield "github.com/OffchainLabs/go-bitfield"
 	client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	apiv1gloas "github.com/attestantio/go-eth2-client/api/v1/gloas"
 	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
-	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics/null"
@@ -101,23 +100,14 @@ func TestFetchClientCustomSpecSupport(t *testing.T) {
 	require.Equal(t, block.Slot, response.Data.Gloas.Slot)
 }
 
-func TestSimpleProposalProviderRejectsZeroFeeRecipient(t *testing.T) {
+func TestSimpleProposalProviderReturnsProviderError(t *testing.T) {
 	ctx := context.Background()
 	const address = "http://proposal.test"
+	providerErr := errors.New("proposal failed")
 	proposalClient, err := mockconsensusclient.New(ctx)
 	require.NoError(t, err)
 	proposalClient.EPBSProposalFunc = func(context.Context, *api.EPBSProposalOpts) (*api.Response[*api.VersionedEPBSProposal], error) {
-		return &api.Response[*api.VersionedEPBSProposal]{
-			Data: &api.VersionedEPBSProposal{
-				Version:                  spec.DataVersionGloas,
-				ExecutionPayloadIncluded: true,
-				GloasContents: &apiv1gloas.BlockContents{Block: &gloas.BeaconBlock{Body: &gloas.BeaconBlockBody{
-					SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{Message: &gloas.ExecutionPayloadBid{
-						FeeRecipient: bellatrix.ExecutionAddress{},
-					}},
-				}}},
-			},
-		}, nil
+		return nil, providerErr
 	}
 	viper.Set("strategies.beaconblockproposal.style", "simple")
 	viper.Set("strategies.beaconblockproposal.beacon-node-addresses", []string{address})
@@ -141,5 +131,5 @@ func TestSimpleProposalProviderRejectsZeroFeeRecipient(t *testing.T) {
 		IncludePayload: &includePayload,
 	})
 	require.Nil(t, response)
-	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal before timeout")
+	require.ErrorIs(t, err, providerErr)
 }

@@ -1466,17 +1466,7 @@ func selectProposalProvider(ctx context.Context,
 		if !isProvider {
 			return nil, errors.New("beacon block proposal client does not support ePBS proposals")
 		}
-		proposalProvider, err = firstbeaconblockproposalstrategy.New(ctx,
-			firstbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-			firstbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.first")),
-			firstbeaconblockproposalstrategy.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
-				"simple": provider,
-			}),
-			firstbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.first")),
-		)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to start simple beacon block proposal strategy")
-		}
+		proposalProvider = provider
 	}
 
 	return proposalProvider, nil

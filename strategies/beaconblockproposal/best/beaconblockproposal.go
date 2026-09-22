@@ -22,6 +22,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/vouch/strategies/beaconblockproposal"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -248,7 +249,7 @@ func (s *Service) epbsProposal(ctx context.Context,
 		return
 	}
 
-	if err := validateEPBSProposal(proposalResponse.Data); err != nil {
+	if err := beaconblockproposal.ValidateEPBSProposal(proposalResponse.Data, opts.IncludePayload); err != nil {
 		errCh <- &beaconBlockError{
 			provider: name,
 			err:      err,
@@ -261,32 +262,6 @@ func (s *Service) epbsProposal(ctx context.Context,
 		provider: name,
 		proposal: proposalResponse.Data,
 	}
-}
-
-// validateEPBSProposal confirms that an ePBS proposal is structurally sound and pays a fee recipient.
-// The caller must have already excluded a nil proposal.
-func validateEPBSProposal(proposal *api.VersionedEPBSProposal) error {
-	if proposal.Version != spec.DataVersionGloas {
-		return nil
-	}
-
-	block := proposal.Gloas
-	if proposal.ExecutionPayloadIncluded {
-		if proposal.GloasContents == nil {
-			return errors.New("beacon node returned malformed ePBS proposal")
-		}
-		block = proposal.GloasContents.Block
-	}
-
-	if block == nil || block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
-		return errors.New("beacon node returned malformed ePBS proposal")
-	}
-
-	if block.Body.SignedExecutionPayloadBid.Message.FeeRecipient.IsZero() {
-		return errors.New("beacon block obtained with 0 fee recipient")
-	}
-
-	return nil
 }
 
 // Proposal provides the best beacon block proposal from a number of beacon nodes.

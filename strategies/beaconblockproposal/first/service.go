@@ -19,8 +19,8 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/strategies/beaconblockproposal"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -110,40 +110,12 @@ func (s *Service) fetchEPBSProposal(ctx context.Context,
 	}
 }
 
-// acceptableEPBSProposal reports whether proposal is usable, discarding and logging it if it is
-// nil, lacks a requested execution payload, or (for Gloas) is structurally malformed or pays a
-// zero fee recipient.
+// acceptableEPBSProposal reports whether proposal is usable, logging it if it is not.
 func (s *Service) acceptableEPBSProposal(proposal *api.VersionedEPBSProposal, includePayload *bool) bool {
-	if proposal == nil {
-		s.log.Warn().Msg("Discarding empty ePBS proposal")
+	if err := beaconblockproposal.ValidateEPBSProposal(proposal, includePayload); err != nil {
+		s.log.Warn().Err(err).Msg("Discarding invalid ePBS proposal")
 
 		return false
-	}
-	if includePayload != nil && *includePayload && !proposal.ExecutionPayloadIncluded {
-		s.log.Warn().Msg("Discarding ePBS proposal without requested execution payload")
-
-		return false
-	}
-	if proposal.Version == spec.DataVersionGloas {
-		block := proposal.Gloas
-		if proposal.ExecutionPayloadIncluded {
-			if proposal.GloasContents == nil {
-				s.log.Warn().Msg("Discarding malformed ePBS proposal")
-
-				return false
-			}
-			block = proposal.GloasContents.Block
-		}
-		if block == nil || block.Body == nil || block.Body.SignedExecutionPayloadBid == nil || block.Body.SignedExecutionPayloadBid.Message == nil {
-			s.log.Warn().Msg("Discarding malformed ePBS proposal")
-
-			return false
-		}
-		if block.Body.SignedExecutionPayloadBid.Message.FeeRecipient.IsZero() {
-			s.log.Warn().Msg("Discarding ePBS proposal with 0 fee recipient")
-
-			return false
-		}
 	}
 
 	return true

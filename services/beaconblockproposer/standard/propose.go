@@ -43,6 +43,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/submitter"
+	"github.com/attestantio/vouch/strategies/beaconblockproposal"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
@@ -267,9 +268,12 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if err != nil {
 		return errors.Wrap(err, "failed to obtain ePBS proposal")
 	}
+	if proposalResponse == nil {
+		return errors.New("beacon node returned no ePBS proposal response")
+	}
 	proposal := proposalResponse.Data
-	if !proposal.ExecutionPayloadIncluded {
-		return errors.New("ePBS proposal excludes requested execution payload")
+	if err := beaconblockproposal.ValidateEPBSProposal(proposal, &includePayload); err != nil {
+		return err
 	}
 
 	if err := s.confirmEPBSProposalData(ctx, proposal, duty); err != nil {
