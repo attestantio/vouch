@@ -26,6 +26,8 @@ import (
 type Duty struct {
 	DependentRoot  phase0.Root
 	ProposalSlot   phase0.Slot
+	CurrentSlot    phase0.Slot
+	CurrentEpoch   phase0.Epoch
 	ValidatorIndex phase0.ValidatorIndex
 	Account        e2wtypes.Account
 	FeeRecipient   bellatrix.ExecutionAddress
@@ -67,6 +69,7 @@ type Publisher interface {
 	// Publish publishes the supplied duty's proposer preferences.
 	// It returns an error only if no provider has accepted the preferences.
 	Publish(ctx context.Context, duty *Duty) error
+	FlushConfigChangeWarnings()
 }
 
 // Service publishes proposer preferences and reports provider readiness.
