@@ -602,8 +602,8 @@ func (p *recordingProposerPreferences) Publish(_ context.Context, duty *proposer
 }
 
 func preferenceWithoutCurrentSlot(duty *proposerpreferences.Duty) *proposerpreferences.Duty {
-	copy := *duty
-	copy.CurrentSlot = 0
-	copy.CurrentEpoch = 0
-	return &copy
+	result := *duty
+	result.CurrentSlot = 0
+	result.CurrentEpoch = 0
+	return &result
 }

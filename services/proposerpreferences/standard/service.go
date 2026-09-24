@@ -259,19 +259,7 @@ func (s *Service) claimPublication(preferences gloas.ProposerPreferences, dutyKe
 		monitorProposerPreferencesProcess("stale")
 		return nil, nil
 	}
-	if current, exists := s.current[dutyKey]; exists && current.DependentRoot == preferences.DependentRoot {
-		if cached := s.cache[current]; cached != nil && cached.signed != nil {
-			if configOf(current) != configOf(preferences) {
-				if previous, pending := s.pendingConfig[dutyKey.validatorIndex]; pending && previous != configOf(preferences) {
-					delete(s.reportedConfig, previous)
-				}
-				s.pendingConfig[dutyKey.validatorIndex] = configOf(preferences)
-			} else {
-				delete(s.pendingConfig, dutyKey.validatorIndex)
-			}
-		}
-		preferences = current
-	}
+	preferences = s.firstSignedPreference(preferences, dutyKey)
 	cached, exists := s.cache[preferences]
 	if exists && cached.published {
 		s.current[dutyKey] = preferences
@@ -281,7 +269,7 @@ func (s *Service) claimPublication(preferences gloas.ProposerPreferences, dutyKe
 	if complete, exists := s.inFlight[preferences]; exists {
 		return nil, complete
 	}
-	providers := s.failedProviders(cached, currentSlot, currentEpoch)
+	providers := failedProviders(cached, currentSlot, currentEpoch)
 	if exists && len(providers) == 0 {
 		return nil, nil
 	}
@@ -309,7 +297,27 @@ func (s *Service) claimPublication(preferences gloas.ProposerPreferences, dutyKe
 	}, nil
 }
 
-func (s *Service) failedProviders(cached *cachedPreference, currentSlot phase0.Slot, currentEpoch phase0.Epoch) []string {
+// firstSignedPreference retains the first signature and tracks config changes for later duties.
+// The caller holds s.mutex.
+func (s *Service) firstSignedPreference(preferences gloas.ProposerPreferences, dutyKey preferenceDuty) gloas.ProposerPreferences {
+	current, exists := s.current[dutyKey]
+	if !exists || current.DependentRoot != preferences.DependentRoot {
+		return preferences
+	}
+	if cached := s.cache[current]; cached != nil && cached.signed != nil {
+		if configOf(current) != configOf(preferences) {
+			if previous, pending := s.pendingConfig[dutyKey.validatorIndex]; pending && previous != configOf(preferences) {
+				delete(s.reportedConfig, previous)
+			}
+			s.pendingConfig[dutyKey.validatorIndex] = configOf(preferences)
+		} else {
+			delete(s.pendingConfig, dutyKey.validatorIndex)
+		}
+	}
+	return current
+}
+
+func failedProviders(cached *cachedPreference, currentSlot phase0.Slot, currentEpoch phase0.Epoch) []string {
 	if cached == nil {
 		return nil
 	}
@@ -433,7 +441,7 @@ func (s *Service) recordSubmission(publication *publication, outcomes map[string
 
 		return errors.Wrap(submissionErr, "failed to submit proposer preferences")
 	}
-	publication.cached.published = len(s.failedProviders(publication.cached, publication.attemptSlot+1, publication.attemptEpoch+1)) == 0
+	publication.cached.published = len(failedProviders(publication.cached, publication.attemptSlot+1, publication.attemptEpoch+1)) == 0
 
 	return nil
 }
