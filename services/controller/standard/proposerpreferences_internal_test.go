@@ -24,7 +24,9 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/proposerpreferences"
+	"github.com/attestantio/vouch/testing/logger"
 	"github.com/attestantio/vouch/testutil"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -63,6 +65,38 @@ func TestPublishProposerPreferencesPublishesFirstGloasEpoch(t *testing.T) {
 		bellatrix.ExecutionAddress{0x02},
 		30_000_000,
 	)}, preferences.duties)
+}
+
+func TestPublishProposerPreferencesSkipsUnownedValidatorsQuietly(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+
+	provider := &recordingProposerDutiesProvider{
+		duties:   []*apiv1.ProposerDuty{{Slot: 160, ValidatorIndex: 3}, {Slot: 161, ValidatorIndex: 4}},
+		metadata: map[string]any{"dependent_root": phase0.Root{0x01}},
+	}
+	preferences := &recordingProposerPreferences{}
+	capture := logger.NewLogCapture()
+	service := &Service{
+		log:                          zerolog.New(capture),
+		chainTimeService:             &recordingChainTime{currentEpoch: 4, slotDuration: time.Second, slotsPerEpoch: 32},
+		proposerDutiesProvider:       provider,
+		proposerDutiesV2Provider:     provider,
+		validatingAccountsProvider:   &proposerPreferencesAccountsProvider{accounts: accounts},
+		executionConfigProvider:      &recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{FeeRecipient: bellatrix.ExecutionAddress{0x02}, GasLimit: 30_000_000}},
+		proposerPreferences:          preferences,
+		gloasForkEpoch:               5,
+		proposerPreferencesLookahead: 1,
+	}
+
+	service.publishProposerPreferences(ctx, 5, phase0.Root{0x01})
+
+	require.Len(t, preferences.duties, 1)
+	require.Equal(t, phase0.ValidatorIndex(3), preferences.duties[0].ValidatorIndex)
+	for _, level := range []string{"warn", "error"} {
+		require.False(t, capture.HasLog(map[string]any{"level": level, "message": "No account for proposer preferences duty"}))
+	}
 }
 
 func TestHandleHeadV2EventUsesEpochDependentRootsAcrossBoundary(t *testing.T) {
