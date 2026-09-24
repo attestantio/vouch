@@ -193,7 +193,7 @@ func TestProviderReadyAfterAcceptedSubmission(t *testing.T) {
 		bellatrix.ExecutionAddress{0x02},
 		30_000_000,
 	))
-	require.EqualError(t, err, "failed to submit proposer preferences: context deadline exceeded")
+	require.NoError(t, err)
 	require.True(t, service.ProviderReady("accepted", 64, 3))
 	require.False(t, service.ProviderReady("rejected", 64, 3))
 }
@@ -338,9 +338,59 @@ func TestPublishRetriesOnlyRejectedProvider(t *testing.T) {
 	require.NoError(t, err)
 	duty := proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000)
 
-	require.EqualError(t, service.Publish(ctx, duty), "failed to submit proposer preferences: context deadline exceeded")
+	require.NoError(t, service.Publish(ctx, duty))
 	require.NoError(t, service.Publish(ctx, duty))
 	require.Equal(t, [][]string{nil, {"rejected"}}, submitter.providers)
+}
+
+func TestPublishSubmissionOutcomes(t *testing.T) {
+	tests := []struct {
+		name        string
+		outcomeSets []map[string]error
+		err         string
+	}{
+		{
+			name:        "SomeProvidersAccept",
+			outcomeSets: []map[string]error{{"accepted": nil, "rejected": context.DeadlineExceeded}},
+		},
+		{
+			name:        "NoProviderAccepts",
+			outcomeSets: []map[string]error{{"one": context.DeadlineExceeded, "two": context.DeadlineExceeded}},
+			err:         "failed to submit proposer preferences: context deadline exceeded",
+		},
+		{
+			name: "RetryFailsAfterEarlierAcceptance",
+			outcomeSets: []map[string]error{
+				{"accepted": nil, "rejected": context.DeadlineExceeded},
+				{"rejected": context.DeadlineExceeded},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+			require.NoError(t, err)
+			service, err := standard.New(ctx,
+				standard.WithMonitor(nullmetrics.New()),
+				standard.WithSigner(&recordingSigner{signature: phase0.BLSSignature{0x01}}),
+				standard.WithSubmitter(&recordingSubmitter{outcomeSets: test.outcomeSets}),
+			)
+			require.NoError(t, err)
+			duty := proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000)
+
+			for range test.outcomeSets[1:] {
+				_ = service.Publish(ctx, duty)
+			}
+			err = service.Publish(ctx, duty)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
 
 func TestPublishRecordsProviderOutcomes(t *testing.T) {
@@ -364,7 +414,7 @@ func TestPublishRecordsProviderOutcomes(t *testing.T) {
 		30_000_000,
 	))
 
-	require.EqualError(t, err, "failed to submit proposer preferences: context deadline exceeded")
+	require.NoError(t, err)
 	require.Equal(t, before["signed"]+1, proposerPreferencesEventCounts(t)["signed"])
 	require.Equal(t, before["accepted"]+1, proposerPreferencesEventCounts(t)["accepted"])
 	require.Equal(t, before["rejected"]+1, proposerPreferencesEventCounts(t)["rejected"])

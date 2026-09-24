@@ -190,7 +190,8 @@ func (s *Service) publishProposerPreferencesDuty(
 ) {
 	account, exists := accounts[duty.ValidatorIndex]
 	if !exists {
-		s.log.Error().Uint64("validator_index", uint64(duty.ValidatorIndex)).Msg("No account for proposer preferences duty")
+		// Duties cover every proposer in the epoch, not just ours.
+		s.log.Trace().Uint64("validator_index", uint64(duty.ValidatorIndex)).Msg("No account for proposer preferences duty")
 		return
 	}
 	config, err := s.executionConfigProvider.ProposerConfig(ctx, account, util.ValidatorPubkey(account))
