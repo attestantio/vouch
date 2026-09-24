@@ -15,6 +15,7 @@ package payloadattester
 
 import (
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/attestantio/go-eth2-client/api/v1"
@@ -82,6 +83,10 @@ func (d *Duty) Account(index phase0.ValidatorIndex) e2wtypes.Account {
 func (d *Duty) Accounts() map[phase0.ValidatorIndex]e2wtypes.Account {
 	return d.accounts
 }
+
+// ErrPayloadAttestationDataUnavailable is returned by Attest when it fails before signing,
+// so a later attempt for the same slot cannot produce a conflicting vote.
+var ErrPayloadAttestationDataUnavailable = errors.New("failed to obtain payload attestation data")
 
 // Service is the payload attester service.
 type Service interface {

@@ -6,6 +6,7 @@ package standard
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"strings"
 	"sync"
@@ -27,7 +28,9 @@ import (
 func TestExecutionPayloadAvailableRetainsDeadlineAfterDataUnavailable(t *testing.T) {
 	ctx := context.Background()
 	schedulerService := &recordingScheduler{}
-	payloadService := &recordingPayloadAttester{err: eth2client.ErrNoPayloadAttestationData}
+	payloadService := &recordingPayloadAttester{
+		err: fmt.Errorf("%w: %w", payloadattester.ErrPayloadAttestationDataUnavailable, eth2client.ErrNoPayloadAttestationData),
+	}
 	service := &Service{
 		chainTimeService:        currentSlotRecordingChainTime(10),
 		scheduler:               schedulerService,
@@ -46,7 +49,31 @@ func TestExecutionPayloadAvailableRetainsDeadlineAfterDataUnavailable(t *testing
 func TestPayloadAttestationDeadlineRetriesAfterEventDataUnavailable(t *testing.T) {
 	ctx := context.Background()
 	schedulerService := &recordingScheduler{}
-	payloadService := &recordingPayloadAttester{err: eth2client.ErrNoPayloadAttestationData}
+	payloadService := &recordingPayloadAttester{
+		err: fmt.Errorf("%w: %w", payloadattester.ErrPayloadAttestationDataUnavailable, eth2client.ErrNoPayloadAttestationData),
+	}
+	service := &Service{
+		chainTimeService:        currentSlotRecordingChainTime(10),
+		scheduler:               schedulerService,
+		payloadAttester:         payloadService,
+		payloadAttestationDelay: 9 * time.Second,
+	}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})
+
+	service.schedulePayloadAttestation(ctx, duty, map[phase0.ValidatorIndex]e2wtypes.Account{1: nil})
+	service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 10})
+	payloadService.err = nil
+	schedulerService.RunJobIfExists(ctx, payloadAttestationJobName(10))
+
+	require.Len(t, payloadService.duties, 2)
+}
+
+func TestPayloadAttestationDeadlineRetriesAfterEventDataDisagreement(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{}
+	payloadService := &recordingPayloadAttester{
+		err: fmt.Errorf("%w: split-response payload attestation data responses", payloadattester.ErrPayloadAttestationDataUnavailable),
+	}
 	service := &Service{
 		chainTimeService:        currentSlotRecordingChainTime(10),
 		scheduler:               schedulerService,

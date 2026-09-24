@@ -27,6 +27,8 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/payloadattester"
 	"github.com/attestantio/vouch/services/payloadattester/standard"
+	"github.com/attestantio/vouch/services/signer"
+	"github.com/attestantio/vouch/services/submitter"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/attestantio/vouch/testutil"
 	"github.com/prometheus/client_golang/prometheus"
@@ -121,6 +123,118 @@ func TestAttestRetriesUnavailablePayloadAttestationData(t *testing.T) {
 	require.Equal(t, 2, calls)
 }
 
+func TestAttestReportsDataFailuresAsUnavailable(t *testing.T) {
+	tests := []struct {
+		name     string
+		response *api.Response[*spec.VersionedPayloadAttestationData]
+		err      error
+	}{
+		{
+			name: "ProviderError",
+			err:  errors.New("split-response payload attestation data responses"),
+		},
+		{
+			name: "StillUnavailableAfterRetries",
+			err:  eth2client.ErrNoPayloadAttestationData,
+		},
+		{
+			name: "NoData",
+		},
+		{
+			name: "NotGloas",
+			response: &api.Response[*spec.VersionedPayloadAttestationData]{Data: &spec.VersionedPayloadAttestationData{
+				Version: spec.DataVersionFulu,
+			}},
+		},
+		{
+			name: "WrongSlot",
+			response: &api.Response[*spec.VersionedPayloadAttestationData]{Data: &spec.VersionedPayloadAttestationData{
+				Version: spec.DataVersionGloas,
+				Gloas:   &gloas.PayloadAttestationData{Slot: 13},
+			}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			client, err := mocketh2client.New(ctx)
+			require.NoError(t, err)
+			client.PayloadAttestationDataFunc = func(context.Context, *api.PayloadAttestationDataOpts) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+				return test.response, test.err
+			}
+			accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{1}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+			require.NoError(t, err)
+			signer := &recordingSigner{}
+			service, err := standard.New(ctx,
+				standard.WithLogLevel(zerolog.Disabled),
+				standard.WithMonitor(prometheusMonitor{}),
+				standard.WithPayloadAttestationDataProvider(client),
+				standard.WithPayloadAttestationDataSigner(signer),
+				standard.WithPayloadAttestationMessagesSubmitter(&recordingSubmitter{}),
+			)
+			require.NoError(t, err)
+			duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 12, ValidatorIndex: 1})
+			duty.SetAccount(1, accounts[1])
+
+			_, err = service.Attest(ctx, duty)
+
+			require.ErrorIs(t, err, payloadattester.ErrPayloadAttestationDataUnavailable)
+			require.Empty(t, signer.accounts)
+		})
+	}
+}
+
+func TestAttestDoesNotReportSigningOrSubmissionFailuresAsUnavailable(t *testing.T) {
+	tests := []struct {
+		name      string
+		signer    signer.PayloadAttestationDataSigner
+		submitter submitter.PayloadAttestationMessagesSubmitter
+	}{
+		{
+			name:      "SigningFailure",
+			signer:    failingSigner{},
+			submitter: &recordingSubmitter{},
+		},
+		{
+			name:      "SubmissionFailure",
+			signer:    &recordingSigner{},
+			submitter: failingSubmitter{},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			client, err := mocketh2client.New(ctx)
+			require.NoError(t, err)
+			client.PayloadAttestationDataFunc = func(context.Context, *api.PayloadAttestationDataOpts) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+				return &api.Response[*spec.VersionedPayloadAttestationData]{Data: &spec.VersionedPayloadAttestationData{
+					Version: spec.DataVersionGloas,
+					Gloas:   &gloas.PayloadAttestationData{Slot: 12},
+				}}, nil
+			}
+			accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{1}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+			require.NoError(t, err)
+			service, err := standard.New(ctx,
+				standard.WithLogLevel(zerolog.Disabled),
+				standard.WithMonitor(prometheusMonitor{}),
+				standard.WithPayloadAttestationDataProvider(client),
+				standard.WithPayloadAttestationDataSigner(test.signer),
+				standard.WithPayloadAttestationMessagesSubmitter(test.submitter),
+			)
+			require.NoError(t, err)
+			duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 12, ValidatorIndex: 1})
+			duty.SetAccount(1, accounts[1])
+
+			_, err = service.Attest(ctx, duty)
+
+			require.Error(t, err)
+			require.NotErrorIs(t, err, payloadattester.ErrPayloadAttestationDataUnavailable)
+		})
+	}
+}
+
 func TestAttestRejectsDataForDifferentSlotBeforeSigningOrSubmitting(t *testing.T) {
 	ctx := context.Background()
 	capture := logger.NewLogCapture()
@@ -150,13 +264,14 @@ func TestAttestRejectsDataForDifferentSlotBeforeSigningOrSubmitting(t *testing.T
 
 	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 12, ValidatorIndex: 1})
 	duty.SetAccount(1, accounts[1])
+	failedBefore := payloadAttestationEventCounts(t)["failed"]
 
 	_, err = service.Attest(ctx, duty)
-	require.EqualError(t, err, "payload attestation data slot 13 does not match duty slot 12")
+	require.EqualError(t, err, "failed to obtain payload attestation data: payload attestation data slot 13 does not match duty slot 12")
 	require.Empty(t, signer.accounts)
 	require.Empty(t, submitter.messages)
 
-	require.Equal(t, float64(1), payloadAttestationEventCounts(t)["failed"])
+	require.Equal(t, failedBefore+1, payloadAttestationEventCounts(t)["failed"])
 	require.True(t, capture.HasLog(map[string]any{"message": "Failed to produce payload attestation data", "slot": uint64(12)}))
 }
 
@@ -258,6 +373,12 @@ func (s *recordingSigner) SignPayloadAttestationData(_ context.Context, accounts
 		sigs[i][0] = byte(i + 1)
 	}
 	return sigs, nil
+}
+
+type failingSigner struct{}
+
+func (failingSigner) SignPayloadAttestationData(context.Context, []e2wtypes.Account, *gloas.PayloadAttestationData) ([]phase0.BLSSignature, error) {
+	return nil, errors.New("signing failed")
 }
 
 type recordingSubmitter struct {
