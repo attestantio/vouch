@@ -41,6 +41,7 @@ import (
 	"github.com/attestantio/vouch/services/payloadattester"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/attestantio/vouch/testutil"
+	"github.com/attestantio/vouch/util"
 	dynssz "github.com/pk910/dynamic-ssz"
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
@@ -111,6 +112,34 @@ func TestFetchClientCustomSpecSupport(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, spec.DataVersionGloas, response.Data.Version)
 	require.Equal(t, block.Slot, response.Data.Gloas.Slot)
+}
+
+func TestFetchClientPublishesSafeClientDetails(t *testing.T) {
+	ctx := context.Background()
+	server := httptest.NewServer(nethttp.HandlerFunc(func(w nethttp.ResponseWriter, r *nethttp.Request) {
+		switch r.URL.Path {
+		case "/eth/v1/node/version":
+			_, _ = w.Write([]byte(`{"data":{"version":"Lighthouse/v7.1.0 (https://private.example:5052)"}}`))
+		case "/eth/v1/node/syncing":
+			_, _ = w.Write([]byte(`{"data":{"is_syncing":false,"is_optimistic":false,"el_offline":false,"head_slot":"1","sync_distance":"0"}}`))
+		default:
+			w.WriteHeader(nethttp.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	viper.Set("eth2client.timeout", "2s")
+	t.Cleanup(func() {
+		viper.Reset()
+		knownClientsMu.Lock()
+		delete(knownClients, server.URL)
+		knownClientsMu.Unlock()
+	})
+	_, err := fetchClient(ctx, null.New(), server.URL)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		name, version := util.BeaconNodeClientDetails(server.URL)
+		return name == "lighthouse" && version == "7.1.0"
+	}, time.Second, 10*time.Millisecond)
 }
 
 func TestFetchClientDoesNotLogEPBSBuilderAuth(t *testing.T) {

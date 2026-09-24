@@ -135,11 +135,12 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		attribute.Bool("soft_deadline_reached", selection.softDeadlineReached),
 		attribute.Bool("hard_deadline_reached", selection.hardDeadlineReached),
 	)
+	span.SetAttributes(beaconblockproposer.ClientDetailsAttributes(selection.provider)...)
 	if selection.provider != "" {
 		s.clientMonitor.StrategyOperation("best", selection.provider, "ePBS beacon block proposal", time.Since(started))
 	}
 
-	log.Info().
+	selectionEvent := log.Info().
 		Uint64("slot", uint64(opts.Slot)).
 		Str("request_id", requestID).
 		Str("provider", stableBestProvider).
@@ -154,8 +155,9 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		Bool("deadline_reached", selection.hardDeadlineReached).
 		Bool("soft_deadline_reached", selection.softDeadlineReached).
 		Bool("hard_deadline_reached", selection.hardDeadlineReached).
-		Str("outcome", "selected").
-		Msg("ePBS proposal selection completed")
+		Str("outcome", "selected")
+	beaconblockproposer.WithClientDetails(selectionEvent, selection.provider)
+	selectionEvent.Msg("ePBS proposal selection completed")
 
 	metadata := make(map[string]any, 4)
 	metadata[beaconblockproposer.MetadataStrategy] = "best"
@@ -367,6 +369,7 @@ func (s *Service) epbsProposal(ctx context.Context,
 		attribute.String("source", "unknown"),
 	))
 	defer span.End()
+	span.SetAttributes(beaconblockproposer.ClientDetailsAttributes(name)...)
 
 	providerGraffiti := opts.Graffiti[:]
 	if bytes.Contains(providerGraffiti, []byte("{{CLIENT}}")) {
@@ -527,6 +530,7 @@ func (s *Service) logEPBSProviderResult(slot phase0.Slot,
 	} else {
 		event = event.Str("execution_value", response.proposal.ExecutionValue.String())
 	}
+	beaconblockproposer.WithClientDetails(event, response.provider)
 	event.Msg("ePBS proposal provider completed")
 }
 

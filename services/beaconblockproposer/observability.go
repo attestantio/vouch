@@ -15,12 +15,13 @@ package beaconblockproposer
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"regexp"
 	"strings"
 
+	"github.com/attestantio/vouch/util"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const (
@@ -67,13 +68,29 @@ func SafeError(err error, sensitiveValues ...string) string {
 	return endpointInError.ReplaceAllString(message, "<redacted>")
 }
 
-// StableProviderName returns a stable telemetry name without exposing a configured endpoint.
+// StableProviderName returns the configured provider's position without exposing its endpoint.
 func StableProviderName(provider string) string {
-	if provider != "localhost" && !strings.ContainsAny(provider, ".:/@?#") {
-		return provider
+	return util.BeaconNodeName(provider)
+}
+
+// WithClientDetails adds known, validated client details to a provider log event.
+func WithClientDetails(event *zerolog.Event, provider string) {
+	client, version := util.BeaconNodeClientDetails(provider)
+	if client != "" {
+		event.Str("client", client).Str("client_version", version)
 	}
-	digest := sha256.Sum256([]byte(provider))
-	return "provider-" + hex.EncodeToString(digest[:8])
+}
+
+// ClientDetailsAttributes adds known, validated client details to a provider span.
+func ClientDetailsAttributes(provider string) []attribute.KeyValue {
+	client, version := util.BeaconNodeClientDetails(provider)
+	if client == "" {
+		return nil
+	}
+	return []attribute.KeyValue{
+		attribute.String("client", client),
+		attribute.String("client_version", version),
+	}
 }
 
 // BuilderURLPresent reports whether response metadata contains a non-empty builder URL.

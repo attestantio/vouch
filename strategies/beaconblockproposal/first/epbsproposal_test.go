@@ -33,6 +33,7 @@ import (
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/strategies/beaconblockproposal/first"
 	"github.com/attestantio/vouch/testing/logger"
+	"github.com/attestantio/vouch/util"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
@@ -130,6 +131,7 @@ func TestEPBSProposalAcceptsUnknownValue(t *testing.T) {
 func TestEPBSProposalObservability(t *testing.T) {
 	ctx := context.Background()
 	capture := logger.NewLogCapture()
+	util.RecordBeaconNodeVersion("stable-provider", "Prysm/v6.2.1")
 	spanRecorder := tracetest.NewSpanRecorder()
 	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
 	previousTracerProvider := otel.GetTracerProvider()
@@ -164,6 +166,8 @@ func TestEPBSProposalObservability(t *testing.T) {
 		"message":             "ePBS proposal provider completed",
 		"slot":                uint64(1),
 		"provider":            "stable-provider",
+		"client":              "prysm",
+		"client_version":      "6.2.1",
 		"source":              "builder_api",
 		"builder_index":       uint64(7),
 		"value_known":         true,
@@ -174,6 +178,12 @@ func TestEPBSProposalObservability(t *testing.T) {
 		"rejection_reason":    "",
 	}))
 	require.Equal(t, false, response.Metadata["vouch.fallback"])
+	require.True(t, capture.HasLog(map[string]any{
+		"message":        "ePBS proposal selection completed",
+		"provider":       "stable-provider",
+		"client":         "prysm",
+		"client_version": "6.2.1",
+	}))
 
 	for _, recordedSpan := range spanRecorder.Ended() {
 		if recordedSpan.Name() != "EPBSProposal" && recordedSpan.Name() != "ePBSBeaconBlockProposal" {
@@ -186,6 +196,8 @@ func TestEPBSProposalObservability(t *testing.T) {
 		require.Equal(t, int64(1), attributes["slot"])
 		require.NotEmpty(t, attributes["request_id"])
 		require.Equal(t, "stable-provider", attributes["provider"])
+		require.Equal(t, "prysm", attributes["client"])
+		require.Equal(t, "6.2.1", attributes["client_version"])
 		require.Equal(t, "builder_api", attributes["source"])
 		require.NotEmpty(t, attributes["proposal_root"])
 	}

@@ -14,9 +14,72 @@
 package prometheus
 
 import (
-	"github.com/stretchr/testify/require"
+	"context"
 	"testing"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/require"
 )
+
+func TestClientOperationHidesConfiguredBeaconNode(t *testing.T) {
+	viper.Set("beacon-node-addresses", []string{"https://private.example:5052"})
+	t.Cleanup(func() { viper.Reset() })
+
+	service, err := New(context.Background(), WithAddress("localhost:0"))
+	require.NoError(t, err)
+	service.ClientOperation("https://private.example:5052", "test beacon privacy", true, time.Millisecond)
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	var provider string
+	for _, family := range families {
+		if family.GetName() != "vouch_client_operation_requests_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "operation" && label.GetValue() == "test beacon privacy" {
+					for _, candidate := range metric.GetLabel() {
+						if candidate.GetName() == "provider" {
+							provider = candidate.GetValue()
+						}
+					}
+				}
+			}
+		}
+	}
+	require.Equal(t, "beacon-1", provider)
+}
+
+func TestStrategyOperationHidesConfiguredBeaconNode(t *testing.T) {
+	viper.Set("beacon-node-addresses", []string{"https://private.example:5052"})
+	t.Cleanup(func() { viper.Reset() })
+
+	service, err := New(context.Background(), WithAddress("localhost:0"))
+	require.NoError(t, err)
+	service.StrategyOperation("best", "https://private.example:5052", "test strategy privacy", time.Millisecond)
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	var provider string
+	for _, family := range families {
+		if family.GetName() != "vouch_strategy_operation_used_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "operation" && label.GetValue() == "test strategy privacy" {
+					for _, candidate := range metric.GetLabel() {
+						if candidate.GetName() == "provider" {
+							provider = candidate.GetValue()
+						}
+					}
+				}
+			}
+		}
+	}
+	require.Equal(t, "beacon-1", provider)
+}
 
 func TestParseAddress(t *testing.T) {
 	provider := "eth-val-d03-01.attestant.io:15100"

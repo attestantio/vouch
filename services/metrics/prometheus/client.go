@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/attestantio/vouch/util"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -101,10 +102,7 @@ func (s *Service) setupClientMetrics() error {
 
 // ClientOperation registers an operation.
 func (s *Service) ClientOperation(provider string, operation string, succeeded bool, duration time.Duration) {
-	address, err := parseAddress(provider)
-	if err == nil && address != nil {
-		provider = address.String()
-	}
+	provider = s.metricProviderName(provider)
 	if succeeded {
 		s.clientOperationCounter.WithLabelValues(provider, operation, "succeeded").Add(1)
 		s.clientOperationTimer.WithLabelValues(provider, operation).Observe(duration.Seconds())
@@ -115,12 +113,23 @@ func (s *Service) ClientOperation(provider string, operation string, succeeded b
 
 // StrategyOperation provides a generic monitor for strategy operations.
 func (s *Service) StrategyOperation(strategy string, provider string, operation string, duration time.Duration) {
-	address, err := parseAddress(provider)
-	if err == nil && address != nil {
-		provider = address.String()
-	}
+	provider = s.metricProviderName(provider)
 	s.strategyOperationCounter.WithLabelValues(strategy, provider, operation).Add(1)
 	s.strategyOperationTimer.WithLabelValues(strategy, provider, operation).Observe(duration.Seconds())
+}
+
+func (s *Service) metricProviderName(provider string) string {
+	if cached, ok := s.providerNames.Load(provider); ok {
+		return cached.(string)
+	}
+	name := provider
+	if beaconName, known := util.LookupBeaconNodeName(provider); known {
+		name = beaconName
+	} else if address, err := parseAddress(provider); err == nil && address != nil {
+		name = address.String()
+	}
+	s.providerNames.Store(provider, name)
+	return name
 }
 
 func parseAddress(address string) (*url.URL, error) {

@@ -14,6 +14,7 @@
 package main
 
 import (
+	"io"
 	"os"
 
 	"github.com/attestantio/vouch/util"
@@ -35,13 +36,15 @@ func initLogging() error {
 	zerolog.TimeFieldFormat = viper.GetString("logging.timestamp.format")
 
 	// Change the output file.
+	var output io.Writer = os.Stderr
 	if viper.GetString("log-file") != "" {
 		f, err := os.OpenFile(resolvePath(viper.GetString("log-file")), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		if err != nil {
 			return errors.Wrap(err, "failed to open log file")
 		}
-		zerologger.Logger = zerologger.Logger.Output(f)
+		output = f
 	}
+	zerologger.Logger = zerologger.Logger.Output(util.BeaconNodeLogWriter(output))
 
 	// Set the local logger from the global logger.
 	log = zerologger.Logger.With().Logger().Level(util.LogLevel(""))

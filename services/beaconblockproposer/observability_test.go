@@ -18,8 +18,46 @@ import (
 	"testing"
 
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
+
+func TestStableProviderName(t *testing.T) {
+	viper.Set("beacon-node-addresses", []string{"https://node-a.example:5052", "https://node-b.example:5052"})
+	t.Cleanup(func() { viper.Reset() })
+
+	tests := []struct {
+		name     string
+		provider string
+		expected string
+	}{
+		{name: "FirstProvider", provider: "https://node-a.example:5052", expected: "beacon-1"},
+		{name: "SecondProvider", provider: "https://node-b.example:5052", expected: "beacon-2"},
+		{name: "UnavailableProvider", provider: "https://node-c.example:5052", expected: "beacon-unknown"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.expected, beaconblockproposer.StableProviderName(test.provider))
+		})
+	}
+}
+
+func TestStableProviderNameWithNormalizedAddress(t *testing.T) {
+	viper.Set("beacon-node-addresses", []string{"node-a.example:5052"})
+	t.Cleanup(func() { viper.Reset() })
+
+	require.Equal(t, "beacon-1", beaconblockproposer.StableProviderName("http://node-a.example:5052"))
+}
+
+func TestStableProviderNameWithStrategyOverride(t *testing.T) {
+	viper.Set("beacon-node-addresses", []string{"https://default.example:5052"})
+	viper.Set("strategies.beaconblockproposal.best.beacon-node-addresses", []string{"https://node-b.example:5052", "https://node-a.example:5052"})
+	t.Cleanup(func() { viper.Reset() })
+
+	require.Equal(t, "beacon-2", beaconblockproposer.StableProviderName("https://node-b.example:5052"))
+	require.Equal(t, "beacon-3", beaconblockproposer.StableProviderName("https://node-a.example:5052"))
+	require.Equal(t, "stable-provider", beaconblockproposer.StableProviderName("stable-provider"))
+}
 
 func TestSafeError(t *testing.T) {
 	tests := []struct {
