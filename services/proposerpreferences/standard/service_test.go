@@ -15,7 +15,6 @@ package standard_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -31,6 +30,7 @@ import (
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/attestantio/vouch/testutil"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -382,7 +382,7 @@ func TestRouteMissingProviderIsProbedOncePerEpochAndRecovers(t *testing.T) {
 			require.NoError(t, err)
 			capture := logger.NewLogCapture()
 			submitter := &recordingSubmitter{outcomeSets: []map[string]error{
-				{"node": fmt.Errorf("wrapped: %w", &api.Error{StatusCode: status})}, {"node": nil},
+				{"node": errors.Wrap(&api.Error{StatusCode: status}, "wrapped")}, {"node": nil},
 			}}
 			service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(submitter))
 			require.NoError(t, err)
