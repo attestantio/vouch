@@ -223,7 +223,8 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		attribute.Bool("value_known", valueKnown),
 		attribute.Bool("fallback", false),
 	)
-	s.log.Info().
+	span.SetAttributes(beaconblockproposer.ClientDetailsAttributes(response.provider)...)
+	selectionEvent := s.log.Info().
 		Uint64("slot", uint64(opts.Slot)).
 		Str("request_id", requestID).
 		Str("provider", stableProvider).
@@ -234,8 +235,9 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		Bool("value_known", valueKnown).
 		Bool("fallback", false).
 		Str("outcome", "selected").
-		Bool("deadline_reached", false).
-		Msg("ePBS proposal selection completed")
+		Bool("deadline_reached", false)
+	beaconblockproposer.WithClientDetails(selectionEvent, response.provider)
+	selectionEvent.Msg("ePBS proposal selection completed")
 	metadata := make(map[string]any, 4)
 	metadata[beaconblockproposer.MetadataStrategy] = "first"
 	metadata[beaconblockproposer.MetadataProvider] = stableProvider
@@ -281,6 +283,7 @@ func (s *Service) fetchEPBSProposal(ctx context.Context,
 		attribute.String("source", "unknown"),
 	))
 	defer span.End()
+	span.SetAttributes(beaconblockproposer.ClientDetailsAttributes(name)...)
 
 	started := time.Now()
 	result := fetchProviderProposal(s,
@@ -427,6 +430,7 @@ func (s *Service) logEPBSProviderResult(slot phase0.Slot,
 	} else {
 		event = event.Str("execution_value", response.proposal.ExecutionValue.String())
 	}
+	beaconblockproposer.WithClientDetails(event, response.provider)
 	event.Msg("ePBS proposal provider completed")
 }
 

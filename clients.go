@@ -18,8 +18,10 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	httpclient "github.com/attestantio/go-eth2-client/http"
 	multiclient "github.com/attestantio/go-eth2-client/multi"
 	"github.com/attestantio/vouch/services/metrics"
@@ -64,6 +66,17 @@ func fetchClient(ctx context.Context, monitor metrics.Service, address string) (
 		knownClientsMu.Lock()
 		knownClients[address] = client
 		knownClientsMu.Unlock()
+		// NodeVersion is cached by go-eth2-client, so this is a startup snapshot.
+		if versionProvider, ok := client.(eth2client.NodeVersionProvider); ok {
+			go func() {
+				queryCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				defer cancel()
+				response, err := versionProvider.NodeVersion(queryCtx, &api.NodeVersionOpts{})
+				if err == nil && response != nil {
+					util.RecordBeaconNodeVersion(address, response.Data)
+				}
+			}()
+		}
 	}
 	return client, nil
 }
