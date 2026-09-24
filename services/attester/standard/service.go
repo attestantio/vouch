@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2025 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -35,18 +35,18 @@ import (
 type Service struct {
 	log                        zerolog.Logger
 	monitor                    metrics.Service
+	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
+	attestationDataProvider    eth2client.AttestationDataProvider
 	processConcurrency         int64
 	slotsPerEpoch              uint64
 	grace                      time.Duration
 	chainTime                  chaintime.Service
-	validatingAccountsProvider accountmanager.ValidatingAccountsProvider
-	attestationDataProvider    eth2client.AttestationDataProvider
 	attestationsSubmitter      submitter.AttestationsSubmitter
 	beaconAttestationsSigner   signer.BeaconAttestationsSigner
 	attested                   map[phase0.Epoch]map[phase0.ValidatorIndex]struct{}
-	attestedMu                 sync.Mutex
 	electraForkEpoch           phase0.Epoch
 	fuluForkEpoch              phase0.Epoch
+	attestedMu                 sync.Mutex
 }
 
 // New creates a new beacon block attester.

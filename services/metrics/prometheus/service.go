@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -36,7 +36,7 @@ type Service struct {
 	strategyOperationTimer   *prometheus.HistogramVec
 }
 
-// module-wide log.
+// Module-wide log.
 var log zerolog.Logger
 
 // New creates a new prometheus metrics service.
