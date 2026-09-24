@@ -16,6 +16,7 @@ gloas:
   - submit versioned payload attestations through the immediate, multinode and null submitters, batching signatures for validators that share a slot
   - cast the payload timeliness vote on the first execution_payload_available event from the payload attestation data beacon nodes, keeping the payload attestation deadline as the fallback, and drop the 250ms delay after that deadline
   - retry unavailable payload attestation data every 50ms for up to 500ms before giving up on the vote
+  - retry the payload timeliness vote at the attestation deadline when an early, event-triggered attempt fails before signing, such as when the payload attestation data beacon nodes disagree
   - obtain payload attestation data from a dedicated multiclient (the 'simple' style), configurable with strategies.payloadattestationdata.beacon-node-addresses
   - add first and majority payloadattestationdata strategies, selected with strategies.payloadattestationdata.style; the majority strategy breaks a tie in favour of the payload-present vote, rejects responses that disagree on the beacon block root, and proceeds with the responses received when the timeout fires rather than discarding them
   - default strategies.payloadattestationdata.timeout to 1s, tighter than the global timeout because payload attestation data is due 75% of the way through the slot; the per-style timeouts and beacon-node-addresses inherit from it

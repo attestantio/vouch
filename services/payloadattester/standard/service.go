@@ -15,6 +15,7 @@ package standard
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -105,26 +106,26 @@ func (s *Service) Attest(ctx context.Context, duty *payloadattester.Duty) ([]*sp
 	if err != nil {
 		monitorPayloadAttestationProcess("failed", len(accounts))
 		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to produce payload attestation data")
-		return nil, errors.Wrap(err, "failed to obtain payload attestation data")
+		return nil, fmt.Errorf("%w: %w", payloadattester.ErrPayloadAttestationDataUnavailable, err)
 	}
 	if response == nil || response.Data == nil {
 		err := errors.New("no payload attestation data returned")
 		monitorPayloadAttestationProcess("failed", len(accounts))
 		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to produce payload attestation data")
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", payloadattester.ErrPayloadAttestationDataUnavailable, err)
 	}
 	if response.Data.Version != spec.DataVersionGloas || response.Data.Gloas == nil {
 		err := errors.New("payload attestation data is not Gloas")
 		monitorPayloadAttestationProcess("failed", len(accounts))
 		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to produce payload attestation data")
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", payloadattester.ErrPayloadAttestationDataUnavailable, err)
 	}
 	data := response.Data.Gloas
 	if data.Slot != duty.Slot() {
 		err := errors.Errorf("payload attestation data slot %d does not match duty slot %d", data.Slot, duty.Slot())
 		monitorPayloadAttestationProcess("failed", len(accounts))
 		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to produce payload attestation data")
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", payloadattester.ErrPayloadAttestationDataUnavailable, err)
 	}
 	monitorPayloadAttestationProcess("produced", len(accounts))
 	s.log.Trace().Uint64("slot", uint64(duty.Slot())).Dur("elapsed", time.Since(started)).Msg("Produced payload attestation data")
