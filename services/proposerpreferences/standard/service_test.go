@@ -380,8 +380,9 @@ func TestPublishSubmissionOutcomes(t *testing.T) {
 			require.NoError(t, err)
 			duty := proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000)
 
+			// Earlier attempts in each case end with at least one acceptance.
 			for range test.outcomeSets[1:] {
-				_ = service.Publish(ctx, duty)
+				require.NoError(t, service.Publish(ctx, duty))
 			}
 			err = service.Publish(ctx, duty)
 			if test.err != "" {
