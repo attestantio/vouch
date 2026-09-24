@@ -97,9 +97,6 @@ func (s *Service) HandleHeadEvent(ctx context.Context, data *apiv1.HeadEvent) {
 	}
 
 	s.checkEventForReorg(ctx, epoch, data.Slot, data.PreviousDutyDependentRoot, data.CurrentDutyDependentRoot)
-	if s.proposerPreferencesEnabled() {
-		s.queueProposerPreferencesPublication(ctx)
-	}
 
 	s.fastTrackJobs(ctx, data.Slot)
 
