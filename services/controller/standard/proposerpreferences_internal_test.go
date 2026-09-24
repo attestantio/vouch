@@ -23,7 +23,11 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/proposerpreferences"
+	"github.com/attestantio/vouch/services/scheduler"
+	"github.com/attestantio/vouch/services/scheduler/advanced"
+	schedulermock "github.com/attestantio/vouch/services/scheduler/mock"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/attestantio/vouch/testutil"
 	"github.com/rs/zerolog"
@@ -57,14 +61,8 @@ func TestPublishProposerPreferencesPublishesFirstGloasEpoch(t *testing.T) {
 	require.Zero(t, provider.v1Calls)
 	require.Equal(t, 1, provider.v2Calls)
 	require.Equal(t, phase0.Epoch(5), provider.epoch)
-	require.Equal(t, []*proposerpreferences.Duty{proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		160,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	)}, preferences.duties)
+	require.Len(t, preferences.duties, 1)
+	require.Equal(t, proposerpreferences.NewDuty(phase0.Root{0x01}, 160, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000), preferenceWithoutCurrentSlot(preferences.duties[0]))
 }
 
 func TestPublishProposerPreferencesSkipsUnownedValidatorsQuietly(t *testing.T) {
@@ -144,9 +142,9 @@ func TestHandleHeadV2EventUsesEpochDependentRootsAcrossBoundary(t *testing.T) {
 	})
 
 	require.Equal(t, phase0.Epoch(6), receiveProposerPreferencesEpoch(t, provider.epochs))
-	require.Equal(t, proposerpreferences.NewDuty(rootA, 209, 100, accounts[100], feeRecipient, gasLimit), receiveProposerPreferencesDuty(t, preferences.duties))
+	require.Equal(t, proposerpreferences.NewDuty(rootA, 209, 100, accounts[100], feeRecipient, gasLimit), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
 	require.Equal(t, phase0.Epoch(7), receiveProposerPreferencesEpoch(t, provider.epochs))
-	require.Equal(t, proposerpreferences.NewDuty(rootB, 225, 100, accounts[100], feeRecipient, gasLimit), receiveProposerPreferencesDuty(t, preferences.duties))
+	require.Equal(t, proposerpreferences.NewDuty(rootB, 225, 100, accounts[100], feeRecipient, gasLimit), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
 	waitForProposerPreferencesPublication(t, service)
 
 	chainTime.currentEpoch = 7
@@ -156,14 +154,152 @@ func TestHandleHeadV2EventUsesEpochDependentRootsAcrossBoundary(t *testing.T) {
 		NextEpochDependentRoot:    rootC,
 	})
 
-	require.Equal(t, phase0.Epoch(7), receiveProposerPreferencesEpoch(t, provider.epochs))
-	require.Equal(t, proposerpreferences.NewDuty(rootB, 225, 100, accounts[100], feeRecipient, gasLimit), receiveProposerPreferencesDuty(t, preferences.duties))
+	// An unchanged root reuses duties across the epoch boundary.
+	require.Equal(t, proposerpreferences.NewDuty(rootB, 225, 100, accounts[100], feeRecipient, gasLimit), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
 	require.Equal(t, phase0.Epoch(8), receiveProposerPreferencesEpoch(t, provider.epochs))
-	require.Equal(t, proposerpreferences.NewDuty(rootC, 257, 100, accounts[100], feeRecipient, gasLimit), receiveProposerPreferencesDuty(t, preferences.duties))
+	require.Equal(t, proposerpreferences.NewDuty(rootC, 257, 100, accounts[100], feeRecipient, gasLimit), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
 	waitForProposerPreferencesPublication(t, service)
 }
 
-func TestChangedHeadV2RootInvalidatesUntilClassicHeadRefreshesCorrectedPreferences(t *testing.T) {
+func TestProposerPreferencesSlotTickerRunsOnConsecutiveSlots(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	const slotDuration = 150 * time.Millisecond
+	clock := &advancingPreferenceClock{recordingChainTime: &recordingChainTime{
+		genesisTime:  time.Now().Add(-192*slotDuration - 20*time.Millisecond),
+		slotDuration: slotDuration, slotsPerEpoch: 32,
+	}}
+	jobs, err := advanced.New(ctx, advanced.WithMonitor(nullmetrics.New()), advanced.WithLogLevel(zerolog.Disabled))
+	require.NoError(t, err)
+	root := phase0.Root{1}
+	provider := &headEventProposerDutiesProvider{responses: map[phase0.Epoch]*api.Response[[]*apiv1.ProposerDuty]{
+		6: {Data: []*apiv1.ProposerDuty{{Slot: 200, ValidatorIndex: 3}}, Metadata: map[string]any{"dependent_root": root}},
+	}, epochs: make(chan phase0.Epoch, 8)}
+	preferences := &headEventProposerPreferences{duties: make(chan *proposerpreferences.Duty, 8)}
+	service := &Service{
+		chainTimeService: clock, scheduler: jobs,
+		proposerDutiesV2Provider:   provider,
+		validatingAccountsProvider: &proposerPreferencesAccountsProvider{accounts: accounts},
+		executionConfigProvider:    &recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{}},
+		proposerPreferences:        preferences, proposerPreferencesLookahead: 1,
+		gloasForkEpoch: 5, proposerPreferencesDependentRoots: map[phase0.Epoch]phase0.Root{6: root},
+	}
+	require.NoError(t, service.startProposerPreferencesSlotTicker(ctx))
+	require.Equal(t, proposerpreferences.NewDuty(root, 200, 3, accounts[3], bellatrix.ExecutionAddress{}, 0), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
+	require.Equal(t, proposerpreferences.NewDuty(root, 200, 3, accounts[3], bellatrix.ExecutionAddress{}, 0), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
+	require.Equal(t, phase0.Epoch(6), receiveProposerPreferencesEpoch(t, provider.epochs))
+	select {
+	case epoch := <-provider.epochs:
+		t.Fatalf("duties refetched on consecutive slot ticks for epoch %d", epoch)
+	default:
+	}
+}
+
+type advancingPreferenceClock struct{ *recordingChainTime }
+
+func (s *advancingPreferenceClock) CurrentSlot() phase0.Slot {
+	return phase0.Slot(time.Since(s.genesisTime) / s.slotDuration)
+}
+
+func (s *advancingPreferenceClock) CurrentEpoch() phase0.Epoch {
+	return s.SlotToEpoch(s.CurrentSlot())
+}
+
+func TestProposerPreferencesSlotTickerSchedulesNextSlot(t *testing.T) {
+	ctx := context.Background()
+	clock := &recordingChainTime{currentEpoch: 6, slotsPerEpoch: 32, slotDuration: time.Second}
+	jobs := &recordingPreferenceTicker{Service: schedulermock.New()}
+	service := &Service{chainTimeService: clock, scheduler: jobs, proposerPreferences: &recordingProposerPreferences{}, executionConfigProvider: &recordingExecutionConfigProvider{}, proposerPreferencesLookahead: 1}
+	require.NoError(t, service.startProposerPreferencesSlotTicker(ctx))
+	require.Equal(t, "Proposer preferences slot ticker", jobs.name)
+	when, err := jobs.runtime(ctx)
+	require.NoError(t, err)
+	require.Equal(t, clock.StartOfSlot(clock.CurrentSlot()+1), when)
+}
+
+type recordingPreferenceTicker struct {
+	scheduler.Service
+	name    string
+	runtime scheduler.RuntimeFunc
+}
+
+func (s *recordingPreferenceTicker) SchedulePeriodicJob(_ context.Context, _ string, name string, runtime scheduler.RuntimeFunc, _ scheduler.JobFunc) error {
+	s.name, s.runtime = name, runtime
+	return nil
+}
+
+func TestProposerPreferencesPublishesEarliestUnsignedDutyFirst(t *testing.T) {
+	service := &Service{chainTimeService: &recordingChainTime{currentEpoch: 6, slotsPerEpoch: 32}}
+	duties := service.currentProposerPreferencesDuties([]*apiv1.ProposerDuty{
+		{Slot: 210, ValidatorIndex: 4}, {Slot: 209, ValidatorIndex: 3},
+	}, 6)
+	require.Equal(t, []phase0.Slot{209, 210}, []phase0.Slot{duties[0].Slot, duties[1].Slot})
+}
+
+func TestAlternatingDependentRootsReuseCachedDuties(t *testing.T) {
+	ctx := context.Background()
+	rootA, rootB := phase0.Root{1}, phase0.Root{2}
+	provider := &recordingProposerDutiesProvider{metadata: map[string]any{"dependent_root": rootA}}
+	service := &Service{
+		chainTimeService:             &recordingChainTime{currentEpoch: 6, slotsPerEpoch: 32},
+		proposerDutiesV2Provider:     provider,
+		proposerPreferences:          &recordingProposerPreferences{},
+		executionConfigProvider:      &recordingExecutionConfigProvider{},
+		proposerPreferencesLookahead: 1,
+		gloasForkEpoch:               5,
+	}
+	service.publishProposerPreferences(ctx, 6, rootA)
+	provider.metadata["dependent_root"] = rootB
+	service.publishProposerPreferences(ctx, 6, rootB)
+	service.publishProposerPreferences(ctx, 6, rootA)
+	require.Equal(t, 2, provider.v2Calls)
+}
+
+func TestEmptyDutiesForKnownRootAreCached(t *testing.T) {
+	provider := &recordingProposerDutiesProvider{metadata: map[string]any{"dependent_root": phase0.Root{1}}}
+	service := &Service{
+		chainTimeService:             &recordingChainTime{currentEpoch: 6, slotsPerEpoch: 32},
+		proposerDutiesV2Provider:     provider,
+		proposerPreferences:          &recordingProposerPreferences{},
+		executionConfigProvider:      &recordingExecutionConfigProvider{},
+		proposerPreferencesLookahead: 1,
+		gloasForkEpoch:               5,
+	}
+	for range 2 {
+		service.publishProposerPreferences(context.Background(), 6, phase0.Root{1})
+	}
+	require.Equal(t, 1, provider.v2Calls)
+}
+
+func TestUnchangedHeadV2PairsDoNotRefetchDuties(t *testing.T) {
+	ctx := context.Background()
+	root := phase0.Root{0x01}
+	provider := &recordingProposerDutiesProvider{
+		duties:   []*apiv1.ProposerDuty{{Slot: 209, ValidatorIndex: 100}},
+		metadata: map[string]any{"dependent_root": root},
+	}
+	service := &Service{
+		chainTimeService:             &recordingChainTime{currentEpoch: 6, slotsPerEpoch: 32},
+		proposerDutiesV2Provider:     provider,
+		proposerPreferences:          &recordingProposerPreferences{},
+		executionConfigProvider:      &recordingExecutionConfigProvider{},
+		validatingAccountsProvider:   &proposerPreferencesAccountsProvider{},
+		gloasForkEpoch:               5,
+		proposerPreferencesLookahead: 1,
+		slotsPerEpoch:                32,
+	}
+	for _, status := range []string{"empty", "full"} {
+		service.HandleHeadEvent(ctx, &apiv1.HeadEvent{Slot: 192})
+		waitForProposerPreferencesPublication(t, service)
+		service.HandleHeadV2Event(ctx, &apiv1.HeadEventV2{Slot: 192, PayloadStatus: status, CurrentEpochDependentRoot: root})
+		waitForProposerPreferencesPublication(t, service)
+	}
+	require.Equal(t, 1, provider.v2Calls)
+}
+
+func TestChangedHeadV2RootInvalidatesUntilSlotTickRefreshesCorrectedPreferences(t *testing.T) {
 	ctx := context.Background()
 	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{100}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
 	require.NoError(t, err)
@@ -208,9 +344,9 @@ func TestChangedHeadV2RootInvalidatesUntilClassicHeadRefreshesCorrectedPreferenc
 		Data:     []*apiv1.ProposerDuty{{Slot: 209, ValidatorIndex: 100}},
 		Metadata: map[string]any{"dependent_root": rootB},
 	}
-	service.HandleHeadEvent(ctx, &apiv1.HeadEvent{Slot: 192})
+	service.proposerPreferencesSlotTick(ctx)
 
-	require.Equal(t, proposerpreferences.NewDuty(rootB, 209, 100, accounts[100], bellatrix.ExecutionAddress{}, 0), receiveProposerPreferencesDuty(t, preferences.duties))
+	require.Equal(t, proposerpreferences.NewDuty(rootB, 209, 100, accounts[100], bellatrix.ExecutionAddress{}, 0), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
 	waitForProposerPreferencesPublication(t, service)
 }
 
@@ -345,7 +481,8 @@ func (p *headEventProposerPreferences) UpdateDependentRoot(fromSlot phase0.Slot,
 	}
 }
 
-func (*headEventProposerPreferences) Prune(phase0.Slot) {}
+func (*headEventProposerPreferences) Prune(phase0.Slot)          {}
+func (*headEventProposerPreferences) FlushConfigChangeWarnings() {}
 
 func (p *headEventProposerPreferences) Publish(_ context.Context, duty *proposerpreferences.Duty) error {
 	p.duties <- duty
@@ -453,6 +590,7 @@ type recordingProposerPreferences struct {
 }
 
 func (*recordingProposerPreferences) UpdateDependentRoot(phase0.Slot, phase0.Slot, phase0.Root) {}
+func (*recordingProposerPreferences) FlushConfigChangeWarnings()                                {}
 
 func (p *recordingProposerPreferences) Prune(slot phase0.Slot) {
 	p.prunedSlots = append(p.prunedSlots, slot)
@@ -461,4 +599,11 @@ func (p *recordingProposerPreferences) Prune(slot phase0.Slot) {
 func (p *recordingProposerPreferences) Publish(_ context.Context, duty *proposerpreferences.Duty) error {
 	p.duties = append(p.duties, duty)
 	return nil
+}
+
+func preferenceWithoutCurrentSlot(duty *proposerpreferences.Duty) *proposerpreferences.Duty {
+	copy := *duty
+	copy.CurrentSlot = 0
+	copy.CurrentEpoch = 0
+	return &copy
 }

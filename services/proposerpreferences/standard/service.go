@@ -16,8 +16,12 @@ package standard
 
 import (
 	"context"
+	stderrors "errors"
+	"net/http"
 	"sync"
 
+	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics"
@@ -25,11 +29,14 @@ import (
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	zerologger "github.com/rs/zerolog/log"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
 // Service is the standard proposer-preferences service.
 type Service struct {
+	log            zerolog.Logger
 	monitor        metrics.Service
 	cache          map[gloas.ProposerPreferences]*cachedPreference
 	current        map[preferenceDuty]gloas.ProposerPreferences
@@ -37,7 +44,20 @@ type Service struct {
 	inFlight       map[gloas.ProposerPreferences]chan struct{}
 	signer         signer.ProposerPreferencesSigner
 	submitter      submitter.ProposerPreferencesSubmitter
+	unsupported    map[string]phase0.Epoch
+	pendingConfig  map[phase0.ValidatorIndex]preferenceConfig
+	reportedConfig map[preferenceConfig]struct{}
+	firstApplied   map[preferenceConfig]phase0.Slot
 	mutex          sync.Mutex
+}
+
+type preferenceConfig struct {
+	feeRecipient bellatrix.ExecutionAddress
+	gasLimit     uint64
+}
+
+func configOf(preferences gloas.ProposerPreferences) preferenceConfig {
+	return preferenceConfig{feeRecipient: preferences.FeeRecipient, gasLimit: preferences.TargetGasLimit}
 }
 
 type preferenceDuty struct {
@@ -46,18 +66,22 @@ type preferenceDuty struct {
 }
 
 type cachedPreference struct {
-	accepted  map[string]struct{}
-	outcomes  map[string]error
-	signed    *gloas.SignedProposerPreferences
-	published bool
+	accepted       map[string]struct{}
+	outcomes       map[string]error
+	attempted      map[string]phase0.Slot
+	attemptedEpoch map[string]phase0.Epoch
+	signed         *gloas.SignedProposerPreferences
+	published      bool
 }
 
 type publication struct {
-	preferences gloas.ProposerPreferences
-	cached      *cachedPreference
-	providers   []string
-	sign        bool
-	complete    chan struct{}
+	preferences  gloas.ProposerPreferences
+	cached       *cachedPreference
+	providers    []string
+	sign         bool
+	attemptSlot  phase0.Slot
+	attemptEpoch phase0.Epoch
+	complete     chan struct{}
 }
 
 // New creates a standard proposer-preferences service.
@@ -72,6 +96,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 
 	return &Service{
 		monitor:        parameters.monitor,
+		log:            zerologger.With().Str("service", "proposerpreferences").Logger(),
+		unsupported:    make(map[string]phase0.Epoch),
+		pendingConfig:  make(map[phase0.ValidatorIndex]preferenceConfig),
+		reportedConfig: make(map[preferenceConfig]struct{}),
+		firstApplied:   make(map[preferenceConfig]phase0.Slot),
 		signer:         parameters.signer,
 		submitter:      parameters.submitter,
 		cache:          make(map[gloas.ProposerPreferences]*cachedPreference),
@@ -79,6 +108,29 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		dependentRoots: make(map[phase0.Slot]phase0.Root),
 		inFlight:       make(map[gloas.ProposerPreferences]chan struct{}),
 	}, nil
+}
+
+// FlushConfigChangeWarnings reports config changes after all duties in this publication run were inspected.
+func (s *Service) FlushConfigChangeWarnings() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	for config, slot := range s.firstApplied {
+		if _, reported := s.reportedConfig[config]; reported {
+			continue
+		}
+		count := 0
+		for _, pending := range s.pendingConfig {
+			if pending == config {
+				count++
+			}
+		}
+		if count > 0 {
+			s.log.Warn().Int("affected_validators", count).Uint64("first_slot", uint64(slot)).Msg("Proposer preferences config change delayed")
+			s.reportedConfig[config] = struct{}{}
+		}
+	}
+	clear(s.firstApplied)
 }
 
 // ProviderReady reports whether provider has accepted the current preference for a proposal duty.
@@ -115,6 +167,7 @@ func (s *Service) UpdateDependentRoot(fromSlot phase0.Slot, toSlot phase0.Slot, 
 			delete(s.current, duty)
 		}
 	}
+	s.clearPendingWithoutSignedDuties(0)
 }
 
 // Prune discards preferences for proposal slots that have passed.
@@ -141,6 +194,27 @@ func (s *Service) Prune(slot phase0.Slot) {
 			}
 		}
 	}
+	s.clearPendingWithoutSignedDuties(slot)
+}
+
+// clearPendingWithoutSignedDuties discards config changes with no still-relevant signed preference.
+// The caller holds s.mutex.
+func (s *Service) clearPendingWithoutSignedDuties(fromSlot phase0.Slot) {
+	for index := range s.pendingConfig {
+		future := false
+		for duty, preferences := range s.current {
+			if duty.validatorIndex == index && duty.proposalSlot >= fromSlot {
+				cached := s.cache[preferences]
+				if cached != nil && cached.signed != nil {
+					future = true
+					break
+				}
+			}
+		}
+		if !future {
+			delete(s.pendingConfig, index)
+		}
+	}
 }
 
 // Publish publishes the supplied duty's proposer preferences.
@@ -161,7 +235,7 @@ func (s *Service) Publish(ctx context.Context, duty *proposerpreferences.Duty) e
 	}
 	dutyKey := preferenceDuty{proposalSlot: duty.ProposalSlot, validatorIndex: duty.ValidatorIndex}
 	for {
-		publication, complete := s.claimPublication(preferences, dutyKey)
+		publication, complete := s.claimPublication(preferences, dutyKey, duty.CurrentSlot, duty.CurrentEpoch)
 		if publication != nil {
 			return s.publish(ctx, duty.Account, publication)
 		}
@@ -174,13 +248,29 @@ func (s *Service) Publish(ctx context.Context, duty *proposerpreferences.Duty) e
 	}
 }
 
-func (s *Service) claimPublication(preferences gloas.ProposerPreferences, dutyKey preferenceDuty) (*publication, chan struct{}) {
+func (s *Service) claimPublication(preferences gloas.ProposerPreferences, dutyKey preferenceDuty, currentSlot phase0.Slot, currentEpoch phase0.Epoch) (*publication, chan struct{}) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
+	if currentSlot >= dutyKey.proposalSlot {
+		return nil, nil
+	}
 	if dependentRoot, exists := s.dependentRoots[dutyKey.proposalSlot]; exists && dependentRoot != preferences.DependentRoot {
 		monitorProposerPreferencesProcess("stale")
 		return nil, nil
+	}
+	if current, exists := s.current[dutyKey]; exists && current.DependentRoot == preferences.DependentRoot {
+		if cached := s.cache[current]; cached != nil && cached.signed != nil {
+			if configOf(current) != configOf(preferences) {
+				if previous, pending := s.pendingConfig[dutyKey.validatorIndex]; pending && previous != configOf(preferences) {
+					delete(s.reportedConfig, previous)
+				}
+				s.pendingConfig[dutyKey.validatorIndex] = configOf(preferences)
+			} else {
+				delete(s.pendingConfig, dutyKey.validatorIndex)
+			}
+		}
+		preferences = current
 	}
 	cached, exists := s.cache[preferences]
 	if exists && cached.published {
@@ -191,38 +281,44 @@ func (s *Service) claimPublication(preferences gloas.ProposerPreferences, dutyKe
 	if complete, exists := s.inFlight[preferences]; exists {
 		return nil, complete
 	}
+	providers := s.failedProviders(cached, currentSlot, currentEpoch)
+	if exists && len(providers) == 0 {
+		return nil, nil
+	}
 	complete := make(chan struct{})
 	s.inFlight[preferences] = complete
-	if current, exists := s.current[dutyKey]; exists && current != preferences {
-		monitorProposerPreferencesProcess("refreshed")
-	}
-	providers := failedProviders(cached)
 	if !exists {
 		cached = &cachedPreference{
-			accepted: make(map[string]struct{}),
-			outcomes: make(map[string]error),
+			accepted:       make(map[string]struct{}),
+			outcomes:       make(map[string]error),
+			attempted:      make(map[string]phase0.Slot),
+			attemptedEpoch: make(map[string]phase0.Epoch),
 		}
 		s.cache[preferences] = cached
 	}
 	s.current[dutyKey] = preferences
 
 	return &publication{
-		preferences: preferences,
-		cached:      cached,
-		complete:    complete,
-		providers:   providers,
-		sign:        !exists,
+		preferences:  preferences,
+		cached:       cached,
+		complete:     complete,
+		providers:    providers,
+		sign:         !exists,
+		attemptSlot:  currentSlot,
+		attemptEpoch: currentEpoch,
 	}, nil
 }
 
-func failedProviders(cached *cachedPreference) []string {
+func (s *Service) failedProviders(cached *cachedPreference, currentSlot phase0.Slot, currentEpoch phase0.Epoch) []string {
 	if cached == nil {
 		return nil
 	}
 	providers := make([]string, 0)
 	for provider, err := range cached.outcomes {
-		if err != nil {
-			providers = append(providers, provider)
+		if err != nil && cached.attempted[provider] != currentSlot {
+			if !routeMissing(cached.outcomes[provider]) || cached.attemptedEpoch[provider] != currentEpoch {
+				providers = append(providers, provider)
+			}
 		}
 	}
 
@@ -244,7 +340,6 @@ func (s *Service) publish(ctx context.Context, account e2wtypes.Account, publica
 			return err
 		}
 	}
-
 	outcomes := s.submitter.SubmitProposerPreferences(ctx, []*gloas.SignedProposerPreferences{publication.cached.signed}, publication.providers)
 
 	return s.recordSubmission(publication, outcomes)
@@ -261,8 +356,19 @@ func (s *Service) sign(ctx context.Context, account e2wtypes.Account, publicatio
 		Signature: signature,
 	}
 	monitorProposerPreferencesProcess("signed")
+	s.recordSignedConfig(publication.preferences)
 
 	return nil
+}
+
+func (s *Service) recordSignedConfig(preferences gloas.ProposerPreferences) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	config := configOf(preferences)
+	if slot, exists := s.firstApplied[config]; !exists || preferences.ProposalSlot < slot {
+		s.firstApplied[config] = preferences.ProposalSlot
+	}
 }
 
 func (s *Service) abandonPublication(publication *publication) {
@@ -272,6 +378,11 @@ func (s *Service) abandonPublication(publication *publication) {
 	delete(s.cache, publication.preferences)
 	delete(s.inFlight, publication.preferences)
 	close(publication.complete)
+}
+
+func routeMissing(err error) bool {
+	var apiErr *api.Error
+	return stderrors.As(err, &apiErr) && (apiErr.StatusCode == http.StatusNotFound || apiErr.StatusCode == http.StatusMethodNotAllowed || apiErr.StatusCode == http.StatusNotImplemented)
 }
 
 func (s *Service) recordSubmission(publication *publication, outcomes map[string]error) error {
@@ -286,6 +397,23 @@ func (s *Service) recordSubmission(publication *publication, outcomes map[string
 	var submissionErr error
 	for provider, err := range outcomes {
 		publication.cached.outcomes[provider] = err
+		publication.cached.attempted[provider] = publication.attemptSlot
+		publication.cached.attemptedEpoch[provider] = publication.attemptEpoch
+		if err == nil {
+			if _, unsupported := s.unsupported[provider]; unsupported {
+				delete(s.unsupported, provider)
+				s.log.Info().Str("provider", provider).Msg("Proposer preferences provider recovered")
+			}
+		} else {
+			if routeMissing(err) {
+				if _, unsupported := s.unsupported[provider]; !unsupported {
+					var apiErr *api.Error
+					stderrors.As(err, &apiErr)
+					s.log.Warn().Str("provider", provider).Int("status_code", apiErr.StatusCode).Msg("Proposer preferences provider does not support submission route")
+				}
+				s.unsupported[provider] = publication.attemptEpoch
+			}
+		}
 		if err == nil {
 			publication.cached.accepted[provider] = struct{}{}
 			monitorProposerPreferencesProcess("accepted")
@@ -305,7 +433,7 @@ func (s *Service) recordSubmission(publication *publication, outcomes map[string
 
 		return errors.Wrap(submissionErr, "failed to submit proposer preferences")
 	}
-	publication.cached.published = true
+	publication.cached.published = len(s.failedProviders(publication.cached, publication.attemptSlot+1, publication.attemptEpoch+1)) == 0
 
 	return nil
 }

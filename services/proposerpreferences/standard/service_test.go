@@ -15,16 +15,19 @@ package standard_test
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/attestantio/vouch/services/proposerpreferences/standard"
+	"github.com/attestantio/vouch/testing/logger"
 	"github.com/attestantio/vouch/testutil"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
@@ -322,6 +325,119 @@ func TestPruneDropsExpiredPreferences(t *testing.T) {
 	require.False(t, service.ProviderReady("accepted", 64, 3))
 }
 
+func TestPublishRetriesRejectedProviderOncePerSlotUntilDutyStarts(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	submitter := &recordingSubmitter{outcomeSets: []map[string]error{
+		{"node": context.DeadlineExceeded}, {"node": nil},
+	}}
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(submitter))
+	require.NoError(t, err)
+	duty := proposerpreferences.NewDuty(phase0.Root{1}, 66, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)
+	duty.CurrentSlot, duty.CurrentEpoch = 32, 1
+	require.Error(t, service.Publish(ctx, duty))
+	require.NoError(t, service.Publish(ctx, duty))
+	require.Len(t, submitter.preferences, 1)
+	require.False(t, service.ProviderReady("node", 66, 3))
+	duty.CurrentSlot = 33
+	require.NoError(t, service.Publish(ctx, duty))
+	require.True(t, service.ProviderReady("node", 66, 3))
+	duty.CurrentSlot = 66
+	require.NoError(t, service.Publish(ctx, duty))
+	require.Len(t, submitter.preferences, 2)
+}
+
+func TestRouteMissingProviderIsProbedOncePerEpochAndRecovers(t *testing.T) {
+	for _, status := range []int{404, 405, 501} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			ctx := context.Background()
+			accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+			require.NoError(t, err)
+			capture := logger.NewLogCapture()
+			submitter := &recordingSubmitter{outcomeSets: []map[string]error{
+				{"node": fmt.Errorf("wrapped: %w", &api.Error{StatusCode: status})}, {"node": nil},
+			}}
+			service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(submitter))
+			require.NoError(t, err)
+			duty := proposerpreferences.NewDuty(phase0.Root{1}, 96, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)
+			duty.CurrentSlot, duty.CurrentEpoch = 32, 1
+			require.Error(t, service.Publish(ctx, duty))
+			for slot := phase0.Slot(33); slot < 64; slot++ {
+				duty.CurrentSlot = slot
+				require.NoError(t, service.Publish(ctx, duty))
+			}
+			require.Len(t, submitter.preferences, 1)
+			require.False(t, service.ProviderReady("node", 96, 3))
+			duty.CurrentSlot, duty.CurrentEpoch = 64, 2
+			require.NoError(t, service.Publish(ctx, duty))
+			require.Len(t, submitter.preferences, 2)
+			require.True(t, service.ProviderReady("node", 96, 3))
+			require.Equal(t, 1, countPreferenceLogs(capture, "Proposer preferences provider does not support submission route"))
+			require.Equal(t, 1, countPreferenceLogs(capture, "Proposer preferences provider recovered"))
+		})
+	}
+}
+
+func TestUnsupportedProviderSubmitsEachPendingPreferenceOncePerEpoch(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	capture := logger.NewLogCapture()
+	signer := &recordingSigner{}
+	submitter := &recordingSubmitter{outcomeSets: []map[string]error{
+		{"node": &api.Error{StatusCode: 404}}, {"node": &api.Error{StatusCode: 404}}, {"node": nil}, {"node": nil},
+	}}
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(signer), standard.WithSubmitter(submitter))
+	require.NoError(t, err)
+	first := proposerpreferences.NewDuty(phase0.Root{1}, 96, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)
+	first.CurrentSlot, first.CurrentEpoch = 32, 1
+	require.Error(t, service.Publish(ctx, first))
+	second := proposerpreferences.NewDuty(phase0.Root{1}, 97, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)
+	second.CurrentSlot, second.CurrentEpoch = 33, 1
+	require.Error(t, service.Publish(ctx, second))
+	require.Len(t, signer.preferences, 2)
+	require.Len(t, submitter.preferences, 2)
+	second.CurrentSlot = 34
+	require.NoError(t, service.Publish(ctx, second))
+	require.Len(t, submitter.preferences, 2)
+	first.CurrentSlot, first.CurrentEpoch = 64, 2
+	require.NoError(t, service.Publish(ctx, first))
+	second.CurrentSlot, second.CurrentEpoch = 64, 2
+	require.NoError(t, service.Publish(ctx, second))
+	require.Len(t, submitter.preferences, 4)
+	require.True(t, service.ProviderReady("node", 97, 3))
+	require.Equal(t, 1, countPreferenceLogs(capture, "Proposer preferences provider does not support submission route"))
+	require.Equal(t, 1, countPreferenceLogs(capture, "Proposer preferences provider recovered"))
+}
+
+func TestRecoveredProviderDoesNotRepeatRouteMissingPreferenceWithinEpoch(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	submitter := &recordingSubmitter{outcomeSets: []map[string]error{
+		{"node": &api.Error{StatusCode: 404}},
+		{"node": &api.Error{StatusCode: 404}},
+		{"node": &api.Error{StatusCode: 404}},
+		{"node": nil},
+	}}
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(submitter))
+	require.NoError(t, err)
+	first := proposerpreferences.NewDuty(phase0.Root{1}, 96, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)
+	second := proposerpreferences.NewDuty(phase0.Root{1}, 97, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)
+	first.CurrentSlot, first.CurrentEpoch = 32, 1
+	second.CurrentSlot, second.CurrentEpoch = 33, 1
+	require.Error(t, service.Publish(ctx, first))
+	require.Error(t, service.Publish(ctx, second))
+	first.CurrentSlot, first.CurrentEpoch = 64, 2
+	require.Error(t, service.Publish(ctx, first))
+	second.CurrentSlot, second.CurrentEpoch = 65, 2
+	require.NoError(t, service.Publish(ctx, second))
+	first.CurrentSlot = 66
+	require.NoError(t, service.Publish(ctx, first))
+	require.Len(t, submitter.preferences, 4)
+}
+
 func TestPublishRetriesOnlyRejectedProvider(t *testing.T) {
 	ctx := context.Background()
 	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
@@ -339,6 +455,7 @@ func TestPublishRetriesOnlyRejectedProvider(t *testing.T) {
 	duty := proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000)
 
 	require.NoError(t, service.Publish(ctx, duty))
+	duty.CurrentSlot = 1
 	require.NoError(t, service.Publish(ctx, duty))
 	require.Equal(t, [][]string{nil, {"rejected"}}, submitter.providers)
 }
@@ -447,14 +564,143 @@ func TestPublishRecordsPreferenceReplay(t *testing.T) {
 	require.Equal(t, replayedBefore+1, proposerPreferencesEventCounts(t)["replayed"])
 }
 
-func TestPublishRecordsPreferenceRefresh(t *testing.T) {
+func TestConfigChangeWarnsWhenFirstUnsignedDutyUsesIt(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3, 4}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	capture := logger.NewLogCapture()
+	signer := &recordingSigner{}
+	submitter := &recordingSubmitter{outcomes: map[string]error{"node": nil}}
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(signer), standard.WithSubmitter(submitter))
+	require.NoError(t, err)
+	makeDuty := func(slot phase0.Slot, index phase0.ValidatorIndex, gas uint64) *proposerpreferences.Duty {
+		return proposerpreferences.NewDuty(phase0.Root{1}, slot, index, accounts[index], bellatrix.ExecutionAddress{2}, gas)
+	}
+	require.NoError(t, service.Publish(ctx, makeDuty(64, 3, 30_000_000)))
+	require.NoError(t, service.Publish(ctx, makeDuty(67, 4, 30_000_000)))
+	require.NoError(t, service.Publish(ctx, makeDuty(64, 3, 31_000_000)))
+	require.NoError(t, service.Publish(ctx, makeDuty(65, 3, 31_000_000)))
+	require.NoError(t, service.Publish(ctx, makeDuty(67, 4, 31_000_000)))
+	require.NoError(t, service.Publish(ctx, makeDuty(68, 4, 31_000_000)))
+	require.Zero(t, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
+	service.FlushConfigChangeWarnings()
+	require.Equal(t, 1, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
+	require.True(t, capture.HasLog(map[string]any{"level": "warn", "message": "Proposer preferences config change delayed", "affected_validators": 2, "first_slot": uint64(65)}))
+	require.Len(t, signer.preferences, 4)
+	require.Len(t, submitter.preferences, 4)
+}
+
+func countPreferenceLogs(capture *logger.LogCapture, message string) int {
+	count := 0
+	for _, entry := range capture.Entries() {
+		if entry["message"] == message {
+			count++
+		}
+	}
+	return count
+}
+
+func TestReorgedSignedDutyDoesNotCountAsDelayedConfig(t *testing.T) {
 	ctx := context.Background()
 	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
 	require.NoError(t, err)
+	capture := logger.NewLogCapture()
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"node": nil}}))
+	require.NoError(t, err)
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)))
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, 31_000_000)))
+	service.UpdateDependentRoot(64, 64, phase0.Root{3})
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{3}, 65, 3, accounts[3], bellatrix.ExecutionAddress{2}, 31_000_000)))
+	service.FlushConfigChangeWarnings()
+	require.Zero(t, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
+}
+
+func TestFeeRecipientChangeUsesNewValueOnlyForUnsignedDuty(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	capture := logger.NewLogCapture()
+	signer := &recordingSigner{}
+	submitter := &recordingSubmitter{outcomes: map[string]error{"node": nil}}
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(signer), standard.WithSubmitter(submitter))
+	require.NoError(t, err)
+	for _, fee := range []bellatrix.ExecutionAddress{{2}, {3}} {
+		require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], fee, 30_000_000)))
+	}
+	require.Len(t, signer.preferences, 1)
+	require.Len(t, submitter.preferences, 1)
+	require.True(t, service.ProviderReady("node", 64, 3))
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 65, 3, accounts[3], bellatrix.ExecutionAddress{3}, 30_000_000)))
+	require.Equal(t, bellatrix.ExecutionAddress{3}, signer.preferences[1].FeeRecipient)
+	service.FlushConfigChangeWarnings()
+	require.Equal(t, 1, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
+	require.True(t, capture.HasLog(map[string]any{"affected_validators": 1, "first_slot": uint64(65)}))
+}
+
+func TestPastSignedDutyDoesNotCountAsDelayedConfig(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	capture := logger.NewLogCapture()
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"node": nil}}))
+	require.NoError(t, err)
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)))
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, 31_000_000)))
+	service.Prune(65)
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 66, 3, accounts[3], bellatrix.ExecutionAddress{2}, 31_000_000)))
+	service.FlushConfigChangeWarnings()
+	require.Zero(t, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
+}
+
+func TestRepeatedConfigValueWarnsForEachAppliedChange(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	capture := logger.NewLogCapture()
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"node": nil}}))
+	require.NoError(t, err)
+	makeDuty := func(slot phase0.Slot, gas uint64) *proposerpreferences.Duty {
+		return proposerpreferences.NewDuty(phase0.Root{1}, slot, 3, accounts[3], bellatrix.ExecutionAddress{2}, gas)
+	}
+	require.NoError(t, service.Publish(ctx, makeDuty(64, 30_000_000)))
+	for i, gas := range []uint64{31_000_000, 32_000_000, 31_000_000} {
+		require.NoError(t, service.Publish(ctx, makeDuty(64, gas)))
+		require.NoError(t, service.Publish(ctx, makeDuty(phase0.Slot(65+i), gas)))
+		service.FlushConfigChangeWarnings()
+	}
+	require.Equal(t, 3, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
+	for _, slot := range []uint64{65, 66, 67} {
+		require.True(t, capture.HasLog(map[string]any{"first_slot": slot}))
+	}
+}
+
+func TestSupersededConfigDoesNotWarnBeforeUse(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	capture := logger.NewLogCapture()
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"node": nil}}))
+	require.NoError(t, err)
+	for _, gas := range []uint64{30_000_000, 31_000_000, 32_000_000} {
+		require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, gas)))
+	}
+	require.Zero(t, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 65, 3, accounts[3], bellatrix.ExecutionAddress{2}, 32_000_000)))
+	service.FlushConfigChangeWarnings()
+	require.Equal(t, 1, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
+	require.True(t, capture.HasLog(map[string]any{"first_slot": uint64(65), "affected_validators": 1}))
+}
+
+func TestPublishKeepsFirstSignedPreferenceWhenConfigChanges(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	signer := &recordingSigner{signature: phase0.BLSSignature{0x01}}
+	submitter := &recordingSubmitter{outcomes: map[string]error{"accepted": nil}}
 	service, err := standard.New(ctx,
 		standard.WithMonitor(prometheusMonitor{}),
-		standard.WithSigner(&recordingSigner{signature: phase0.BLSSignature{0x01}}),
-		standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"accepted": nil}}),
+		standard.WithSigner(signer),
+		standard.WithSubmitter(submitter),
 	)
 	require.NoError(t, err)
 	refreshedBefore := proposerPreferencesEventCounts(t)["refreshed"]
@@ -475,8 +721,19 @@ func TestPublishRecordsPreferenceRefresh(t *testing.T) {
 		bellatrix.ExecutionAddress{0x02},
 		31_000_000,
 	)))
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(
+		phase0.Root{0x01},
+		64,
+		3,
+		accounts[3],
+		bellatrix.ExecutionAddress{0x03},
+		30_000_000,
+	)))
 
-	require.Equal(t, refreshedBefore+1, proposerPreferencesEventCounts(t)["refreshed"])
+	require.Equal(t, refreshedBefore, proposerPreferencesEventCounts(t)["refreshed"])
+	require.Len(t, signer.preferences, 1)
+	require.Len(t, submitter.preferences, 1)
+	require.True(t, service.ProviderReady("accepted", 64, 3))
 }
 
 func TestPublishRejectsMissingProviderOutcomes(t *testing.T) {

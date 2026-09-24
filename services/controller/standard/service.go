@@ -113,6 +113,7 @@ type Service struct {
 	pendingAttestations                   map[phase0.Slot]bool
 	payloadAttestations                   map[phase0.Slot]*payloadAttestation
 	proposerPreferencesDependentRoots     map[phase0.Epoch]phase0.Root
+	proposerPreferencesDutiesCache        map[proposerDutiesCacheKey]cachedProposerDuties
 	proposerPreferencesPublicationRunning bool
 	proposerPreferencesPublicationPending bool
 	subscriptionInfosMutex                sync.Mutex
@@ -286,6 +287,10 @@ func (s *Service) startTickers(ctx context.Context,
 	s.log.Trace().Msg("Starting epoch tickers")
 	if err := s.startEpochTicker(ctx); err != nil {
 		return errors.Wrap(err, "failed to start epoch ticker")
+	}
+
+	if err := s.startProposerPreferencesSlotTicker(ctx); err != nil {
+		return errors.Wrap(err, "failed to start proposer preferences slot ticker")
 	}
 
 	// Start account refresher.
