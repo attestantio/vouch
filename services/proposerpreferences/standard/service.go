@@ -298,6 +298,11 @@ func (s *Service) recordSubmission(publication *publication, outcomes map[string
 		}
 	}
 	if submissionErr != nil {
+		// Failing providers are retried on the next publication; only fail when none accepted.
+		if len(publication.cached.accepted) > 0 {
+			return nil
+		}
+
 		return errors.Wrap(submissionErr, "failed to submit proposer preferences")
 	}
 	publication.cached.published = true
