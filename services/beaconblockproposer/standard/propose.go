@@ -240,8 +240,6 @@ func (s *Service) unblindingProviders(auctionResults *blockauctioneer.Results) (
 
 // proposeEPBSBlock proposes a Gloas block.
 // skipcq: GO-R1005
-//
-//nolint:godox // The FIXME below is tracked as follow-up work, not left as a loose end.
 func (s *Service) proposeEPBSBlock(ctx context.Context,
 	duty *beaconblockproposer.Duty,
 	graffiti [32]byte,
@@ -503,6 +501,8 @@ func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
 
 // proposeSelfBuiltEPBSBlock signs and publishes a proposal the beacon node built itself,
 // along with the execution payload envelope that reveals its payload.
+//
+//nolint:godox // The FIXME below is tracked as follow-up work, not left as a loose end.
 func (s *Service) proposeSelfBuiltEPBSBlock(ctx context.Context,
 	proposal *api.VersionedEPBSProposal,
 	duty *beaconblockproposer.Duty,
