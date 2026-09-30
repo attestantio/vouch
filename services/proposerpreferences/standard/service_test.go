@@ -221,6 +221,30 @@ func TestSimpleProviderReadyAfterAllPreferencesAccepted(t *testing.T) {
 	require.True(t, service.ProviderReady("simple", 64, 3))
 }
 
+func TestSimpleProviderNotReadyAfterPartialAcceptance(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	service, err := standard.New(ctx,
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithSigner(&recordingSigner{signature: phase0.BLSSignature{0x01}}),
+		standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"one": nil, "two": context.DeadlineExceeded}}),
+	)
+	require.NoError(t, err)
+
+	require.Error(t, service.Publish(ctx, proposerpreferences.NewDuty(
+		phase0.Root{0x01},
+		64,
+		3,
+		accounts[3],
+		bellatrix.ExecutionAddress{0x02},
+		30_000_000,
+	)))
+
+	require.True(t, service.ProviderReady("one", 64, 3))
+	require.False(t, service.ProviderReady("simple", 64, 3))
+}
+
 func TestPruneDropsExpiredPreferences(t *testing.T) {
 	ctx := context.Background()
 	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
