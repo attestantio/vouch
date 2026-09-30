@@ -106,13 +106,13 @@ func firstProposal[T any](ctx context.Context,
 	proposalErrors := make([]error, 0, providers)
 	processResult := func(result *proposalResult[T]) (T, bool) {
 		if result.err != nil {
-			proposalErrors = append(proposalErrors, fmt.Errorf("%s: %w", result.provider, result.err))
+			proposalErrors = append(proposalErrors, fmt.Errorf("%s: %w", beaconblockproposer.StableProviderName(result.provider), result.err))
 
 			return zero, false
 		}
 		if validate != nil {
 			if err := validate(result.provider, result.proposal); err != nil {
-				proposalErrors = append(proposalErrors, fmt.Errorf("%s: %w", result.provider, err))
+				proposalErrors = append(proposalErrors, fmt.Errorf("%s: %w", beaconblockproposer.StableProviderName(result.provider), err))
 
 				return zero, false
 			}

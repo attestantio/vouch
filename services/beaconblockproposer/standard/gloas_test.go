@@ -691,6 +691,59 @@ func TestProposeGloasFailureCorrelation(t *testing.T) {
 	require.Equal(t, blockRoot, envelopeRoot)
 }
 
+func TestProposeGloasSpansRedactEndpointsInErrors(t *testing.T) {
+	ctx := context.Background()
+	endpointErr := errors.New(`Post "http://user:secret@node.example:5052/eth/v2/beacon/blocks": refused`)
+
+	tests := []struct {
+		name   string
+		inject func(*capturingExecutionPayloadEnvelopeSubmitter, *capturingProposalSubmitter)
+	}{
+		{
+			name: "BlockSubmission",
+			inject: func(_ *capturingExecutionPayloadEnvelopeSubmitter, proposalSubmitter *capturingProposalSubmitter) {
+				proposalSubmitter.err = endpointErr
+			},
+		},
+		{
+			name: "EnvelopeSubmission",
+			inject: func(envelopeSubmitter *capturingExecutionPayloadEnvelopeSubmitter, _ *capturingProposalSubmitter) {
+				envelopeSubmitter.err = endpointErr
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			spanRecorder := tracetest.NewSpanRecorder()
+			tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+			previousTracerProvider := otel.GetTracerProvider()
+			otel.SetTracerProvider(tracerProvider)
+			t.Cleanup(func() {
+				otel.SetTracerProvider(previousTracerProvider)
+				require.NoError(t, tracerProvider.Shutdown(ctx))
+			})
+			service, duty, _, _, envelopeSubmitter, proposalSubmitter := newGloasProposerForProposalSource(ctx, t, true, nullmetrics.New())
+			test.inject(envelopeSubmitter, proposalSubmitter)
+
+			require.Error(t, service.Propose(ctx, duty))
+			recordedErrors := 0
+			for _, recordedSpan := range spanRecorder.Ended() {
+				for _, event := range recordedSpan.Events() {
+					for _, attr := range event.Attributes {
+						if attr.Key == "exception.message" {
+							recordedErrors++
+							require.NotContains(t, attr.Value.AsString(), "node.example", recordedSpan.Name())
+							require.NotContains(t, attr.Value.AsString(), "secret", recordedSpan.Name())
+						}
+					}
+				}
+			}
+			require.NotZero(t, recordedErrors)
+		})
+	}
+}
+
 func TestProposeGloasProposalSource(t *testing.T) {
 	ctx := context.Background()
 
