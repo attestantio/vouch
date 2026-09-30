@@ -346,7 +346,7 @@ func TestSimpleProposalProviderGatesBuilderBidsOnReadiness(t *testing.T) {
 				require.Nil(t, response)
 				require.EqualError(t, err, test.err)
 				if !test.noReadiness {
-					require.Equal(t, []string{"simple"}, readiness.providers)
+					require.Equal(t, []string{proposerpreferences.SimpleProvider}, readiness.providers)
 				}
 
 				return

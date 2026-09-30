@@ -92,7 +92,7 @@ func (s *Service) ProviderReady(provider string, proposalSlot phase0.Slot, valid
 	if !exists {
 		return false
 	}
-	if provider == "simple" {
+	if provider == proposerpreferences.SimpleProvider {
 		return cached.published
 	}
 	_, exists = cached.accepted[provider]

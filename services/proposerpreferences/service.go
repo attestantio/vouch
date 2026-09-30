@@ -50,6 +50,10 @@ func NewDuty(dependentRoot phase0.Root,
 	}
 }
 
+// SimpleProvider is the readiness name of the simple proposal style's multiclient.  It is ready
+// once every proposal provider has accepted the current preference.
+const SimpleProvider = "simple"
+
 // ProviderReadiness reports whether a proposal provider has accepted a current preference.
 type ProviderReadiness interface {
 	ProviderReady(provider string, proposalSlot phase0.Slot, validatorIndex phase0.ValidatorIndex) bool

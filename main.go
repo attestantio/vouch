@@ -1600,7 +1600,7 @@ func (p *readinessGatedProposalProvider) EPBSProposal(ctx context.Context,
 	if err := beaconblockproposal.ValidateEPBSProposal(response.Data, opts.IncludePayload); err != nil {
 		return nil, err
 	}
-	if err := beaconblockproposal.ValidateBuilderBidReadiness(p.providerReadiness, "simple", opts.Slot, response.Data); err != nil {
+	if err := beaconblockproposal.ValidateBuilderBidReadiness(p.providerReadiness, proposerpreferences.SimpleProvider, opts.Slot, response.Data); err != nil {
 		return nil, err
 	}
 

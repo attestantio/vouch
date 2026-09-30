@@ -219,7 +219,7 @@ func TestSimpleProviderReadyAfterAllPreferencesAccepted(t *testing.T) {
 		30_000_000,
 	)))
 
-	require.True(t, service.ProviderReady("simple", 64, 3))
+	require.True(t, service.ProviderReady(proposerpreferences.SimpleProvider, 64, 3))
 }
 
 func TestSimpleProviderNotReadyAfterPartialAcceptance(t *testing.T) {
@@ -243,7 +243,7 @@ func TestSimpleProviderNotReadyAfterPartialAcceptance(t *testing.T) {
 	)))
 
 	require.True(t, service.ProviderReady("one", 64, 3))
-	require.False(t, service.ProviderReady("simple", 64, 3))
+	require.False(t, service.ProviderReady(proposerpreferences.SimpleProvider, 64, 3))
 }
 
 func TestPruneDropsExpiredPreferences(t *testing.T) {
