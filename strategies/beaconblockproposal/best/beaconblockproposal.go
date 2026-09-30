@@ -238,7 +238,6 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		attribute.String("provider", stableBestProvider),
 		attribute.String("source", source),
 		attribute.Bool("value_known", valueKnown),
-		attribute.Bool("fallback", !valueKnown),
 		attribute.Bool("soft_deadline_reached", selection.softDeadlineReached),
 		attribute.Bool("hard_deadline_reached", selection.hardDeadlineReached),
 	)
@@ -258,7 +257,6 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		Int("errored", selection.errored).
 		Int("timed_out", selection.timedOut).
 		Bool("value_known", valueKnown).
-		Bool("fallback", !valueKnown).
 		Bool("deadline_reached", selection.hardDeadlineReached).
 		Bool("soft_deadline_reached", selection.softDeadlineReached).
 		Bool("hard_deadline_reached", selection.hardDeadlineReached).
@@ -266,11 +264,10 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	beaconblockproposer.WithClientDetails(selectionEvent, selection.provider)
 	selectionEvent.Msg("ePBS proposal selection completed")
 
-	metadata := make(map[string]any, 4)
+	metadata := make(map[string]any, 3)
 	metadata[beaconblockproposer.MetadataStrategy] = "best"
 	metadata[beaconblockproposer.MetadataProvider] = stableBestProvider
 	metadata[beaconblockproposer.MetadataSource] = source
-	metadata[beaconblockproposer.MetadataFallback] = !valueKnown
 	return &api.Response[*api.VersionedEPBSProposal]{
 		Data:     selection.proposal,
 		Metadata: metadata,

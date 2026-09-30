@@ -1613,7 +1613,6 @@ func (p *readinessGatedProposalProvider) EPBSProposal(ctx context.Context,
 			beaconblockproposer.MetadataStrategy: "simple",
 			beaconblockproposer.MetadataProvider: proposerpreferences.SimpleProvider,
 			beaconblockproposer.MetadataSource:   beaconblockproposal.EPBSProposalSource(response.Data, response.Metadata),
-			beaconblockproposer.MetadataFallback: false,
 		},
 	}, nil
 }

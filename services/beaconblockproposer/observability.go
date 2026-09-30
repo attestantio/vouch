@@ -31,8 +31,6 @@ const (
 	MetadataProvider = "vouch.provider"
 	// MetadataSource identifies where the beacon node obtained the execution payload bid.
 	MetadataSource = "vouch.source"
-	// MetadataFallback reports that the strategy selected without a known value.
-	MetadataFallback = "vouch.fallback"
 )
 
 var endpointInError = regexp.MustCompile(`(?i)(?:https?|grpc)://\S+`)

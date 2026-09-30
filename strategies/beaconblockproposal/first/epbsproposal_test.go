@@ -175,7 +175,10 @@ func TestEPBSProposalObservability(t *testing.T) {
 		"outcome":             "accepted",
 		"rejection_reason":    "",
 	}))
-	require.Equal(t, false, response.Metadata["vouch.fallback"])
+	require.NotContains(t, response.Metadata, "vouch.fallback")
+	for _, entry := range capture.Entries() {
+		require.NotContains(t, entry, "fallback")
+	}
 	require.True(t, capture.HasLog(map[string]any{
 		"message":        "ePBS proposal selection completed",
 		"provider":       "stable-provider",

@@ -319,7 +319,6 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		publicationPath = "block_and_envelope"
 	}
 	requestedPreference := gloasRequestedPreference(builderConfig.BuilderBoostFactor)
-	fallback := responseMetadataBool(proposalResponse.Metadata, beaconblockproposer.MetadataFallback)
 	executionValue := "unknown"
 	if proposal.ExecutionValue != nil {
 		executionValue = proposal.ExecutionValue.String()
@@ -339,7 +338,6 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		Uint64("builder_boost_factor", builderConfig.BuilderBoostFactor).
 		Str("requested_preference", requestedPreference).
 		Bool("value_known", proposal.ExecutionValue != nil).
-		Bool("fallback", fallback).
 		Str("execution_value", executionValue).
 		Str("publication_path", publicationPath).
 		Msg("Selected Gloas proposal")
@@ -435,11 +433,6 @@ func boundedGloasSource(source string) string {
 	default:
 		return "unknown"
 	}
-}
-
-func responseMetadataBool(metadata map[string]any, key string) bool {
-	value, _ := metadata[key].(bool)
-	return value
 }
 
 func responseMetadataString(metadata map[string]any, key string, fallback string) string {

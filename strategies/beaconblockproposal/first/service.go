@@ -221,7 +221,6 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		attribute.String("provider", stableProvider),
 		attribute.String("source", source),
 		attribute.Bool("value_known", valueKnown),
-		attribute.Bool("fallback", false),
 	)
 	span.SetAttributes(beaconblockproposer.ClientDetailsAttributes(response.provider)...)
 	selectionEvent := s.log.Info().
@@ -233,16 +232,14 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		Dur("elapsed", time.Since(started)).
 		Int("providers", len(s.proposalProviders)).
 		Bool("value_known", valueKnown).
-		Bool("fallback", false).
 		Str("outcome", "selected").
 		Bool("deadline_reached", false)
 	beaconblockproposer.WithClientDetails(selectionEvent, response.provider)
 	selectionEvent.Msg("ePBS proposal selection completed")
-	metadata := make(map[string]any, 4)
+	metadata := make(map[string]any, 3)
 	metadata[beaconblockproposer.MetadataStrategy] = "first"
 	metadata[beaconblockproposer.MetadataProvider] = stableProvider
 	metadata[beaconblockproposer.MetadataSource] = source
-	metadata[beaconblockproposer.MetadataFallback] = false
 
 	return &api.Response[*api.VersionedEPBSProposal]{
 		Data:     response.proposal,

@@ -589,11 +589,13 @@ func TestProposeGloasSelectionObservability(t *testing.T) {
 		"requested_min_bid":    uint64(11),
 		"builder_boost_factor": uint64(100),
 		"value_known":          true,
-		"fallback":             false,
 		"execution_value":      "2",
 		"publication_path":     "block_and_envelope",
 		"requested_preference": "value_maximizing",
 	}), "%v", capture.Entries())
+	for _, entry := range capture.Entries() {
+		require.NotContains(t, entry, "fallback")
+	}
 
 	spanAttributes := make(map[string]map[string]any)
 	for _, recordedSpan := range spanRecorder.Ended() {
