@@ -151,6 +151,7 @@ func TestECProposerConfig(t *testing.T) {
 			input:                []byte(`{"default_config":{"fee_recipient":"0x000102030405060708090a0b0c0d0e0f10111213"}}`),
 			pc: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: executionAddress("0x000102030405060708090a0b0c0d0e0f10111213"),
+				GasLimit:     12345,
 				Relays:       []*beaconblockproposer.RelayConfig{},
 			},
 		},
@@ -161,6 +162,7 @@ func TestECProposerConfig(t *testing.T) {
 			input:                []byte(`{"default_config":{"fee_recipient":"0x000102030405060708090a0b0c0d0e0f10111213","builder":{"enabled":true,"relays": ["https://relay1.com/"]}}}`),
 			pc: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: executionAddress("0x000102030405060708090a0b0c0d0e0f10111213"),
+				GasLimit:     12345,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -178,6 +180,7 @@ func TestECProposerConfig(t *testing.T) {
 			input:                []byte(`{"default_config":{"fee_recipient":"0x000102030405060708090a0b0c0d0e0f10111213","gas_limit":"23456","builder":{"enabled":true,"relays": ["https://relay1.com/"]}}}`),
 			pc: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: executionAddress("0x000102030405060708090a0b0c0d0e0f10111213"),
+				GasLimit:     23456,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -196,6 +199,7 @@ func TestECProposerConfig(t *testing.T) {
 			pubkey:               pubkey("0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"),
 			pc: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: executionAddress("0x000102030405060708090a0b0c0d0e0f10111213"),
+				GasLimit:     23456,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -214,6 +218,7 @@ func TestECProposerConfig(t *testing.T) {
 			pubkey:               pubkey("0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"),
 			pc: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: executionAddress("0x0102030405060708090a0b0c0d0e0f1011121314"),
+				GasLimit:     34567,
 				Relays:       []*beaconblockproposer.RelayConfig{},
 			},
 		},
@@ -230,8 +235,7 @@ func TestECProposerConfig(t *testing.T) {
 				require.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, test.pc.FeeRecipient, pc.FeeRecipient)
-				require.Equal(t, test.pc.Relays, pc.Relays)
+				require.Equal(t, test.pc, pc)
 			}
 		})
 	}
