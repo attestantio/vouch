@@ -380,8 +380,7 @@ func (s *Service) obtainEPBSProposal(ctx context.Context,
 
 	response, err := s.proposalProvider.EPBSProposal(ctx, opts)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to obtain ePBS proposal")
+		recordSpanError(span, err, "failed to obtain ePBS proposal")
 
 		return nil, err
 	}
@@ -445,6 +444,12 @@ func responseMetadataString(metadata map[string]any, key string, fallback string
 	return result
 }
 
+// recordSpanError marks span as failed without exporting endpoint details from err.
+func recordSpanError(span trace.Span, err error, description string) {
+	span.RecordError(errors.New(beaconblockproposer.SafeError(err)))
+	span.SetStatus(codes.Error, description)
+}
+
 func gloasRequestedPreference(boost uint64) string {
 	switch {
 	case boost < 100:
@@ -484,8 +489,7 @@ func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
 	publicationCtx, publicationSpan := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishGloasBlock", trace.WithAttributes(publicationAttributes...))
 	err = s.proposalSubmitter.SubmitProposal(publicationCtx, signedProposal)
 	if err != nil {
-		publicationSpan.RecordError(err)
-		publicationSpan.SetStatus(codes.Error, "failed to submit proposal")
+		recordSpanError(publicationSpan, err, "failed to submit proposal")
 	}
 	publicationSpan.End()
 	if err != nil {
@@ -557,8 +561,7 @@ func (s *Service) proposeSelfBuiltEPBSBlock(ctx context.Context,
 	))
 	err = s.proposalSubmitter.SubmitProposal(publicationCtx, signedProposal)
 	if err != nil {
-		publicationSpan.RecordError(err)
-		publicationSpan.SetStatus(codes.Error, "failed to submit proposal")
+		recordSpanError(publicationSpan, err, "failed to submit proposal")
 	}
 	publicationSpan.End()
 	if err != nil {
@@ -616,8 +619,7 @@ func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 
 	err := s.attemptExecutionPayloadEnvelopeSubmission(ctx, log, opts)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to submit execution payload envelope")
+		recordSpanError(span, err, "failed to submit execution payload envelope")
 		log.Warn().Str("error", beaconblockproposer.SafeError(err)).Str("status", "failed").Bool("envelope_submission_succeeded", false).Msg("Execution payload envelope submission completed")
 
 		return errors.Wrap(err, "failed to submit execution payload envelope after block publication")

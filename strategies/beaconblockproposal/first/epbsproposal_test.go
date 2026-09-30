@@ -973,3 +973,16 @@ func TestEPBSProposalSkipsSelfBuiltProposalWithoutPayload(t *testing.T) {
 	require.Nil(t, response)
 	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal: self-built: ePBS proposal excludes requested execution payload")
 }
+
+func TestEPBSProposalErrorDoesNotExposeProviderAddress(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(ctx, t,
+		map[string]eth2client.MultiForkProposalProvider{
+			"http://user:secret@node.example:5052": &epbsProposalProvider{err: errors.New("boom")},
+		},
+		time.Second,
+	)
+
+	_, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal: beacon-unknown: boom")
+}
