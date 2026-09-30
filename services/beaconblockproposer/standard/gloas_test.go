@@ -43,6 +43,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	e2types "github.com/wealdtech/go-eth2-types/v2"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
@@ -638,6 +639,21 @@ func TestProposeGloasBuilderSelectionObservability(t *testing.T) {
 		"publication_path":  "block_only",
 		"selected_provider": "stable-provider",
 	}))
+}
+
+func TestProposeGloasKeepsStrategyProviderName(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	// A configured host that matches the strategy's stable name must not capture it.
+	viper.Set("beacon-node-addresses", []string{"http://other:5052", "http://stable-provider"})
+	t.Cleanup(func() { viper.Reset() })
+	service, duty, _, _, _, _ := newGloasProposerForProposalSource(ctx, t, true, nullmetrics.New())
+
+	require.NoError(t, service.Propose(ctx, duty))
+	require.True(t, capture.HasLog(map[string]any{
+		"message":           "Selected Gloas proposal",
+		"selected_provider": "stable-provider",
+	}), "%v", capture.Entries())
 }
 
 func TestProposeGloasFailureCorrelation(t *testing.T) {
