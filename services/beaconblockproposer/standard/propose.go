@@ -345,7 +345,6 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		attribute.String("provider", provider),
 		attribute.String("proposal_root", proposalRootString),
 	)
-	ctx = withGloasSelectionCorrelation(ctx, provider)
 	monitorGloasProposalSelection(strategy, requestedPreference, source)
 
 	// The bid's builder index is the auction result: a self-built proposal reveals its own
@@ -354,10 +353,10 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	// ValidateEPBSProposal has already matched the payload to the auction result and rejected a
 	// zero bid fee recipient.
 	if bid.BuilderIndex != gloas.BuilderIndexSelfBuild {
-		return s.proposeBuilderBackedEPBSBlock(ctx, proposal, duty)
+		return s.proposeBuilderBackedEPBSBlock(ctx, proposal, duty, provider)
 	}
 
-	return s.proposeSelfBuiltEPBSBlock(ctx, proposal, duty, bid)
+	return s.proposeSelfBuiltEPBSBlock(ctx, proposal, duty, bid, provider)
 }
 
 func (s *Service) obtainEPBSProposal(ctx context.Context,
@@ -399,23 +398,6 @@ func (s *Service) obtainEPBSProposal(ctx context.Context,
 	return response, nil
 }
 
-type gloasSelectionCorrelation struct {
-	provider string
-}
-
-type gloasSelectionCorrelationKey struct{}
-
-func withGloasSelectionCorrelation(ctx context.Context, provider string) context.Context {
-	return context.WithValue(ctx, gloasSelectionCorrelationKey{}, gloasSelectionCorrelation{
-		provider: provider,
-	})
-}
-
-func gloasSelectionFromContext(ctx context.Context) gloasSelectionCorrelation {
-	correlation, _ := ctx.Value(gloasSelectionCorrelationKey{}).(gloasSelectionCorrelation)
-	return correlation
-}
-
 func responseMetadataString(metadata map[string]any, key string, fallback string) string {
 	value, exists := metadata[key]
 	if !exists {
@@ -450,6 +432,7 @@ func gloasRequestedPreference(boost uint64) string {
 func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
 	proposal *api.VersionedEPBSProposal,
 	duty *beaconblockproposer.Duty,
+	provider string,
 ) error {
 	bodyRoot, err := proposal.BodyRoot()
 	if err != nil {
@@ -459,7 +442,6 @@ func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	correlation := gloasSelectionFromContext(ctx)
 	proposalRoot := "unknown"
 	if root, err := proposal.Root(); err == nil {
 		proposalRoot = root.String()
@@ -467,7 +449,7 @@ func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
 	publicationAttributes := []attribute.KeyValue{
 		attribute.Int64("slot", util.SlotToInt64(duty.Slot())),
 		attribute.String("request_id", beaconblockproposer.RequestID(ctx)),
-		attribute.String("provider", correlation.provider),
+		attribute.String("provider", provider),
 		attribute.String("proposal_root", proposalRoot),
 	}
 	publicationCtx, publicationSpan := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishGloasBlock", trace.WithAttributes(publicationAttributes...))
@@ -495,6 +477,7 @@ func (s *Service) proposeSelfBuiltEPBSBlock(ctx context.Context,
 	proposal *api.VersionedEPBSProposal,
 	duty *beaconblockproposer.Duty,
 	bid *gloas.ExecutionPayloadBid,
+	provider string,
 ) error {
 	envelope, bodyRoot, err := s.epbsProposalEnvelope(proposal, bid)
 	if err != nil {
@@ -536,11 +519,10 @@ func (s *Service) proposeSelfBuiltEPBSBlock(ctx context.Context,
 		return errors.Wrap(err, "failed to obtain execution payload envelope blobs")
 	}
 
-	correlation := gloasSelectionFromContext(ctx)
 	publicationCtx, publicationSpan := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishGloasBlock", trace.WithAttributes(
 		attribute.Int64("slot", util.SlotToInt64(duty.Slot())),
 		attribute.String("request_id", beaconblockproposer.RequestID(ctx)),
-		attribute.String("provider", correlation.provider),
+		attribute.String("provider", provider),
 		attribute.String("proposal_root", envelope.BeaconBlockRoot.String()),
 	))
 	err = s.proposalSubmitter.SubmitProposal(publicationCtx, signedProposal)
@@ -566,7 +548,7 @@ func (s *Service) proposeSelfBuiltEPBSBlock(ctx context.Context,
 		KZGProofs: kzgProofs,
 		Blobs:     blobs,
 	}
-	if err := s.submitExecutionPayloadEnvelope(ctx, log, duty.Slot(), envelopeSubmissionOpts); err != nil {
+	if err := s.submitExecutionPayloadEnvelope(ctx, log, duty.Slot(), provider, envelopeSubmissionOpts); err != nil {
 		// FIXME: The block is already published, so this is a partial failure, but it is reported as a failed proposal: the metric records "failed" and multi-instance failover deactivates this proposer.
 		return err
 	}
@@ -590,13 +572,13 @@ const (
 func (s *Service) submitExecutionPayloadEnvelope(ctx context.Context,
 	log zerolog.Logger,
 	slot phase0.Slot,
+	provider string,
 	opts *api.SubmitExecutionPayloadEnvelopeOpts,
 ) error {
-	correlation := gloasSelectionFromContext(ctx)
 	ctx, span := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishExecutionPayloadEnvelope", trace.WithAttributes(
 		attribute.Int64("slot", util.SlotToInt64(slot)),
 		attribute.String("request_id", beaconblockproposer.RequestID(ctx)),
-		attribute.String("provider", correlation.provider),
+		attribute.String("provider", provider),
 		attribute.String("proposal_root", opts.SignedExecutionPayloadEnvelope.Gloas.Message.BeaconBlockRoot.String()),
 	))
 	defer span.End()
