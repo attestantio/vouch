@@ -17,6 +17,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"sync"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -53,11 +54,19 @@ func proposalResults[P any, T any](providers map[string]P,
 	request func(string, P) *proposalResult[T],
 ) <-chan *proposalResult[T] {
 	results := make(chan *proposalResult[T], len(providers))
+	var wg sync.WaitGroup
 	for name, provider := range providers {
+		wg.Add(1)
 		go func(name string, provider P) {
+			defer wg.Done()
 			results <- request(name, provider)
 		}(name, provider)
 	}
+	// Closed once every provider has answered, so a reader can drain the results it did not use.
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
 
 	return results
 }
@@ -130,7 +139,7 @@ func firstProposal[T any](ctx context.Context,
 			}
 		case <-ctx.Done():
 			log.Debug().Msg(timeoutMessage)
-			for {
+			for completed < providers {
 				select {
 				case result := <-results:
 					completed++
@@ -138,9 +147,7 @@ func firstProposal[T any](ctx context.Context,
 						return proposal, nil
 					}
 				default:
-					if completed < providers {
-						proposalErrors = append(proposalErrors, ctx.Err())
-					}
+					proposalErrors = append(proposalErrors, ctx.Err())
 
 					return zero, errors.Wrap(stderrors.Join(proposalErrors...), failure)
 				}
@@ -188,6 +195,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 		"failed to obtain ePBS beacon block proposal",
 		"Failed to obtain ePBS beacon block proposal before timeout",
 	)
+	go s.logUnreadEPBSResults(results)
 	if err != nil {
 		outcome := "no_valid_proposal"
 		deadlineReached := errors.Is(ctx.Err(), context.DeadlineExceeded)
@@ -248,8 +256,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 
 var errNoEPBSProposalResponse = errors.New("beacon node returned no ePBS proposal response")
 
-// fetchEPBSProposal obtains an ePBS proposal from a single provider, logging a provider that
-// fails or that completes after selection has finished.
+// fetchEPBSProposal obtains an ePBS proposal from a single provider, logging a provider that fails.
 func (s *Service) fetchEPBSProposal(ctx context.Context,
 	name string,
 	provider eth2client.MultiForkProposalProvider,
@@ -333,14 +340,21 @@ func (s *Service) fetchEPBSProposal(ctx context.Context,
 			span.SetAttributes(attribute.String("proposal_root", proposalRoot.String()))
 		}
 	}
-	if errors.Is(ctx.Err(), context.Canceled) {
-		// Selection has finished, so nothing reads this result.
+
+	return result
+}
+
+// logUnreadEPBSResults logs the proposals that arrived after selection finished.  Failed
+// requests were logged when they ended.
+func (s *Service) logUnreadEPBSResults(results <-chan *proposalResult[*beaconblockproposal.ProviderOutcome]) {
+	for result := range results {
+		if result.err != nil {
+			continue
+		}
 		result.proposal.Outcome = "cancelled"
 		result.proposal.RejectionReason = "selection_completed"
 		beaconblockproposal.LogProviderOutcome(s.log, result.proposal)
 	}
-
-	return result
 }
 
 // validateEPBSProposal rejects an invalid proposal, or a builder-backed Gloas proposal from a
