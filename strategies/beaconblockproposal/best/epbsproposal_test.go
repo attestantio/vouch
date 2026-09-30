@@ -184,7 +184,10 @@ func TestEPBSProposalObservability(t *testing.T) {
 		"outcome":             "accepted",
 		"rejection_reason":    "",
 	}))
-	require.Equal(t, false, response.Metadata["vouch.fallback"])
+	require.NotContains(t, response.Metadata, "vouch.fallback")
+	for _, entry := range capture.Entries() {
+		require.NotContains(t, entry, "fallback")
+	}
 	require.True(t, capture.HasLog(map[string]any{
 		"message":        "ePBS proposal selection completed",
 		"provider":       "stable-provider",
@@ -500,7 +503,10 @@ func TestEPBSProposalReturnsIncludedCandidateAtSoftTimeout(t *testing.T) {
 		"outcome":          "timeout",
 		"rejection_reason": "soft_deadline_reached",
 	}))
-	require.Equal(t, true, response.Metadata["vouch.fallback"])
+	require.NotContains(t, response.Metadata, "vouch.fallback")
+	for _, entry := range capture.Entries() {
+		require.NotContains(t, entry, "fallback")
+	}
 }
 
 func TestEPBSProposalPrefersIncludedCandidate(t *testing.T) {
@@ -1204,10 +1210,11 @@ func TestEPBSProposalRecordsDegradedSelectionWithUnknownValues(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			capture := logger.NewLogCapture()
 			proposal := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
 			proposal.ExecutionValue = test.value
 			service, err := best.New(ctx,
-				best.WithLogLevel(zerolog.Disabled),
+				best.WithLogLevel(zerolog.TraceLevel),
 				best.WithClientMonitor(nullmetrics.New()),
 				best.WithProcessConcurrency(1),
 				best.WithChainTimeService(chainTime),
@@ -1223,7 +1230,14 @@ func TestEPBSProposalRecordsDegradedSelectionWithUnknownValues(t *testing.T) {
 			response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
 			require.NoError(t, err)
 			require.Same(t, proposal, response.Data)
-			require.Equal(t, test.degraded, response.Metadata["vouch.fallback"])
+			require.NotContains(t, response.Metadata, "vouch.fallback")
+			require.True(t, capture.HasLog(map[string]any{
+				"message":     "ePBS proposal selection completed",
+				"value_known": !test.degraded,
+			}), "%v", capture.Entries())
+			for _, entry := range capture.Entries() {
+				require.NotContains(t, entry, "fallback")
+			}
 		})
 	}
 }
