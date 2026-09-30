@@ -50,14 +50,7 @@ func TestPublishSignsAndSubmitsEachDistinctPreferenceOnce(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	duty := proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	)
+	duty := &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}
 
 	require.NoError(t, service.Publish(ctx, duty))
 	require.NoError(t, service.Publish(ctx, duty))
@@ -88,14 +81,7 @@ func TestProviderReadyDoesNotWaitForPreferenceSubmission(t *testing.T) {
 	require.NoError(t, err)
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- service.Publish(ctx, proposerpreferences.NewDuty(
-			phase0.Root{0x01},
-			64,
-			3,
-			accounts[3],
-			bellatrix.ExecutionAddress{0x02},
-			30_000_000,
-		))
+		errCh <- service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000})
 	}()
 	<-submitter.started
 
@@ -125,14 +111,8 @@ func TestConcurrentPublishReusesInFlightPreference(t *testing.T) {
 		standard.WithSubmitter(submitter),
 	)
 	require.NoError(t, err)
-	duty := proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	)
+	duty := &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}
+
 	errs := make(chan error, 2)
 	go func() { errs <- service.Publish(ctx, duty) }()
 	<-submitter.started
@@ -160,14 +140,7 @@ func TestPruneRetainsInFlightPreference(t *testing.T) {
 	require.NoError(t, err)
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- service.Publish(ctx, proposerpreferences.NewDuty(
-			phase0.Root{0x01},
-			64,
-			3,
-			accounts[3],
-			bellatrix.ExecutionAddress{0x02},
-			30_000_000,
-		))
+		errCh <- service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000})
 	}()
 	<-submitter.started
 
@@ -191,14 +164,7 @@ func TestProviderReadyAfterAcceptedSubmission(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = service.Publish(ctx, proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	))
+	err = service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000})
 	require.NoError(t, err)
 	require.True(t, service.ProviderReady("accepted", 64, 3))
 	require.False(t, service.ProviderReady("rejected", 64, 3))
@@ -214,36 +180,15 @@ func TestDependentRootChangeRejectsStalePreferenceReplay(t *testing.T) {
 		standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"accepted": nil}}),
 	)
 	require.NoError(t, err)
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}))
 	require.True(t, service.ProviderReady("accepted", 64, 3))
 
 	service.UpdateDependentRoot(64, 95, phase0.Root{0x02})
 
 	require.False(t, service.ProviderReady("accepted", 64, 3))
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}))
 	require.False(t, service.ProviderReady("accepted", 64, 3))
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(
-		phase0.Root{0x02},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x02}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}))
 	require.True(t, service.ProviderReady("accepted", 64, 3))
 }
 
@@ -261,14 +206,7 @@ func TestDependentRootChangeKeepsInFlightStalePreferenceUnready(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- service.Publish(ctx, proposerpreferences.NewDuty(
-			phase0.Root{0x01},
-			64,
-			3,
-			accounts[3],
-			bellatrix.ExecutionAddress{0x02},
-			30_000_000,
-		))
+		errCh <- service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000})
 	}()
 	<-submitter.started
 
@@ -290,14 +228,7 @@ func TestSimpleProviderReadyAfterAllPreferencesAccepted(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}))
 
 	require.True(t, service.ProviderReady(proposerpreferences.SimpleProvider, 64, 3))
 }
@@ -313,14 +244,7 @@ func TestSimpleProviderNotReadyAfterPartialAcceptance(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}))
 
 	require.True(t, service.ProviderReady("one", 64, 3))
 	require.False(t, service.ProviderReady(proposerpreferences.SimpleProvider, 64, 3))
@@ -336,14 +260,7 @@ func TestPruneDropsExpiredPreferences(t *testing.T) {
 		standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"accepted": nil}}),
 	)
 	require.NoError(t, err)
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}))
 	pruner, ok := any(service).(interface{ Prune(phase0.Slot) })
 	require.True(t, ok)
 
@@ -361,7 +278,7 @@ func TestPublishRetriesRejectedProviderOncePerSlotUntilDutyStarts(t *testing.T) 
 	}}
 	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(submitter))
 	require.NoError(t, err)
-	duty := proposerpreferences.NewDuty(phase0.Root{1}, 66, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)
+	duty := &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 66, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 30_000_000}
 	duty.CurrentSlot, duty.CurrentEpoch = 32, 1
 	require.Error(t, service.Publish(ctx, duty))
 	require.NoError(t, service.Publish(ctx, duty))
@@ -387,7 +304,7 @@ func TestRouteMissingProviderIsProbedOncePerEpochAndRecovers(t *testing.T) {
 			}}
 			service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(submitter))
 			require.NoError(t, err)
-			duty := proposerpreferences.NewDuty(phase0.Root{1}, 96, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)
+			duty := &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 96, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 30_000_000}
 			duty.CurrentSlot, duty.CurrentEpoch = 32, 1
 			require.Error(t, service.Publish(ctx, duty))
 			for slot := phase0.Slot(33); slot < 64; slot++ {
@@ -417,10 +334,10 @@ func TestUnsupportedProviderSubmitsEachPendingPreferenceOncePerEpoch(t *testing.
 	}}
 	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(signer), standard.WithSubmitter(submitter))
 	require.NoError(t, err)
-	first := proposerpreferences.NewDuty(phase0.Root{1}, 96, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)
+	first := &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 96, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 30_000_000}
 	first.CurrentSlot, first.CurrentEpoch = 32, 1
 	require.Error(t, service.Publish(ctx, first))
-	second := proposerpreferences.NewDuty(phase0.Root{1}, 97, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)
+	second := &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 97, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 30_000_000}
 	second.CurrentSlot, second.CurrentEpoch = 33, 1
 	require.Error(t, service.Publish(ctx, second))
 	require.Len(t, signer.preferences, 2)
@@ -450,8 +367,8 @@ func TestRecoveredProviderDoesNotRepeatRouteMissingPreferenceWithinEpoch(t *test
 	}}
 	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(submitter))
 	require.NoError(t, err)
-	first := proposerpreferences.NewDuty(phase0.Root{1}, 96, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)
-	second := proposerpreferences.NewDuty(phase0.Root{1}, 97, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)
+	first := &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 96, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 30_000_000}
+	second := &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 97, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 30_000_000}
 	first.CurrentSlot, first.CurrentEpoch = 32, 1
 	second.CurrentSlot, second.CurrentEpoch = 33, 1
 	require.Error(t, service.Publish(ctx, first))
@@ -479,7 +396,7 @@ func TestPublishRetriesOnlyRejectedProvider(t *testing.T) {
 		standard.WithSubmitter(submitter),
 	)
 	require.NoError(t, err)
-	duty := proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000)
+	duty := &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}
 
 	require.NoError(t, service.Publish(ctx, duty))
 	duty.CurrentSlot = 1
@@ -522,7 +439,7 @@ func TestPublishSubmissionOutcomes(t *testing.T) {
 				standard.WithSubmitter(&recordingSubmitter{outcomeSets: test.outcomeSets}),
 			)
 			require.NoError(t, err)
-			duty := proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000)
+			duty := &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}
 
 			// Earlier attempts in each case end with at least one acceptance.
 			for range test.outcomeSets[1:] {
@@ -550,14 +467,7 @@ func TestPublishRecordsProviderOutcomes(t *testing.T) {
 	require.NoError(t, err)
 	before := proposerPreferencesEventCounts(t)
 
-	err = service.Publish(ctx, proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	))
+	err = service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000})
 
 	require.NoError(t, err)
 	require.Equal(t, before["signed"]+1, proposerPreferencesEventCounts(t)["signed"])
@@ -575,14 +485,8 @@ func TestPublishRecordsPreferenceReplay(t *testing.T) {
 		standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"accepted": nil}}),
 	)
 	require.NoError(t, err)
-	duty := proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	)
+	duty := &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}
+
 	replayedBefore := proposerPreferencesEventCounts(t)["replayed"]
 
 	require.NoError(t, service.Publish(ctx, duty))
@@ -601,7 +505,7 @@ func TestConfigChangeWarnsWhenFirstUnsignedDutyUsesIt(t *testing.T) {
 	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(signer), standard.WithSubmitter(submitter))
 	require.NoError(t, err)
 	makeDuty := func(slot phase0.Slot, index phase0.ValidatorIndex, gas uint64) *proposerpreferences.Duty {
-		return proposerpreferences.NewDuty(phase0.Root{1}, slot, index, accounts[index], bellatrix.ExecutionAddress{2}, gas)
+		return &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: slot, ValidatorIndex: index, Account: accounts[index], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: gas}
 	}
 	require.NoError(t, service.Publish(ctx, makeDuty(64, 3, 30_000_000)))
 	require.NoError(t, service.Publish(ctx, makeDuty(67, 4, 30_000_000)))
@@ -630,9 +534,9 @@ func TestLogLevelSuppressesServiceLogs(t *testing.T) {
 		standard.WithSubmitter(submitter),
 	)
 	require.NoError(t, err)
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)))
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, 31_000_000)))
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 65, 3, accounts[3], bellatrix.ExecutionAddress{2}, 31_000_000)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 30_000_000}))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 31_000_000}))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 65, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 31_000_000}))
 	service.FlushConfigChangeWarnings()
 	require.Zero(t, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
 }
@@ -654,10 +558,10 @@ func TestReorgedSignedDutyDoesNotCountAsDelayedConfig(t *testing.T) {
 	capture := logger.NewLogCapture()
 	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"node": nil}}))
 	require.NoError(t, err)
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)))
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, 31_000_000)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 30_000_000}))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 31_000_000}))
 	service.UpdateDependentRoot(64, 64, phase0.Root{3})
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{3}, 65, 3, accounts[3], bellatrix.ExecutionAddress{2}, 31_000_000)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{3}, ProposalSlot: 65, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 31_000_000}))
 	service.FlushConfigChangeWarnings()
 	require.Zero(t, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
 }
@@ -672,12 +576,12 @@ func TestFeeRecipientChangeUsesNewValueOnlyForUnsignedDuty(t *testing.T) {
 	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(signer), standard.WithSubmitter(submitter))
 	require.NoError(t, err)
 	for _, fee := range []bellatrix.ExecutionAddress{{2}, {3}} {
-		require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], fee, 30_000_000)))
+		require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: fee, TargetGasLimit: 30_000_000}))
 	}
 	require.Len(t, signer.preferences, 1)
 	require.Len(t, submitter.preferences, 1)
 	require.True(t, service.ProviderReady("node", 64, 3))
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 65, 3, accounts[3], bellatrix.ExecutionAddress{3}, 30_000_000)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 65, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{3}, TargetGasLimit: 30_000_000}))
 	require.Equal(t, bellatrix.ExecutionAddress{3}, signer.preferences[1].FeeRecipient)
 	service.FlushConfigChangeWarnings()
 	require.Equal(t, 1, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
@@ -691,10 +595,10 @@ func TestPastSignedDutyDoesNotCountAsDelayedConfig(t *testing.T) {
 	capture := logger.NewLogCapture()
 	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"node": nil}}))
 	require.NoError(t, err)
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)))
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, 31_000_000)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 30_000_000}))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 31_000_000}))
 	service.Prune(65)
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 66, 3, accounts[3], bellatrix.ExecutionAddress{2}, 31_000_000)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 66, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 31_000_000}))
 	service.FlushConfigChangeWarnings()
 	require.Zero(t, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
 }
@@ -707,7 +611,7 @@ func TestRepeatedConfigValueWarnsForEachAppliedChange(t *testing.T) {
 	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"node": nil}}))
 	require.NoError(t, err)
 	makeDuty := func(slot phase0.Slot, gas uint64) *proposerpreferences.Duty {
-		return proposerpreferences.NewDuty(phase0.Root{1}, slot, 3, accounts[3], bellatrix.ExecutionAddress{2}, gas)
+		return &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: slot, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: gas}
 	}
 	require.NoError(t, service.Publish(ctx, makeDuty(64, 30_000_000)))
 	for i, gas := range []uint64{31_000_000, 32_000_000, 31_000_000} {
@@ -729,10 +633,10 @@ func TestSupersededConfigDoesNotWarnBeforeUse(t *testing.T) {
 	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"node": nil}}))
 	require.NoError(t, err)
 	for _, gas := range []uint64{30_000_000, 31_000_000, 32_000_000} {
-		require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, gas)))
+		require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: gas}))
 	}
 	require.Zero(t, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 65, 3, accounts[3], bellatrix.ExecutionAddress{2}, 32_000_000)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 65, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 32_000_000}))
 	service.FlushConfigChangeWarnings()
 	require.Equal(t, 1, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
 	require.True(t, capture.HasLog(map[string]any{"first_slot": uint64(65), "affected_validators": 1}))
@@ -752,30 +656,9 @@ func TestPublishKeepsFirstSignedPreferenceWhenConfigChanges(t *testing.T) {
 	require.NoError(t, err)
 	refreshedBefore := proposerPreferencesEventCounts(t)["refreshed"]
 
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	)))
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		31_000_000,
-	)))
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x03},
-		30_000_000,
-	)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 31_000_000}))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x03}, TargetGasLimit: 30_000_000}))
 
 	require.Equal(t, refreshedBefore, proposerPreferencesEventCounts(t)["refreshed"])
 	require.Len(t, signer.preferences, 1)
@@ -794,14 +677,7 @@ func TestPublishRejectsMissingProviderOutcomes(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = service.Publish(ctx, proposerpreferences.NewDuty(
-		phase0.Root{0x01},
-		64,
-		3,
-		accounts[3],
-		bellatrix.ExecutionAddress{0x02},
-		30_000_000,
-	))
+	err = service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000})
 
 	require.EqualError(t, err, "no proposer preferences submission outcomes")
 }
@@ -809,7 +685,7 @@ func TestPublishRejectsMissingProviderOutcomes(t *testing.T) {
 func TestPublishRecordsFailedPublicationOutcomes(t *testing.T) {
 	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
 	require.NoError(t, err)
-	duty := proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000)
+	duty := &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}
 
 	t.Run("SignFailed", func(t *testing.T) {
 		service, err := standard.New(context.Background(),
@@ -873,7 +749,7 @@ func TestPublishRecordsUnavailableDomain(t *testing.T) {
 	require.NoError(t, err)
 	before := proposerPreferencesEventCounts(t)
 
-	err = service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000))
+	err = service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000})
 
 	require.ErrorIs(t, err, signer.ErrProposerPreferencesDomainUnavailable)
 	require.Equal(t, before["domain_unavailable"]+1, proposerPreferencesEventCounts(t)["domain_unavailable"])
@@ -896,7 +772,7 @@ func TestPublishRecordsOutcomesPerProvider(t *testing.T) {
 	require.NoError(t, err)
 	before := proposerPreferencesProviderEventCounts(t)
 
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}))
 
 	after := proposerPreferencesProviderEventCounts(t)
 	require.Equal(t, before[[2]string{"one", "accepted"}]+1, after[[2]string{"one", "accepted"}])
@@ -918,7 +794,7 @@ func TestProviderReadyRecordsBuilderBidRejection(t *testing.T) {
 		standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"ready": nil, "unready": context.DeadlineExceeded}}),
 	)
 	require.NoError(t, err)
-	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000)))
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}))
 	before := proposerPreferencesProviderEventCounts(t)
 
 	require.True(t, service.ProviderReady("ready", 64, 3))

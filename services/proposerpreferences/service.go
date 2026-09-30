@@ -34,24 +34,6 @@ type Duty struct {
 	TargetGasLimit uint64
 }
 
-// NewDuty creates a proposer-preferences duty.
-func NewDuty(dependentRoot phase0.Root,
-	proposalSlot phase0.Slot,
-	validatorIndex phase0.ValidatorIndex,
-	account e2wtypes.Account,
-	feeRecipient bellatrix.ExecutionAddress,
-	targetGasLimit uint64,
-) *Duty {
-	return &Duty{
-		DependentRoot:  dependentRoot,
-		ProposalSlot:   proposalSlot,
-		ValidatorIndex: validatorIndex,
-		Account:        account,
-		FeeRecipient:   feeRecipient,
-		TargetGasLimit: targetGasLimit,
-	}
-}
-
 // SimpleProvider is the readiness name of the simple proposal style's multiclient.  It is ready
 // once every proposal provider has accepted the current preference.
 const SimpleProvider = "simple"
