@@ -54,13 +54,14 @@ func ValidateEPBSProposal(proposal *api.VersionedEPBSProposal, includePayload *b
 
 // ValidateBuilderBidReadiness rejects a builder-backed Gloas proposal from a provider that has not
 // accepted the current proposer preferences.  Self-built proposals are always accepted.
+// Without readiness no provider is ready, so builder-backed proposals are rejected.
 // The proposal must already have passed ValidateEPBSProposal.
 func ValidateBuilderBidReadiness(readiness proposerpreferences.ProviderReadiness,
 	provider string,
 	slot phase0.Slot,
 	proposal *api.VersionedEPBSProposal,
 ) error {
-	if readiness == nil || proposal.Version != spec.DataVersionGloas {
+	if proposal.Version != spec.DataVersionGloas {
 		return nil
 	}
 	block := proposal.Gloas
@@ -70,7 +71,7 @@ func ValidateBuilderBidReadiness(readiness proposerpreferences.ProviderReadiness
 	if block.Body.SignedExecutionPayloadBid.Message.BuilderIndex == gloas.BuilderIndexSelfBuild {
 		return nil
 	}
-	if !readiness.ProviderReady(provider, slot, block.ProposerIndex) {
+	if readiness == nil || !readiness.ProviderReady(provider, slot, block.ProposerIndex) {
 		return errors.New("builder-backed ePBS proposal from provider without current preferences")
 	}
 

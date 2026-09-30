@@ -104,34 +104,95 @@ func TestEPBSProposal(t *testing.T) {
 	}
 }
 
-func TestEPBSProposalRejectsBuilderBidFromUnreadyProvider(t *testing.T) {
-	ctx := context.Background()
-	specProvider := mock.NewSpecProvider()
-	chainTime, err := standardchaintime.New(ctx,
-		standardchaintime.WithLogLevel(zerolog.Disabled),
-		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
-		standardchaintime.WithSpecProvider(specProvider),
-	)
-	require.NoError(t, err)
-	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
-	service, err := best.New(ctx,
-		best.WithLogLevel(zerolog.Disabled),
-		best.WithClientMonitor(nullmetrics.New()),
-		best.WithProcessConcurrency(1),
-		best.WithChainTimeService(chainTime),
-		best.WithSpecProvider(specProvider),
-		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
-			"unready": &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x01})},
-		}),
-		best.WithProviderReadiness(&providerReadiness{ready: false}),
-		best.WithTimeout(time.Second),
-		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
-	)
-	require.NoError(t, err)
+func TestEPBSProposalGatesBuilderBidsByProviderReadiness(t *testing.T) {
+	builderBid := func(value int64, proposerIndex phase0.ValidatorIndex) *api.VersionedEPBSProposal {
+		proposal := testGloasProposal(value, bellatrix.ExecutionAddress{0x01})
+		proposal.ExecutionValue = big.NewInt(value)
+		proposal.GloasContents.Block.ProposerIndex = proposerIndex
+		proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = 1
 
-	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
-	require.Nil(t, response)
-	require.EqualError(t, err, "no ePBS proposals received")
+		return proposal
+	}
+	readyBid := builderBid(1, 7)
+	tests := []struct {
+		name      string
+		providers map[string]*api.VersionedEPBSProposal
+		ready     map[readyDuty]bool
+		expected  *api.VersionedEPBSProposal
+		err       string
+	}{
+		{
+			name:      "Ready",
+			providers: map[string]*api.VersionedEPBSProposal{"ready": readyBid},
+			ready:     map[readyDuty]bool{{provider: "ready", slot: 1, index: 7}: true},
+			expected:  readyBid,
+		},
+		{
+			name:      "Unready",
+			providers: map[string]*api.VersionedEPBSProposal{"unready": builderBid(1, 7)},
+			err:       "no ePBS proposals received",
+		},
+		{
+			name:      "ReadyForOtherSlot",
+			providers: map[string]*api.VersionedEPBSProposal{"ready": builderBid(1, 7)},
+			ready:     map[readyDuty]bool{{provider: "ready", slot: 2, index: 7}: true},
+			err:       "no ePBS proposals received",
+		},
+		{
+			name:      "ReadyForOtherValidator",
+			providers: map[string]*api.VersionedEPBSProposal{"ready": builderBid(1, 7)},
+			ready:     map[readyDuty]bool{{provider: "ready", slot: 1, index: 8}: true},
+			err:       "no ePBS proposals received",
+		},
+		{
+			name: "HigherValueFromUnreadyProviderDiscarded",
+			providers: map[string]*api.VersionedEPBSProposal{
+				"ready":   readyBid,
+				"unready": builderBid(2, 7),
+			},
+			ready:    map[readyDuty]bool{{provider: "ready", slot: 1, index: 7}: true},
+			expected: readyBid,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			specProvider := mock.NewSpecProvider()
+			chainTime, err := standardchaintime.New(ctx,
+				standardchaintime.WithLogLevel(zerolog.Disabled),
+				standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+				standardchaintime.WithSpecProvider(specProvider),
+			)
+			require.NoError(t, err)
+			providers := make(map[string]eth2client.MultiForkProposalProvider, len(test.providers))
+			for name, proposal := range test.providers {
+				providers[name] = &testEPBSProposalProvider{proposal: proposal}
+			}
+			service, err := best.New(ctx,
+				best.WithLogLevel(zerolog.Disabled),
+				best.WithClientMonitor(nullmetrics.New()),
+				best.WithProcessConcurrency(int64(len(providers))),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
+				best.WithProposalProviders(providers),
+				best.WithProviderReadiness(&providerReadiness{ready: test.ready}),
+				best.WithTimeout(time.Second),
+				best.WithBlockRootToSlotCache(mockcache.New(map[phase0.Root]phase0.Slot{}).(cache.BlockRootToSlotProvider)),
+			)
+			require.NoError(t, err)
+
+			response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+			if test.err != "" {
+				require.Nil(t, response)
+				require.EqualError(t, err, test.err)
+
+				return
+			}
+			require.NoError(t, err)
+			require.Same(t, test.expected, response.Data)
+		})
+	}
 }
 
 func TestEPBSProposalReturnsIncludedCandidateAtSoftTimeout(t *testing.T) {
@@ -506,7 +567,7 @@ func testGloasProposal(value int64, feeRecipient bellatrix.ExecutionAddress) *ap
 			Block: &gloas.BeaconBlock{
 				Body: &gloas.BeaconBlockBody{
 					SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{
-						Message: &gloas.ExecutionPayloadBid{FeeRecipient: feeRecipient},
+						Message: &gloas.ExecutionPayloadBid{BuilderIndex: gloas.BuilderIndexSelfBuild, FeeRecipient: feeRecipient},
 					},
 				},
 			},
@@ -668,12 +729,18 @@ func TestEPBSProposalStartsProvidersWhileGraffitiClientLookupIsSlow(t *testing.T
 	require.NoError(t, <-errCh)
 }
 
-type providerReadiness struct {
-	ready bool
+type readyDuty struct {
+	provider string
+	slot     phase0.Slot
+	index    phase0.ValidatorIndex
 }
 
-func (p *providerReadiness) ProviderReady(string, phase0.Slot, phase0.ValidatorIndex) bool {
-	return p.ready
+type providerReadiness struct {
+	ready map[readyDuty]bool
+}
+
+func (p *providerReadiness) ProviderReady(provider string, slot phase0.Slot, index phase0.ValidatorIndex) bool {
+	return p.ready[readyDuty{provider: provider, slot: slot, index: index}]
 }
 
 type testEPBSProposalProvider struct {

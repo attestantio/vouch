@@ -1568,12 +1568,9 @@ func selectProposalProvider(ctx context.Context,
 		if !isProvider {
 			return nil, errors.New("beacon block proposal client does not support ePBS proposals")
 		}
-		proposalProvider = provider
-		if providerReadiness != nil {
-			proposalProvider = &readinessGatedProposalProvider{
-				MultiForkProposalProvider: provider,
-				providerReadiness:         providerReadiness,
-			}
+		proposalProvider = &readinessGatedProposalProvider{
+			MultiForkProposalProvider: provider,
+			providerReadiness:         providerReadiness,
 		}
 	}
 
