@@ -217,6 +217,24 @@ func TestHandleHeadV2EventIgnoresFutureSlot(t *testing.T) {
 	require.Empty(t, service.proposerPreferencesDependentRoots)
 }
 
+func TestSeedProposerPreferencesDependentRootsPublishesAtStartup(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{100}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	service, _, preferences := newHeadV2ProposerPreferencesService(t, accounts, 6, map[phase0.Epoch]*api.Response[[]*apiv1.ProposerDuty]{
+		6: {Data: []*apiv1.ProposerDuty{{Slot: 209, ValidatorIndex: 100}}, Metadata: map[string]any{"dependent_root": phase0.Root{0x0a}}},
+		7: {Data: []*apiv1.ProposerDuty{{Slot: 225, ValidatorIndex: 100}}, Metadata: map[string]any{"dependent_root": phase0.Root{0x0b}}},
+	})
+
+	service.seedProposerPreferencesDependentRoots(ctx)
+
+	first := receiveProposerPreferencesDuty(t, preferences.duties)
+	second := receiveProposerPreferencesDuty(t, preferences.duties)
+	require.Equal(t, [2]phase0.Slot{209, 225}, [2]phase0.Slot{first.ProposalSlot, second.ProposalSlot})
+	require.Equal(t, [2]phase0.Root{{0x0a}, {0x0b}}, [2]phase0.Root{first.DependentRoot, second.DependentRoot})
+	waitForProposerPreferencesPublication(t, service)
+}
+
 func newHeadV2ProposerPreferencesService(t *testing.T,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 	currentEpoch phase0.Epoch,

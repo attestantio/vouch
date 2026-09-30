@@ -211,6 +211,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}); err != nil {
 		return nil, errors.Wrap(err, "failed to add events handler")
 	}
+	if s.proposerPreferences != nil && s.executionConfigProvider != nil && s.proposerPreferencesLookahead != 0 {
+		go s.seedProposerPreferencesDependentRoots(ctx)
+	}
 
 	// Start tickers, to carry out periodic operations.
 	if err := s.startTickers(ctx, handlingBellatrix); err != nil {
