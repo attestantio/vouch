@@ -111,6 +111,17 @@ There is also a companion metric `vouch_client_operation_requests_total`, which 
   - `provider` is the provider of the information selected by the strategy
   - `strategy` is the strategy used to select the outcome
 
+`vouch_beaconblockproposal_process_gloas_selections_total` counts the Gloas proposals Vouch selected.  It has three labels:
+
+  - `strategy` is the beacon block proposal strategy that selected the proposal: "best", "first", "simple" or "unknown"
+  - `requested_preference` is the auction preference Vouch requested, derived from the builder boost factor: "self_build_preferred" below 100, "value_maximizing" at 100 and "builder_preferred" above 100
+  - `source` is where the selected proposal's execution payload came from: "self_build", "p2p_builder", "builder_api" or "unknown"
+
+`vouch_proposerpreferences_provider_events_total` counts proposer preferences outcomes per beacon node.  It has two labels:
+
+  - `provider` is the beacon node's configured position, such as "beacon-1", rather than its endpoint
+  - `outcome` is "accepted" or "rejected" for a preferences submission, or "builder_bid_rejected" when a builder-backed proposal from the node was discarded because the node had not accepted the current preferences
+
 Network metrics provide information about the network from Vouch's point of view.  Although these are not under Vouch's control, they have an impact on the performance of the validator.  The specific metrics are:
 
   - `vouch_block_receipt_delay_seconds` the delay between the start of a slot and the arrival of the block for that slot.  This metric is provided as a histogram, with buckets in increments of 0.1 seconds up to 12 seconds.  This has a label `epoch_slot` which is the position of the slot in the epoch (0 through 31, inclusive)
