@@ -35,6 +35,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/payloadattester"
+	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/attestantio/vouch/testutil"
 	dynssz "github.com/pk910/dynamic-ssz"
 	"github.com/spf13/viper"
@@ -255,6 +256,7 @@ func TestSimpleProposalProviderGatesBuilderBidsOnReadiness(t *testing.T) {
 		name         string
 		builderIndex gloas.BuilderIndex
 		ready        bool
+		noReadiness  bool
 		providerErr  error
 		err          string
 	}{
@@ -266,6 +268,12 @@ func TestSimpleProposalProviderGatesBuilderBidsOnReadiness(t *testing.T) {
 		{
 			name:         "BuilderBidFromUnreadyProvider",
 			builderIndex: 1,
+			err:          "builder-backed ePBS proposal from provider without current preferences",
+		},
+		{
+			name:         "BuilderBidWithoutReadiness",
+			builderIndex: 1,
+			noReadiness:  true,
 			err:          "builder-backed ePBS proposal from provider without current preferences",
 		},
 		{
@@ -319,8 +327,12 @@ func TestSimpleProposalProviderGatesBuilderBidsOnReadiness(t *testing.T) {
 				knownClientsMu.Unlock()
 			})
 			readiness := &recordingProviderReadiness{ready: test.ready}
+			var providerReadiness proposerpreferences.ProviderReadiness = readiness
+			if test.noReadiness {
+				providerReadiness = nil
+			}
 
-			provider, err := selectProposalProvider(ctx, null.New(), nil, nil, nil, readiness)
+			provider, err := selectProposalProvider(ctx, null.New(), nil, nil, nil, providerReadiness)
 			require.NoError(t, err)
 			response, err := provider.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
 			if test.providerErr != nil {
@@ -333,7 +345,9 @@ func TestSimpleProposalProviderGatesBuilderBidsOnReadiness(t *testing.T) {
 			if test.err != "" {
 				require.Nil(t, response)
 				require.EqualError(t, err, test.err)
-				require.Equal(t, []string{"simple"}, readiness.providers)
+				if !test.noReadiness {
+					require.Equal(t, []string{"simple"}, readiness.providers)
+				}
 
 				return
 			}

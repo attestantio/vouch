@@ -248,35 +248,96 @@ func TestEPBSProposalDoesNotLeaveLateProvidersBlocked(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 }
 
-func TestEPBSProposalSkipsBuilderBidFromUnreadyProvider(t *testing.T) {
-	ctx := context.Background()
-	service, err := first.New(ctx,
-		first.WithLogLevel(zerolog.Disabled),
-		first.WithClientMonitor(nullmetrics.New()),
-		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
-			"unready": &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})},
-		}),
-		first.WithProviderReadiness(&providerReadiness{ready: false}),
-		first.WithTimeout(10*time.Millisecond),
-	)
-	require.NoError(t, err)
+func TestEPBSProposalGatesBuilderBidsByProviderReadiness(t *testing.T) {
+	builderBid := func(proposerIndex phase0.ValidatorIndex) *api.VersionedEPBSProposal {
+		proposal := gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})
+		proposal.GloasContents.Block.ProposerIndex = proposerIndex
+		proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = 1
 
-	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
-	require.Nil(t, response)
-	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal: unready: builder-backed ePBS proposal from provider without current preferences")
+		return proposal
+	}
+	readyBid := builderBid(7)
+	const unreadyErr = "failed to obtain ePBS beacon block proposal: ready: builder-backed ePBS proposal from provider without current preferences"
+	tests := []struct {
+		name      string
+		providers map[string]*api.VersionedEPBSProposal
+		ready     map[readyDuty]bool
+		expected  *api.VersionedEPBSProposal
+		err       string
+	}{
+		{
+			name:      "Ready",
+			providers: map[string]*api.VersionedEPBSProposal{"ready": readyBid},
+			ready:     map[readyDuty]bool{{provider: "ready", slot: 1, index: 7}: true},
+			expected:  readyBid,
+		},
+		{
+			name:      "Unready",
+			providers: map[string]*api.VersionedEPBSProposal{"ready": builderBid(7)},
+			err:       unreadyErr,
+		},
+		{
+			name:      "ReadyForOtherSlot",
+			providers: map[string]*api.VersionedEPBSProposal{"ready": builderBid(7)},
+			ready:     map[readyDuty]bool{{provider: "ready", slot: 2, index: 7}: true},
+			err:       unreadyErr,
+		},
+		{
+			name:      "ReadyForOtherValidator",
+			providers: map[string]*api.VersionedEPBSProposal{"ready": builderBid(7)},
+			ready:     map[readyDuty]bool{{provider: "ready", slot: 1, index: 8}: true},
+			err:       unreadyErr,
+		},
+		{
+			name: "UnreadyProviderSkipped",
+			providers: map[string]*api.VersionedEPBSProposal{
+				"ready":   readyBid,
+				"unready": builderBid(7),
+			},
+			ready:    map[readyDuty]bool{{provider: "ready", slot: 1, index: 7}: true},
+			expected: readyBid,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			providers := make(map[string]eth2client.MultiForkProposalProvider, len(test.providers))
+			for name, proposal := range test.providers {
+				providers[name] = &epbsProposalProvider{proposal: proposal}
+			}
+			service, err := first.New(ctx,
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithClientMonitor(nullmetrics.New()),
+				first.WithProposalProviders(providers),
+				first.WithProviderReadiness(&providerReadiness{ready: test.ready}),
+				first.WithTimeout(time.Second),
+			)
+			require.NoError(t, err)
+
+			response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+			if test.err != "" {
+				require.Nil(t, response)
+				require.EqualError(t, err, test.err)
+
+				return
+			}
+			require.NoError(t, err)
+			require.Same(t, test.expected, response.Data)
+		})
+	}
 }
 
 func TestEPBSProposalAcceptsSelfBuiltProposalFromUnreadyProvider(t *testing.T) {
 	ctx := context.Background()
 	proposal := gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})
-	proposal.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = gloas.BuilderIndex(^uint64(0))
 	service, err := first.New(ctx,
 		first.WithLogLevel(zerolog.Disabled),
 		first.WithClientMonitor(nullmetrics.New()),
 		first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
 			"unready": &epbsProposalProvider{proposal: proposal},
 		}),
-		first.WithProviderReadiness(&providerReadiness{ready: false}),
+		first.WithProviderReadiness(&providerReadiness{}),
 		first.WithTimeout(time.Second),
 	)
 	require.NoError(t, err)
@@ -459,7 +520,7 @@ func gloasEPBSProposal(feeRecipient bellatrix.ExecutionAddress) *api.VersionedEP
 			Block: &gloas.BeaconBlock{
 				Body: &gloas.BeaconBlockBody{
 					SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{
-						Message: &gloas.ExecutionPayloadBid{FeeRecipient: feeRecipient},
+						Message: &gloas.ExecutionPayloadBid{BuilderIndex: gloas.BuilderIndexSelfBuild, FeeRecipient: feeRecipient},
 					},
 				},
 			},
@@ -467,12 +528,18 @@ func gloasEPBSProposal(feeRecipient bellatrix.ExecutionAddress) *api.VersionedEP
 	}
 }
 
-type providerReadiness struct {
-	ready bool
+type readyDuty struct {
+	provider string
+	slot     phase0.Slot
+	index    phase0.ValidatorIndex
 }
 
-func (p *providerReadiness) ProviderReady(string, phase0.Slot, phase0.ValidatorIndex) bool {
-	return p.ready
+type providerReadiness struct {
+	ready map[readyDuty]bool
+}
+
+func (p *providerReadiness) ProviderReady(provider string, slot phase0.Slot, index phase0.ValidatorIndex) bool {
+	return p.ready[readyDuty{provider: provider, slot: slot, index: index}]
 }
 
 type epbsProposalProvider struct {

@@ -74,8 +74,13 @@ func TestValidateBuilderBidReadiness(t *testing.T) {
 		checked   bool
 	}{
 		{
-			name:     "NoReadiness",
+			name:     "NoReadinessBuilder",
 			proposal: withoutPayload(1),
+			err:      "builder-backed ePBS proposal from provider without current preferences",
+		},
+		{
+			name:     "NoReadinessSelfBuild",
+			proposal: withoutPayload(gloas.BuilderIndexSelfBuild),
 		},
 		{
 			name:      "NotGloas",
