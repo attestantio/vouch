@@ -18,9 +18,11 @@ import (
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 type parameters struct {
+	logLevel  zerolog.Level
 	monitor   metrics.Service
 	signer    signer.ProposerPreferencesSigner
 	submitter submitter.ProposerPreferencesSubmitter
@@ -35,6 +37,11 @@ type parameterFunc func(*parameters)
 
 func (f parameterFunc) apply(parameters *parameters) {
 	f(parameters)
+}
+
+// WithLogLevel sets the log level for the module.
+func WithLogLevel(logLevel zerolog.Level) Parameter {
+	return parameterFunc(func(parameters *parameters) { parameters.logLevel = logLevel })
 }
 
 // WithMonitor sets the metrics monitor.
@@ -53,7 +60,9 @@ func WithSubmitter(submitter submitter.ProposerPreferencesSubmitter) Parameter {
 }
 
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
-	parameters := &parameters{}
+	parameters := &parameters{
+		logLevel: zerolog.GlobalLevel(),
+	}
 	for _, param := range params {
 		if param != nil {
 			param.apply(parameters)

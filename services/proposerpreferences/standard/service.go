@@ -94,9 +94,14 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.Wrap(err, "failed to register metrics")
 	}
 
+	log := zerologger.With().Str("service", "proposerpreferences").Logger()
+	if parameters.logLevel != log.GetLevel() {
+		log = log.Level(parameters.logLevel)
+	}
+
 	return &Service{
 		monitor:        parameters.monitor,
-		log:            zerologger.With().Str("service", "proposerpreferences").Logger(),
+		log:            log,
 		unsupported:    make(map[string]phase0.Epoch),
 		pendingConfig:  make(map[phase0.ValidatorIndex]preferenceConfig),
 		reportedConfig: make(map[preferenceConfig]struct{}),

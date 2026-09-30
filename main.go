@@ -1878,6 +1878,7 @@ func startProposerPreferences(ctx context.Context,
 	}
 
 	service, err := standardproposerpreferences.New(ctx,
+		standardproposerpreferences.WithLogLevel(util.LogLevel("proposerpreferences")),
 		standardproposerpreferences.WithMonitor(monitor),
 		standardproposerpreferences.WithSigner(proposerPreferencesSigner),
 		standardproposerpreferences.WithSubmitter(proposerPreferencesSubmitter),
