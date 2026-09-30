@@ -234,6 +234,8 @@ func (s *Service) unblindingProviders(auctionResults *blockauctioneer.Results) (
 
 // proposeEPBSBlock proposes a Gloas block.
 // skipcq: GO-R1005
+//
+//nolint:godox // The FIXME below is tracked as follow-up work, not left as a loose end.
 func (s *Service) proposeEPBSBlock(ctx context.Context,
 	duty *beaconblockproposer.Duty,
 	graffiti [32]byte,
@@ -336,6 +338,7 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		Blobs:     blobs,
 	}
 	if err := s.submitExecutionPayloadEnvelope(ctx, log, envelopeSubmissionOpts); err != nil {
+		// FIXME: The block is already published, so this is a partial failure, but it is reported as a failed proposal: the metric records "failed" and multi-instance failover deactivates this proposer.
 		return err
 	}
 	monitorBeaconBlockProposalSource("local")
