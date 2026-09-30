@@ -36,6 +36,8 @@ func TestInitLoggingHidesBeaconNodeAddress(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "vouch.log")
 	viper.Set("beacon-node-addresses", []string{"https://private.example:5052", "https://user:pw@second.example:5052/path"})
 	viper.Set("log-file", path)
+	// Keep the timestamp format so initLogging does not write it while other tests log.
+	viper.Set("logging.timestamp.format", zerolog.TimeFieldFormat)
 
 	require.NoError(t, initLogging())
 	log.Error().Str("provider", "https://private.example:5052").Err(errors.New("dial https://private.example:5052 failed")).Msg("request failed")
