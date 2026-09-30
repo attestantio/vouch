@@ -207,6 +207,7 @@ func waitForPublication(ctx context.Context, complete <-chan struct{}) error {
 	case <-complete:
 		return nil
 	case <-ctx.Done():
+		monitorProposerPreferencesProcess("cancelled")
 		return ctx.Err()
 	}
 }
@@ -227,6 +228,7 @@ func (s *Service) sign(ctx context.Context, account e2wtypes.Account, publicatio
 	signature, err := s.signer.SignProposerPreferences(ctx, account, &publication.preferences)
 	if err != nil {
 		s.abandonPublication(publication)
+		monitorProposerPreferencesProcess("sign_failed")
 		return errors.Wrap(err, "failed to sign proposer preferences")
 	}
 	publication.cached.signed = &gloas.SignedProposerPreferences{
@@ -254,6 +256,7 @@ func (s *Service) recordSubmission(publication *publication, outcomes map[string
 	defer delete(s.inFlight, publication.preferences)
 
 	if len(outcomes) == 0 {
+		monitorProposerPreferencesProcess("no_outcomes")
 		return errors.New("no proposer preferences submission outcomes")
 	}
 	var submissionErr error

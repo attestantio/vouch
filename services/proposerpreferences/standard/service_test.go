@@ -15,6 +15,7 @@ package standard_test
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -400,6 +401,61 @@ func TestPublishRejectsMissingProviderOutcomes(t *testing.T) {
 	require.EqualError(t, err, "no proposer preferences submission outcomes")
 }
 
+func TestPublishRecordsFailedPublicationOutcomes(t *testing.T) {
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	duty := proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000)
+
+	t.Run("SignFailed", func(t *testing.T) {
+		service, err := standard.New(context.Background(),
+			standard.WithMonitor(prometheusMonitor{}),
+			standard.WithSigner(&recordingSigner{err: errors.New("signer unavailable")}),
+			standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"accepted": nil}}),
+		)
+		require.NoError(t, err)
+		before := proposerPreferencesEventCounts(t)
+
+		require.EqualError(t, service.Publish(context.Background(), duty), "failed to sign proposer preferences: signer unavailable")
+		require.Equal(t, before["sign_failed"]+1, proposerPreferencesEventCounts(t)["sign_failed"])
+	})
+
+	t.Run("NoOutcomes", func(t *testing.T) {
+		service, err := standard.New(context.Background(),
+			standard.WithMonitor(prometheusMonitor{}),
+			standard.WithSigner(&recordingSigner{}),
+			standard.WithSubmitter(&recordingSubmitter{}),
+		)
+		require.NoError(t, err)
+		before := proposerPreferencesEventCounts(t)
+
+		require.EqualError(t, service.Publish(context.Background(), duty), "no proposer preferences submission outcomes")
+		require.Equal(t, before["no_outcomes"]+1, proposerPreferencesEventCounts(t)["no_outcomes"])
+	})
+
+	t.Run("Cancelled", func(t *testing.T) {
+		submitter := &blockingSubmitter{started: make(chan struct{}), release: make(chan struct{})}
+		service, err := standard.New(context.Background(),
+			standard.WithMonitor(prometheusMonitor{}),
+			standard.WithSigner(&recordingSigner{}),
+			standard.WithSubmitter(submitter),
+		)
+		require.NoError(t, err)
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- service.Publish(context.Background(), duty)
+		}()
+		<-submitter.started
+		before := proposerPreferencesEventCounts(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		require.ErrorIs(t, service.Publish(ctx, duty), context.Canceled)
+		require.Equal(t, before["cancelled"]+1, proposerPreferencesEventCounts(t)["cancelled"])
+		close(submitter.release)
+		require.NoError(t, <-errCh)
+	})
+}
+
 func proposerPreferencesEventCounts(t *testing.T) map[string]float64 {
 	t.Helper()
 
@@ -444,6 +500,7 @@ func (s *blockingSubmitter) SubmitProposerPreferences(_ context.Context, _ []*gl
 type recordingSigner struct {
 	preferences []*gloas.ProposerPreferences
 	signature   phase0.BLSSignature
+	err         error
 }
 
 func (s *recordingSigner) SignProposerPreferences(_ context.Context,
@@ -454,7 +511,7 @@ func (s *recordingSigner) SignProposerPreferences(_ context.Context,
 	error,
 ) {
 	s.preferences = append(s.preferences, preferences)
-	return s.signature, nil
+	return s.signature, s.err
 }
 
 type recordingSubmitter struct {
