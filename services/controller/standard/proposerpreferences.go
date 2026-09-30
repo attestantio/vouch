@@ -311,9 +311,16 @@ func (s *Service) publishProposerPreferencesDuty(
 		s.log.Error().Uint64("validator_index", uint64(duty.ValidatorIndex)).Msg("No proposer preferences execution configuration")
 		return
 	}
-	preferenceDuty := proposerpreferences.NewDuty(dependentRoot, duty.Slot, duty.ValidatorIndex, account, config.FeeRecipient, config.GasLimit)
-	preferenceDuty.CurrentSlot = s.chainTimeService.CurrentSlot()
-	preferenceDuty.CurrentEpoch = s.chainTimeService.CurrentEpoch()
+	preferenceDuty := &proposerpreferences.Duty{
+		DependentRoot:  dependentRoot,
+		ProposalSlot:   duty.Slot,
+		CurrentSlot:    s.chainTimeService.CurrentSlot(),
+		CurrentEpoch:   s.chainTimeService.CurrentEpoch(),
+		ValidatorIndex: duty.ValidatorIndex,
+		Account:        account,
+		FeeRecipient:   config.FeeRecipient,
+		TargetGasLimit: config.GasLimit,
+	}
 	if err := s.proposerPreferences.Publish(ctx, preferenceDuty); err != nil {
 		s.log.Error().Err(err).Uint64("proposal_slot", uint64(duty.Slot)).Msg("Failed to publish proposer preferences")
 	}

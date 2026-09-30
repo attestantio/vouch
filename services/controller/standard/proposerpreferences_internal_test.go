@@ -62,7 +62,7 @@ func TestPublishProposerPreferencesPublishesFirstGloasEpoch(t *testing.T) {
 	require.Equal(t, 1, provider.v2Calls)
 	require.Equal(t, phase0.Epoch(5), provider.epoch)
 	require.Len(t, preferences.duties, 1)
-	require.Equal(t, proposerpreferences.NewDuty(phase0.Root{0x01}, 160, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000), preferenceWithoutCurrentSlot(preferences.duties[0]))
+	require.Equal(t, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 160, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}, preferenceWithoutCurrentSlot(preferences.duties[0]))
 }
 
 func TestPublishProposerPreferencesSkipsUnownedValidatorsQuietly(t *testing.T) {
@@ -142,9 +142,9 @@ func TestHandleHeadV2EventUsesEpochDependentRootsAcrossBoundary(t *testing.T) {
 	})
 
 	require.Equal(t, phase0.Epoch(6), receiveProposerPreferencesEpoch(t, provider.epochs))
-	require.Equal(t, proposerpreferences.NewDuty(rootA, 209, 100, accounts[100], feeRecipient, gasLimit), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
+	require.Equal(t, &proposerpreferences.Duty{DependentRoot: rootA, ProposalSlot: 209, ValidatorIndex: 100, Account: accounts[100], FeeRecipient: feeRecipient, TargetGasLimit: gasLimit}, preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
 	require.Equal(t, phase0.Epoch(7), receiveProposerPreferencesEpoch(t, provider.epochs))
-	require.Equal(t, proposerpreferences.NewDuty(rootB, 225, 100, accounts[100], feeRecipient, gasLimit), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
+	require.Equal(t, &proposerpreferences.Duty{DependentRoot: rootB, ProposalSlot: 225, ValidatorIndex: 100, Account: accounts[100], FeeRecipient: feeRecipient, TargetGasLimit: gasLimit}, preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
 	waitForProposerPreferencesPublication(t, service)
 
 	chainTime.currentEpoch = 7
@@ -155,9 +155,9 @@ func TestHandleHeadV2EventUsesEpochDependentRootsAcrossBoundary(t *testing.T) {
 	})
 
 	// An unchanged root reuses duties across the epoch boundary.
-	require.Equal(t, proposerpreferences.NewDuty(rootB, 225, 100, accounts[100], feeRecipient, gasLimit), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
+	require.Equal(t, &proposerpreferences.Duty{DependentRoot: rootB, ProposalSlot: 225, ValidatorIndex: 100, Account: accounts[100], FeeRecipient: feeRecipient, TargetGasLimit: gasLimit}, preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
 	require.Equal(t, phase0.Epoch(8), receiveProposerPreferencesEpoch(t, provider.epochs))
-	require.Equal(t, proposerpreferences.NewDuty(rootC, 257, 100, accounts[100], feeRecipient, gasLimit), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
+	require.Equal(t, &proposerpreferences.Duty{DependentRoot: rootC, ProposalSlot: 257, ValidatorIndex: 100, Account: accounts[100], FeeRecipient: feeRecipient, TargetGasLimit: gasLimit}, preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
 	waitForProposerPreferencesPublication(t, service)
 }
 
@@ -187,8 +187,8 @@ func TestProposerPreferencesSlotTickerRunsOnConsecutiveSlots(t *testing.T) {
 		gloasForkEpoch: 5, proposerPreferencesDependentRoots: map[phase0.Epoch]phase0.Root{6: root},
 	}
 	require.NoError(t, service.startProposerPreferencesSlotTicker(ctx))
-	require.Equal(t, proposerpreferences.NewDuty(root, 200, 3, accounts[3], bellatrix.ExecutionAddress{}, 0), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
-	require.Equal(t, proposerpreferences.NewDuty(root, 200, 3, accounts[3], bellatrix.ExecutionAddress{}, 0), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
+	require.Equal(t, &proposerpreferences.Duty{DependentRoot: root, ProposalSlot: 200, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{}, TargetGasLimit: 0}, preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
+	require.Equal(t, &proposerpreferences.Duty{DependentRoot: root, ProposalSlot: 200, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{}, TargetGasLimit: 0}, preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
 	require.Equal(t, phase0.Epoch(6), receiveProposerPreferencesEpoch(t, provider.epochs))
 	select {
 	case epoch := <-provider.epochs:
@@ -346,7 +346,7 @@ func TestChangedHeadV2RootInvalidatesUntilSlotTickRefreshesCorrectedPreferences(
 	}
 	service.proposerPreferencesSlotTick(ctx)
 
-	require.Equal(t, proposerpreferences.NewDuty(rootB, 209, 100, accounts[100], bellatrix.ExecutionAddress{}, 0), preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
+	require.Equal(t, &proposerpreferences.Duty{DependentRoot: rootB, ProposalSlot: 209, ValidatorIndex: 100, Account: accounts[100], FeeRecipient: bellatrix.ExecutionAddress{}, TargetGasLimit: 0}, preferenceWithoutCurrentSlot(receiveProposerPreferencesDuty(t, preferences.duties)))
 	waitForProposerPreferencesPublication(t, service)
 }
 
