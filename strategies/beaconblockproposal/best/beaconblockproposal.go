@@ -197,7 +197,7 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	defer span.End()
 
 	started := time.Now()
-	log := s.log.With().Str("request_id", requestID).Uint64("slot", uint64(opts.Slot)).Logger()
+	log := util.LogWithID(ctx, s.log, "strategy_id").With().Str("request_id", requestID).Uint64("slot", uint64(opts.Slot)).Logger()
 	ctx = log.WithContext(ctx)
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
