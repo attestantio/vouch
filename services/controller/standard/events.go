@@ -85,8 +85,9 @@ func (s *Service) HandleHeadEvent(ctx context.Context, data *apiv1.HeadEvent) {
 }
 
 // HandleHeadV2Event handles the "head_v2" events from the beacon node.
+// A head from an earlier slot, such as a late block or a reorg, still carries valid roots for its epoch.
 func (s *Service) HandleHeadV2Event(ctx context.Context, data *apiv1.HeadEventV2) {
-	if data.Slot != s.chainTimeService.CurrentSlot() {
+	if data.Slot > s.chainTimeService.CurrentSlot() {
 		return
 	}
 
