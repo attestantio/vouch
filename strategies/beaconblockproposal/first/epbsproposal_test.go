@@ -986,3 +986,27 @@ func TestEPBSProposalErrorDoesNotExposeProviderAddress(t *testing.T) {
 	_, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
 	require.EqualError(t, err, "failed to obtain ePBS beacon block proposal: beacon-unknown: boom")
 }
+
+func TestEPBSProposalLogsEveryProviderResult(t *testing.T) {
+	ctx := context.Background()
+	for range 20 {
+		capture := logger.NewLogCapture()
+		service, err := first.New(ctx,
+			first.WithLogLevel(zerolog.TraceLevel),
+			first.WithClientMonitor(nullmetrics.New()),
+			first.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+				"node-a": &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})},
+				"node-b": &epbsProposalProvider{proposal: gloasEPBSProposal(bellatrix.ExecutionAddress{0x01})},
+			}),
+			first.WithTimeout(time.Second),
+		)
+		require.NoError(t, err)
+
+		_, err = service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			return capture.HasLog(map[string]any{"message": "ePBS proposal provider completed", "provider": "node-a"}) &&
+				capture.HasLog(map[string]any{"message": "ePBS proposal provider completed", "provider": "node-b"})
+		}, time.Second, 5*time.Millisecond, "%v", capture.Entries())
+	}
+}
