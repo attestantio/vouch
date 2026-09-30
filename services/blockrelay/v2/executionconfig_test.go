@@ -218,6 +218,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient1,
+				GasLimit:     gasLimit1,
 				Relays:       []*beaconblockproposer.RelayConfig{},
 			},
 		},
@@ -234,6 +235,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient1,
+				GasLimit:     gasLimit1,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -258,6 +260,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     uint64(12345),
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient2,
+				GasLimit:     gasLimit2,
 				Relays:       []*beaconblockproposer.RelayConfig{},
 			},
 		},
@@ -279,6 +282,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient1,
+				GasLimit:     gasLimit1,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -317,6 +321,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient3,
+				GasLimit:     gasLimit3,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -355,6 +360,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient1,
+				GasLimit:     gasLimit1,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -397,6 +403,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient1,
+				GasLimit:     gasLimit1,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -435,6 +442,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient3,
+				GasLimit:     gasLimit3,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -472,6 +480,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient1,
+				GasLimit:     gasLimit1,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -518,6 +527,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient3,
+				GasLimit:     gasLimit3,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -557,6 +567,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient3,
+				GasLimit:     gasLimit3,
 				Relays:       []*beaconblockproposer.RelayConfig{},
 			},
 		},
@@ -591,6 +602,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient3,
+				GasLimit:     gasLimit3,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay3.com/",
@@ -638,6 +650,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient3,
+				GasLimit:     gasLimit3,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay3.com/",
@@ -677,6 +690,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient3,
+				GasLimit:     gasLimit3,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -704,6 +718,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient3,
+				GasLimit:     gasLimit4,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -733,6 +748,7 @@ func TestConfig(t *testing.T) {
 			fallbackGasLimit:     gasLimit1,
 			expected: &beaconblockproposer.ProposerConfig{
 				FeeRecipient: feeRecipient3,
+				GasLimit:     gasLimit4,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -779,8 +795,7 @@ func TestConfig(t *testing.T) {
 				require.EqualError(t, err, test.err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, test.expected.FeeRecipient, res.FeeRecipient)
-				require.Equal(t, test.expected.Relays, res.Relays)
+				require.Equal(t, test.expected, res)
 			}
 		})
 	}
