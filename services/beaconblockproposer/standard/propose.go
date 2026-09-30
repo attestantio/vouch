@@ -301,9 +301,9 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if bid.ParentBlockRoot != parentRoot {
 		return errors.New("ePBS execution payload bid for incorrect parent block")
 	}
-	strategy := boundedGloasStrategy(responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataStrategy, "unknown"))
+	strategy := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataStrategy, "unknown")
 	provider := beaconblockproposer.StableProviderName(responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataProvider, "unknown"))
-	source := boundedGloasSource(responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataSource, ""))
+	source := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataSource, "unknown")
 	if source == "unknown" && bid.BuilderIndex == gloas.BuilderIndexSelfBuild {
 		// The proposer can recover self-building from the bid, but telling builder_api apart from
 		// p2p_builder needs the beacon node's response headers, and the strategies replace those
@@ -387,7 +387,7 @@ func (s *Service) obtainEPBSProposal(ctx context.Context,
 	if response != nil && response.Data != nil {
 		span.SetAttributes(
 			attribute.String("provider", beaconblockproposer.StableProviderName(responseMetadataString(response.Metadata, beaconblockproposer.MetadataProvider, "unknown"))),
-			attribute.String("source", boundedGloasSource(responseMetadataString(response.Metadata, beaconblockproposer.MetadataSource, "unknown"))),
+			attribute.String("source", responseMetadataString(response.Metadata, beaconblockproposer.MetadataSource, "unknown")),
 		)
 		if proposalRoot, err := response.Data.Root(); err == nil {
 			span.SetAttributes(attribute.String("proposal_root", proposalRoot.String()))
@@ -412,24 +412,6 @@ func withGloasSelectionCorrelation(ctx context.Context, provider string) context
 func gloasSelectionFromContext(ctx context.Context) gloasSelectionCorrelation {
 	correlation, _ := ctx.Value(gloasSelectionCorrelationKey{}).(gloasSelectionCorrelation)
 	return correlation
-}
-
-func boundedGloasStrategy(strategy string) string {
-	switch strategy {
-	case "best", "first", "simple":
-		return strategy
-	default:
-		return "unknown"
-	}
-}
-
-func boundedGloasSource(source string) string {
-	switch source {
-	case "self_build", "p2p_builder", "builder_api":
-		return source
-	default:
-		return "unknown"
-	}
 }
 
 func responseMetadataString(metadata map[string]any, key string, fallback string) string {
