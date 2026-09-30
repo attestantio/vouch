@@ -613,6 +613,8 @@ func TestProposeGloasSelectionObservability(t *testing.T) {
 		require.NotEmpty(t, attributes["request_id"])
 		require.Equal(t, "stable-provider", attributes["provider"])
 		require.NotEmpty(t, attributes["proposal_root"])
+		require.Equal(t, spanAttributes["selectGloasProposal"]["proposal_root"], attributes["proposal_root"], spanName)
+		require.Equal(t, spanAttributes["selectGloasProposal"]["request_id"], attributes["request_id"], spanName)
 	}
 	require.Equal(t, "11", spanAttributes["selectGloasProposal"]["requested_min_bid"])
 	require.Equal(t, "100", spanAttributes["selectGloasProposal"]["builder_boost_factor"])
@@ -654,6 +656,55 @@ func TestProposeGloasKeepsStrategyProviderName(t *testing.T) {
 		"message":           "Selected Gloas proposal",
 		"selected_provider": "stable-provider",
 	}), "%v", capture.Entries())
+}
+
+func TestProposeGloasSelectionReportsStrategyAndUnknownValue(t *testing.T) {
+	ctx := context.Background()
+	monitor, err := prometheusmetrics.New(ctx,
+		prometheusmetrics.WithLogLevel(zerolog.Disabled),
+		prometheusmetrics.WithAddress("localhost:0"),
+	)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		strategy string
+		source   string
+	}{
+		{
+			name:     "FirstBuilderAPI",
+			strategy: "first",
+			source:   "builder_api",
+		},
+		{
+			name:     "SimpleP2PBuilder",
+			strategy: "simple",
+			source:   "p2p_builder",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			capture := logger.NewLogCapture()
+			before := gloasSelectionCount(t, test.strategy, "value_maximizing", test.source)
+			service, duty, _, _, _, _ := newGloasProposerForSelection(ctx, t, false, monitor, func(response *consensusapi.Response[*consensusapi.VersionedEPBSProposal]) {
+				response.Data.ExecutionValue = nil
+				response.Metadata[beaconblockproposer.MetadataStrategy] = test.strategy
+				response.Metadata[beaconblockproposer.MetadataSource] = test.source
+			})
+
+			require.NoError(t, service.Propose(ctx, duty))
+			require.Equal(t, before+1, gloasSelectionCount(t, test.strategy, "value_maximizing", test.source))
+			require.True(t, capture.HasLog(map[string]any{
+				"message":          "Selected Gloas proposal",
+				"strategy":         test.strategy,
+				"source":           test.source,
+				"value_known":      false,
+				"execution_value":  "unknown",
+				"publication_path": "block_only",
+			}), "%v", capture.Entries())
+		})
+	}
 }
 
 func TestProposeGloasFailureCorrelation(t *testing.T) {
@@ -881,6 +932,25 @@ func newGloasProposerForProposalSource(
 ) {
 	t.Helper()
 
+	return newGloasProposerForSelection(ctx, t, executionPayloadIncluded, monitor, nil)
+}
+
+// newGloasProposerForSelection lets mutate change the strategy's response before the proposer sees it.
+func newGloasProposerForSelection(
+	ctx context.Context,
+	t *testing.T,
+	executionPayloadIncluded bool,
+	monitor metrics.Service,
+	mutate func(*consensusapi.Response[*consensusapi.VersionedEPBSProposal]),
+) (*standard.Service,
+	*beaconblockproposer.Duty,
+	*capturingBeaconBlockSigner,
+	*capturingExecutionPayloadEnvelopeSigner,
+	*capturingExecutionPayloadEnvelopeSubmitter,
+	*capturingProposalSubmitter,
+) {
+	t.Helper()
+
 	proposalClient, err := mockconsensusclient.New(ctx)
 	require.NoError(t, err)
 	responseClient, err := mockconsensusclient.New(ctx)
@@ -904,6 +974,9 @@ func newGloasProposerForProposalSource(
 			beaconblockproposer.MetadataStrategy: "best",
 			beaconblockproposer.MetadataProvider: "stable-provider",
 			beaconblockproposer.MetadataSource:   map[bool]string{true: "self_build", false: "p2p_builder"}[executionPayloadIncluded],
+		}
+		if mutate != nil {
+			mutate(response)
 		}
 
 		return response, nil
