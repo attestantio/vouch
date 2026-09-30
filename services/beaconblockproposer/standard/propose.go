@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -372,8 +373,8 @@ func (s *Service) obtainEPBSProposal(ctx context.Context,
 		attribute.String("provider", "unknown"),
 		attribute.String("proposal_root", "unknown"),
 		attribute.String("source", "unknown"),
-		attribute.Int64("requested_min_bid", int64(opts.BuilderConfig.MinBid)),
-		attribute.Int64("builder_boost_factor", int64(opts.BuilderConfig.BuilderBoostFactor)),
+		attribute.String("requested_min_bid", strconv.FormatUint(uint64(opts.BuilderConfig.MinBid), 10)),
+		attribute.String("builder_boost_factor", strconv.FormatUint(opts.BuilderConfig.BuilderBoostFactor, 10)),
 		attribute.String("requested_preference", gloasRequestedPreference(opts.BuilderConfig.BuilderBoostFactor)),
 		attribute.Bool("payload_requested", payloadRequested),
 	))
