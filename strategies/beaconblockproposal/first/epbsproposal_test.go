@@ -34,7 +34,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestEPBSProposal(t *testing.T) {
+func TestEPBSProposalAcceptsUnknownValue(t *testing.T) {
 	ctx := context.Background()
 
 	service := newTestService(ctx, t,
@@ -50,6 +50,7 @@ func TestEPBSProposal(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, response)
 	require.NotNil(t, response.Data)
+	require.Nil(t, response.Data.ExecutionValue)
 }
 
 func TestNewRejectsEmptyProviders(t *testing.T) {
