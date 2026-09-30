@@ -1549,3 +1549,36 @@ func TestEPBSProposalLogsStrategyID(t *testing.T) {
 	}
 	require.Fail(t, "no selection log", "%v", capture.Entries())
 }
+
+func TestEPBSProposalFailureSpansShareCorrelation(t *testing.T) {
+	ctx := context.Background()
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+	previousTracerProvider := otel.GetTracerProvider()
+	otel.SetTracerProvider(tracerProvider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		require.NoError(t, tracerProvider.Shutdown(ctx))
+	})
+	service := newTestEPBSService(ctx, t, map[string]eth2client.MultiForkProposalProvider{
+		"node": &testEPBSProposalProvider{err: errors.New("boom")},
+	})
+
+	_, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+	require.Error(t, err)
+	spans := make(map[string]map[string]any)
+	for _, recordedSpan := range spanRecorder.Ended() {
+		attributes := make(map[string]any)
+		for _, attr := range recordedSpan.Attributes() {
+			attributes[string(attr.Key)] = attr.Value.AsInterface()
+		}
+		spans[recordedSpan.Name()] = attributes
+	}
+	require.Contains(t, spans, "EPBSProposal")
+	require.Contains(t, spans, "ePBSBeaconBlockProposal")
+	require.NotEmpty(t, spans["EPBSProposal"]["request_id"])
+	require.Equal(t, spans["EPBSProposal"]["request_id"], spans["ePBSBeaconBlockProposal"]["request_id"])
+	require.Equal(t, int64(1), spans["ePBSBeaconBlockProposal"]["slot"])
+	require.Equal(t, "node", spans["ePBSBeaconBlockProposal"]["provider"])
+	require.Equal(t, "unknown", spans["EPBSProposal"]["proposal_root"])
+}
