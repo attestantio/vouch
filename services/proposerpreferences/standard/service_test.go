@@ -32,6 +32,7 @@ import (
 	"github.com/attestantio/vouch/testutil"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -614,6 +615,26 @@ func TestConfigChangeWarnsWhenFirstUnsignedDutyUsesIt(t *testing.T) {
 	require.True(t, capture.HasLog(map[string]any{"level": "warn", "message": "Proposer preferences config change delayed", "affected_validators": 2, "first_slot": uint64(65)}))
 	require.Len(t, signer.preferences, 4)
 	require.Len(t, submitter.preferences, 4)
+}
+
+func TestLogLevelSuppressesServiceLogs(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	capture := logger.NewLogCapture()
+	submitter := &recordingSubmitter{outcomes: map[string]error{"node": nil}}
+	service, err := standard.New(ctx,
+		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithSigner(&recordingSigner{}),
+		standard.WithSubmitter(submitter),
+	)
+	require.NoError(t, err)
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, 30_000_000)))
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 64, 3, accounts[3], bellatrix.ExecutionAddress{2}, 31_000_000)))
+	require.NoError(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{1}, 65, 3, accounts[3], bellatrix.ExecutionAddress{2}, 31_000_000)))
+	service.FlushConfigChangeWarnings()
+	require.Zero(t, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
 }
 
 func countPreferenceLogs(capture *logger.LogCapture, message string) int {
