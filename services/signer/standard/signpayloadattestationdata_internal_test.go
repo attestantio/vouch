@@ -22,6 +22,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -75,6 +76,22 @@ func TestSignProposerPreferencesSignsForProposalEpoch(t *testing.T) {
 	require.Equal(t, 1, account.signCount)
 	require.Equal(t, phase0.DomainType{0x0d}, domainProvider.domainType)
 	require.Equal(t, phase0.Epoch(1), domainProvider.epoch)
+}
+
+func TestSignProposerPreferencesReportsUnavailableDomain(t *testing.T) {
+	ctx := context.Background()
+	service, err := New(ctx,
+		WithLogLevel(zerolog.Disabled),
+		WithMonitor(nullmetrics.New()),
+		WithClientMonitor(nullmetrics.New()),
+		WithSpecProvider(&preGloasSpecProvider{}),
+		WithDomainProvider(mock.NewDomainProvider()),
+	)
+	require.NoError(t, err)
+
+	account := &mockSignerAccount{id: uuid.New(), name: "one", pubKey: &mockPublicKey{data: []byte("one")}}
+	_, err = service.SignProposerPreferences(ctx, account, &gloas.ProposerPreferences{ProposalSlot: 33})
+	require.ErrorIs(t, err, signer.ErrProposerPreferencesDomainUnavailable)
 }
 
 func TestNewWarnsWhenPTCAttesterDomainUnavailable(t *testing.T) {

@@ -55,6 +55,7 @@ func NewDuty(dependentRoot phase0.Root,
 const SimpleProvider = "simple"
 
 // ProviderReadiness reports whether a proposal provider has accepted a current preference.
+// Callers ask only about builder-backed proposals.
 type ProviderReadiness interface {
 	ProviderReady(provider string, proposalSlot phase0.Slot, validatorIndex phase0.ValidatorIndex) bool
 }
