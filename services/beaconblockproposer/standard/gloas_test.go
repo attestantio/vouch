@@ -614,8 +614,8 @@ func TestProposeGloasSelectionObservability(t *testing.T) {
 		require.Equal(t, "stable-provider", attributes["provider"])
 		require.NotEmpty(t, attributes["proposal_root"])
 	}
-	require.Equal(t, int64(11), spanAttributes["selectGloasProposal"]["requested_min_bid"])
-	require.Equal(t, int64(100), spanAttributes["selectGloasProposal"]["builder_boost_factor"])
+	require.Equal(t, "11", spanAttributes["selectGloasProposal"]["requested_min_bid"])
+	require.Equal(t, "100", spanAttributes["selectGloasProposal"]["builder_boost_factor"])
 	require.Equal(t, "value_maximizing", spanAttributes["selectGloasProposal"]["requested_preference"])
 	require.Equal(t, true, spanAttributes["selectGloasProposal"]["payload_requested"])
 }
