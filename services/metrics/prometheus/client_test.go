@@ -23,7 +23,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestClientOperationHidesConfiguredBeaconNode(t *testing.T) {
+// The provider label stays the masked endpoint for compatibility; see GLAM-208.
+func TestClientOperationKeepsEndpointLabel(t *testing.T) {
 	viper.Set("beacon-node-addresses", []string{"https://private.example:5052"})
 	t.Cleanup(func() { viper.Reset() })
 
@@ -49,10 +50,10 @@ func TestClientOperationHidesConfiguredBeaconNode(t *testing.T) {
 			}
 		}
 	}
-	require.Equal(t, "beacon-1", provider)
+	require.Equal(t, "https://private.example:5052", provider)
 }
 
-func TestStrategyOperationHidesConfiguredBeaconNode(t *testing.T) {
+func TestStrategyOperationKeepsEndpointLabel(t *testing.T) {
 	viper.Set("beacon-node-addresses", []string{"https://private.example:5052"})
 	t.Cleanup(func() { viper.Reset() })
 
@@ -78,7 +79,7 @@ func TestStrategyOperationHidesConfiguredBeaconNode(t *testing.T) {
 			}
 		}
 	}
-	require.Equal(t, "beacon-1", provider)
+	require.Equal(t, "https://private.example:5052", provider)
 }
 
 func TestParseAddress(t *testing.T) {

@@ -16,7 +16,6 @@ package prometheus
 import (
 	"context"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/attestantio/vouch/services/chaintime"
@@ -35,7 +34,6 @@ type Service struct {
 	clientOperationTimer     *prometheus.HistogramVec
 	strategyOperationCounter *prometheus.CounterVec
 	strategyOperationTimer   *prometheus.HistogramVec
-	providerNames            sync.Map
 }
 
 // Module-wide log.
