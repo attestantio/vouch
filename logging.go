@@ -33,7 +33,10 @@ func initLogging() error {
 	// local log level the local level is ignored.  It is then overridden for each module.
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 
-	zerolog.TimeFieldFormat = viper.GetString("logging.timestamp.format")
+	// Skip an unchanged value: a write races with goroutines that are already logging.
+	if format := viper.GetString("logging.timestamp.format"); format != zerolog.TimeFieldFormat {
+		zerolog.TimeFieldFormat = format
+	}
 
 	// Change the output file.
 	var output io.Writer = os.Stderr
