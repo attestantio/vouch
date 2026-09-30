@@ -18,6 +18,7 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/signer"
 	"github.com/pkg/errors"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -34,7 +35,7 @@ func (s *Service) SignProposerPreferences(ctx context.Context,
 		return phase0.BLSSignature{}, errors.New("no proposer preferences supplied")
 	}
 	if s.proposerPreferencesDomainType == nil {
-		return phase0.BLSSignature{}, errors.New("DOMAIN_PROPOSER_PREFERENCES unavailable in beacon node spec; cannot sign proposer preferences")
+		return phase0.BLSSignature{}, signer.ErrProposerPreferencesDomainUnavailable
 	}
 
 	root, err := preferences.HashTreeRoot()

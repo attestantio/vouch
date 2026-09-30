@@ -80,10 +80,21 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 }
 
 // ProviderReady reports whether provider has accepted the current preference for a proposal duty.
+// Callers ask only about builder-backed proposals, so a false answer is recorded as a rejected builder bid.
 func (s *Service) ProviderReady(provider string, proposalSlot phase0.Slot, validatorIndex phase0.ValidatorIndex) bool {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
+	if s.providerReady(provider, proposalSlot, validatorIndex) {
+		return true
+	}
+	monitorProposerPreferencesProvider(provider, "builder_bid_rejected")
+
+	return false
+}
+
+// providerReady reports readiness.  The caller holds s.mutex.
+func (s *Service) providerReady(provider string, proposalSlot phase0.Slot, validatorIndex phase0.ValidatorIndex) bool {
 	preferences, exists := s.current[preferenceDuty{proposalSlot: proposalSlot, validatorIndex: validatorIndex}]
 	if !exists {
 		return false
@@ -228,7 +239,11 @@ func (s *Service) sign(ctx context.Context, account e2wtypes.Account, publicatio
 	signature, err := s.signer.SignProposerPreferences(ctx, account, &publication.preferences)
 	if err != nil {
 		s.abandonPublication(publication)
-		monitorProposerPreferencesProcess("sign_failed")
+		if errors.Is(err, signer.ErrProposerPreferencesDomainUnavailable) {
+			monitorProposerPreferencesProcess("domain_unavailable")
+		} else {
+			monitorProposerPreferencesProcess("sign_failed")
+		}
 		return errors.Wrap(err, "failed to sign proposer preferences")
 	}
 	publication.cached.signed = &gloas.SignedProposerPreferences{
@@ -265,10 +280,12 @@ func (s *Service) recordSubmission(publication *publication, outcomes map[string
 		if err == nil {
 			publication.cached.accepted[provider] = struct{}{}
 			monitorProposerPreferencesProcess("accepted")
+			monitorProposerPreferencesProvider(provider, "accepted")
 			continue
 		}
 		delete(publication.cached.accepted, provider)
 		monitorProposerPreferencesProcess("rejected")
+		monitorProposerPreferencesProvider(provider, "rejected")
 		if submissionErr == nil {
 			submissionErr = err
 		}

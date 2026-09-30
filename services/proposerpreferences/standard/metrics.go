@@ -18,10 +18,14 @@ import (
 	"errors"
 
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/util"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var proposerPreferencesProcessEvents *prometheus.CounterVec
+var (
+	proposerPreferencesProcessEvents  *prometheus.CounterVec
+	proposerPreferencesProviderEvents *prometheus.CounterVec
+)
 
 func registerMetrics(_ context.Context, monitor metrics.Service) error {
 	if monitor == nil || monitor.Presenter() != "prometheus" {
@@ -43,7 +47,31 @@ func registerMetrics(_ context.Context, monitor metrics.Service) error {
 		}
 	}
 
+	proposerPreferencesProviderEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "vouch",
+		Subsystem: "proposerpreferences",
+		Name:      "provider_events_total",
+		Help:      "The number of proposer preferences events per proposal provider.",
+	}, []string{"provider", "outcome"})
+	if err := prometheus.Register(proposerPreferencesProviderEvents); err != nil {
+		var alreadyRegisteredError prometheus.AlreadyRegisteredError
+		if ok := errors.As(err, &alreadyRegisteredError); ok {
+			proposerPreferencesProviderEvents = alreadyRegisteredError.ExistingCollector.(*prometheus.CounterVec)
+		} else {
+			return err
+		}
+	}
+
 	return nil
+}
+
+// monitorProposerPreferencesProvider records an outcome for a provider under its configured name,
+// so endpoints never reach telemetry.
+func monitorProposerPreferencesProvider(provider string, outcome string) {
+	if proposerPreferencesProviderEvents == nil {
+		return
+	}
+	proposerPreferencesProviderEvents.WithLabelValues(util.BeaconNodeName(provider), outcome).Inc()
 }
 
 func monitorProposerPreferencesProcess(outcome string) {

@@ -26,6 +26,7 @@ import (
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/attestantio/vouch/services/proposerpreferences/standard"
+	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/testutil"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
@@ -454,6 +455,101 @@ func TestPublishRecordsFailedPublicationOutcomes(t *testing.T) {
 		close(submitter.release)
 		require.NoError(t, <-errCh)
 	})
+}
+
+func TestPublishRecordsUnavailableDomain(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	service, err := standard.New(ctx,
+		standard.WithMonitor(prometheusMonitor{}),
+		standard.WithSigner(&recordingSigner{err: signer.ErrProposerPreferencesDomainUnavailable}),
+		standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"accepted": nil}}),
+	)
+	require.NoError(t, err)
+	before := proposerPreferencesEventCounts(t)
+
+	err = service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000))
+
+	require.ErrorIs(t, err, signer.ErrProposerPreferencesDomainUnavailable)
+	require.Equal(t, before["domain_unavailable"]+1, proposerPreferencesEventCounts(t)["domain_unavailable"])
+	require.Equal(t, before["sign_failed"], proposerPreferencesEventCounts(t)["sign_failed"])
+}
+
+func TestPublishRecordsOutcomesPerProvider(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	service, err := standard.New(ctx,
+		standard.WithMonitor(prometheusMonitor{}),
+		standard.WithSigner(&recordingSigner{}),
+		standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{
+			"one":                               nil,
+			"two":                               context.DeadlineExceeded,
+			"http://user:secret@node.test:5052": nil,
+		}}),
+	)
+	require.NoError(t, err)
+	before := proposerPreferencesProviderEventCounts(t)
+
+	require.Error(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000)))
+
+	after := proposerPreferencesProviderEventCounts(t)
+	require.Equal(t, before[[2]string{"one", "accepted"}]+1, after[[2]string{"one", "accepted"}])
+	require.Equal(t, before[[2]string{"two", "rejected"}]+1, after[[2]string{"two", "rejected"}])
+	require.Equal(t, before[[2]string{"one", "rejected"}], after[[2]string{"one", "rejected"}])
+	require.Equal(t, before[[2]string{"beacon-unknown", "accepted"}]+1, after[[2]string{"beacon-unknown", "accepted"}])
+	for key := range after {
+		require.NotContains(t, key[0], "secret")
+	}
+}
+
+func TestProviderReadyRecordsBuilderBidRejection(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	service, err := standard.New(ctx,
+		standard.WithMonitor(prometheusMonitor{}),
+		standard.WithSigner(&recordingSigner{}),
+		standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"ready": nil, "unready": context.DeadlineExceeded}}),
+	)
+	require.NoError(t, err)
+	require.Error(t, service.Publish(ctx, proposerpreferences.NewDuty(phase0.Root{0x01}, 64, 3, accounts[3], bellatrix.ExecutionAddress{0x02}, 30_000_000)))
+	before := proposerPreferencesProviderEventCounts(t)
+
+	require.True(t, service.ProviderReady("ready", 64, 3))
+	require.False(t, service.ProviderReady("unready", 64, 3))
+
+	after := proposerPreferencesProviderEventCounts(t)
+	require.Equal(t, before[[2]string{"unready", "builder_bid_rejected"}]+1, after[[2]string{"unready", "builder_bid_rejected"}])
+	require.Equal(t, before[[2]string{"ready", "builder_bid_rejected"}], after[[2]string{"ready", "builder_bid_rejected"}])
+}
+
+func proposerPreferencesProviderEventCounts(t *testing.T) map[[2]string]float64 {
+	t.Helper()
+
+	eventCounts := make(map[[2]string]float64)
+	metricFamilies, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, family := range metricFamilies {
+		if family.GetName() != "vouch_proposerpreferences_provider_events_total" {
+			continue
+		}
+		for _, metric := range family.Metric {
+			var provider, outcome string
+			for _, label := range metric.Label {
+				switch label.GetName() {
+				case "provider":
+					provider = label.GetValue()
+				case "outcome":
+					outcome = label.GetValue()
+				}
+			}
+			eventCounts[[2]string{provider, outcome}] = metric.GetCounter().GetValue()
+		}
+	}
+
+	return eventCounts
 }
 
 func proposerPreferencesEventCounts(t *testing.T) map[string]float64 {

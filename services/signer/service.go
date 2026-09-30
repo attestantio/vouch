@@ -16,6 +16,7 @@ package signer
 
 import (
 	"context"
+	"errors"
 
 	"github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec/altair"
@@ -37,6 +38,9 @@ type BuilderRequestAuthSigner interface {
 		error,
 	)
 }
+
+// ErrProposerPreferencesDomainUnavailable is returned when the beacon node spec has no DOMAIN_PROPOSER_PREFERENCES.
+var ErrProposerPreferencesDomainUnavailable = errors.New("DOMAIN_PROPOSER_PREFERENCES unavailable in beacon node spec; cannot sign proposer preferences")
 
 // ProposerPreferencesSigner provides methods to sign proposer preferences.
 type ProposerPreferencesSigner interface {
