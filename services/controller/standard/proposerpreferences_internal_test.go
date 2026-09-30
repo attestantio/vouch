@@ -180,6 +180,66 @@ func TestChangedHeadV2RootInvalidatesUntilClassicHeadRefreshesCorrectedPreferenc
 	waitForProposerPreferencesPublication(t, service)
 }
 
+func TestHandleHeadV2EventRecordsRootsFromEarlierSlot(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{100}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	service, provider, preferences := newHeadV2ProposerPreferencesService(t, accounts, 7, map[phase0.Epoch]*api.Response[[]*apiv1.ProposerDuty]{
+		7: {Data: []*apiv1.ProposerDuty{{Slot: 225, ValidatorIndex: 100}}, Metadata: map[string]any{"dependent_root": phase0.Root{0x0b}}},
+	})
+
+	// A late block from the last slot of epoch 6 becomes head during the first slot of epoch 7.
+	service.HandleHeadV2Event(ctx, &apiv1.HeadEventV2{
+		Slot:                      223,
+		CurrentEpochDependentRoot: phase0.Root{0x0a},
+		NextEpochDependentRoot:    phase0.Root{0x0b},
+	})
+
+	require.Equal(t, phase0.Epoch(7), receiveProposerPreferencesEpoch(t, provider.epochs))
+	require.Equal(t, phase0.Root{0x0b}, receiveProposerPreferencesDuty(t, preferences.duties).DependentRoot)
+	waitForProposerPreferencesPublication(t, service)
+}
+
+func TestHandleHeadV2EventIgnoresFutureSlot(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{100}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	service, _, preferences := newHeadV2ProposerPreferencesService(t, accounts, 7, map[phase0.Epoch]*api.Response[[]*apiv1.ProposerDuty]{})
+
+	service.HandleHeadV2Event(ctx, &apiv1.HeadEventV2{
+		Slot:                      225,
+		CurrentEpochDependentRoot: phase0.Root{0x0b},
+		NextEpochDependentRoot:    phase0.Root{0x0c},
+	})
+
+	waitForProposerPreferencesPublication(t, service)
+	assertNoProposerPreferencesDuty(t, preferences.duties)
+	require.Empty(t, service.proposerPreferencesDependentRoots)
+}
+
+func newHeadV2ProposerPreferencesService(t *testing.T,
+	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
+	currentEpoch phase0.Epoch,
+	responses map[phase0.Epoch]*api.Response[[]*apiv1.ProposerDuty],
+) (*Service, *headEventProposerDutiesProvider, *headEventProposerPreferences) {
+	t.Helper()
+
+	provider := &headEventProposerDutiesProvider{responses: responses, epochs: make(chan phase0.Epoch, 16)}
+	preferences := &headEventProposerPreferences{duties: make(chan *proposerpreferences.Duty, 16)}
+	service := &Service{
+		chainTimeService:             &recordingChainTime{currentEpoch: currentEpoch, slotsPerEpoch: 32},
+		proposerDutiesV2Provider:     provider,
+		validatingAccountsProvider:   &proposerPreferencesAccountsProvider{accounts: accounts},
+		executionConfigProvider:      &recordingExecutionConfigProvider{config: &beaconblockproposer.ProposerConfig{FeeRecipient: bellatrix.ExecutionAddress{0x02}, GasLimit: 30_000_000}},
+		proposerPreferences:          preferences,
+		gloasForkEpoch:               5,
+		proposerPreferencesLookahead: 1,
+		slotsPerEpoch:                32,
+	}
+
+	return service, provider, preferences
+}
+
 func TestPublishProposerPreferencesPrunesPastSlots(t *testing.T) {
 	preferences := &recordingProposerPreferences{}
 	service := &Service{
