@@ -74,8 +74,10 @@ func beaconNodeHost(address string) string {
 }
 
 // BeaconNodeTelemetryAddresses lists configured beacon nodes in stable configuration order.
+// Global and proposal nodes come first, so another strategy's addresses cannot renumber them.
 func BeaconNodeTelemetryAddresses() []string {
 	addresses := append([]string(nil), BeaconNodeAddresses("")...)
+	addresses = append(addresses, BeaconNodeAddressesForBeaconBlockProposal()...)
 	var collect func(map[string]any)
 	collect = func(settings map[string]any) {
 		keys := make([]string, 0, len(settings))

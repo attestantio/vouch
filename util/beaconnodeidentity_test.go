@@ -46,3 +46,14 @@ func TestLookupBeaconNodeNameDoesNotExposeAmbiguousHost(t *testing.T) {
 	require.True(t, known)
 	require.Equal(t, "beacon-unknown", name)
 }
+
+func TestBeaconNodeNameNumbersProposalNodesBeforeOtherStrategies(t *testing.T) {
+	viper.Set("beacon-node-addresses", []string{"http://global:5052"})
+	viper.Set("strategies.attestationdata.beacon-node-addresses", []string{"http://attestation:5052"})
+	viper.Set("strategies.beaconblockproposal.beacon-node-addresses", []string{"http://proposal:5052"})
+	t.Cleanup(func() { viper.Reset() })
+
+	require.Equal(t, "beacon-1", util.BeaconNodeName("http://global:5052"))
+	require.Equal(t, "beacon-2", util.BeaconNodeName("http://proposal:5052"))
+	require.Equal(t, "beacon-3", util.BeaconNodeName("http://attestation:5052"))
+}
