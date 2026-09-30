@@ -19,7 +19,10 @@ gloas:
   - default strategies.payloadattestationdata.timeout to 1s, tighter than the global timeout because payload attestation data is due 75% of the way through the slot; the per-style timeouts and beacon-node-addresses inherit from it
   - resolve Gloas P2P and direct-builder policy from version 2 execution configuration, sign slot-bound direct-builder authorization, and send the same non-nil BuilderConfig to each beacon node's auction
   - accept the beacon node's gloas auction result: sign and publish only the block for a builder-backed result, and continue to publish the execution payload envelope for a self-built one
-  - record a best beaconblockproposal selection made when no valid ePBS response reported a value
+  - log value_known on a gloas proposal selection, so a best selection made when no valid ePBS response reported a value is visible
+  - add gloas proposal observability: per-provider and final selection logs, correlated request, provider, selection and publication spans, client and client_version fields from a node version query at startup, and the vouch_beaconblockproposal_process_gloas_selections_total metric
+  - add the vouch_proposerpreferences_provider_events_total metric, and count proposer preferences signing refused for an unavailable domain as domain_unavailable rather than sign_failed
+  - replace configured beacon node endpoints in log output, gloas proposal spans and first strategy errors with their beacon-N position; client and strategy operation metrics keep the endpoint label
   - update go-eth2-client to a gloas pseudo-version
   - satisfy the attgo struct field order and comment capitalisation rules across services and strategies
 
