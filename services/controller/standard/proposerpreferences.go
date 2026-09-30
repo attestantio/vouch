@@ -48,6 +48,23 @@ func (s *Service) recordProposerPreferencesDependentRoot(epoch phase0.Epoch, roo
 	}
 }
 
+// seedProposerPreferencesDependentRoots records the current and next epoch roots from proposer duties and
+// queues publication, so preferences go out at startup without waiting for the first head_v2 event.
+func (s *Service) seedProposerPreferencesDependentRoots(ctx context.Context) {
+	currentEpoch := s.chainTimeService.CurrentEpoch()
+	for _, epoch := range []phase0.Epoch{currentEpoch, currentEpoch + 1} {
+		response, err := s.proposerDutiesV2Provider.ProposerDutiesV2(ctx, &api.ProposerDutiesOpts{Epoch: epoch})
+		if err != nil || response == nil {
+			s.log.Debug().Err(err).Uint64("epoch", uint64(epoch)).Msg("Failed to seed proposer preferences dependent root")
+			continue
+		}
+		if root, ok := response.Metadata["dependent_root"].(phase0.Root); ok {
+			s.recordProposerPreferencesDependentRoot(epoch, root)
+		}
+	}
+	s.queueProposerPreferencesPublication(ctx)
+}
+
 func (s *Service) queueProposerPreferencesPublication(ctx context.Context) {
 	s.proposerPreferencesPublicationMutex.Lock()
 	s.proposerPreferencesPublicationPending = true
