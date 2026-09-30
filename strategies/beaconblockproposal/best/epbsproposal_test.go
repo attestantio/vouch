@@ -1531,3 +1531,21 @@ func TestEPBSProposalOmitsBuilderIndexWithoutBid(t *testing.T) {
 	}
 	require.True(t, found)
 }
+
+func TestEPBSProposalLogsStrategyID(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	service := newTestEPBSService(ctx, t, map[string]eth2client.MultiForkProposalProvider{
+		"node": &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x01})},
+	})
+
+	_, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+	require.NoError(t, err)
+	for _, entry := range capture.Entries() {
+		if entry["message"] == "ePBS proposal selection completed" {
+			require.NotEmpty(t, entry["strategy_id"])
+			return
+		}
+	}
+	require.Fail(t, "no selection log", "%v", capture.Entries())
+}
