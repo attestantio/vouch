@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/vouch/strategies/beaconblockproposal"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
@@ -68,7 +69,7 @@ func TestConsiderEPBSProposalUnknownValues(t *testing.T) {
 				providers[index] = fmt.Sprintf("provider-%d", index)
 				selected, selectedProvider = service.considerEPBSProposal(
 					&api.EPBSProposalOpts{},
-					&beaconBlockEPBSResponse{provider: providers[index], proposal: proposals[index]},
+					&beaconblockproposal.ProviderOutcome{Provider: providers[index], Proposal: proposals[index]},
 					selected,
 					selectedProvider,
 					zerolog.Nop(),

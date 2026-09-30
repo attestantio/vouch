@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -37,6 +38,7 @@ import (
 	"github.com/attestantio/vouch/testing/logger"
 	"github.com/attestantio/vouch/util"
 	"github.com/rs/zerolog"
+	zerologger "github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -301,7 +303,6 @@ func TestEPBSProposalLogsProviderError(t *testing.T) {
 		"slot":                uint64(1),
 		"provider":            "failed-provider",
 		"source":              "unknown",
-		"builder_index":       "unknown",
 		"value_known":         false,
 		"execution_value":     "unknown",
 		"payload_included":    false,
@@ -1401,4 +1402,132 @@ func TestEPBSProposalRejectsSelfBuiltProposalWithoutPayload(t *testing.T) {
 	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, IncludePayload: &includePayload})
 	require.Nil(t, response)
 	require.EqualError(t, err, "no ePBS proposals received")
+}
+
+// rawLogCapture keeps log lines as written, because LogCapture's map hides duplicate keys.
+type rawLogCapture struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+func (c *rawLogCapture) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lines = append(c.lines, string(p))
+
+	return len(p), nil
+}
+
+func (c *rawLogCapture) linesWith(message string) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	matching := make([]string, 0)
+	for _, line := range c.lines {
+		if strings.Contains(line, `"message":"`+message+`"`) {
+			matching = append(matching, line)
+		}
+	}
+
+	return matching
+}
+
+func newTestEPBSService(ctx context.Context, t *testing.T, providers map[string]eth2client.MultiForkProposalProvider) *best.Service {
+	t.Helper()
+
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.TraceLevel),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(providers),
+		best.WithProviderReadiness(&providerReadiness{ready: map[readyDuty]bool{{provider: "node", slot: 1}: true}}),
+		best.WithTimeout(100*time.Millisecond),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	return service
+}
+
+func TestEPBSProposalSelectionLogHasNoDuplicateKeys(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider *testEPBSProposalProvider
+	}{
+		{
+			name:     "Selected",
+			provider: &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x01})},
+		},
+		{
+			name:     "Failed",
+			provider: &testEPBSProposalProvider{err: errors.New("boom")},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			raw := &rawLogCapture{}
+			zerolog.SetGlobalLevel(zerolog.TraceLevel)
+			zerologger.Logger = zerolog.New(raw)
+			service := newTestEPBSService(ctx, t, map[string]eth2client.MultiForkProposalProvider{"node": test.provider})
+
+			_, _ = service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+			lines := raw.linesWith("ePBS proposal selection completed")
+			require.Len(t, lines, 1)
+			for _, key := range []string{"request_id", "slot"} {
+				require.Equal(t, 1, strings.Count(lines[0], `"`+key+`":`), "%s in %s", key, lines[0])
+			}
+		})
+	}
+}
+
+func TestEPBSProposalLogsRejectedProposalDetails(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	inconsistent := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
+	inconsistent.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = 7
+	service := newTestEPBSService(ctx, t, map[string]eth2client.MultiForkProposalProvider{
+		"node": &testEPBSProposalProvider{proposal: inconsistent},
+	})
+
+	_, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+	require.Error(t, err)
+	require.True(t, capture.HasLog(map[string]any{
+		"message":          "ePBS proposal provider completed",
+		"outcome":          "rejected",
+		"rejection_reason": "builder_payload_included",
+		"builder_index":    uint64(7),
+		"payload_included": true,
+		"source":           "p2p_builder",
+	}), "%v", capture.Entries())
+}
+
+func TestEPBSProposalOmitsBuilderIndexWithoutBid(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	service := newTestEPBSService(ctx, t, map[string]eth2client.MultiForkProposalProvider{
+		"node": &testEPBSProposalProvider{err: errors.New("boom")},
+	})
+
+	_, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+	require.Error(t, err)
+	found := false
+	for _, entry := range capture.Entries() {
+		if entry["message"] == "ePBS proposal provider completed" {
+			found = true
+			require.NotContains(t, entry, "builder_index")
+			require.Equal(t, "provider_error", entry["rejection_reason"])
+		}
+	}
+	require.True(t, found)
 }
