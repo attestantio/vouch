@@ -1,4 +1,4 @@
-// Copyright © 2022, 2024 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -891,6 +891,72 @@ func TestConfig(t *testing.T) {
 						Address:      "https://relay1.com/",
 						FeeRecipient: feeRecipient4,
 						GasLimit:     gasLimit0,
+						Grace:        grace0,
+						MinValue:     minValue0,
+					},
+				},
+			},
+		},
+		{
+			name: "ProposerValidatorRelayFromExecutionConfig",
+			executionConfig: &v2.ExecutionConfig{
+				FeeRecipient: &feeRecipient2,
+				GasLimit:     &gasLimit2,
+				Grace:        &grace1,
+				MinValue:     &minValue1,
+				Proposers: []*v2.ProposerConfig{
+					{
+						Validator: pubkey1,
+						Relays: map[string]*v2.ProposerRelayConfig{
+							"https://relay3.com/": {},
+						},
+					},
+				},
+			},
+			account:              account1,
+			pubkey:               pubkey1,
+			fallbackFeeRecipient: feeRecipient1,
+			fallbackGasLimit:     gasLimit1,
+			expected: &beaconblockproposer.ProposerConfig{
+				FeeRecipient:      feeRecipient2,
+				GasLimit:          gasLimit2,
+				EPBSBuilderConfig: defaultEPBSBuilderConfig(1),
+				Relays: []*beaconblockproposer.RelayConfig{
+					{
+						Address:      "https://relay3.com/",
+						FeeRecipient: feeRecipient2,
+						GasLimit:     gasLimit2,
+						Grace:        grace1,
+						MinValue:     minValue1,
+					},
+				},
+			},
+		},
+		{
+			name: "ProposerValidatorRelayFromFallback",
+			executionConfig: &v2.ExecutionConfig{
+				Proposers: []*v2.ProposerConfig{
+					{
+						Validator: pubkey1,
+						Relays: map[string]*v2.ProposerRelayConfig{
+							"https://relay3.com/": {},
+						},
+					},
+				},
+			},
+			account:              account1,
+			pubkey:               pubkey1,
+			fallbackFeeRecipient: feeRecipient1,
+			fallbackGasLimit:     gasLimit1,
+			expected: &beaconblockproposer.ProposerConfig{
+				FeeRecipient:      feeRecipient1,
+				GasLimit:          gasLimit1,
+				EPBSBuilderConfig: defaultEPBSBuilderConfig(0),
+				Relays: []*beaconblockproposer.RelayConfig{
+					{
+						Address:      "https://relay3.com/",
+						FeeRecipient: feeRecipient1,
+						GasLimit:     gasLimit1,
 						Grace:        grace0,
 						MinValue:     minValue0,
 					},
