@@ -249,19 +249,19 @@ func TestAttestReportsDataFailuresAsUnavailable(t *testing.T) {
 
 func TestAttestReportsUnavailableDataOnlyOnLastAttempt(t *testing.T) {
 	tests := []struct {
-		name        string
-		lastAttempt bool
-		failed      float64
-		errorLogs   int
+		name            string
+		lastAttempt     bool
+		failed          float64
+		warnOrErrorLogs int
 	}{
 		{
 			name: "EarlyAttempt",
 		},
 		{
-			name:        "LastAttempt",
-			lastAttempt: true,
-			failed:      1,
-			errorLogs:   1,
+			name:            "LastAttempt",
+			lastAttempt:     true,
+			failed:          1,
+			warnOrErrorLogs: 1,
 		},
 	}
 
@@ -292,13 +292,13 @@ func TestAttestReportsUnavailableDataOnlyOnLastAttempt(t *testing.T) {
 
 			require.ErrorIs(t, err, payloadattester.ErrPayloadAttestationDataUnavailable)
 			require.Equal(t, failedBefore+test.failed, payloadAttestationEventCounts(t)["failed"])
-			errorLogs := 0
+			warnOrErrorLogs := 0
 			for _, entry := range capture.Entries() {
-				if entry["level"] == "error" {
-					errorLogs++
+				if entry["level"] == "warn" || entry["level"] == "error" {
+					warnOrErrorLogs++
 				}
 			}
-			require.Equal(t, test.errorLogs, errorLogs)
+			require.Equal(t, test.warnOrErrorLogs, warnOrErrorLogs)
 		})
 	}
 }
@@ -350,25 +350,39 @@ func TestAttestTracesEveryFailedRequest(t *testing.T) {
 
 func TestAttestDoesNotReportSigningOrSubmissionFailuresAsUnavailable(t *testing.T) {
 	tests := []struct {
-		name      string
-		signer    signer.PayloadAttestationDataSigner
-		submitter submitter.PayloadAttestationMessagesSubmitter
+		name        string
+		signer      signer.PayloadAttestationDataSigner
+		submitter   submitter.PayloadAttestationMessagesSubmitter
+		lastAttempt bool
 	}{
 		{
-			name:      "SigningFailure",
+			name:      "EarlySigningFailure",
 			signer:    failingSigner{},
 			submitter: &recordingSubmitter{},
 		},
 		{
-			name:      "SubmissionFailure",
+			name:        "LastSigningFailure",
+			signer:      failingSigner{},
+			submitter:   &recordingSubmitter{},
+			lastAttempt: true,
+		},
+		{
+			name:      "EarlySubmissionFailure",
 			signer:    &recordingSigner{},
 			submitter: failingSubmitter{},
+		},
+		{
+			name:        "LastSubmissionFailure",
+			signer:      &recordingSigner{},
+			submitter:   failingSubmitter{},
+			lastAttempt: true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
+			capture := logger.NewLogCapture()
 			client, err := mocketh2client.New(ctx)
 			require.NoError(t, err)
 			client.PayloadAttestationDataFunc = func(context.Context, *api.PayloadAttestationDataOpts) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
@@ -380,7 +394,7 @@ func TestAttestDoesNotReportSigningOrSubmissionFailuresAsUnavailable(t *testing.
 			accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{1}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
 			require.NoError(t, err)
 			service, err := standard.New(ctx,
-				standard.WithLogLevel(zerolog.Disabled),
+				standard.WithLogLevel(zerolog.TraceLevel),
 				standard.WithMonitor(prometheusMonitor{}),
 				standard.WithPayloadAttestationDataProvider(client),
 				standard.WithPayloadAttestationDataSigner(test.signer),
@@ -389,11 +403,21 @@ func TestAttestDoesNotReportSigningOrSubmissionFailuresAsUnavailable(t *testing.
 			require.NoError(t, err)
 			duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 12, ValidatorIndex: 1})
 			duty.SetAccount(1, accounts[1])
+			failedBefore := payloadAttestationEventCounts(t)["failed"]
 
-			_, err = service.Attest(ctx, duty, true)
+			_, err = service.Attest(ctx, duty, test.lastAttempt)
 
 			require.Error(t, err)
 			require.NotErrorIs(t, err, payloadattester.ErrPayloadAttestationDataUnavailable)
+			// The caller does not retry after signing, so even an early attempt reports the failure.
+			require.Equal(t, failedBefore+1, payloadAttestationEventCounts(t)["failed"])
+			errorLogs := 0
+			for _, entry := range capture.Entries() {
+				if entry["level"] == "error" {
+					errorLogs++
+				}
+			}
+			require.Equal(t, 1, errorLogs)
 		})
 	}
 }
