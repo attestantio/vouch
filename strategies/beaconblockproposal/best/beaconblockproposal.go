@@ -38,11 +38,8 @@ type beaconBlockResponse struct {
 }
 
 type beaconBlockError struct {
-	provider        string
-	err             error
-	elapsed         time.Duration
-	outcome         string
-	rejectionReason string
+	provider string
+	err      error
 }
 
 type beaconBlockProposalResults struct {
