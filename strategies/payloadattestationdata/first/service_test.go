@@ -118,9 +118,14 @@ func TestPayloadAttestationDataReportsUnavailableData(t *testing.T) {
 	failed := func(context.Context, *api.PayloadAttestationDataOpts) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
 		return nil, errors.New("failed")
 	}
+	hanging := func(ctx context.Context, _ *api.PayloadAttestationDataOpts) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	tests := []struct {
 		name        string
 		providers   map[string]eth2client.PayloadAttestationDataProvider
+		timeout     time.Duration
 		err         string
 		unavailable bool
 	}{
@@ -130,6 +135,16 @@ func TestPayloadAttestationDataReportsUnavailableData(t *testing.T) {
 				"nodata": payloadAttestationDataProvider(t, noData),
 				"failed": payloadAttestationDataProvider(t, failed),
 			},
+			err:         "no valid payload attestation data received: no payload attestation data available",
+			unavailable: true,
+		},
+		{
+			name: "TimeoutWhileProviderHasNoDataYet",
+			providers: map[string]eth2client.PayloadAttestationDataProvider{
+				"nodata":  payloadAttestationDataProvider(t, noData),
+				"hanging": payloadAttestationDataProvider(t, hanging),
+			},
+			timeout:     50 * time.Millisecond,
 			err:         "no valid payload attestation data received: no payload attestation data available",
 			unavailable: true,
 		},
@@ -144,10 +159,14 @@ func TestPayloadAttestationDataReportsUnavailableData(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			service, err := first.New(ctx,
+			params := []first.Parameter{
 				first.WithLogLevel(zerolog.Disabled),
 				first.WithPayloadAttestationDataProviders(test.providers),
-			)
+			}
+			if test.timeout > 0 {
+				params = append(params, first.WithTimeout(test.timeout))
+			}
+			service, err := first.New(ctx, params...)
 			require.NoError(t, err)
 
 			_, err = service.PayloadAttestationData(ctx, &api.PayloadAttestationDataOpts{Slot: 12})
