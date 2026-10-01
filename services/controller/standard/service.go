@@ -120,6 +120,23 @@ type Service struct {
 	pendingAttestationsMutex              sync.RWMutex
 }
 
+// eventsOpts returns the controller's event subscription.
+func (s *Service) eventsOpts() *api.EventsOpts {
+	opts := &api.EventsOpts{
+		Topics:       []string{"block", "head"},
+		HeadHandler:  s.HandleHeadEvent,
+		BlockHandler: s.HandleBlockEvent,
+	}
+	// Only proposer preferences need head_v2.  A beacon node that does not know a topic rejects the
+	// whole stream, so asking for it otherwise would also lose head and block events.
+	if s.proposerPreferencesEnabled() {
+		opts.Topics = append(opts.Topics, "head_v2")
+		opts.HeadV2Handler = s.HandleHeadV2Event
+	}
+
+	return opts
+}
+
 // New creates a new controller.
 func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	parameters, err := parseAndCheckParameters(ctx, params...)
@@ -203,18 +220,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	// re-request duties if there is a change in beacon block.
 	// This also allows us to re-request duties if the dependent roots change.
 	// Also subscribe to block events.  This allows us to keep the cache for the block roots to slot number up to date.
-	eventsOpts := &api.EventsOpts{
-		Topics:       []string{"block", "head"},
-		HeadHandler:  s.HandleHeadEvent,
-		BlockHandler: s.HandleBlockEvent,
-	}
-	// Only proposer preferences need head_v2.  A beacon node that does not know a topic rejects the
-	// whole stream, so asking for it otherwise would also lose head and block events.
-	if s.proposerPreferencesEnabled() {
-		eventsOpts.Topics = append(eventsOpts.Topics, "head_v2")
-		eventsOpts.HeadV2Handler = s.HandleHeadV2Event
-	}
-	if err := parameters.eventsProvider.Events(ctx, eventsOpts); err != nil {
+	if err := parameters.eventsProvider.Events(ctx, s.eventsOpts()); err != nil {
 		return nil, errors.Wrap(err, "failed to add events handler")
 	}
 	if s.proposerPreferencesEnabled() {
