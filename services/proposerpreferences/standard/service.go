@@ -302,7 +302,7 @@ func (s *Service) claimPublication(preferences gloas.ProposerPreferences, dutyKe
 	if complete, exists := s.inFlight[preferences]; exists {
 		return nil, complete
 	}
-	providers := failedProviders(cached, currentSlot, currentEpoch)
+	providers := failedProviders(cached, s.unsupported, currentSlot, currentEpoch)
 	if exists && len(providers) == 0 {
 		s.current[dutyKey] = preferences
 		return nil, nil
@@ -352,14 +352,16 @@ func (s *Service) firstSignedPreference(preferences gloas.ProposerPreferences, d
 	return current
 }
 
-func failedProviders(cached *cachedPreference, currentSlot phase0.Slot, currentEpoch phase0.Epoch) []string {
+// failedProviders returns providers to retry this slot.  Route-missing failures are retried once per epoch while the provider is unsupported.
+func failedProviders(cached *cachedPreference, unsupported map[string]phase0.Epoch, currentSlot phase0.Slot, currentEpoch phase0.Epoch) []string {
 	if cached == nil {
 		return nil
 	}
 	providers := make([]string, 0)
 	for provider, err := range cached.outcomes {
 		if err != nil && cached.attempted[provider] != currentSlot {
-			if !routeMissing(cached.outcomes[provider]) || cached.attemptedEpoch[provider] != currentEpoch {
+			_, stillUnsupported := unsupported[provider]
+			if !routeMissing(err) || !stillUnsupported || cached.attemptedEpoch[provider] != currentEpoch {
 				providers = append(providers, provider)
 			}
 		}
@@ -488,7 +490,7 @@ func (s *Service) recordSubmission(publication *publication, outcomes map[string
 
 		return errors.Wrap(submissionErr, "failed to submit proposer preferences")
 	}
-	publication.cached.published = len(failedProviders(publication.cached, publication.attemptSlot+1, publication.attemptEpoch+1)) == 0
+	publication.cached.published = len(failedProviders(publication.cached, s.unsupported, publication.attemptSlot+1, publication.attemptEpoch+1)) == 0
 
 	return nil
 }
