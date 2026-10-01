@@ -63,7 +63,7 @@ func (s *Service) HandleHeadEvent(ctx context.Context, data *apiv1.HeadEvent) {
 	}
 
 	s.checkEventForReorg(ctx, epoch, data.Slot, data.PreviousDutyDependentRoot, data.CurrentDutyDependentRoot)
-	if s.proposerPreferences != nil && s.executionConfigProvider != nil && s.proposerPreferencesLookahead != 0 {
+	if s.proposerPreferencesEnabled() {
 		s.queueProposerPreferencesPublication(ctx)
 	}
 
@@ -94,7 +94,7 @@ func (s *Service) HandleHeadV2Event(ctx context.Context, data *apiv1.HeadEventV2
 	epoch := s.chainTimeService.SlotToEpoch(data.Slot)
 	s.recordProposerPreferencesDependentRoot(epoch, data.CurrentEpochDependentRoot)
 	s.recordProposerPreferencesDependentRoot(epoch+1, data.NextEpochDependentRoot)
-	if s.proposerPreferences != nil && s.executionConfigProvider != nil && s.proposerPreferencesLookahead != 0 {
+	if s.proposerPreferencesEnabled() {
 		s.queueProposerPreferencesPublication(ctx)
 	}
 }
