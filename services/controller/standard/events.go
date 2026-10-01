@@ -57,7 +57,7 @@ func (s *Service) HandleExecutionPayloadAvailableEvent(ctx context.Context, data
 	}
 	attestation.eventAttempted = true
 	attemptCtx, cancel := context.WithDeadline(ctx, s.chainTimeService.StartOfSlot(data.Slot+1))
-	err := s.attestPayload(attemptCtx, attestation.duty)
+	_, err := s.payloadAttester.Attest(attemptCtx, attestation.duty, false)
 	cancel()
 	if !errors.Is(err, payloadattester.ErrPayloadAttestationDataUnavailable) {
 		attestation.attemptFinished = true

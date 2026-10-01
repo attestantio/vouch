@@ -290,7 +290,7 @@ func TestPayloadAttesterUsesConfiguredPayloadAttestationDataProviders(t *testing
 	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 12, ValidatorIndex: 1})
 	duty.SetAccount(1, accounts[1])
 
-	_, err = service.Attest(ctx, duty)
+	_, err = service.Attest(ctx, duty, true)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), configuredRequests.Load())
 	require.Zero(t, globalRequests.Load())
