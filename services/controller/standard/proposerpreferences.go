@@ -31,6 +31,27 @@ func (s *Service) recordProposerPreferencesDependentRoot(epoch phase0.Epoch, roo
 		return
 	}
 	s.proposerPreferencesDependentRootMutex.Lock()
+	defer s.proposerPreferencesDependentRootMutex.Unlock()
+	s.storeProposerPreferencesDependentRoot(epoch, root)
+}
+
+// seedProposerPreferencesDependentRoot retains a root only if none is recorded for the epoch, so a slow
+// startup fetch cannot overwrite a newer head_v2 root.
+func (s *Service) seedProposerPreferencesDependentRoot(epoch phase0.Epoch, root phase0.Root) {
+	if root == (phase0.Root{}) {
+		return
+	}
+	s.proposerPreferencesDependentRootMutex.Lock()
+	defer s.proposerPreferencesDependentRootMutex.Unlock()
+	if _, exists := s.proposerPreferencesDependentRoots[epoch]; exists {
+		return
+	}
+	s.storeProposerPreferencesDependentRoot(epoch, root)
+}
+
+// storeProposerPreferencesDependentRoot records the root here and in the publisher under one lock, so both
+// always hold the same root.  The caller holds proposerPreferencesDependentRootMutex.
+func (s *Service) storeProposerPreferencesDependentRoot(epoch phase0.Epoch, root phase0.Root) {
 	if s.proposerPreferencesDependentRoots == nil {
 		s.proposerPreferencesDependentRoots = make(map[phase0.Epoch]phase0.Root)
 	}
@@ -40,7 +61,6 @@ func (s *Service) recordProposerPreferencesDependentRoot(epoch phase0.Epoch, roo
 			delete(s.proposerPreferencesDependentRoots, storedEpoch)
 		}
 	}
-	s.proposerPreferencesDependentRootMutex.Unlock()
 
 	if s.proposerPreferences != nil {
 		fromSlot := s.chainTimeService.FirstSlotOfEpoch(epoch)
@@ -54,13 +74,16 @@ func (s *Service) seedProposerPreferencesDependentRoots(ctx context.Context) {
 	currentEpoch := s.chainTimeService.CurrentEpoch()
 	for _, epoch := range []phase0.Epoch{currentEpoch, currentEpoch + 1} {
 		response, err := s.proposerDutiesV2Provider.ProposerDutiesV2(ctx, &api.ProposerDutiesOpts{Epoch: epoch})
-		if err != nil || response == nil {
-			s.log.Debug().Err(err).Uint64("epoch", uint64(epoch)).Msg("Failed to seed proposer preferences dependent root")
+		if err != nil {
+			s.log.Warn().Err(err).Uint64("epoch", uint64(epoch)).Msg("Failed to seed proposer preferences dependent root")
 			continue
 		}
-		if root, ok := response.Metadata["dependent_root"].(phase0.Root); ok {
-			s.recordProposerPreferencesDependentRoot(epoch, root)
+		root := proposerDutiesDependentRoot(response)
+		if root == (phase0.Root{}) {
+			s.log.Warn().Uint64("epoch", uint64(epoch)).Msg("No dependent root to seed proposer preferences")
+			continue
 		}
+		s.seedProposerPreferencesDependentRoot(epoch, root)
 	}
 	s.queueProposerPreferencesPublication(ctx)
 }
@@ -145,8 +168,8 @@ func (s *Service) proposerPreferencesDuties(
 	if response == nil || len(response.Data) == 0 {
 		return nil, phase0.Root{}
 	}
-	responseDependentRoot, ok := response.Metadata["dependent_root"].(phase0.Root)
-	if !ok || responseDependentRoot == (phase0.Root{}) {
+	responseDependentRoot := proposerDutiesDependentRoot(response)
+	if responseDependentRoot == (phase0.Root{}) {
 		s.log.Error().Uint64("epoch", uint64(proposalEpoch)).Msg("No dependent root for proposer preferences duties")
 		return nil, phase0.Root{}
 	}
@@ -156,6 +179,16 @@ func (s *Service) proposerPreferencesDuties(
 	}
 
 	return s.currentProposerPreferencesDuties(response.Data, proposalEpoch), responseDependentRoot
+}
+
+// proposerDutiesDependentRoot returns the dependent root of a proposer duties response, or a zero root if it has none.
+func proposerDutiesDependentRoot(response *api.Response[[]*apiv1.ProposerDuty]) phase0.Root {
+	if response == nil {
+		return phase0.Root{}
+	}
+	root, _ := response.Metadata["dependent_root"].(phase0.Root)
+
+	return root
 }
 
 func (s *Service) currentProposerPreferencesDuties(
