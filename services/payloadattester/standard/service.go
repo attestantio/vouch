@@ -170,21 +170,17 @@ func (s *Service) payloadAttestationData(ctx context.Context, slot phase0.Slot) 
 	retryDeadline := time.Now().Add(payloadAttestationDataRetryWindow)
 	for {
 		response, err := s.payloadAttestationDataProvider.PayloadAttestationData(ctx, &api.PayloadAttestationDataOpts{Slot: slot})
-		if err == nil || !errors.Is(err, eth2client.ErrNoPayloadAttestationData) {
+		if !errors.Is(err, eth2client.ErrNoPayloadAttestationData) {
 			return response, err
 		}
 		if time.Now().Add(payloadAttestationDataRetryInterval).After(retryDeadline) {
 			return nil, err
 		}
 
-		timer := time.NewTimer(payloadAttestationDataRetryInterval)
 		select {
 		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
 			return nil, err
-		case <-timer.C:
+		case <-time.After(payloadAttestationDataRetryInterval):
 		}
 	}
 }
