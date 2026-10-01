@@ -91,5 +91,7 @@ var ErrPayloadAttestationDataUnavailable = errors.New("failed to obtain payload 
 // Service is the payload attester service.
 type Service interface {
 	Prepare(ctx context.Context, duty *Duty) error
-	Attest(ctx context.Context, duty *Duty) ([]*spec.VersionedPayloadAttestationMessage, error)
+	// Attest attests to the payload timeliness for the duty.  lastAttempt is false when the caller
+	// will retry a failure before signing, so that failure is neither logged as an error nor counted.
+	Attest(ctx context.Context, duty *Duty, lastAttempt bool) ([]*spec.VersionedPayloadAttestationMessage, error)
 }

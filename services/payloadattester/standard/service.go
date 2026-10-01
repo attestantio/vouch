@@ -27,11 +27,18 @@ import (
 	"github.com/attestantio/vouch/services/payloadattester"
 	"github.com/attestantio/vouch/services/signer"
 	"github.com/attestantio/vouch/services/submitter"
+	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
+
+const tracerName = "attestantio.vouch.services.payloadattester.standard"
 
 const (
 	payloadAttestationDataRetryInterval = 50 * time.Millisecond
@@ -82,10 +89,24 @@ func (s *Service) Prepare(_ context.Context, duty *payloadattester.Duty) error {
 }
 
 // Attest creates and submits payload attestation messages.
-func (s *Service) Attest(ctx context.Context, duty *payloadattester.Duty) ([]*spec.VersionedPayloadAttestationMessage, error) {
+func (s *Service) Attest(ctx context.Context, duty *payloadattester.Duty, lastAttempt bool) ([]*spec.VersionedPayloadAttestationMessage, error) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "Attest", trace.WithAttributes(attribute.Bool("last_attempt", lastAttempt)))
+	defer span.End()
+
+	messages, err := s.attest(ctx, duty, lastAttempt)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to attest to payload timeliness")
+	}
+
+	return messages, err
+}
+
+func (s *Service) attest(ctx context.Context, duty *payloadattester.Duty, lastAttempt bool) ([]*spec.VersionedPayloadAttestationMessage, error) {
 	if duty == nil {
 		return nil, errors.New("no duty supplied")
 	}
+	trace.SpanFromContext(ctx).SetAttributes(attribute.Int64("slot", util.SlotToInt64(duty.Slot())))
 	started := time.Now()
 
 	accounts := make([]e2wtypes.Account, 0, len(duty.ValidatorIndices()))
@@ -104,28 +125,18 @@ func (s *Service) Attest(ctx context.Context, duty *payloadattester.Duty) ([]*sp
 
 	response, err := s.payloadAttestationData(ctx, duty.Slot())
 	if err != nil {
-		monitorPayloadAttestationProcess("failed", len(accounts))
-		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to produce payload attestation data")
-		return nil, fmt.Errorf("%w: %w", payloadattester.ErrPayloadAttestationDataUnavailable, err)
+		return nil, s.dataUnavailable(duty, len(accounts), lastAttempt, err)
 	}
 	if response == nil || response.Data == nil {
-		err := errors.New("no payload attestation data returned")
-		monitorPayloadAttestationProcess("failed", len(accounts))
-		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to produce payload attestation data")
-		return nil, fmt.Errorf("%w: %w", payloadattester.ErrPayloadAttestationDataUnavailable, err)
+		return nil, s.dataUnavailable(duty, len(accounts), lastAttempt, errors.New("no payload attestation data returned"))
 	}
 	if response.Data.Version != spec.DataVersionGloas || response.Data.Gloas == nil {
-		err := errors.New("payload attestation data is not Gloas")
-		monitorPayloadAttestationProcess("failed", len(accounts))
-		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to produce payload attestation data")
-		return nil, fmt.Errorf("%w: %w", payloadattester.ErrPayloadAttestationDataUnavailable, err)
+		return nil, s.dataUnavailable(duty, len(accounts), lastAttempt, errors.New("payload attestation data is not Gloas"))
 	}
 	data := response.Data.Gloas
 	if data.Slot != duty.Slot() {
-		err := errors.Errorf("payload attestation data slot %d does not match duty slot %d", data.Slot, duty.Slot())
-		monitorPayloadAttestationProcess("failed", len(accounts))
-		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to produce payload attestation data")
-		return nil, fmt.Errorf("%w: %w", payloadattester.ErrPayloadAttestationDataUnavailable, err)
+		return nil, s.dataUnavailable(duty, len(accounts), lastAttempt,
+			errors.Errorf("payload attestation data slot %d does not match duty slot %d", data.Slot, duty.Slot()))
 	}
 	monitorPayloadAttestationProcess("produced", len(accounts))
 	s.log.Trace().Uint64("slot", uint64(duty.Slot())).Dur("elapsed", time.Since(started)).Msg("Produced payload attestation data")
@@ -167,10 +178,29 @@ func (s *Service) Attest(ctx context.Context, duty *payloadattester.Duty) ([]*sp
 	return messages, nil
 }
 
+// dataUnavailable reports a failure before signing.  Only the last attempt logs it as an error and
+// counts it, because the caller retries an earlier one.
+func (s *Service) dataUnavailable(duty *payloadattester.Duty, accounts int, lastAttempt bool, err error) error {
+	if lastAttempt {
+		monitorPayloadAttestationProcess("failed", accounts)
+		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to produce payload attestation data")
+	} else {
+		s.log.Debug().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Payload attestation data not usable yet; retrying at the deadline")
+	}
+
+	return fmt.Errorf("%w: %w", payloadattester.ErrPayloadAttestationDataUnavailable, err)
+}
+
 func (s *Service) payloadAttestationData(ctx context.Context, slot phase0.Slot) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
 	retryDeadline := time.Now().Add(payloadAttestationDataRetryWindow)
 	for {
-		response, err := s.payloadAttestationDataProvider.PayloadAttestationData(ctx, &api.PayloadAttestationDataOpts{Slot: slot})
+		requestCtx, span := otel.Tracer(tracerName).Start(ctx, "PayloadAttestationData")
+		response, err := s.payloadAttestationDataProvider.PayloadAttestationData(requestCtx, &api.PayloadAttestationDataOpts{Slot: slot})
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to obtain payload attestation data")
+		}
+		span.End()
 		if !errors.Is(err, eth2client.ErrNoPayloadAttestationData) {
 			return response, err
 		}

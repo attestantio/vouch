@@ -168,7 +168,8 @@ func (s *Service) schedulePayloadAttestation(ctx context.Context,
 			defer cancel()
 			attestation.mutex.Lock()
 			if !attestation.attemptFinished {
-				_ = s.attestPayload(ctx, duty)
+				// The payload attester logs and counts a failure.
+				_, _ = s.payloadAttester.Attest(ctx, duty, true)
 				attestation.attemptFinished = true
 			}
 			attestation.mutex.Unlock()
@@ -184,14 +185,6 @@ func (s *Service) schedulePayloadAttestation(ctx context.Context,
 	if err := s.payloadAttester.Prepare(ctx, duty); err != nil {
 		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to prepare payload attestation")
 	}
-}
-
-func (s *Service) attestPayload(ctx context.Context, duty *payloadattester.Duty) error {
-	if _, err := s.payloadAttester.Attest(ctx, duty); err != nil {
-		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to attest to payload timeliness")
-		return err
-	}
-	return nil
 }
 
 func (s *Service) removePayloadAttestation(slot phase0.Slot, attestation *payloadAttestation) bool {

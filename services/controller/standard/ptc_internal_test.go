@@ -21,6 +21,8 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/payloadattester"
 	"github.com/attestantio/vouch/services/scheduler"
+	"github.com/attestantio/vouch/testing/logger"
+	zerologger "github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
@@ -66,6 +68,46 @@ func TestPayloadAttestationDeadlineRetriesAfterEventDataUnavailable(t *testing.T
 	schedulerService.RunJobIfExists(ctx, payloadAttestationJobName(10))
 
 	require.Len(t, payloadService.duties, 2)
+}
+
+func TestOnlyPayloadAttestationDeadlineIsLastAttempt(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{}
+	payloadService := &recordingPayloadAttester{
+		err: fmt.Errorf("%w: split-response payload attestation data responses", payloadattester.ErrPayloadAttestationDataUnavailable),
+	}
+	service := &Service{
+		chainTimeService:        currentSlotRecordingChainTime(10),
+		scheduler:               schedulerService,
+		payloadAttester:         payloadService,
+		payloadAttestationDelay: 9 * time.Second,
+	}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})
+
+	service.schedulePayloadAttestation(ctx, duty, map[phase0.ValidatorIndex]e2wtypes.Account{1: nil})
+	service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 10})
+	schedulerService.RunJobIfExists(ctx, payloadAttestationJobName(10))
+
+	require.Equal(t, []bool{false, true}, payloadService.lastAttempts)
+}
+
+func TestPayloadAttestationFailureIsLoggedByThePayloadAttester(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	schedulerService := &recordingScheduler{}
+	service := &Service{
+		log:                     zerologger.With().Logger(),
+		chainTimeService:        currentSlotRecordingChainTime(10),
+		scheduler:               schedulerService,
+		payloadAttester:         &recordingPayloadAttester{err: errors.New("failed to submit payload attestation messages")},
+		payloadAttestationDelay: 9 * time.Second,
+	}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})
+
+	service.schedulePayloadAttestation(ctx, duty, map[phase0.ValidatorIndex]e2wtypes.Account{1: nil})
+	schedulerService.RunJobIfExists(ctx, payloadAttestationJobName(10))
+
+	require.False(t, capture.HasLog(map[string]any{"level": "error"}))
 }
 
 func TestPayloadAttestationDeadlineRetriesAfterEventDataDisagreement(t *testing.T) {
@@ -725,7 +767,7 @@ func (*blockingPayloadAttester) Prepare(context.Context, *payloadattester.Duty) 
 	return nil
 }
 
-func (s *blockingPayloadAttester) Attest(context.Context, *payloadattester.Duty) ([]*spec.VersionedPayloadAttestationMessage, error) {
+func (s *blockingPayloadAttester) Attest(context.Context, *payloadattester.Duty, bool) ([]*spec.VersionedPayloadAttestationMessage, error) {
 	if s.calls.Add(1) == 1 {
 		close(s.started)
 		<-s.release
@@ -734,10 +776,11 @@ func (s *blockingPayloadAttester) Attest(context.Context, *payloadattester.Duty)
 }
 
 type recordingPayloadAttester struct {
-	duties   []*payloadattester.Duty
-	prepared []*payloadattester.Duty
-	deadline time.Time
-	err      error
+	duties       []*payloadattester.Duty
+	lastAttempts []bool
+	prepared     []*payloadattester.Duty
+	deadline     time.Time
+	err          error
 }
 
 func (s *recordingPayloadAttester) Prepare(_ context.Context, duty *payloadattester.Duty) error {
@@ -745,9 +788,10 @@ func (s *recordingPayloadAttester) Prepare(_ context.Context, duty *payloadattes
 	return nil
 }
 
-func (s *recordingPayloadAttester) Attest(ctx context.Context, duty *payloadattester.Duty) ([]*spec.VersionedPayloadAttestationMessage, error) {
+func (s *recordingPayloadAttester) Attest(ctx context.Context, duty *payloadattester.Duty, lastAttempt bool) ([]*spec.VersionedPayloadAttestationMessage, error) {
 	s.deadline, _ = ctx.Deadline()
 	s.duties = append(s.duties, duty)
+	s.lastAttempts = append(s.lastAttempts, lastAttempt)
 	return nil, s.err
 }
 
