@@ -541,6 +541,29 @@ func TestConfigChangeWarnsWhenFirstUnsignedDutyUsesIt(t *testing.T) {
 	require.Len(t, submitter.preferences, 4)
 }
 
+func TestOtherValidatorUsingNewConfigDoesNotReportDelayedChange(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3, 4}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	capture := logger.NewLogCapture()
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"node": nil}}))
+	require.NoError(t, err)
+	makeDuty := func(slot phase0.Slot, index phase0.ValidatorIndex, gas uint64) *proposerpreferences.Duty {
+		return &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: slot, ValidatorIndex: index, Account: accounts[index], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: gas}
+	}
+	require.NoError(t, service.Publish(ctx, makeDuty(64, 3, 30_000_000)))
+	require.NoError(t, service.Publish(ctx, makeDuty(64, 3, 31_000_000)))
+	require.NoError(t, service.Publish(ctx, makeDuty(66, 4, 31_000_000)))
+	service.FlushConfigChangeWarnings()
+	require.Zero(t, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
+
+	require.NoError(t, service.Publish(ctx, makeDuty(65, 3, 31_000_000)))
+	service.FlushConfigChangeWarnings()
+
+	require.Equal(t, 1, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
+	require.True(t, capture.HasLog(map[string]any{"affected_validators": 1, "first_slot": uint64(65)}))
+}
+
 func TestLogLevelSuppressesServiceLogs(t *testing.T) {
 	ctx := context.Background()
 	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
@@ -643,6 +666,28 @@ func TestRepeatedConfigValueWarnsForEachAppliedChange(t *testing.T) {
 	for _, slot := range []uint64{65, 66, 67} {
 		require.True(t, capture.HasLog(map[string]any{"first_slot": slot}))
 	}
+}
+
+func TestReportedConfigWarnsAgainAfterChangeIsApplied(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	capture := logger.NewLogCapture()
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"node": nil}}))
+	require.NoError(t, err)
+	makeDuty := func(slot phase0.Slot, gas uint64) *proposerpreferences.Duty {
+		return &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: slot, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: gas}
+	}
+	for _, slot := range []phase0.Slot{64, 96} {
+		require.NoError(t, service.Publish(ctx, makeDuty(slot, 30_000_000)))
+		require.NoError(t, service.Publish(ctx, makeDuty(slot, 31_000_000)))
+		require.NoError(t, service.Publish(ctx, makeDuty(slot+1, 31_000_000)))
+		service.FlushConfigChangeWarnings()
+		service.Prune(slot + 2)
+	}
+
+	require.Equal(t, 2, countPreferenceLogs(capture, "Proposer preferences config change delayed"))
+	require.True(t, capture.HasLog(map[string]any{"first_slot": uint64(97)}))
 }
 
 func TestSupersededConfigDoesNotWarnBeforeUse(t *testing.T) {

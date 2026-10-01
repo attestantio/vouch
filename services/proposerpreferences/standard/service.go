@@ -228,9 +228,25 @@ func (s *Service) clearPendingWithoutSignedDuties(fromSlot phase0.Slot) {
 			}
 		}
 		if !future {
-			delete(s.pendingConfig, index)
+			s.dropPendingConfig(index)
 		}
 	}
+}
+
+// dropPendingConfig discards a validator's config change, and its report once no validator has it pending.
+// The caller holds s.mutex.
+func (s *Service) dropPendingConfig(index phase0.ValidatorIndex) {
+	config, exists := s.pendingConfig[index]
+	if !exists {
+		return
+	}
+	delete(s.pendingConfig, index)
+	for _, pending := range s.pendingConfig {
+		if pending == config {
+			return
+		}
+	}
+	delete(s.reportedConfig, config)
 }
 
 // Publish publishes the supplied duty's proposer preferences.
@@ -325,12 +341,12 @@ func (s *Service) firstSignedPreference(preferences gloas.ProposerPreferences, d
 	}
 	if cached.signed != nil {
 		if configOf(current) != configOf(preferences) {
-			if previous, pending := s.pendingConfig[dutyKey.validatorIndex]; pending && previous != configOf(preferences) {
-				delete(s.reportedConfig, previous)
+			if s.pendingConfig[dutyKey.validatorIndex] != configOf(preferences) {
+				s.dropPendingConfig(dutyKey.validatorIndex)
 			}
 			s.pendingConfig[dutyKey.validatorIndex] = configOf(preferences)
 		} else {
-			delete(s.pendingConfig, dutyKey.validatorIndex)
+			s.dropPendingConfig(dutyKey.validatorIndex)
 		}
 	}
 	return current
@@ -399,6 +415,9 @@ func (s *Service) recordSignature(publication *publication, signature phase0.BLS
 		Signature: signature,
 	}
 	config := configOf(publication.preferences)
+	if pending, exists := s.pendingConfig[publication.preferences.ValidatorIndex]; !exists || pending != config {
+		return
+	}
 	if slot, exists := s.firstApplied[config]; !exists || publication.preferences.ProposalSlot < slot {
 		s.firstApplied[config] = publication.preferences.ProposalSlot
 	}
