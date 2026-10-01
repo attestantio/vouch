@@ -174,7 +174,7 @@ func (s *Service) proposerPreferencesDuties(
 		return nil, phase0.Root{}
 	}
 	if responseDependentRoot != dependentRoot {
-		s.log.Error().Uint64("epoch", uint64(proposalEpoch)).Msg("Stale dependent root for proposer preferences duties")
+		s.log.Debug().Uint64("epoch", uint64(proposalEpoch)).Stringer("duties_root", responseDependentRoot).Stringer("recorded_root", dependentRoot).Msg("Stale dependent root for proposer preferences duties")
 		return nil, phase0.Root{}
 	}
 
