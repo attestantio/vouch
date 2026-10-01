@@ -16,7 +16,6 @@ package standard
 
 import (
 	"context"
-	stderrors "errors"
 	"net/http"
 	"sync"
 
@@ -44,7 +43,7 @@ type Service struct {
 	inFlight       map[gloas.ProposerPreferences]chan struct{}
 	signer         signer.ProposerPreferencesSigner
 	submitter      submitter.ProposerPreferencesSubmitter
-	unsupported    map[string]phase0.Epoch
+	unsupported    map[string]struct{}
 	pendingConfig  map[phase0.ValidatorIndex]preferenceConfig
 	reportedConfig map[preferenceConfig]struct{}
 	firstApplied   map[preferenceConfig]phase0.Slot
@@ -94,7 +93,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.Wrap(err, "failed to register metrics")
 	}
 
-	log := zerologger.With().Str("service", "proposerpreferences").Logger()
+	log := zerologger.With().Str("service", "proposerpreferences").Str("impl", "standard").Logger()
 	if parameters.logLevel != log.GetLevel() {
 		log = log.Level(parameters.logLevel)
 	}
@@ -102,7 +101,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	return &Service{
 		monitor:        parameters.monitor,
 		log:            log,
-		unsupported:    make(map[string]phase0.Epoch),
+		unsupported:    make(map[string]struct{}),
 		pendingConfig:  make(map[phase0.ValidatorIndex]preferenceConfig),
 		reportedConfig: make(map[preferenceConfig]struct{}),
 		firstApplied:   make(map[preferenceConfig]phase0.Slot),
@@ -353,7 +352,7 @@ func (s *Service) firstSignedPreference(preferences gloas.ProposerPreferences, d
 }
 
 // failedProviders returns providers to retry this slot.  Route-missing failures are retried once per epoch while the provider is unsupported.
-func failedProviders(cached *cachedPreference, unsupported map[string]phase0.Epoch, currentSlot phase0.Slot, currentEpoch phase0.Epoch) []string {
+func failedProviders(cached *cachedPreference, unsupported map[string]struct{}, currentSlot phase0.Slot, currentEpoch phase0.Epoch) []string {
 	if cached == nil {
 		return nil
 	}
@@ -361,7 +360,7 @@ func failedProviders(cached *cachedPreference, unsupported map[string]phase0.Epo
 	for provider, err := range cached.outcomes {
 		if err != nil && cached.attempted[provider] != currentSlot {
 			_, stillUnsupported := unsupported[provider]
-			if !routeMissing(err) || !stillUnsupported || cached.attemptedEpoch[provider] != currentEpoch {
+			if routeMissingStatus(err) == 0 || !stillUnsupported || cached.attemptedEpoch[provider] != currentEpoch {
 				providers = append(providers, provider)
 			}
 		}
@@ -434,9 +433,13 @@ func (s *Service) abandonPublication(publication *publication) {
 	close(publication.complete)
 }
 
-func routeMissing(err error) bool {
+// routeMissingStatus returns the status code if err shows the provider lacks the submission route, otherwise 0.
+func routeMissingStatus(err error) int {
 	var apiErr *api.Error
-	return stderrors.As(err, &apiErr) && (apiErr.StatusCode == http.StatusNotFound || apiErr.StatusCode == http.StatusMethodNotAllowed || apiErr.StatusCode == http.StatusNotImplemented)
+	if errors.As(err, &apiErr) && (apiErr.StatusCode == http.StatusNotFound || apiErr.StatusCode == http.StatusMethodNotAllowed || apiErr.StatusCode == http.StatusNotImplemented) {
+		return apiErr.StatusCode
+	}
+	return 0
 }
 
 func (s *Service) recordSubmission(publication *publication, outcomes map[string]error) error {
@@ -460,13 +463,11 @@ func (s *Service) recordSubmission(publication *publication, outcomes map[string
 				s.log.Info().Str("provider", provider).Msg("Proposer preferences provider recovered")
 			}
 		} else {
-			if routeMissing(err) {
+			if status := routeMissingStatus(err); status != 0 {
 				if _, unsupported := s.unsupported[provider]; !unsupported {
-					var apiErr *api.Error
-					stderrors.As(err, &apiErr)
-					s.log.Warn().Str("provider", provider).Int("status_code", apiErr.StatusCode).Msg("Proposer preferences provider does not support submission route")
+					s.log.Warn().Str("provider", provider).Int("status_code", status).Msg("Proposer preferences provider does not support submission route")
 				}
-				s.unsupported[provider] = publication.attemptEpoch
+				s.unsupported[provider] = struct{}{}
 			}
 		}
 		if err == nil {
@@ -483,14 +484,19 @@ func (s *Service) recordSubmission(publication *publication, outcomes map[string
 		}
 	}
 	if submissionErr != nil {
-		// Failing providers are retried on the next publication; only fail when none accepted.
+		// Failing providers are retried by later publications; only fail when none accepted.
 		if len(publication.cached.accepted) > 0 {
 			return nil
 		}
 
 		return errors.Wrap(submissionErr, "failed to submit proposer preferences")
 	}
-	publication.cached.published = len(failedProviders(publication.cached, s.unsupported, publication.attemptSlot+1, publication.attemptEpoch+1)) == 0
+	publication.cached.published = true
+	for _, err := range publication.cached.outcomes {
+		if err != nil {
+			publication.cached.published = false
+		}
+	}
 
 	return nil
 }

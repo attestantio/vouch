@@ -26,15 +26,16 @@ import (
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
+// startProposerPreferencesSlotTicker queues proposer preferences publication at the start of each slot.
 func (s *Service) startProposerPreferencesSlotTicker(ctx context.Context) error {
-	if s.proposerPreferences == nil || s.executionConfigProvider == nil || s.proposerPreferencesLookahead == 0 {
+	if !s.proposerPreferencesEnabled() {
 		return nil
 	}
 	return s.scheduler.SchedulePeriodicJob(ctx, "Slot", "Proposer preferences slot ticker",
 		func(_ context.Context) (time.Time, error) {
 			return s.chainTimeService.StartOfSlot(s.chainTimeService.CurrentSlot() + 1), nil
 		},
-		func(ctx context.Context) { s.proposerPreferencesSlotTick(ctx) },
+		s.queueProposerPreferencesPublication,
 	)
 }
 
@@ -43,14 +44,6 @@ type proposerDutiesCacheKey struct {
 	root  phase0.Root
 }
 
-type cachedProposerDuties struct {
-	root   phase0.Root
-	duties []*apiv1.ProposerDuty
-}
-
-func (s *Service) proposerPreferencesSlotTick(ctx context.Context) {
-	s.queueProposerPreferencesPublication(ctx)
-}
 
 // recordProposerPreferencesDependentRoot retains the root used to derive proposer duties for an epoch.
 func (s *Service) recordProposerPreferencesDependentRoot(epoch phase0.Epoch, root phase0.Root) {
@@ -191,20 +184,17 @@ func (s *Service) publishProposerPreferences(ctx context.Context, proposalEpoch 
 		if root == (phase0.Root{}) {
 			return
 		}
-		cached = cachedProposerDuties{root: root, duties: duties}
+		cached = duties
 		s.proposerPreferencesDependentRootMutex.Lock()
-		if s.proposerPreferencesDutiesCache == nil {
-			s.proposerPreferencesDutiesCache = make(map[proposerDutiesCacheKey]cachedProposerDuties)
-		}
-		if s.proposerPreferencesDependentRoots[proposalEpoch] == root || s.proposerPreferencesDependentRoots == nil {
+		if s.proposerPreferencesDependentRoots[proposalEpoch] == root {
 			s.proposerPreferencesDutiesCache[key] = cached
 		}
 		s.proposerPreferencesDependentRootMutex.Unlock()
 	}
-	if len(cached.duties) == 0 {
+	if len(cached) == 0 {
 		return
 	}
-	s.publishProposerPreferencesDuties(ctx, proposalEpoch, cached.root, s.currentProposerPreferencesDuties(cached.duties, proposalEpoch))
+	s.publishProposerPreferencesDuties(ctx, proposalEpoch, dependentRoot, s.currentProposerPreferencesDuties(cached, proposalEpoch))
 }
 
 func (s *Service) proposerPreferencesDuties(
