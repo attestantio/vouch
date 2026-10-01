@@ -146,6 +146,7 @@ func TestEPBSProposalBuilderConfigTransports(t *testing.T) {
 	ctx := context.Background()
 	includePayload := false
 	config := &gloas.BuilderConfig{
+		MinBid:             12,
 		BuilderBoostFactor: 100,
 		Builders: []*gloas.BuilderEntry{{
 			URL: []byte("https://builder.example"),
@@ -168,6 +169,8 @@ func TestEPBSProposalBuilderConfigTransports(t *testing.T) {
 	require.NoError(t, err)
 	response, err := responseClient.EPBSProposal(ctx, opts)
 	require.NoError(t, err)
+	// The client rejects a bid below MinBid, and the mock bid is zero.
+	response.Data.Gloas.Body.SignedExecutionPayloadBid.Message.Value = 12
 	jsonResponse, err := response.Data.Gloas.MarshalJSON()
 	require.NoError(t, err)
 	sszResponse, err := response.Data.Gloas.MarshalSSZ()
