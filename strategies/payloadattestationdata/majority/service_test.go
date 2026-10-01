@@ -73,6 +73,17 @@ func data(slot phase0.Slot, root phase0.Root, payloadPresent, blobDataAvailable 
 	}
 }
 
+func hangingProvider(t *testing.T) eth2client.PayloadAttestationDataProvider {
+	t.Helper()
+	provider, err := mockclient.New(context.Background())
+	require.NoError(t, err)
+	provider.PayloadAttestationDataFunc = func(ctx context.Context, _ *api.PayloadAttestationDataOpts) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	return provider
+}
+
 func erroringProvider(t *testing.T, err error) eth2client.PayloadAttestationDataProvider {
 	t.Helper()
 	provider, newErr := mockclient.New(context.Background())
@@ -298,6 +309,7 @@ func TestPayloadAttestationDataReportsUnavailableData(t *testing.T) {
 		name        string
 		providers   map[string]eth2client.PayloadAttestationDataProvider
 		threshold   int
+		timeout     time.Duration
 		err         string
 		unavailable bool
 	}{
@@ -307,6 +319,16 @@ func TestPayloadAttestationDataReportsUnavailableData(t *testing.T) {
 				"one": erroringProvider(t, eth2client.ErrNoPayloadAttestationData),
 				"two": erroringProvider(t, eth2client.ErrNoPayloadAttestationData),
 			},
+			err:         "no valid payload attestation data received: no payload attestation data available",
+			unavailable: true,
+		},
+		{
+			name: "TimeoutWhileProviderHasNoDataYet",
+			providers: map[string]eth2client.PayloadAttestationDataProvider{
+				"nodata":  erroringProvider(t, eth2client.ErrNoPayloadAttestationData),
+				"hanging": hangingProvider(t),
+			},
+			timeout:     50 * time.Millisecond,
 			err:         "no valid payload attestation data received: no payload attestation data available",
 			unavailable: true,
 		},
@@ -340,11 +362,15 @@ func TestPayloadAttestationDataReportsUnavailableData(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			service, err := majority.New(ctx,
+			params := []majority.Parameter{
 				majority.WithLogLevel(zerolog.Disabled),
 				majority.WithPayloadAttestationDataProviders(test.providers),
 				majority.WithThreshold(test.threshold),
-			)
+			}
+			if test.timeout > 0 {
+				params = append(params, majority.WithTimeout(test.timeout))
+			}
+			service, err := majority.New(ctx, params...)
 			require.NoError(t, err)
 
 			_, err = service.PayloadAttestationData(ctx, &api.PayloadAttestationDataOpts{Slot: 12})

@@ -154,11 +154,11 @@ func (s *Service) selectPayloadAttestationData(ctx context.Context,
 ) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
 	leading, count := leadingPayloadAttestationDataBuckets(buckets)
 	if count == 0 {
-		if ctx.Err() != nil {
-			return nil, errors.Wrap(ctx.Err(), "failed to obtain payload attestation data")
-		}
 		if noData {
 			return nil, errors.Wrap(eth2client.ErrNoPayloadAttestationData, "no valid payload attestation data received")
+		}
+		if ctx.Err() != nil {
+			return nil, errors.Wrap(ctx.Err(), "failed to obtain payload attestation data")
 		}
 
 		return nil, errors.New("no valid payload attestation data received")
