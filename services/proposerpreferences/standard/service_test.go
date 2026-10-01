@@ -375,7 +375,7 @@ func TestUnsupportedProviderSubmitsEachPendingPreferenceOncePerEpoch(t *testing.
 	require.Equal(t, 1, countPreferenceLogs(capture, "Proposer preferences provider recovered"))
 }
 
-func TestRecoveredProviderDoesNotRepeatRouteMissingPreferenceWithinEpoch(t *testing.T) {
+func TestRecoveredProviderRetriesRouteMissingPreferenceNextSlot(t *testing.T) {
 	ctx := context.Background()
 	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
 	require.NoError(t, err)
@@ -383,6 +383,7 @@ func TestRecoveredProviderDoesNotRepeatRouteMissingPreferenceWithinEpoch(t *test
 		{"node": &api.Error{StatusCode: 404}},
 		{"node": &api.Error{StatusCode: 404}},
 		{"node": &api.Error{StatusCode: 404}},
+		{"node": nil},
 		{"node": nil},
 	}}
 	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(submitter))
@@ -397,9 +398,11 @@ func TestRecoveredProviderDoesNotRepeatRouteMissingPreferenceWithinEpoch(t *test
 	require.Error(t, service.Publish(ctx, first))
 	second.CurrentSlot, second.CurrentEpoch = 65, 2
 	require.NoError(t, service.Publish(ctx, second))
+	require.False(t, service.ProviderReady("node", 96, 3))
 	first.CurrentSlot = 66
 	require.NoError(t, service.Publish(ctx, first))
-	require.Len(t, submitter.preferences, 4)
+	require.Len(t, submitter.preferences, 5)
+	require.True(t, service.ProviderReady("node", 96, 3))
 }
 
 func TestPublishRetriesOnlyRejectedProvider(t *testing.T) {
