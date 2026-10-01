@@ -94,6 +94,9 @@ func (s *Service) SubmitProposerPreferences(ctx context.Context, preferences []*
 			started := time.Now()
 			err := submitter.SubmitProposerPreferences(ctx, &api.SubmitProposerPreferencesOpts{Preferences: preferences})
 			s.clientMonitor.ClientOperation(address, "submit proposer preferences", err == nil, time.Since(started))
+			if err != nil {
+				s.log.Warn().Err(err).Str("beacon_node_address", address).Msg("Failed to submit proposer preferences")
+			}
 			outcomes[address] = err
 		}
 		return outcomes

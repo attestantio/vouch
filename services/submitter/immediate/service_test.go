@@ -15,8 +15,10 @@ package immediate_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
@@ -26,6 +28,7 @@ import (
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/attestantio/vouch/services/submitter/immediate"
+	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
@@ -280,8 +283,36 @@ func TestSubmitProposerPreferences(t *testing.T) {
 	require.Equal(t, preferences, preferencesSubmitter.preferences)
 }
 
+func TestSubmitProposerPreferencesWarnsForFailingNode(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	service, err := newTestService(ctx,
+		immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+		immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
+		immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+		immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+		immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
+		immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+		immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+		immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+		immediate.WithProposerPreferencesSubmitters(map[string]eth2client.ProposerPreferencesSubmitter{
+			"good": &recordingProposerPreferencesSubmitter{},
+			"bad":  &recordingProposerPreferencesSubmitter{err: errors.New("rejected")},
+		}),
+	)
+	require.NoError(t, err)
+
+	outcomes := service.SubmitProposerPreferences(ctx, []*gloas.SignedProposerPreferences{{}}, nil)
+
+	require.NoError(t, outcomes["good"])
+	require.EqualError(t, outcomes["bad"], "rejected")
+	require.True(t, capture.HasLog(map[string]any{"level": "warn", "message": "Failed to submit proposer preferences", "beacon_node_address": "bad"}))
+	require.False(t, capture.HasLog(map[string]any{"level": "warn", "beacon_node_address": "good"}))
+}
+
 type recordingProposerPreferencesSubmitter struct {
 	preferences []*gloas.SignedProposerPreferences
+	err         error
 }
 
 func (*recordingProposerPreferencesSubmitter) Name() string { return "test" }
@@ -294,7 +325,7 @@ func (*recordingProposerPreferencesSubmitter) IsSynced() bool { return true }
 
 func (s *recordingProposerPreferencesSubmitter) SubmitProposerPreferences(_ context.Context, opts *api.SubmitProposerPreferencesOpts) error {
 	s.preferences = opts.Preferences
-	return nil
+	return s.err
 }
 
 func TestSubmitProposal(t *testing.T) {
