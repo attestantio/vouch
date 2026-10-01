@@ -21,6 +21,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
 	"github.com/attestantio/vouch/services/attestationaggregator"
@@ -113,7 +114,7 @@ type Service struct {
 	pendingAttestations                   map[phase0.Slot]bool
 	payloadAttestations                   map[phase0.Slot]*payloadAttestation
 	proposerPreferencesDependentRoots     map[phase0.Epoch]phase0.Root
-	proposerPreferencesDutiesCache        map[proposerDutiesCacheKey]cachedProposerDuties
+	proposerPreferencesDutiesCache        map[proposerDutiesCacheKey][]*apiv1.ProposerDuty
 	proposerPreferencesPublicationRunning bool
 	proposerPreferencesPublicationPending bool
 	subscriptionInfosMutex                sync.Mutex
@@ -244,6 +245,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		pendingAttestations:               make(map[phase0.Slot]bool),
 		payloadAttestations:               make(map[phase0.Slot]*payloadAttestation),
 		proposerPreferencesDependentRoots: make(map[phase0.Epoch]phase0.Root),
+		proposerPreferencesDutiesCache:    make(map[proposerDutiesCacheKey][]*apiv1.ProposerDuty),
 	}
 
 	// Subscribe to head events.  This allows us to go early for attestations if a block arrives, as well as

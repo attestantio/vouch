@@ -22,8 +22,8 @@ import (
 )
 
 type parameters struct {
-	logLevel  zerolog.Level
 	monitor   metrics.Service
+	logLevel  zerolog.Level
 	signer    signer.ProposerPreferencesSigner
 	submitter submitter.ProposerPreferencesSubmitter
 }
