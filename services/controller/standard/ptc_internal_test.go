@@ -370,15 +370,6 @@ func TestRefreshPayloadAttestationsReplacesDutyBeforeWaitingEventRuns(t *testing
 	oldAttestation := service.payloadAttestations[0]
 	oldAttestation.mutex.Lock()
 
-	refreshDone := make(chan struct{})
-	go func() {
-		service.refreshPayloadAttestationDutiesForEpoch(ctx, 0)
-		close(refreshDone)
-	}()
-	require.Eventually(t, func() bool {
-		return goroutineBlockedOnMutex("refreshPayloadAttestationDutiesForEpoch")
-	}, time.Second, time.Millisecond)
-
 	eventDone := make(chan struct{})
 	go func() {
 		service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 0})
@@ -386,6 +377,15 @@ func TestRefreshPayloadAttestationsReplacesDutyBeforeWaitingEventRuns(t *testing
 	}()
 	require.Eventually(t, func() bool {
 		return goroutineBlockedOnMutex("HandleExecutionPayloadAvailableEvent")
+	}, time.Second, time.Millisecond)
+
+	refreshDone := make(chan struct{})
+	go func() {
+		service.refreshPayloadAttestationDutiesForEpoch(ctx, 0)
+		close(refreshDone)
+	}()
+	require.Eventually(t, func() bool {
+		return goroutineBlockedOnMutex("refreshPayloadAttestationDutiesForEpoch")
 	}, time.Second, time.Millisecond)
 
 	oldAttestation.mutex.Unlock()
