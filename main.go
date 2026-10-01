@@ -594,6 +594,9 @@ func initController(ctx context.Context,
 			standardcontroller.WithProposerPreferences(proposerPreferences),
 			standardcontroller.WithExecutionConfigProvider(executionConfigProvider),
 		)
+		if proposerDutiesV2Provider, ok := eth2Client.(eth2client.ProposerDutiesV2Provider); ok {
+			controllerParams = append(controllerParams, standardcontroller.WithProposerDutiesV2Provider(proposerDutiesV2Provider))
+		}
 	}
 	controller, err := standardcontroller.New(ctx, controllerParams...)
 	if err != nil {
