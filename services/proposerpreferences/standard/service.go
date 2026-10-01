@@ -155,6 +155,7 @@ func (s *Service) Prune(slot phase0.Slot) {
 }
 
 // Publish publishes the supplied duty's proposer preferences.
+// It returns an error only if no provider has accepted the preferences.
 func (s *Service) Publish(ctx context.Context, duty *proposerpreferences.Duty) error {
 	if duty == nil {
 		return errors.New("no proposer preferences duty supplied")

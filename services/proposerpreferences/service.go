@@ -64,6 +64,8 @@ type ProviderReadiness interface {
 type Publisher interface {
 	UpdateDependentRoot(fromSlot phase0.Slot, toSlot phase0.Slot, root phase0.Root)
 	Prune(slot phase0.Slot)
+	// Publish publishes the supplied duty's proposer preferences.
+	// It returns an error only if no provider has accepted the preferences.
 	Publish(ctx context.Context, duty *Duty) error
 }
 
