@@ -94,7 +94,7 @@ func TestPublishProposerPreferencesSkipsUnownedValidatorsQuietly(t *testing.T) {
 
 	require.Len(t, preferences.duties, 1)
 	require.Equal(t, phase0.ValidatorIndex(3), preferences.duties[0].ValidatorIndex)
-	for _, level := range []string{"warn", "error"} {
+	for _, level := range []string{"info", "warn", "error"} {
 		require.False(t, capture.HasLog(map[string]any{"level": level, "message": "No account for proposer preferences duty"}))
 	}
 }
@@ -359,7 +359,9 @@ func TestPublishProposerPreferencesRejectsStaleDependentRoot(t *testing.T) {
 		metadata: map[string]any{"dependent_root": phase0.Root{0x02}},
 	}
 	preferences := &recordingProposerPreferences{}
+	capture := logger.NewLogCapture()
 	service := &Service{
+		log:                          zerolog.New(capture),
 		chainTimeService:             &recordingChainTime{currentEpoch: 4, slotsPerEpoch: 32},
 		proposerDutiesProvider:       provider,
 		proposerDutiesV2Provider:     provider,
@@ -373,6 +375,13 @@ func TestPublishProposerPreferencesRejectsStaleDependentRoot(t *testing.T) {
 	service.publishProposerPreferences(ctx, 5, phase0.Root{0x01})
 
 	require.Empty(t, preferences.duties)
+	require.True(t, capture.HasLog(map[string]any{
+		"level":         "debug",
+		"message":       "Stale dependent root for proposer preferences duties",
+		"duties_root":   phase0.Root{0x02}.String(),
+		"recorded_root": phase0.Root{0x01}.String(),
+	}))
+	require.False(t, capture.HasLog(map[string]any{"level": "error"}))
 }
 
 func TestPublishProposerPreferencesDoesNotPublishBeforeGloas(t *testing.T) {
