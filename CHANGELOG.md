@@ -18,6 +18,7 @@ gloas:
   - retry unavailable payload attestation data every 50ms for up to 500ms before giving up on the vote
   - retry the payload timeliness vote at the attestation deadline when an early, event-triggered attempt fails before signing, such as when the payload attestation data beacon nodes disagree
   - log and count a payload timeliness vote failure before signing only on the deadline attempt, and trace every payload attestation data request and attempt with its error
+  - report missing payload attestation data from the first and majority strategies when a beacon node has no data yet, including below the majority threshold and when the strategy times out, so the payload attester retries it
   - obtain payload attestation data from a dedicated multiclient (the 'simple' style), configurable with strategies.payloadattestationdata.beacon-node-addresses
   - add first and majority payloadattestationdata strategies, selected with strategies.payloadattestationdata.style; the majority strategy breaks a tie in favour of the payload-present vote, rejects responses that disagree on the beacon block root, and proceeds with the responses received when the timeout fires rather than discarding them
   - default strategies.payloadattestationdata.timeout to 1s, tighter than the global timeout because payload attestation data is due 75% of the way through the slot; the per-style timeouts and beacon-node-addresses inherit from it
