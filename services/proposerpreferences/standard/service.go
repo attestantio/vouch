@@ -288,6 +288,7 @@ func (s *Service) claimPublication(preferences gloas.ProposerPreferences, dutyKe
 	}
 	providers := failedProviders(cached, currentSlot, currentEpoch)
 	if exists && len(providers) == 0 {
+		s.current[dutyKey] = preferences
 		return nil, nil
 	}
 	complete := make(chan struct{})
@@ -318,10 +319,11 @@ func (s *Service) claimPublication(preferences gloas.ProposerPreferences, dutyKe
 // The caller holds s.mutex.
 func (s *Service) firstSignedPreference(preferences gloas.ProposerPreferences, dutyKey preferenceDuty) gloas.ProposerPreferences {
 	current, exists := s.current[dutyKey]
-	if !exists || current.DependentRoot != preferences.DependentRoot {
+	cached := s.cache[current]
+	if !exists || current.DependentRoot != preferences.DependentRoot || cached == nil {
 		return preferences
 	}
-	if cached := s.cache[current]; cached != nil && cached.signed != nil {
+	if cached.signed != nil {
 		if configOf(current) != configOf(preferences) {
 			if previous, pending := s.pendingConfig[dutyKey.validatorIndex]; pending && previous != configOf(preferences) {
 				delete(s.reportedConfig, previous)
@@ -382,23 +384,23 @@ func (s *Service) sign(ctx context.Context, account e2wtypes.Account, publicatio
 		}
 		return errors.Wrap(err, "failed to sign proposer preferences")
 	}
-	publication.cached.signed = &gloas.SignedProposerPreferences{
-		Message:   &publication.preferences,
-		Signature: signature,
-	}
 	monitorProposerPreferencesProcess("signed")
-	s.recordSignedConfig(publication.preferences)
+	s.recordSignature(publication, signature)
 
 	return nil
 }
 
-func (s *Service) recordSignedConfig(preferences gloas.ProposerPreferences) {
+func (s *Service) recordSignature(publication *publication, signature phase0.BLSSignature) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	config := configOf(preferences)
-	if slot, exists := s.firstApplied[config]; !exists || preferences.ProposalSlot < slot {
-		s.firstApplied[config] = preferences.ProposalSlot
+	publication.cached.signed = &gloas.SignedProposerPreferences{
+		Message:   &publication.preferences,
+		Signature: signature,
+	}
+	config := configOf(publication.preferences)
+	if slot, exists := s.firstApplied[config]; !exists || publication.preferences.ProposalSlot < slot {
+		s.firstApplied[config] = publication.preferences.ProposalSlot
 	}
 }
 
