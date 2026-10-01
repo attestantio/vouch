@@ -217,6 +217,26 @@ func TestDependentRootChangeKeepsInFlightStalePreferenceUnready(t *testing.T) {
 	require.False(t, service.ProviderReady("accepted", 64, 3))
 }
 
+func TestDependentRootRestoreKeepsAcceptedProviderReadyWhileRetryIsPending(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	submitter := &recordingSubmitter{outcomes: map[string]error{"accepted": nil, "missing": &api.Error{StatusCode: 404}}}
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(submitter))
+	require.NoError(t, err)
+	duty := &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 96, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 30_000_000}
+	duty.CurrentSlot, duty.CurrentEpoch = 32, 1
+	require.NoError(t, service.Publish(ctx, duty))
+
+	service.UpdateDependentRoot(96, 127, phase0.Root{2})
+	service.UpdateDependentRoot(96, 127, phase0.Root{1})
+	duty.CurrentSlot = 33
+	require.NoError(t, service.Publish(ctx, duty))
+
+	require.Len(t, submitter.preferences, 1)
+	require.True(t, service.ProviderReady("accepted", 96, 3))
+}
+
 func TestSimpleProviderReadyAfterAllPreferencesAccepted(t *testing.T) {
 	ctx := context.Background()
 	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
@@ -666,6 +686,54 @@ func TestPublishKeepsFirstSignedPreferenceWhenConfigChanges(t *testing.T) {
 	require.True(t, service.ProviderReady("accepted", 64, 3))
 }
 
+func TestPruneDuringSigningDoesNotRace(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	signer := &blockingSigner{}
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(signer), standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"node": nil}}))
+	require.NoError(t, err)
+	makeDuty := func(slot phase0.Slot, gas uint64) *proposerpreferences.Duty {
+		return &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: slot, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: gas}
+	}
+	require.NoError(t, service.Publish(ctx, makeDuty(64, 30_000_000)))
+	require.NoError(t, service.Publish(ctx, makeDuty(64, 31_000_000)))
+	signer.started, signer.release = make(chan struct{}), make(chan struct{})
+	errCh := make(chan error, 1)
+	go func() { errCh <- service.Publish(ctx, makeDuty(65, 31_000_000)) }()
+	<-signer.started
+
+	// Prune reads the in-flight preference's signature from a goroutine that does not synchronise with the signer.
+	pruned := make(chan struct{})
+	go func() {
+		service.Prune(65)
+		close(pruned)
+	}()
+	time.Sleep(50 * time.Millisecond)
+	close(signer.release)
+
+	require.NoError(t, <-errCh)
+	<-pruned
+	require.True(t, service.ProviderReady("node", 65, 3))
+}
+
+func TestSignFailureDoesNotPinConfigForLaterSignature(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	signer := &recordingSigner{err: errors.New("signer unavailable")}
+	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(signer), standard.WithSubmitter(&recordingSubmitter{outcomes: map[string]error{"node": nil}}))
+	require.NoError(t, err)
+	require.Error(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 30_000_000}))
+	signer.err = nil
+
+	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 31_000_000}))
+
+	require.Len(t, signer.preferences, 2)
+	require.Equal(t, uint64(31_000_000), signer.preferences[1].TargetGasLimit)
+	require.True(t, service.ProviderReady("node", 64, 3))
+}
+
 func TestPublishRejectsMissingProviderOutcomes(t *testing.T) {
 	ctx := context.Background()
 	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
@@ -871,6 +939,20 @@ func (s *blockingSubmitter) SubmitProposerPreferences(_ context.Context, _ []*gl
 	close(s.started)
 	<-s.release
 	return map[string]error{"accepted": nil}
+}
+
+// blockingSigner blocks once started is set, until release is closed.
+type blockingSigner struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (s *blockingSigner) SignProposerPreferences(_ context.Context, _ e2wtypes.Account, _ *gloas.ProposerPreferences) (phase0.BLSSignature, error) {
+	if s.started != nil {
+		close(s.started)
+		<-s.release
+	}
+	return phase0.BLSSignature{}, nil
 }
 
 type recordingSigner struct {
