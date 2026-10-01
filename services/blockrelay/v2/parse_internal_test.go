@@ -23,6 +23,7 @@ func TestFirstSet(t *testing.T) {
 	first := uint64(1)
 	second := uint64(2)
 
-	require.Equal(t, uint64(1), firstSet(9, nil, &first, &second))
+	require.Equal(t, uint64(1), firstSet(9, &first, &second))
+	require.Equal(t, uint64(2), firstSet(9, nil, &second))
 	require.Equal(t, uint64(9), firstSet[uint64](9, nil, nil))
 }
