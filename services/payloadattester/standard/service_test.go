@@ -77,6 +77,8 @@ func TestAttestFetchesSignsAndSubmitsVersionedMessages(t *testing.T) {
 	duty.SetAccount(1, accounts[1])
 	duty.SetAccount(2, accounts[2])
 
+	countsBefore := payloadAttestationEventCounts(t)
+
 	messages, err := service.Attest(ctx, duty, true)
 	require.NoError(t, err)
 	require.Len(t, messages, 2)
@@ -87,7 +89,11 @@ func TestAttestFetchesSignsAndSubmitsVersionedMessages(t *testing.T) {
 	require.Equal(t, phase0.ValidatorIndex(1), submitter.messages[0].Gloas.ValidatorIndex)
 	require.Equal(t, phase0.ValidatorIndex(2), submitter.messages[1].Gloas.ValidatorIndex)
 
-	require.Equal(t, map[string]float64{"produced": 2, "signed": 2, "submitted": 2}, payloadAttestationEventCounts(t))
+	counts := payloadAttestationEventCounts(t)
+	for _, event := range []string{"produced", "signed", "submitted"} {
+		require.Equal(t, countsBefore[event]+2, counts[event], event)
+	}
+	require.Equal(t, countsBefore["failed"], counts["failed"])
 	require.True(t, capture.HasLog(map[string]any{"message": "Produced payload attestation data", "slot": uint64(12)}))
 	require.True(t, capture.HasLog(map[string]any{"message": "Signed payload attestation messages", "slot": uint64(12), "count": 2}))
 	require.True(t, capture.HasLog(map[string]any{"message": "Submitted payload attestation messages", "slot": uint64(12), "count": 2}))
