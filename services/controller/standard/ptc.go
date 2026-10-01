@@ -213,17 +213,17 @@ func (s *Service) refreshPayloadAttestationDutiesForEpoch(ctx context.Context, e
 
 	cancelledJobs := make(map[phase0.Slot]bool)
 	for slot := s.chainTimeService.FirstSlotOfEpoch(epoch); slot < s.chainTimeService.FirstSlotOfEpoch(epoch+1); slot++ {
+		// Remove the attestation before waiting for its lock, so an event attempt that is waiting for
+		// the same lock finds it replaced and does not vote for the old duty.
 		s.payloadAttestationsMutex.Lock()
 		attestation := s.payloadAttestations[slot]
+		delete(s.payloadAttestations, slot)
 		s.payloadAttestationsMutex.Unlock()
 		if attestation != nil {
 			attestation.mutex.Lock()
 		}
 		if err := s.scheduler.CancelJob(ctx, payloadAttestationJobName(slot)); err == nil {
 			cancelledJobs[slot] = attestation == nil || !attestation.attemptFinished
-			if attestation != nil {
-				s.removePayloadAttestation(slot, attestation)
-			}
 		}
 		if attestation != nil {
 			attestation.mutex.Unlock()
