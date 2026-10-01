@@ -180,12 +180,12 @@ func (s *Service) attest(ctx context.Context, duty *payloadattester.Duty, lastAt
 
 // dataUnavailable reports a failure before signing.  Only the last attempt logs it as an error and
 // counts it, because the caller retries an earlier one.
-func (s *Service) dataUnavailable(duty *payloadattester.Duty, accounts int, lastAttempt bool, err error) error {
+func (s *Service) dataUnavailable(duty *payloadattester.Duty, count int, lastAttempt bool, err error) error {
 	if lastAttempt {
-		monitorPayloadAttestationProcess("failed", accounts)
+		monitorPayloadAttestationProcess("failed", count)
 		s.log.Error().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Failed to produce payload attestation data")
 	} else {
-		s.log.Debug().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Payload attestation data not usable yet; retrying at the deadline")
+		s.log.Debug().Err(err).Uint64("slot", uint64(duty.Slot())).Msg("Payload attestation data not usable yet; will retry")
 	}
 
 	return fmt.Errorf("%w: %w", payloadattester.ErrPayloadAttestationDataUnavailable, err)
