@@ -20,7 +20,6 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
-	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	mockaccountmanager "github.com/attestantio/vouch/services/accountmanager/mock"
@@ -41,6 +40,35 @@ import (
 )
 
 func TestNewSeedsProposerPreferencesDependentRoots(t *testing.T) {
+	dutiesProvider := &headEventProposerDutiesProvider{epochs: make(chan phase0.Epoch, 16)}
+	newProposerPreferencesController(t, &recordingEventsProvider{},
+		WithProposerDutiesV2Provider(dutiesProvider),
+		WithProposerPreferences(&headEventProposerPreferences{duties: make(chan *proposerpreferences.Duty, 16)}),
+		WithExecutionConfigProvider(&recordingExecutionConfigProvider{}),
+	)
+
+	epochs := []phase0.Epoch{receiveProposerPreferencesEpoch(t, dutiesProvider.epochs), receiveProposerPreferencesEpoch(t, dutiesProvider.epochs)}
+	require.ElementsMatch(t, []phase0.Epoch{0, 1}, epochs)
+}
+
+func TestNewSubscribesToHeadV2OnlyForProposerPreferences(t *testing.T) {
+	disabled := &recordingEventsProvider{}
+	newProposerPreferencesController(t, disabled)
+	require.Equal(t, []string{"block", "head"}, disabled.opts.Topics)
+	require.Nil(t, disabled.opts.HeadV2Handler)
+
+	enabled := &recordingEventsProvider{}
+	newProposerPreferencesController(t, enabled,
+		WithProposerDutiesV2Provider(&headEventProposerDutiesProvider{epochs: make(chan phase0.Epoch, 16)}),
+		WithProposerPreferences(&headEventProposerPreferences{duties: make(chan *proposerpreferences.Duty, 16)}),
+		WithExecutionConfigProvider(&recordingExecutionConfigProvider{}),
+	)
+	require.Equal(t, []string{"block", "head", "head_v2"}, enabled.opts.Topics)
+	require.NotNil(t, enabled.opts.HeadV2Handler)
+}
+
+func newProposerPreferencesController(t *testing.T, eventsProvider *recordingEventsProvider, params ...Parameter) {
+	t.Helper()
 	ctx := context.Background()
 	specProvider := &seedLookaheadSpecProvider{SpecProvider: mock.NewSpecProvider()}
 	chainTime, err := standardchaintime.New(ctx,
@@ -51,16 +79,15 @@ func TestNewSeedsProposerPreferencesDependentRoots(t *testing.T) {
 	require.NoError(t, err)
 	multiInstance, err := alwaysmultiinstance.New(ctx)
 	require.NoError(t, err)
-	dutiesProvider := &v2RecordingProposerDutiesProvider{epochs: make(chan phase0.Epoch, 16)}
 
-	_, err = New(ctx,
+	_, err = New(ctx, append([]Parameter{
 		WithLogLevel(zerolog.Disabled),
 		WithMonitor(nullmetrics.New()),
 		WithSpecProvider(specProvider),
 		WithChainTimeService(chainTime),
-		WithProposerDutiesProvider(dutiesProvider),
+		WithProposerDutiesProvider(mock.NewProposerDutiesProvider()),
 		WithAttesterDutiesProvider(mock.NewAttesterDutiesProvider()),
-		WithEventsProvider(mock.NewEventsProvider()),
+		WithEventsProvider(eventsProvider),
 		WithValidatingAccountsProvider(mockaccountmanager.NewValidatingAccountsProvider()),
 		WithProposalsPreparer(mockproposalpreparer.New()),
 		WithScheduler(mockscheduler.New()),
@@ -73,13 +100,8 @@ func TestNewSeedsProposerPreferencesDependentRoots(t *testing.T) {
 		WithBeaconBlockHeadersProvider(mock.NewBeaconBlockHeadersProvider()),
 		WithSignedBeaconBlockProvider(mock.NewSignedBeaconBlockProvider()),
 		WithMultiInstance(multiInstance),
-		WithProposerPreferences(&headEventProposerPreferences{duties: make(chan *proposerpreferences.Duty, 16)}),
-		WithExecutionConfigProvider(&recordingExecutionConfigProvider{}),
-	)
+	}, params...)...)
 	require.NoError(t, err)
-
-	epochs := []phase0.Epoch{receiveEpoch(t, dutiesProvider.epochs), receiveEpoch(t, dutiesProvider.epochs)}
-	require.ElementsMatch(t, []phase0.Epoch{0, 1}, epochs)
 }
 
 type seedLookaheadSpecProvider struct {
@@ -96,26 +118,12 @@ func (p *seedLookaheadSpecProvider) Spec(ctx context.Context, opts *api.SpecOpts
 	return response, nil
 }
 
-type v2RecordingProposerDutiesProvider struct {
-	mock.ProposerDutiesProvider
-
-	epochs chan phase0.Epoch
+type recordingEventsProvider struct {
+	opts *api.EventsOpts
 }
 
-func (p *v2RecordingProposerDutiesProvider) ProposerDutiesV2(_ context.Context, opts *api.ProposerDutiesOpts) (*api.Response[[]*apiv1.ProposerDuty], error) {
-	p.epochs <- opts.Epoch
+func (p *recordingEventsProvider) Events(_ context.Context, opts *api.EventsOpts) error {
+	p.opts = opts
 
-	return &api.Response[[]*apiv1.ProposerDuty]{Data: []*apiv1.ProposerDuty{}, Metadata: map[string]any{}}, nil
-}
-
-func receiveEpoch(t *testing.T, epochs <-chan phase0.Epoch) phase0.Epoch {
-	t.Helper()
-	select {
-	case epoch := <-epochs:
-		return epoch
-	case <-time.After(time.Second):
-		require.FailNow(t, "timed out waiting for proposer duties v2 request")
-	}
-
-	return 0
+	return nil
 }
