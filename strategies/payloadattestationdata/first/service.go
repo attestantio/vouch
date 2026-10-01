@@ -66,6 +66,8 @@ func (s *Service) PayloadAttestationData(ctx context.Context, opts *api.PayloadA
 	started := time.Now()
 	results := s.issuePayloadAttestationDataRequests(ctx, opts, started)
 
+	// A provider without data yet may have it shortly, so its answer is reported for a retry.
+	noData := false
 	for range s.payloadAttestationDataProviders {
 		select {
 		case <-ctx.Done():
@@ -81,11 +83,16 @@ func (s *Service) PayloadAttestationData(ctx context.Context, opts *api.PayloadA
 			if response := s.selectedPayloadAttestationData(opts, result, started); response != nil {
 				return response, nil
 			}
+			noData = noData || errors.Is(result.err, eth2client.ErrNoPayloadAttestationData)
 		}
 	}
 
 	if ctx.Err() != nil {
 		return nil, errors.Wrap(ctx.Err(), "failed to obtain payload attestation data")
+	}
+
+	if noData {
+		return nil, errors.Wrap(eth2client.ErrNoPayloadAttestationData, "no valid payload attestation data received")
 	}
 
 	return nil, errors.New("no valid payload attestation data received")

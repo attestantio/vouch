@@ -15,6 +15,7 @@ package first_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -107,4 +108,52 @@ func TestPayloadAttestationDataHonoursCancellation(t *testing.T) {
 	require.NoError(t, err)
 	_, err = service.PayloadAttestationData(ctx, &api.PayloadAttestationDataOpts{Slot: 12})
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestPayloadAttestationDataReportsUnavailableData(t *testing.T) {
+	ctx := context.Background()
+	noData := func(context.Context, *api.PayloadAttestationDataOpts) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+		return nil, eth2client.ErrNoPayloadAttestationData
+	}
+	failed := func(context.Context, *api.PayloadAttestationDataOpts) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+		return nil, errors.New("failed")
+	}
+	tests := []struct {
+		name        string
+		providers   map[string]eth2client.PayloadAttestationDataProvider
+		err         string
+		unavailable bool
+	}{
+		{
+			name: "SomeProviderHasNoDataYet",
+			providers: map[string]eth2client.PayloadAttestationDataProvider{
+				"nodata": payloadAttestationDataProvider(t, noData),
+				"failed": payloadAttestationDataProvider(t, failed),
+			},
+			err:         "no valid payload attestation data received: no payload attestation data available",
+			unavailable: true,
+		},
+		{
+			name: "EveryProviderFailed",
+			providers: map[string]eth2client.PayloadAttestationDataProvider{
+				"failed": payloadAttestationDataProvider(t, failed),
+			},
+			err: "no valid payload attestation data received",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service, err := first.New(ctx,
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithPayloadAttestationDataProviders(test.providers),
+			)
+			require.NoError(t, err)
+
+			_, err = service.PayloadAttestationData(ctx, &api.PayloadAttestationDataOpts{Slot: 12})
+
+			require.EqualError(t, err, test.err)
+			require.Equal(t, test.unavailable, errors.Is(err, eth2client.ErrNoPayloadAttestationData))
+		})
+	}
 }

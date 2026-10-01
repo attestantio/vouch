@@ -75,17 +75,21 @@ func (s *Service) PayloadAttestationData(ctx context.Context, opts *api.PayloadA
 	defer cancel()
 
 	started := time.Now()
-	buckets := s.payloadAttestationDataBuckets(ctx, opts, started)
+	buckets, noData := s.payloadAttestationDataBuckets(ctx, opts, started)
 
-	return s.selectPayloadAttestationData(ctx, started, buckets)
+	return s.selectPayloadAttestationData(ctx, started, buckets, noData)
 }
 
-func (s *Service) payloadAttestationDataBuckets(ctx context.Context, opts *api.PayloadAttestationDataOpts, started time.Time) map[payloadAttestationDataKey][]payloadAttestationDataResult {
+// payloadAttestationDataBuckets groups the valid responses by their data, and reports whether any
+// provider had no data yet.
+func (s *Service) payloadAttestationDataBuckets(ctx context.Context, opts *api.PayloadAttestationDataOpts, started time.Time) (map[payloadAttestationDataKey][]payloadAttestationDataResult, bool) {
 	results := s.issuePayloadAttestationDataRequests(ctx, opts, started)
 	buckets := make(map[payloadAttestationDataKey][]payloadAttestationDataResult)
 	requiredCount := max(len(s.payloadAttestationDataProviders)/2+1, s.threshold)
 	largestCount := 0
+	noData := false
 	bucket := func(result payloadAttestationDataResult) {
+		noData = noData || errors.Is(result.err, eth2client.ErrNoPayloadAttestationData)
 		if key, ok := s.payloadAttestationDataKey(opts, result); ok {
 			buckets[key] = append(buckets[key], result)
 			largestCount = max(largestCount, len(buckets[key]))
@@ -104,13 +108,13 @@ func (s *Service) payloadAttestationDataBuckets(ctx context.Context, opts *api.P
 			}
 			s.log.Debug().Int("buckets", len(buckets)).Msg("Timed out awaiting payload attestation data")
 
-			return buckets
+			return buckets, noData
 		case result := <-results:
 			bucket(result)
 		}
 	}
 
-	return buckets
+	return buckets, noData
 }
 
 func (s *Service) issuePayloadAttestationDataRequests(ctx context.Context, opts *api.PayloadAttestationDataOpts, started time.Time) <-chan payloadAttestationDataResult {
@@ -143,17 +147,27 @@ func (s *Service) payloadAttestationDataKey(opts *api.PayloadAttestationDataOpts
 	}, true
 }
 
-func (s *Service) selectPayloadAttestationData(ctx context.Context, started time.Time, buckets map[payloadAttestationDataKey][]payloadAttestationDataResult) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+func (s *Service) selectPayloadAttestationData(ctx context.Context,
+	started time.Time,
+	buckets map[payloadAttestationDataKey][]payloadAttestationDataResult,
+	noData bool,
+) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
 	leading, count := leadingPayloadAttestationDataBuckets(buckets)
 	if count == 0 {
 		if ctx.Err() != nil {
 			return nil, errors.Wrap(ctx.Err(), "failed to obtain payload attestation data")
+		}
+		if noData {
+			return nil, errors.Wrap(eth2client.ErrNoPayloadAttestationData, "no valid payload attestation data received")
 		}
 
 		return nil, errors.New("no valid payload attestation data received")
 	}
 	if count < s.threshold {
 		s.log.Debug().Int("count", count).Int("threshold", s.threshold).Msg("Insufficient payload attestation data agreement")
+		if noData {
+			return nil, errors.Wrapf(eth2client.ErrNoPayloadAttestationData, "payload attestation data count of %d lower than threshold %d", count, s.threshold)
+		}
 		return nil, errors.Errorf("payload attestation data count of %d lower than threshold %d", count, s.threshold)
 	}
 	if len(leading) == 1 {
