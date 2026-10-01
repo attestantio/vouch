@@ -554,10 +554,6 @@ func initController(ctx context.Context,
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch multiclient for controller")
 	}
-	payloadEvents, err := payloadEventsProvider(ctx, monitor)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to fetch payload events provider for controller")
-	}
 
 	log.Trace().Msg("Starting controller")
 	controllerParams := []standardcontroller.Parameter{
@@ -570,7 +566,6 @@ func initController(ctx context.Context,
 		standardcontroller.WithAttesterDutiesProvider(eth2Client.(eth2client.AttesterDutiesProvider)),
 		standardcontroller.WithSyncCommitteeDutiesProvider(eth2Client.(eth2client.SyncCommitteeDutiesProvider)),
 		standardcontroller.WithEventsProvider(eventsConsensusClient.(eth2client.EventsProvider)),
-		standardcontroller.WithPayloadEventsProvider(payloadEvents),
 		standardcontroller.WithScheduler(schedulerSvc),
 		standardcontroller.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardcontroller.WithAttester(attesterSvc),
@@ -597,7 +592,12 @@ func initController(ctx context.Context,
 		standardcontroller.WithMultiInstance(multiInstance),
 	}
 	if ptcDutiesProvider, ok := eth2Client.(eth2client.PTCDutiesProvider); ok && payloadAttester != nil {
+		payloadEvents, err := payloadEventsProvider(ctx, monitor)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch payload events provider for controller")
+		}
 		controllerParams = append(controllerParams,
+			standardcontroller.WithPayloadEventsProvider(payloadEvents),
 			standardcontroller.WithPTCDutiesProvider(ptcDutiesProvider),
 			standardcontroller.WithPayloadAttester(payloadAttester),
 		)

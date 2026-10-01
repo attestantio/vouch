@@ -67,6 +67,73 @@ func TestNewSubscribesToHeadV2OnlyForProposerPreferences(t *testing.T) {
 	require.NotNil(t, enabled.opts.HeadV2Handler)
 }
 
+func TestNewSubscribesToPayloadEventsOnlyForGloasPayloadAttestation(t *testing.T) {
+	ctx := context.Background()
+	gloasSpecProvider := &gloasSpecProvider{SpecProvider: mock.NewSpecProvider()}
+	gloasChainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(gloasSpecProvider),
+	)
+	require.NoError(t, err)
+	gloas := []Parameter{WithSpecProvider(gloasSpecProvider), WithChainTimeService(gloasChainTime)}
+	payloadAttestation := []Parameter{
+		WithPTCDutiesProvider(&recordingPTCDutiesProvider{}),
+		WithPayloadAttester(&recordingPayloadAttester{}),
+	}
+
+	tests := []struct {
+		name      string
+		params    []Parameter
+		subscribe bool
+	}{
+		{
+			name:      "GloasPayloadAttestation",
+			params:    append(append([]Parameter{}, gloas...), payloadAttestation...),
+			subscribe: true,
+		},
+		{
+			name:   "GloasNotScheduled",
+			params: payloadAttestation,
+		},
+		{
+			name:   "NoPayloadAttester",
+			params: gloas,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			payloadEvents := &recordingEventsProvider{}
+			newProposerPreferencesController(t, &recordingEventsProvider{},
+				append([]Parameter{WithPayloadEventsProvider(payloadEvents)}, test.params...)...,
+			)
+
+			if test.subscribe {
+				require.NotNil(t, payloadEvents.opts)
+				require.Equal(t, []string{"execution_payload_available"}, payloadEvents.opts.Topics)
+			} else {
+				require.Nil(t, payloadEvents.opts)
+			}
+		})
+	}
+}
+
+// gloasSpecProvider schedules the Gloas fork at genesis.
+type gloasSpecProvider struct {
+	eth2client.SpecProvider
+}
+
+func (p *gloasSpecProvider) Spec(ctx context.Context, opts *api.SpecOpts) (*api.Response[map[string]any], error) {
+	response, err := p.SpecProvider.Spec(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	response.Data["GLOAS_FORK_EPOCH"] = uint64(0)
+
+	return response, nil
+}
+
 func newProposerPreferencesController(t *testing.T, eventsProvider *recordingEventsProvider, params ...Parameter) {
 	t.Helper()
 	ctx := context.Background()

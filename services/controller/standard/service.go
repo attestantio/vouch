@@ -140,7 +140,8 @@ func (s *Service) eventsOpts() *api.EventsOpts {
 }
 
 // subscribeEvents subscribes to the controller's events, and to payload availability events if a
-// payload events provider is configured.
+// payload events provider is configured and payload attestations will be needed.  A beacon node
+// that does not know the payload topic rejects the stream, so it is not requested before Gloas is scheduled.
 func (s *Service) subscribeEvents(ctx context.Context,
 	eventsProvider eth2client.EventsProvider,
 	payloadEventsProvider eth2client.EventsProvider,
@@ -148,7 +149,10 @@ func (s *Service) subscribeEvents(ctx context.Context,
 	if err := eventsProvider.Events(ctx, s.eventsOpts()); err != nil {
 		return errors.Wrap(err, "failed to add events handler")
 	}
-	if payloadEventsProvider == nil {
+	if payloadEventsProvider == nil ||
+		s.ptcDutiesProvider == nil ||
+		s.payloadAttester == nil ||
+		s.gloasForkEpoch == 0xffffffffffffffff {
 		return nil
 	}
 	if err := payloadEventsProvider.Events(ctx, &api.EventsOpts{
