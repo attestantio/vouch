@@ -151,9 +151,9 @@ func (s *Service) schedulePayloadAttestation(ctx context.Context,
 	}
 
 	jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.payloadAttestationDelay)
-	// The vote is cast at the attestation deadline, so its context runs to the end of the slot:
-	// bounding it at that deadline would cut off the signing and submission the vote depends on.
-	deadline := s.chainTimeService.StartOfSlot(duty.Slot() + 1)
+	// The vote's context runs to the end of the slot: bounding it at the attestation deadline would
+	// cut off the signing and submission the vote depends on.
+	endOfSlot := s.chainTimeService.StartOfSlot(duty.Slot() + 1)
 	attestation := &payloadAttestation{duty: duty, deadline: jobTime}
 	s.payloadAttestationsMutex.Lock()
 	if s.payloadAttestations == nil {
@@ -164,7 +164,7 @@ func (s *Service) schedulePayloadAttestation(ctx context.Context,
 		payloadAttestationJobName(duty.Slot()),
 		jobTime,
 		func(ctx context.Context) {
-			ctx, cancel := context.WithDeadline(ctx, deadline)
+			ctx, cancel := context.WithDeadline(ctx, endOfSlot)
 			defer cancel()
 			attestation.mutex.Lock()
 			if !attestation.attemptFinished {

@@ -156,6 +156,25 @@ func TestLateExecutionPayloadAvailableDoesNothing(t *testing.T) {
 	require.Empty(t, payloadService.duties)
 }
 
+func TestExecutionPayloadAvailableAfterDeadlineJobDoesNotRerunPayloadAttestation(t *testing.T) {
+	ctx := context.Background()
+	schedulerService := &recordingScheduler{}
+	payloadService := &recordingPayloadAttester{}
+	service := &Service{
+		chainTimeService:        currentSlotRecordingChainTime(10),
+		scheduler:               schedulerService,
+		payloadAttester:         payloadService,
+		payloadAttestationDelay: 9 * time.Second,
+	}
+	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})
+
+	service.schedulePayloadAttestation(ctx, duty, map[phase0.ValidatorIndex]e2wtypes.Account{1: nil})
+	schedulerService.RunJobIfExists(ctx, payloadAttestationJobName(10))
+	service.HandleExecutionPayloadAvailableEvent(ctx, &apiv1.ExecutionPayloadAvailableEvent{Slot: 10})
+
+	require.Len(t, payloadService.duties, 1)
+}
+
 func TestExecutionPayloadAvailableWithoutDutyDoesNothing(t *testing.T) {
 	ctx := context.Background()
 	schedulerService := &recordingScheduler{existing: make(map[string]bool)}
@@ -383,11 +402,12 @@ func TestRefreshPayloadAttestationsRemovesCancelledEventAttempt(t *testing.T) {
 	schedulerService := &recordingScheduler{}
 	payloadService := &recordingPayloadAttester{}
 	service := &Service{
-		chainTimeService:           &recordingChainTime{currentEpoch: 0, slotDuration: time.Second, slotsPerEpoch: 32},
+		chainTimeService:           currentSlotRecordingChainTime(10),
 		ptcDutiesProvider:          &recordingPTCDutiesProvider{},
 		validatingAccountsProvider: &recordingAccountsProvider{},
 		scheduler:                  schedulerService,
 		payloadAttester:            payloadService,
+		payloadAttestationDelay:    9 * time.Second,
 		gloasForkEpoch:             0,
 	}
 	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 10, ValidatorIndex: 1})

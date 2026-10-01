@@ -121,6 +121,64 @@ func TestAttestRetriesUnavailablePayloadAttestationData(t *testing.T) {
 	require.Equal(t, 2, calls)
 }
 
+func TestAttestStopsRetryingUnavailablePayloadAttestationData(t *testing.T) {
+	tests := []struct {
+		name     string
+		cancel   bool
+		minCalls int
+		maxCalls int
+	}{
+		{
+			name:     "RetryWindowElapsed",
+			minCalls: 2,
+			maxCalls: 11,
+		},
+		{
+			name:     "ContextDone",
+			cancel:   true,
+			minCalls: 1,
+			maxCalls: 1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client, err := mocketh2client.New(context.Background())
+			require.NoError(t, err)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			calls := 0
+			client.PayloadAttestationDataFunc = func(context.Context, *api.PayloadAttestationDataOpts) (*api.Response[*spec.VersionedPayloadAttestationData], error) {
+				calls++
+				if test.cancel {
+					cancel()
+				}
+				return nil, eth2client.ErrNoPayloadAttestationData
+			}
+			accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{1}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+			require.NoError(t, err)
+			signer := &recordingSigner{}
+			service, err := standard.New(ctx,
+				standard.WithLogLevel(zerolog.Disabled),
+				standard.WithMonitor(prometheusMonitor{}),
+				standard.WithPayloadAttestationDataProvider(client),
+				standard.WithPayloadAttestationDataSigner(signer),
+				standard.WithPayloadAttestationMessagesSubmitter(&recordingSubmitter{}),
+			)
+			require.NoError(t, err)
+			duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 12, ValidatorIndex: 1})
+			duty.SetAccount(1, accounts[1])
+
+			_, err = service.Attest(ctx, duty)
+
+			require.ErrorIs(t, err, eth2client.ErrNoPayloadAttestationData)
+			require.GreaterOrEqual(t, calls, test.minCalls)
+			require.LessOrEqual(t, calls, test.maxCalls)
+			require.Empty(t, signer.accounts)
+		})
+	}
+}
+
 func TestAttestRejectsDataForDifferentSlotBeforeSigningOrSubmitting(t *testing.T) {
 	ctx := context.Background()
 	capture := logger.NewLogCapture()
@@ -150,13 +208,14 @@ func TestAttestRejectsDataForDifferentSlotBeforeSigningOrSubmitting(t *testing.T
 
 	duty := payloadattester.NewDuty(&apiv1.PTCDuty{Slot: 12, ValidatorIndex: 1})
 	duty.SetAccount(1, accounts[1])
+	failedBefore := payloadAttestationEventCounts(t)["failed"]
 
 	_, err = service.Attest(ctx, duty)
 	require.EqualError(t, err, "payload attestation data slot 13 does not match duty slot 12")
 	require.Empty(t, signer.accounts)
 	require.Empty(t, submitter.messages)
 
-	require.Equal(t, float64(1), payloadAttestationEventCounts(t)["failed"])
+	require.Equal(t, failedBefore+1, payloadAttestationEventCounts(t)["failed"])
 	require.True(t, capture.HasLog(map[string]any{"message": "Failed to produce payload attestation data", "slot": uint64(12)}))
 }
 
