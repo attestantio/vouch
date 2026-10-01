@@ -211,7 +211,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	}); err != nil {
 		return nil, errors.Wrap(err, "failed to add events handler")
 	}
-	if s.proposerPreferences != nil && s.executionConfigProvider != nil && s.proposerPreferencesLookahead != 0 {
+	if s.proposerPreferencesEnabled() {
 		go s.seedProposerPreferencesDependentRoots(ctx)
 	}
 

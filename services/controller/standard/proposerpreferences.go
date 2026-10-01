@@ -110,9 +110,14 @@ func (s *Service) publishProposerPreferencesForKnownRoots(ctx context.Context) {
 	}
 }
 
+// proposerPreferencesEnabled reports whether proposer preferences are configured and published by this node.
+func (s *Service) proposerPreferencesEnabled() bool {
+	return s.proposerPreferences != nil && s.executionConfigProvider != nil && s.proposerPreferencesLookahead != 0
+}
+
 // publishProposerPreferences publishes preferences for the proposal epoch whose duties share the supplied dependent root.
 func (s *Service) publishProposerPreferences(ctx context.Context, proposalEpoch phase0.Epoch, dependentRoot phase0.Root) {
-	if s.proposerPreferences == nil || s.executionConfigProvider == nil || s.proposerPreferencesLookahead == 0 {
+	if !s.proposerPreferencesEnabled() {
 		return
 	}
 	s.proposerPreferences.Prune(s.chainTimeService.CurrentSlot())
