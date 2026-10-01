@@ -235,6 +235,28 @@ func TestSeedProposerPreferencesDependentRootsPublishesAtStartup(t *testing.T) {
 	waitForProposerPreferencesPublication(t, service)
 }
 
+func TestSeedProposerPreferencesDependentRootsKeepsHeadV2Roots(t *testing.T) {
+	ctx := context.Background()
+	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{100}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
+	require.NoError(t, err)
+	service, _, preferences := newHeadV2ProposerPreferencesService(t, accounts, 6, map[phase0.Epoch]*api.Response[[]*apiv1.ProposerDuty]{
+		6: {Data: []*apiv1.ProposerDuty{{Slot: 209, ValidatorIndex: 100}}, Metadata: map[string]any{"dependent_root": phase0.Root{0x01}}},
+		7: {Data: []*apiv1.ProposerDuty{{Slot: 225, ValidatorIndex: 100}}, Metadata: map[string]any{"dependent_root": phase0.Root{0x02}}},
+	})
+	preferences.invalidated = make(chan slotRange, 16)
+
+	// head_v2 arrives while the startup fetch is in flight, which then returns older roots.
+	service.recordProposerPreferencesDependentRoot(6, phase0.Root{0x0a})
+	service.recordProposerPreferencesDependentRoot(7, phase0.Root{0x0b})
+	receiveInvalidatedSlotRange(t, preferences.invalidated)
+	receiveInvalidatedSlotRange(t, preferences.invalidated)
+	service.seedProposerPreferencesDependentRoots(ctx)
+	waitForProposerPreferencesPublication(t, service)
+
+	require.Equal(t, map[phase0.Epoch]phase0.Root{6: {0x0a}, 7: {0x0b}}, service.proposerPreferencesDependentRoots)
+	require.Empty(t, preferences.invalidated)
+}
+
 func newHeadV2ProposerPreferencesService(t *testing.T,
 	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
 	currentEpoch phase0.Epoch,
