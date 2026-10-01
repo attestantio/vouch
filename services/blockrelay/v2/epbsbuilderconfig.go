@@ -14,7 +14,6 @@
 package v2
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -86,13 +85,13 @@ func (c *EPBSBuilderConfig) UnmarshalJSON(input []byte) error {
 	if err := json.Unmarshal(input, &fields); err != nil {
 		return errors.Wrap(err, "invalid ePBS builder config")
 	}
-	if builders, exists := fields["builders"]; exists && bytes.Equal(bytes.TrimSpace(builders), []byte("null")) {
+	if isNullField(fields, "builders") {
 		return errors.New("ePBS direct builders must be an array")
 	}
-	if minBid, exists := fields["min_bid"]; exists && bytes.Equal(bytes.TrimSpace(minBid), []byte("null")) {
+	if isNullField(fields, "min_bid") {
 		return errors.New("ePBS minimum bid must be a decimal string")
 	}
-	if boost, exists := fields["builder_boost_factor"]; exists && bytes.Equal(bytes.TrimSpace(boost), []byte("null")) {
+	if isNullField(fields, "builder_boost_factor") {
 		return errors.New("ePBS builder boost factor must be an unsigned integer")
 	}
 

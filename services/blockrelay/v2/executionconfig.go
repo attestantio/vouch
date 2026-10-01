@@ -16,11 +16,8 @@ package v2
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -100,7 +97,7 @@ func (e *ExecutionConfig) UnmarshalJSON(input []byte) error {
 	if err := json.Unmarshal(input, &fields); err != nil {
 		return errors.Wrap(err, "invalid JSON")
 	}
-	if epbsConfig, exists := fields["epbs_builder_config"]; exists && string(epbsConfig) == "null" {
+	if isNullField(fields, "epbs_builder_config") {
 		return errors.New("invalid JSON: ePBS builder config must be an object")
 	}
 	for i, proposer := range data.Proposers {
@@ -113,46 +110,18 @@ func (e *ExecutionConfig) UnmarshalJSON(input []byte) error {
 		return fmt.Errorf("unexpected version %d", data.Version)
 	}
 
-	if data.FeeRecipient != "" {
-		tmp, err := hex.DecodeString(strings.TrimPrefix(data.FeeRecipient, "0x"))
-		if err != nil {
-			return errors.Wrap(err, "failed to decode fee recipient")
-		}
-		if len(tmp) != bellatrix.ExecutionAddressLength {
-			return errors.New("incorrect length for fee recipient")
-		}
-		var feeRecipient bellatrix.ExecutionAddress
-		copy(feeRecipient[:], tmp)
-		e.FeeRecipient = &feeRecipient
+	var err error
+	if e.FeeRecipient, err = parseFeeRecipient(data.FeeRecipient); err != nil {
+		return err
 	}
-	if data.GasLimit != "" {
-		gasLimit, err := strconv.ParseUint(data.GasLimit, 10, 64)
-		if err != nil {
-			return errors.Wrap(err, "invalid gas limit")
-		}
-		e.GasLimit = &gasLimit
+	if e.GasLimit, err = parseGasLimit(data.GasLimit); err != nil {
+		return err
 	}
-	if data.Grace != "" {
-		tmp, err := strconv.ParseInt(data.Grace, 10, 64)
-		if err != nil {
-			return errors.Wrap(err, "grace invalid")
-		}
-		if tmp < 0 {
-			return errors.New("grace cannot be negative")
-		}
-		grace := time.Duration(tmp) * time.Millisecond
-		e.Grace = &grace
+	if e.Grace, err = parseGrace(data.Grace); err != nil {
+		return err
 	}
-	if data.MinValue != "" {
-		minValue, err := decimal.NewFromString(data.MinValue)
-		if err != nil {
-			return errors.Wrap(err, "min value invalid")
-		}
-		if minValue.Sign() == -1 {
-			return errors.New("min value cannot be negative")
-		}
-		minValue = minValue.Mul(weiPerETH)
-		e.MinValue = &minValue
+	if e.MinValue, err = parseMinValue(data.MinValue); err != nil {
+		return err
 	}
 	e.EPBSBuilderConfig = data.EPBSBuilderConfig
 	e.Relays = data.Relays
@@ -426,67 +395,10 @@ func (e *ExecutionConfig) generateRelayConfig(
 		PublicKey: proposerRelayConfig.PublicKey,
 	}
 
-	switch {
-	case proposerRelayConfig.FeeRecipient != nil:
-		// Fetch from proposer relay config.
-		relayConfig.FeeRecipient = *proposerRelayConfig.FeeRecipient
-	case proposerConfig.FeeRecipient != nil:
-		// Fetch from proposer config.
-		relayConfig.FeeRecipient = *proposerConfig.FeeRecipient
-	case e.FeeRecipient != nil:
-		// Fetch from execution config.
-		relayConfig.FeeRecipient = *e.FeeRecipient
-	default:
-		// No value; set to default.
-		relayConfig.FeeRecipient = fallbackFeeRecipient
-	}
-
-	switch {
-	case proposerRelayConfig.Grace != nil:
-		// Fetch from proposer relay config.
-		relayConfig.Grace = *proposerRelayConfig.Grace
-	case proposerConfig.Grace != nil:
-		// Fetch from proposer config.
-		relayConfig.Grace = *proposerConfig.Grace
-	case e.Grace != nil:
-		// Fetch from execution config.
-		relayConfig.Grace = *e.Grace
-	default:
-		// No value; set to zero.
-		relayConfig.Grace = 0
-	}
-
-	switch {
-	case proposerRelayConfig.GasLimit != nil:
-		// Fetch from proposer relay config.
-		relayConfig.GasLimit = *proposerRelayConfig.GasLimit
-	case proposerConfig.GasLimit != nil:
-		// Fetch from proposer config.
-		relayConfig.GasLimit = *proposerConfig.GasLimit
-	case e.GasLimit != nil:
-		// Fetch from execution config.
-		relayConfig.GasLimit = *e.GasLimit
-	default:
-		// No value; set to default.
-		relayConfig.GasLimit = fallbackGasLimit
-	}
-
-	switch {
-	case relayConfig.MinValue.Sign() == 1:
-		// Already set; nothing to do.
-	case proposerRelayConfig.MinValue != nil:
-		// Fetch from proposer relay config.
-		relayConfig.MinValue = *proposerRelayConfig.MinValue
-	case proposerConfig.MinValue != nil:
-		// Fetch from proposer config.
-		relayConfig.MinValue = *proposerConfig.MinValue
-	case e.MinValue != nil:
-		// Fetch from execution config.
-		relayConfig.MinValue = *e.MinValue
-	default:
-		// No value; set to zero.
-		relayConfig.MinValue = decimal.Zero
-	}
+	relayConfig.FeeRecipient = firstSet(fallbackFeeRecipient, proposerRelayConfig.FeeRecipient, proposerConfig.FeeRecipient, e.FeeRecipient)
+	relayConfig.Grace = firstSet(0, proposerRelayConfig.Grace, proposerConfig.Grace, e.Grace)
+	relayConfig.GasLimit = firstSet(fallbackGasLimit, proposerRelayConfig.GasLimit, proposerConfig.GasLimit, e.GasLimit)
+	relayConfig.MinValue = firstSet(decimal.Zero, proposerRelayConfig.MinValue, proposerConfig.MinValue, e.MinValue)
 
 	return relayConfig
 }
