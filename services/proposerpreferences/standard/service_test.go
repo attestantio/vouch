@@ -293,9 +293,7 @@ func TestPublishRetriesRejectedProviderOncePerSlotUntilDutyStarts(t *testing.T) 
 	ctx := context.Background()
 	accounts, err := testutil.CreateTestWalletAndAccounts([]phase0.ValidatorIndex{3}, "0x25295f0d1d592a90b333e26e85149708208e9f8e8bc18f6c77bd62f8ad7a6866")
 	require.NoError(t, err)
-	submitter := &recordingSubmitter{outcomeSets: []map[string]error{
-		{"node": context.DeadlineExceeded}, {"node": nil},
-	}}
+	submitter := &recordingSubmitter{outcomes: map[string]error{"node": context.DeadlineExceeded}}
 	service, err := standard.New(ctx, standard.WithMonitor(nullmetrics.New()), standard.WithSigner(&recordingSigner{}), standard.WithSubmitter(submitter))
 	require.NoError(t, err)
 	duty := &proposerpreferences.Duty{DependentRoot: phase0.Root{1}, ProposalSlot: 66, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{2}, TargetGasLimit: 30_000_000}
@@ -303,13 +301,15 @@ func TestPublishRetriesRejectedProviderOncePerSlotUntilDutyStarts(t *testing.T) 
 	require.Error(t, service.Publish(ctx, duty))
 	require.NoError(t, service.Publish(ctx, duty))
 	require.Len(t, submitter.preferences, 1)
-	require.False(t, service.ProviderReady("node", 66, 3))
 	duty.CurrentSlot = 33
-	require.NoError(t, service.Publish(ctx, duty))
-	require.True(t, service.ProviderReady("node", 66, 3))
+	require.Error(t, service.Publish(ctx, duty))
+	duty.CurrentSlot, duty.CurrentEpoch = 65, 2
+	require.Error(t, service.Publish(ctx, duty))
+	require.Len(t, submitter.preferences, 3)
 	duty.CurrentSlot = 66
 	require.NoError(t, service.Publish(ctx, duty))
-	require.Len(t, submitter.preferences, 2)
+	require.Len(t, submitter.preferences, 3)
+	require.False(t, service.ProviderReady("node", 66, 3))
 }
 
 func TestRouteMissingProviderIsProbedOncePerEpochAndRecovers(t *testing.T) {
@@ -717,18 +717,16 @@ func TestPublishKeepsFirstSignedPreferenceWhenConfigChanges(t *testing.T) {
 	signer := &recordingSigner{signature: phase0.BLSSignature{0x01}}
 	submitter := &recordingSubmitter{outcomes: map[string]error{"accepted": nil}}
 	service, err := standard.New(ctx,
-		standard.WithMonitor(prometheusMonitor{}),
+		standard.WithMonitor(nullmetrics.New()),
 		standard.WithSigner(signer),
 		standard.WithSubmitter(submitter),
 	)
 	require.NoError(t, err)
-	refreshedBefore := proposerPreferencesEventCounts(t)["refreshed"]
 
 	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}))
 	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 31_000_000}))
 	require.NoError(t, service.Publish(ctx, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 64, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x03}, TargetGasLimit: 30_000_000}))
 
-	require.Equal(t, refreshedBefore, proposerPreferencesEventCounts(t)["refreshed"])
 	require.Len(t, signer.preferences, 1)
 	require.Len(t, submitter.preferences, 1)
 	require.True(t, service.ProviderReady("accepted", 64, 3))

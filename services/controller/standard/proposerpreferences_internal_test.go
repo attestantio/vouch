@@ -62,7 +62,7 @@ func TestPublishProposerPreferencesPublishesFirstGloasEpoch(t *testing.T) {
 	require.Equal(t, 1, provider.v2Calls)
 	require.Equal(t, phase0.Epoch(5), provider.epoch)
 	require.Len(t, preferences.duties, 1)
-	require.Equal(t, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 160, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000}, preferenceWithoutCurrentSlot(preferences.duties[0]))
+	require.Equal(t, &proposerpreferences.Duty{DependentRoot: phase0.Root{0x01}, ProposalSlot: 160, ValidatorIndex: 3, Account: accounts[3], FeeRecipient: bellatrix.ExecutionAddress{0x02}, TargetGasLimit: 30_000_000, CurrentSlot: 128, CurrentEpoch: 4}, preferences.duties[0])
 }
 
 func TestPublishProposerPreferencesSkipsUnownedValidatorsQuietly(t *testing.T) {
@@ -216,7 +216,7 @@ func TestProposerPreferencesSlotTickerSchedulesNextSlot(t *testing.T) {
 	require.Equal(t, "Proposer preferences slot ticker", jobs.name)
 	when, err := jobs.runtime(ctx)
 	require.NoError(t, err)
-	require.Equal(t, clock.StartOfSlot(clock.CurrentSlot()+1), when)
+	require.Equal(t, time.Unix(193, 0), when)
 }
 
 type recordingPreferenceTicker struct {
