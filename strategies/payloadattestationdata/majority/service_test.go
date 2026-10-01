@@ -291,3 +291,66 @@ func TestPayloadAttestationDataHonoursCancellation(t *testing.T) {
 	_, err = service.PayloadAttestationData(ctx, &api.PayloadAttestationDataOpts{Slot: 12})
 	require.ErrorIs(t, err, context.Canceled)
 }
+
+func TestPayloadAttestationDataReportsUnavailableData(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name        string
+		providers   map[string]eth2client.PayloadAttestationDataProvider
+		threshold   int
+		err         string
+		unavailable bool
+	}{
+		{
+			name: "NoProviderHasDataYet",
+			providers: map[string]eth2client.PayloadAttestationDataProvider{
+				"one": erroringProvider(t, eth2client.ErrNoPayloadAttestationData),
+				"two": erroringProvider(t, eth2client.ErrNoPayloadAttestationData),
+			},
+			err:         "no valid payload attestation data received: no payload attestation data available",
+			unavailable: true,
+		},
+		{
+			name: "NoValidResponse",
+			providers: map[string]eth2client.PayloadAttestationDataProvider{
+				"error": erroringProvider(t, errors.New("failed")),
+			},
+			err: "no valid payload attestation data received",
+		},
+		{
+			name: "BelowThresholdWhileProviderHasNoDataYet",
+			providers: map[string]eth2client.PayloadAttestationDataProvider{
+				"nodata": erroringProvider(t, eth2client.ErrNoPayloadAttestationData),
+				"valid":  provider(t, data(12, phase0.Root{1}, true, true)),
+			},
+			threshold:   2,
+			err:         "payload attestation data count of 1 lower than threshold 2: no payload attestation data available",
+			unavailable: true,
+		},
+		{
+			name: "BelowThreshold",
+			providers: map[string]eth2client.PayloadAttestationDataProvider{
+				"error": erroringProvider(t, errors.New("failed")),
+				"valid": provider(t, data(12, phase0.Root{1}, true, true)),
+			},
+			threshold: 2,
+			err:       "payload attestation data count of 1 lower than threshold 2",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service, err := majority.New(ctx,
+				majority.WithLogLevel(zerolog.Disabled),
+				majority.WithPayloadAttestationDataProviders(test.providers),
+				majority.WithThreshold(test.threshold),
+			)
+			require.NoError(t, err)
+
+			_, err = service.PayloadAttestationData(ctx, &api.PayloadAttestationDataOpts{Slot: 12})
+
+			require.EqualError(t, err, test.err)
+			require.Equal(t, test.unavailable, errors.Is(err, eth2client.ErrNoPayloadAttestationData))
+		})
+	}
+}
