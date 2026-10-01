@@ -302,10 +302,10 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if bid.ParentBlockRoot != parentRoot {
 		return errors.New("ePBS execution payload bid for incorrect parent block")
 	}
-	strategy := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataStrategy, "unknown")
+	strategy := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataStrategy)
 	// The strategy has already named the provider stably; naming it again could remap it.
-	provider := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataProvider, "unknown")
-	source := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataSource, "unknown")
+	provider := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataProvider)
+	source := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataSource)
 	if source == "unknown" && bid.BuilderIndex == gloas.BuilderIndexSelfBuild {
 		// The proposer can recover self-building from the bid, but telling builder_api apart from
 		// p2p_builder needs the beacon node's response headers, and the strategies replace those
@@ -387,8 +387,8 @@ func (s *Service) obtainEPBSProposal(ctx context.Context,
 	}
 	if response != nil && response.Data != nil {
 		span.SetAttributes(
-			attribute.String("provider", responseMetadataString(response.Metadata, beaconblockproposer.MetadataProvider, "unknown")),
-			attribute.String("source", responseMetadataString(response.Metadata, beaconblockproposer.MetadataSource, "unknown")),
+			attribute.String("provider", responseMetadataString(response.Metadata, beaconblockproposer.MetadataProvider)),
+			attribute.String("source", responseMetadataString(response.Metadata, beaconblockproposer.MetadataSource)),
 		)
 		if proposalRoot, err := response.Data.Root(); err == nil {
 			span.SetAttributes(attribute.String("proposal_root", proposalRoot.String()))
@@ -398,14 +398,14 @@ func (s *Service) obtainEPBSProposal(ctx context.Context,
 	return response, nil
 }
 
-func responseMetadataString(metadata map[string]any, key string, fallback string) string {
+func responseMetadataString(metadata map[string]any, key string) string {
 	value, exists := metadata[key]
 	if !exists {
-		return fallback
+		return "unknown"
 	}
 	result, isString := value.(string)
 	if !isString || result == "" {
-		return fallback
+		return "unknown"
 	}
 	return result
 }
