@@ -188,6 +188,7 @@ func WithBuilderBoostFactor(factor uint64) Parameter {
 }
 
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
+// skipcq: GO-R1005
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel: zerolog.GlobalLevel(),
