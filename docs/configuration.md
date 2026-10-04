@@ -102,8 +102,8 @@ beaconblockproposer:
   # -  50: `builder value` must be more than twice the local value (`local value*(100/50)`) to be used
   # -  91: `builder value` must be more than ~10% higher than the local value (`local value*(100/91)`) to be used
   # - 100: `builder value` must be more than the local value (`local value*(100/100)`) to be used
-  # From Gloas onwards builder policy comes from version 2 execution configuration's epbs_builder_config.
-  # The ePBS boost defaults to 100 rather than inheriting this legacy value.
+  # This value is not used from Gloas onwards.  Gloas builder policy comes from version 2 execution configuration's
+  # epbs_builder_config, with fallbacks in builderconfig; this value is not one of those fallbacks.
   builder-boost-factor: 91
 
 # attester provides control of the attester process.

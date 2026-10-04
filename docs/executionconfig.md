@@ -46,7 +46,7 @@ builderconfig:
 - `fallback-min-bid` is the minimum P2P bid, in Gwei. It defaults to `0`.
 - `fallback-builder-boost-factor` is the boost factor percentage. It defaults to `100`. An explicit `0` is honoured.
 
-These values apply whenever the execution configuration does not supply its own: with no configuration URL, when the configuration cannot be fetched, with a version 1 configuration, and with a version 2 configuration that omits the fields. They are read once at startup. See [Gloas ePBS builder configuration](#gloas-epbs-builder-configuration) for the full precedence.
+These values apply whenever the execution configuration does not supply its own: with no configuration URL, when no configuration has loaded because the fetch failed (a later failed fetch keeps the last loaded configuration), with a version 1 configuration, and with a version 2 configuration that omits the fields. They are read once at startup. See [Gloas ePBS builder configuration](#gloas-epbs-builder-configuration) for the full precedence.
 
 `builderconfig` is unrelated to `blockrelay.builder-configs`, which scores pre-Gloas relay bids by builder public key. `beaconblockproposer.builder-boost-factor` is also unrelated: it applies only to pre-Gloas proposals, is not used from Gloas onwards, and is not a fallback for `builderconfig.fallback-builder-boost-factor`.
 
@@ -162,7 +162,7 @@ Each field resolves independently, and the first value present wins:
 | Entry `min_bid` | the entry's `min_bid` | resolved P2P `min_bid` for this proposer | | |
 | Entry `builder_boost_factor` | the entry's `builder_boost_factor` | resolved P2P `builder_boost_factor` for this proposer | | |
 
-With no configuration URL, a failed fetch, or a version 1 configuration, only columns 3 and 4 apply.
+With no configuration URL, no configuration loaded yet, or a version 1 configuration, only columns 3 and 4 apply.
 
 An omitted proposer `builders` field inherits the root list, an explicit empty list disables direct builders for that proposer, and a non-empty proposer list replaces the root list as a whole. An entry inherited from the root list takes the resolved values of the proposer it serves, not the root's values. Builder entries are never merged by URL or public key.
 
