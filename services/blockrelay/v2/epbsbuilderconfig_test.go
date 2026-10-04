@@ -53,9 +53,8 @@ func TestEPBSBuilderConfigValidation(t *testing.T) {
 		{name: "PubkeyWrongLength", input: config(validBuilder(`,"builder_pubkeys":["0x11"]`)), err: "invalid JSON: invalid ePBS builder config: direct builder public key 0 has incorrect length"},
 		{name: "PaymentMissing", input: config(validBuilder(`,"max_execution_payment":""`)), err: "invalid JSON: invalid ePBS builder config: direct builder max execution payment is missing"},
 		{name: "PaymentInvalid", input: config(validBuilder(`,"max_execution_payment":"-1"`)), err: "invalid JSON: invalid ePBS builder config: direct builder max execution payment is invalid"},
-		{name: "MinimumMissing", input: config(validBuilder(`,"min_bid":""`)), err: "invalid JSON: invalid ePBS builder config: direct builder minimum bid is missing"},
+		{name: "MinimumEmpty", input: config(validBuilder(`,"min_bid":""`)), err: "invalid JSON: invalid ePBS builder config: direct builder minimum bid is invalid"},
 		{name: "MinimumInvalid", input: config(validBuilder(`,"min_bid":"1.1"`)), err: "invalid JSON: invalid ePBS builder config: direct builder minimum bid is invalid"},
-		{name: "BoostMissing", input: config(validBuilder(`,"builder_boost_factor":null`)), err: "invalid JSON: invalid ePBS builder config: direct builder boost factor is missing"},
 		{name: "BuildersNull", input: []byte(`{"version":2,"epbs_builder_config":{"builders":null}}`), err: "invalid JSON: ePBS direct builders must be an array"},
 		{name: "NullBuilder", input: config("null"), err: "invalid JSON: direct builder 0 is null"},
 		{name: "DuplicateBuilder", input: config(validBuilder("") + "," + validBuilder("")), err: "invalid JSON: direct builder 1 duplicates an earlier URL and authorization"},
@@ -82,6 +81,12 @@ func TestEPBSBuilderConfigValidation(t *testing.T) {
 		}
 		builder := fmt.Sprintf(`{"url":"https://builder.example/%s","auth_data":"0x%s","builder_pubkeys":[%s],"max_execution_payment":"%d","min_bid":"%d","builder_boost_factor":%d}`,
 			strings.Repeat("a", 2024), strings.Repeat("11", 4096), strings.Join(pubkeys, ","), uint64(math.MaxUint64), uint64(math.MaxUint64), uint64(math.MaxUint64))
+		var parsed v2.ExecutionConfig
+		require.NoError(t, json.Unmarshal(config(builder), &parsed))
+	})
+
+	t.Run("OptionalBidFields", func(t *testing.T) {
+		builder := fmt.Sprintf(`{"url":"https://builder.example","auth_data":"0xdeadbeef","builder_pubkeys":[%q],"max_execution_payment":"0"}`, validPubkey)
 		var parsed v2.ExecutionConfig
 		require.NoError(t, json.Unmarshal(config(builder), &parsed))
 	})

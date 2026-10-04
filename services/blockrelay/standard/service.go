@@ -50,6 +50,8 @@ type Service struct {
 	configURL                                 string
 	fallbackFeeRecipient                      bellatrix.ExecutionAddress
 	fallbackGasLimit                          uint64
+	fallbackMinBid                            phase0.Gwei
+	fallbackBuilderBoostFactor                uint64
 	clientCertURL                             string
 	clientKeyURL                              string
 	caCertURL                                 string
@@ -109,6 +111,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		caCertURL:                    parameters.caCertURL,
 		fallbackFeeRecipient:         parameters.fallbackFeeRecipient,
 		fallbackGasLimit:             parameters.fallbackGasLimit,
+		fallbackMinBid:               parameters.fallbackMinBid,
+		fallbackBuilderBoostFactor:   parameters.fallbackBuilderBoostFactor,
 		accountsProvider:             parameters.accountsProvider,
 		validatorsProvider:           parameters.validatorsProvider,
 		validatingAccountsProvider:   parameters.validatingAccountsProvider,

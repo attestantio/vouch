@@ -45,8 +45,9 @@ type EPBSBuilder struct {
 	AuthData            []byte
 	BuilderPubkeys      []phase0.BLSPubKey
 	MaxExecutionPayment phase0.Gwei
-	MinBid              phase0.Gwei
-	BuilderBoostFactor  uint64
+	// MinBid and BuilderBoostFactor are optional; nil inherits the proposer's resolved value.
+	MinBid             *phase0.Gwei
+	BuilderBoostFactor *uint64
 }
 
 type epbsBuilderConfigJSON struct {
@@ -60,8 +61,8 @@ type epbsBuilderJSON struct {
 	AuthData            string    `json:"auth_data"`
 	BuilderPubkeys      *[]string `json:"builder_pubkeys"`
 	MaxExecutionPayment string    `json:"max_execution_payment"`
-	MinBid              string    `json:"min_bid"`
-	BuilderBoostFactor  *uint64   `json:"builder_boost_factor"`
+	MinBid              *string   `json:"min_bid,omitempty"`
+	BuilderBoostFactor  *uint64   `json:"builder_boost_factor,omitempty"`
 }
 
 // MarshalJSON implements json.Marshaler.
@@ -135,15 +136,19 @@ func (b *EPBSBuilder) MarshalJSON() ([]byte, error) {
 	for i := range b.BuilderPubkeys {
 		pubkeys[i] = fmt.Sprintf("%#x", b.BuilderPubkeys[i])
 	}
-	boost := b.BuilderBoostFactor
+	var minBid *string
+	if b.MinBid != nil {
+		value := fmt.Sprintf("%d", *b.MinBid)
+		minBid = &value
+	}
 
 	return json.Marshal(&epbsBuilderJSON{
 		URL:                 b.URL,
 		AuthData:            "redacted",
 		BuilderPubkeys:      &pubkeys,
 		MaxExecutionPayment: fmt.Sprintf("%d", b.MaxExecutionPayment),
-		MinBid:              fmt.Sprintf("%d", b.MinBid),
-		BuilderBoostFactor:  &boost,
+		MinBid:              minBid,
+		BuilderBoostFactor:  b.BuilderBoostFactor,
 	})
 }
 
@@ -169,12 +174,13 @@ func (b *EPBSBuilder) UnmarshalJSON(input []byte) error {
 	if err != nil {
 		return err
 	}
-	minBid, err := parseRequiredGwei(data.MinBid, "direct builder minimum bid")
-	if err != nil {
-		return err
-	}
-	if data.BuilderBoostFactor == nil {
-		return errors.New("direct builder boost factor is missing")
+	var minBid *phase0.Gwei
+	if data.MinBid != nil {
+		value, err := strconv.ParseUint(*data.MinBid, 10, 64)
+		if err != nil {
+			return errors.New("direct builder minimum bid is invalid")
+		}
+		minBid = (*phase0.Gwei)(&value)
 	}
 
 	b.URL = data.URL
@@ -182,7 +188,7 @@ func (b *EPBSBuilder) UnmarshalJSON(input []byte) error {
 	b.BuilderPubkeys = pubkeys
 	b.MaxExecutionPayment = maxExecutionPayment
 	b.MinBid = minBid
-	b.BuilderBoostFactor = *data.BuilderBoostFactor
+	b.BuilderBoostFactor = data.BuilderBoostFactor
 
 	return nil
 }

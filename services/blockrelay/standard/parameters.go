@@ -46,6 +46,8 @@ type parameters struct {
 	configURL                                 string
 	fallbackFeeRecipient                      bellatrix.ExecutionAddress
 	fallbackGasLimit                          uint64
+	fallbackMinBid                            phase0.Gwei
+	fallbackBuilderBoostFactor                uint64
 	clientCertURL                             string
 	clientKeyURL                              string
 	caCertURL                                 string
@@ -120,6 +122,20 @@ func WithConfigURL(url string) Parameter {
 func WithFallbackFeeRecipient(feeRecipient bellatrix.ExecutionAddress) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.fallbackFeeRecipient = feeRecipient
+	})
+}
+
+// WithFallbackMinBid sets the fallback ePBS minimum bid for all validators.
+func WithFallbackMinBid(minBid phase0.Gwei) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.fallbackMinBid = minBid
+	})
+}
+
+// WithFallbackBuilderBoostFactor sets the fallback ePBS builder boost factor for all validators.
+func WithFallbackBuilderBoostFactor(factor uint64) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.fallbackBuilderBoostFactor = factor
 	})
 }
 
@@ -220,8 +236,9 @@ var zeroExecutionAddress bellatrix.ExecutionAddress
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel:       zerolog.GlobalLevel(),
-		builderConfigs: map[phase0.BLSPubKey]*blockrelay.BuilderConfig{},
+		logLevel:                   zerolog.GlobalLevel(),
+		builderConfigs:             map[phase0.BLSPubKey]*blockrelay.BuilderConfig{},
+		fallbackBuilderBoostFactor: 100,
 	}
 	for _, p := range params {
 		p.apply(&parameters)

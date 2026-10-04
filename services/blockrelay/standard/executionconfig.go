@@ -1,4 +1,4 @@
-// Copyright © 2022 - 2024 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,6 +21,7 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/blockrelay"
+	v2 "github.com/attestantio/vouch/services/blockrelay/v2"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	httpconfidant "github.com/wealdtech/go-majordomo/confidants/http"
@@ -147,6 +148,9 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 	executionConfig, err := blockrelay.UnmarshalJSON(res)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal execution config")
+	}
+	if v2Config, isV2 := executionConfig.(*v2.ExecutionConfig); isV2 && v2Config.IgnoresMinValue() {
+		s.log.Warn().Msg("Execution configuration min_value is ignored for Gloas proposals; set epbs_builder_config.min_bid instead")
 	}
 
 	return executionConfig, nil

@@ -230,7 +230,7 @@ func TestECProposerConfig(t *testing.T) {
 			err := json.Unmarshal(test.input, &ec)
 			require.NoError(t, err)
 
-			pc, err := ec.ProposerConfig(ctx, nil, test.pubkey, test.fallbackFeeRecipient, test.fallbackGasLimit)
+			pc, err := ec.ProposerConfig(ctx, nil, test.pubkey, test.fallbackFeeRecipient, test.fallbackGasLimit, 0, 100)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {

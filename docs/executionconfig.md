@@ -35,6 +35,21 @@ blockrelay:
 
 Although in general it is better to leave this value out, as Vouch has its own fallback value configured and changing this could affect the execution network.
 
+From Gloas onwards the ePBS minimum P2P bid and builder boost factor also have fallback values, provided under the `builderconfig` key:
+
+```yaml
+builderconfig:
+  fallback-min-bid: 10000000
+  fallback-builder-boost-factor: 90
+```
+
+- `fallback-min-bid` is the minimum P2P bid, in Gwei. It defaults to `0`.
+- `fallback-builder-boost-factor` is the boost factor percentage. It defaults to `100`. An explicit `0` is honoured.
+
+These values apply whenever the execution configuration does not supply its own: with no configuration URL, when the configuration cannot be fetched, with a version 1 configuration, and with a version 2 configuration that omits the fields. They are read once at startup. See [Gloas ePBS builder configuration](#gloas-epbs-builder-configuration) for the full precedence.
+
+`builderconfig` is unrelated to `blockrelay.builder-configs`, which scores pre-Gloas relay bids by builder public key. `beaconblockproposer.builder-boost-factor` is also unrelated: it applies only to pre-Gloas proposals, is not used from Gloas onwards, and is not a fallback for `builderconfig.fallback-builder-boost-factor`.
+
 ## Specifying an execution configuration
 For more advanced configurations an execution configuration file is required.  Access to the configuration file is usually through a simple URL, for example:
 
@@ -122,11 +137,11 @@ From Gloas onwards the beacon node runs the auction between its local build, P2P
 }
 ```
 
-The top-level `min_bid` is the minimum P2P bid, in Gwei. It is a decimal integer string and defaults to `0`. If it is omitted, Vouch derives it from the resolved root or proposer `min_value`, which is denominated in Ether, converting to Gwei and rounding up. An explicit ePBS `min_bid` takes precedence. Relay-specific `min_value` values are not used for ePBS.
+The top-level `min_bid` is the minimum P2P bid, in Gwei. It is a decimal integer string. `min_value` does not affect ePBS: from Gloas onwards it applies only to pre-Gloas relays. When a loaded configuration has a root or proposer `min_value` without an ePBS `min_bid` at the same level, Vouch logs a warning naming `epbs_builder_config.min_bid` as the replacement.
 
-`builder_boost_factor` is an unsigned 64-bit percentage applied by the beacon node. Its ePBS default is `100`, independent of the legacy `beaconblockproposer.builder-boost-factor` default of `91`. A value of `0` prefers the local build but still permits a P2P fallback when the local build is unviable. A value of `100` selects the highest-value viable bid. Vouch does not apply the factor again after the beacon node returns its auction result.
+`builder_boost_factor` is an unsigned 64-bit percentage applied by the beacon node. Its ePBS default is `100`. The legacy `beaconblockproposer.builder-boost-factor` (default `91`) has no effect on Gloas proposals and is not a fallback. A value of `0` prefers the local build but still permits a P2P fallback when the local build is unviable. A value of `100` selects the highest-value viable bid. Vouch does not apply the factor again after the beacon node returns its auction result.
 
-Each direct-builder entry requires every field shown above:
+Each direct-builder entry requires `url`, `auth_data`, `builder_pubkeys` and `max_execution_payment`. `min_bid` and `builder_boost_factor` are optional; an omitted value inherits the P2P value resolved for the proposer being served. Configuration dumps and `--proposer-config-check` show the resolved values.
 
 - `url` is an absolute HTTP or HTTPS URL, at most 2048 bytes.
 - `auth_data` is non-empty, `0x`-prefixed opaque hex agreed with the builder, at most 4096 decoded bytes. Vouch binds it to the proposal slot and signs it through the validator signer. It is emitted only in that authenticated request. Logs, metrics, errors, configuration dumps, and `--proposer-config-check` never expose its value, hash, or length. Configuration output shows `"redacted"` instead.
@@ -138,7 +153,18 @@ A builder list contains at most 64 entries. Entries sharing both URL and authori
 
 If Vouch cannot sign the authorization for a proposal, it logs a warning and requests that block without direct builders. Local and P2P bids remain eligible.
 
-Resolution starts with the ePBS fallbacks of minimum bid `0`, boost `100`, and no direct builders. Root values then override those fallbacks, followed by the first matching proposer entry. The scalar fields inherit independently. An omitted proposer `builders` field inherits the root list, an explicit empty list disables direct builders for that proposer, and a non-empty proposer list replaces the root list as a whole. Builder entries are never merged by URL or public key.
+Each field resolves independently, and the first value present wins:
+
+| Field | 1 | 2 | 3 | 4 |
+| --- | --- | --- | --- | --- |
+| P2P `min_bid` | first matching proposer `epbs_builder_config.min_bid` | root `epbs_builder_config.min_bid` | `builderconfig.fallback-min-bid` | `0` |
+| P2P `builder_boost_factor` | first matching proposer `epbs_builder_config.builder_boost_factor` | root `epbs_builder_config.builder_boost_factor` | `builderconfig.fallback-builder-boost-factor` | `100` |
+| Entry `min_bid` | the entry's `min_bid` | resolved P2P `min_bid` for this proposer | | |
+| Entry `builder_boost_factor` | the entry's `builder_boost_factor` | resolved P2P `builder_boost_factor` for this proposer | | |
+
+With no configuration URL, a failed fetch, or a version 1 configuration, only columns 3 and 4 apply.
+
+An omitted proposer `builders` field inherits the root list, an explicit empty list disables direct builders for that proposer, and a non-empty proposer list replaces the root list as a whole. An entry inherited from the root list takes the resolved values of the proposer it serves, not the root's values. Builder entries are never merged by URL or public key.
 
 An empty direct-builder list does not disable P2P bids. The Beacon API has no switch that absolutely disables P2P bidding.
 

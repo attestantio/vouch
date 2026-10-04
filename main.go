@@ -264,6 +264,8 @@ func fetchConfig() error {
 	viper.SetDefault("blockrelay.timeout", 1*time.Second)
 	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(36000000))
+	viper.SetDefault("builderconfig.fallback-min-bid", uint64(0))
+	viper.SetDefault("builderconfig.fallback-builder-boost-factor", uint64(100))
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.0005))
 	viper.SetDefault("beaconblockproposer.builder-boost-factor", 91)
@@ -2308,6 +2310,8 @@ func startBlockRelay(ctx context.Context,
 		standardblockrelay.WithConfigURL(viper.GetString("blockrelay.config.url")),
 		standardblockrelay.WithFallbackFeeRecipient(fallbackFeeRecipient),
 		standardblockrelay.WithFallbackGasLimit(viper.GetUint64("blockrelay.fallback-gas-limit")),
+		standardblockrelay.WithFallbackMinBid(phase0.Gwei(viper.GetUint64("builderconfig.fallback-min-bid"))),
+		standardblockrelay.WithFallbackBuilderBoostFactor(viper.GetUint64("builderconfig.fallback-builder-boost-factor")),
 		standardblockrelay.WithClientCertURL(viper.GetString("blockrelay.config.client-cert")),
 		standardblockrelay.WithClientKeyURL(viper.GetString("blockrelay.config.client-key")),
 		standardblockrelay.WithCACertURL(viper.GetString("blockrelay.config.ca-cert")),

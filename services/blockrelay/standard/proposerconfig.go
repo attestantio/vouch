@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -31,13 +31,29 @@ func (s *Service) ProposerConfig(ctx context.Context,
 ) {
 	s.executionConfigMu.RLock()
 	defer s.executionConfigMu.RUnlock()
+	var config *beaconblockproposer.ProposerConfig
 	if s.executionConfig == nil {
 		s.log.Warn().Msg("No execution configuration available; using fallback information")
-		return &beaconblockproposer.ProposerConfig{
+		config = &beaconblockproposer.ProposerConfig{
 			FeeRecipient: s.fallbackFeeRecipient,
 			GasLimit:     s.fallbackGasLimit,
 			Relays:       make([]*beaconblockproposer.RelayConfig, 0),
-		}, nil
+		}
+	} else {
+		var err error
+		config, err = s.executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit, s.fallbackMinBid, s.fallbackBuilderBoostFactor)
+		if err != nil {
+			return nil, err
+		}
 	}
-	return s.executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit)
+	// Version 1 configurations carry no ePBS policy.
+	if config.EPBSBuilderConfig == nil {
+		config.EPBSBuilderConfig = &beaconblockproposer.EPBSBuilderConfig{
+			MinBid:             s.fallbackMinBid,
+			BuilderBoostFactor: s.fallbackBuilderBoostFactor,
+			Builders:           make([]*beaconblockproposer.EPBSBuilder, 0),
+		}
+	}
+
+	return config, nil
 }

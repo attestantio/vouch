@@ -136,6 +136,8 @@ func (e *ExecutionConfig) ProposerConfig(ctx context.Context,
 	pubkey phase0.BLSPubKey,
 	fallbackFeeRecipient bellatrix.ExecutionAddress,
 	fallbackGasLimit uint64,
+	fallbackMinBid phase0.Gwei,
+	fallbackBuilderBoostFactor uint64,
 ) (
 	*beaconblockproposer.ProposerConfig,
 	error,
@@ -143,7 +145,8 @@ func (e *ExecutionConfig) ProposerConfig(ctx context.Context,
 	// Set base configuration without relays.
 	config := &beaconblockproposer.ProposerConfig{
 		EPBSBuilderConfig: &beaconblockproposer.EPBSBuilderConfig{
-			BuilderBoostFactor: 100,
+			MinBid:             fallbackMinBid,
+			BuilderBoostFactor: fallbackBuilderBoostFactor,
 			Builders:           make([]*beaconblockproposer.EPBSBuilder, 0),
 		},
 		Relays: make([]*beaconblockproposer.RelayConfig, 0),
@@ -159,37 +162,64 @@ func (e *ExecutionConfig) ProposerConfig(ctx context.Context,
 		config.GasLimit = *e.GasLimit
 	}
 
-	applyEPBSBuilderConfig(config.EPBSBuilderConfig, e.EPBSBuilderConfig)
-	if e.EPBSBuilderConfig == nil || e.EPBSBuilderConfig.MinBid == nil {
-		if err := setLegacyEPBSMinBid(config, e.MinValue); err != nil {
-			return nil, err
-		}
-	}
 	e.setInitialRelayOptions(ctx, config, fallbackGasLimit)
 
-	if err := e.setProposerSpecificOptions(ctx, config, account, pubkey, fallbackFeeRecipient, fallbackGasLimit); err != nil {
+	proposerConfig, err := e.setProposerSpecificOptions(ctx, config, account, pubkey, fallbackFeeRecipient, fallbackGasLimit)
+	if err != nil {
 		return nil, err
 	}
+	e.resolveEPBSBuilderConfig(config.EPBSBuilderConfig, proposerConfig)
 
 	return config, nil
 }
 
-func applyEPBSBuilderConfig(config *beaconblockproposer.EPBSBuilderConfig, override *EPBSBuilderConfig) {
-	if override == nil {
-		return
+// IgnoresMinValue returns true if a min_value is set at a level without an ePBS min_bid.
+// From Gloas onwards min_value applies only to relays, so the operator may expect a floor that is not applied.
+func (e *ExecutionConfig) IgnoresMinValue() bool {
+	if ignoresMinValue(e.MinValue, e.EPBSBuilderConfig) {
+		return true
 	}
-	if override.MinBid != nil {
-		config.MinBid = *override.MinBid
+	for _, proposer := range e.Proposers {
+		if proposer != nil && ignoresMinValue(proposer.MinValue, proposer.EPBSBuilderConfig) {
+			return true
+		}
 	}
-	if override.BuilderBoostFactor != nil {
-		config.BuilderBoostFactor = *override.BuilderBoostFactor
+
+	return false
+}
+
+func ignoresMinValue(minValue *decimal.Decimal, config *EPBSBuilderConfig) bool {
+	return minValue != nil && (config == nil || config.MinBid == nil)
+}
+
+// resolveEPBSBuilderConfig applies the root and then the matching proposer's ePBS policy.
+// Entries resolve last so that omitted fields inherit the proposer's values.
+func (e *ExecutionConfig) resolveEPBSBuilderConfig(config *beaconblockproposer.EPBSBuilderConfig, proposerConfig *ProposerConfig) {
+	levels := []*EPBSBuilderConfig{e.EPBSBuilderConfig}
+	if proposerConfig != nil {
+		levels = append(levels, proposerConfig.EPBSBuilderConfig)
 	}
-	if override.Builders != nil {
-		config.Builders = resolvedEPBSBuilders(*override.Builders)
+	var builders *[]*EPBSBuilder
+	for _, level := range levels {
+		if level == nil {
+			continue
+		}
+		if level.MinBid != nil {
+			config.MinBid = *level.MinBid
+		}
+		if level.BuilderBoostFactor != nil {
+			config.BuilderBoostFactor = *level.BuilderBoostFactor
+		}
+		if level.Builders != nil {
+			builders = level.Builders
+		}
+	}
+	if builders != nil {
+		config.Builders = resolvedEPBSBuilders(*builders, config.MinBid, config.BuilderBoostFactor)
 	}
 }
 
-func resolvedEPBSBuilders(builders []*EPBSBuilder) []*beaconblockproposer.EPBSBuilder {
+func resolvedEPBSBuilders(builders []*EPBSBuilder, minBid phase0.Gwei, builderBoostFactor uint64) []*beaconblockproposer.EPBSBuilder {
 	res := make([]*beaconblockproposer.EPBSBuilder, len(builders))
 	for i, builder := range builders {
 		if builder == nil {
@@ -200,8 +230,14 @@ func resolvedEPBSBuilders(builders []*EPBSBuilder) []*beaconblockproposer.EPBSBu
 			AuthData:            append([]byte(nil), builder.AuthData...),
 			BuilderPubkeys:      append([]phase0.BLSPubKey(nil), builder.BuilderPubkeys...),
 			MaxExecutionPayment: builder.MaxExecutionPayment,
-			MinBid:              builder.MinBid,
-			BuilderBoostFactor:  builder.BuilderBoostFactor,
+			MinBid:              minBid,
+			BuilderBoostFactor:  builderBoostFactor,
+		}
+		if builder.MinBid != nil {
+			res[i].MinBid = *builder.MinBid
+		}
+		if builder.BuilderBoostFactor != nil {
+			res[i].BuilderBoostFactor = *builder.BuilderBoostFactor
 		}
 	}
 
@@ -241,13 +277,16 @@ func (e *ExecutionConfig) setProposerSpecificOptions(ctx context.Context,
 	pubkey phase0.BLSPubKey,
 	fallbackFeeRecipient bellatrix.ExecutionAddress,
 	fallbackGasLimit uint64,
-) error {
+) (
+	*ProposerConfig,
+	error,
+) {
 	accountName := setAccountName(account)
 
 	// Work through the proposer-specific configurations to see if one matches.
 	for i, proposerConfig := range e.Proposers {
 		if proposerConfig == nil {
-			return errors.Errorf("proposer config %d is null", i)
+			return nil, errors.Errorf("proposer config %d is null", i)
 		}
 		var match bool
 		switch {
@@ -256,22 +295,19 @@ func (e *ExecutionConfig) setProposerSpecificOptions(ctx context.Context,
 		case !bytes.Equal(proposerConfig.Validator[:], zeroPubkey[:]):
 			match = bytes.Equal(proposerConfig.Validator[:], pubkey[:])
 		default:
-			return errors.New("proposer config without either account or validator; cannot apply")
+			return nil, errors.New("proposer config without either account or validator; cannot apply")
 		}
 		if !match {
 			continue
 		}
 
 		e.setProposerConfigOptions(ctx, config, proposerConfig, fallbackFeeRecipient, fallbackGasLimit)
-		if err := e.setProposerEPBSBuilderConfig(config, proposerConfig); err != nil {
-			return err
-		}
 
 		// Once we have a match we are done.
-		break
+		return proposerConfig, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 func setAccountName(account e2wtypes.Account) string {
@@ -284,39 +320,6 @@ func setAccountName(account e2wtypes.Account) string {
 	}
 
 	return fmt.Sprintf("<unknown>/%s", account.Name())
-}
-
-func (e *ExecutionConfig) setProposerEPBSBuilderConfig(config *beaconblockproposer.ProposerConfig,
-	proposerConfig *ProposerConfig,
-) error {
-	applyEPBSBuilderConfig(config.EPBSBuilderConfig, proposerConfig.EPBSBuilderConfig)
-
-	rootHasMinimum := e.EPBSBuilderConfig != nil && e.EPBSBuilderConfig.MinBid != nil
-	proposerHasMinimum := proposerConfig.EPBSBuilderConfig != nil && proposerConfig.EPBSBuilderConfig.MinBid != nil
-	if rootHasMinimum || proposerHasMinimum {
-		return nil
-	}
-	legacyMinimum := e.MinValue
-	if proposerConfig.MinValue != nil {
-		legacyMinimum = proposerConfig.MinValue
-	}
-
-	return setLegacyEPBSMinBid(config, legacyMinimum)
-}
-
-func setLegacyEPBSMinBid(config *beaconblockproposer.ProposerConfig, minValue *decimal.Decimal) error {
-	if minValue == nil {
-		config.EPBSBuilderConfig.MinBid = 0
-
-		return nil
-	}
-	minimumGwei := minValue.Div(decimal.New(1, 9)).Ceil().BigInt()
-	if !minimumGwei.IsUint64() {
-		return errors.New("legacy minimum value exceeds the ePBS Gwei limit")
-	}
-	config.EPBSBuilderConfig.MinBid = phase0.Gwei(minimumGwei.Uint64())
-
-	return nil
 }
 
 func (e *ExecutionConfig) setProposerConfigOptions(_ context.Context,
