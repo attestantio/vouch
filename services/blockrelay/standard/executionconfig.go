@@ -149,7 +149,7 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal execution config")
 	}
-	if v2Config, isV2 := executionConfig.(*v2.ExecutionConfig); isV2 && v2Config.IgnoresMinValue() {
+	if v2Config, isV2 := executionConfig.(*v2.ExecutionConfig); isV2 && v2Config.HasMinValueWithoutEPBSMinBid() {
 		s.log.Warn().Msg("Execution configuration min_value is ignored for Gloas proposals; set epbs_builder_config.min_bid instead")
 	}
 

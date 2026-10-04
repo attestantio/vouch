@@ -173,14 +173,14 @@ func (e *ExecutionConfig) ProposerConfig(ctx context.Context,
 	return config, nil
 }
 
-// IgnoresMinValue returns true if a min_value is set at a level without an ePBS min_bid.
+// HasMinValueWithoutEPBSMinBid returns true if a min_value is set at a level without an ePBS min_bid.
 // From Gloas onwards min_value applies only to relays, so the operator may expect a floor that is not applied.
-func (e *ExecutionConfig) IgnoresMinValue() bool {
-	if ignoresMinValue(e.MinValue, e.EPBSBuilderConfig) {
+func (e *ExecutionConfig) HasMinValueWithoutEPBSMinBid() bool {
+	if hasMinValueWithoutEPBSMinBid(e.MinValue, e.EPBSBuilderConfig) {
 		return true
 	}
 	for _, proposer := range e.Proposers {
-		if proposer != nil && ignoresMinValue(proposer.MinValue, proposer.EPBSBuilderConfig) {
+		if proposer != nil && hasMinValueWithoutEPBSMinBid(proposer.MinValue, proposer.EPBSBuilderConfig) {
 			return true
 		}
 	}
@@ -188,35 +188,23 @@ func (e *ExecutionConfig) IgnoresMinValue() bool {
 	return false
 }
 
-func ignoresMinValue(minValue *decimal.Decimal, config *EPBSBuilderConfig) bool {
+func hasMinValueWithoutEPBSMinBid(minValue *decimal.Decimal, config *EPBSBuilderConfig) bool {
 	return minValue != nil && (config == nil || config.MinBid == nil)
 }
 
 // resolveEPBSBuilderConfig applies the root and then the matching proposer's ePBS policy.
 // Entries resolve last so that omitted fields inherit the proposer's values.
 func (e *ExecutionConfig) resolveEPBSBuilderConfig(config *beaconblockproposer.EPBSBuilderConfig, proposerConfig *ProposerConfig) {
-	levels := []*EPBSBuilderConfig{e.EPBSBuilderConfig}
-	if proposerConfig != nil {
-		levels = append(levels, proposerConfig.EPBSBuilderConfig)
+	var root, proposer EPBSBuilderConfig
+	if e.EPBSBuilderConfig != nil {
+		root = *e.EPBSBuilderConfig
 	}
-	var builders *[]*EPBSBuilder
-	for _, level := range levels {
-		if level == nil {
-			continue
-		}
-		if level.MinBid != nil {
-			config.MinBid = *level.MinBid
-		}
-		if level.BuilderBoostFactor != nil {
-			config.BuilderBoostFactor = *level.BuilderBoostFactor
-		}
-		if level.Builders != nil {
-			builders = level.Builders
-		}
+	if proposerConfig != nil && proposerConfig.EPBSBuilderConfig != nil {
+		proposer = *proposerConfig.EPBSBuilderConfig
 	}
-	if builders != nil {
-		config.Builders = resolvedEPBSBuilders(*builders, config.MinBid, config.BuilderBoostFactor)
-	}
+	config.MinBid = firstSet(config.MinBid, proposer.MinBid, root.MinBid)
+	config.BuilderBoostFactor = firstSet(config.BuilderBoostFactor, proposer.BuilderBoostFactor, root.BuilderBoostFactor)
+	config.Builders = resolvedEPBSBuilders(firstSet(nil, proposer.Builders, root.Builders), config.MinBid, config.BuilderBoostFactor)
 }
 
 func resolvedEPBSBuilders(builders []*EPBSBuilder, minBid phase0.Gwei, builderBoostFactor uint64) []*beaconblockproposer.EPBSBuilder {
@@ -230,14 +218,8 @@ func resolvedEPBSBuilders(builders []*EPBSBuilder, minBid phase0.Gwei, builderBo
 			AuthData:            append([]byte(nil), builder.AuthData...),
 			BuilderPubkeys:      append([]phase0.BLSPubKey(nil), builder.BuilderPubkeys...),
 			MaxExecutionPayment: builder.MaxExecutionPayment,
-			MinBid:              minBid,
-			BuilderBoostFactor:  builderBoostFactor,
-		}
-		if builder.MinBid != nil {
-			res[i].MinBid = *builder.MinBid
-		}
-		if builder.BuilderBoostFactor != nil {
-			res[i].BuilderBoostFactor = *builder.BuilderBoostFactor
+			MinBid:              firstSet(minBid, builder.MinBid),
+			BuilderBoostFactor:  firstSet(builderBoostFactor, builder.BuilderBoostFactor),
 		}
 	}
 

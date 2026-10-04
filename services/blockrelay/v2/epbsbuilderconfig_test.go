@@ -59,9 +59,9 @@ func TestEPBSBuilderConfigValidation(t *testing.T) {
 		{name: "NullBuilder", input: config("null"), err: "invalid JSON: direct builder 0 is null"},
 		{name: "DuplicateBuilder", input: config(validBuilder("") + "," + validBuilder("")), err: "invalid JSON: direct builder 1 duplicates an earlier URL and authorization"},
 		{name: "RootMinimumNull", input: []byte(`{"version":2,"epbs_builder_config":{"min_bid":null}}`), err: "invalid JSON: ePBS minimum bid must be a decimal string"},
-		{name: "RootMinimumEmpty", input: []byte(`{"version":2,"epbs_builder_config":{"min_bid":""}}`), err: "invalid JSON: invalid ePBS minimum bid: strconv.ParseUint: parsing \"\": invalid syntax"},
+		{name: "RootMinimumEmpty", input: []byte(`{"version":2,"epbs_builder_config":{"min_bid":""}}`), err: "invalid JSON: ePBS minimum bid is invalid"},
 		{name: "RootBoostNull", input: []byte(`{"version":2,"epbs_builder_config":{"builder_boost_factor":null}}`), err: "invalid JSON: ePBS builder boost factor must be an unsigned integer"},
-		{name: "RootMinimumInvalid", input: []byte(`{"version":2,"epbs_builder_config":{"min_bid":"18446744073709551616"}}`), err: "invalid JSON: invalid ePBS minimum bid: strconv.ParseUint: parsing \"18446744073709551616\": value out of range"},
+		{name: "RootMinimumInvalid", input: []byte(`{"version":2,"epbs_builder_config":{"min_bid":"18446744073709551616"}}`), err: "invalid JSON: ePBS minimum bid is invalid"},
 	}
 
 	for _, test := range tests {

@@ -102,6 +102,8 @@ func TestProposerConfig(t *testing.T) {
 	epbsConfigFile := filepath.Join(base, "epbsconfig.json")
 	require.NoError(t, os.WriteFile(epbsConfigFile, []byte(`{"version":2,"epbs_builder_config":{"builders":[{"url":"https://builder.example","auth_data":"0xdeadbeef","builder_pubkeys":[],"max_execution_payment":"0","min_bid":"1","builder_boost_factor":100}]}}`), 0o600))
 
+	inheritingConfigFile := filepath.Join(base, "inheritingconfig.json")
+	require.NoError(t, os.WriteFile(inheritingConfigFile, []byte(`{"version":2,"epbs_builder_config":{"builder_boost_factor":120,"builders":[{"url":"https://builder.example","auth_data":"0xdeadbeef","builder_pubkeys":[],"max_execution_payment":"0"}]}}`), 0o600))
 	minValueConfigFile := filepath.Join(base, "minvalueconfig.json")
 	require.NoError(t, os.WriteFile(minValueConfigFile, []byte(`{"version":2,"min_value":"0.1"}`), 0o600))
 
@@ -277,6 +279,29 @@ func TestProposerConfig(t *testing.T) {
 			},
 			proposerConfig: `{"fee_recipient":"0x0200000000000000000000000000000000000000","epbs_builder_config":{"min_bid":"5","builder_boost_factor":0,"builders":[]},"relays":[]}`,
 			gasLimit:       20000000,
+		},
+		{
+			name: "EPBSEntryShowsInheritedValues",
+			params: []standard.Parameter{
+				standard.WithMonitor(nullmetrics.New()),
+				standard.WithMajordomo(majordomoSvc),
+				standard.WithScheduler(mockScheduler),
+				standard.WithListenAddress(listenAddress),
+				standard.WithChainTime(chainTime),
+				standard.WithConfigURL(fmt.Sprintf("file://%s", inheritingConfigFile)),
+				standard.WithFallbackFeeRecipient(bellatrix.ExecutionAddress{0x01}),
+				standard.WithFallbackGasLimit(10000000),
+				standard.WithFallbackMinBid(5),
+				standard.WithValidatingAccountsProvider(mockValidatingAccountsProvider),
+				standard.WithAccountsProvider(mockAccountsProvider),
+				standard.WithValidatorsProvider(mockValidatorsProvider),
+				standard.WithValidatorRegistrationSigner(mockSigner),
+				standard.WithReleaseVersion("test"),
+				standard.WithBuilderBidProvider(mock.BuilderBidProvider{}),
+			},
+			proposerConfig: `{"fee_recipient":"0x0100000000000000000000000000000000000000","epbs_builder_config":{"min_bid":"5","builder_boost_factor":120,"builders":[{"url":"https://builder.example","auth_data":"redacted","builder_pubkeys":[],"max_execution_payment":"0","min_bid":"5","builder_boost_factor":120}]},"relays":[]}`,
+			gasLimit:       10000000,
+			notInLogs:      "deadbeef",
 		},
 		{
 			name: "MinValueIgnoredWarning",

@@ -1097,7 +1097,7 @@ func TestExecutionConfigEPBSPrecedence(t *testing.T) {
 	}
 }
 
-func TestExecutionConfigIgnoresMinValue(t *testing.T) {
+func TestExecutionConfigHasMinValueWithoutEPBSMinBid(t *testing.T) {
 	pubkeyString := fmt.Sprintf("%#x", phase0.BLSPubKey{0x01})
 
 	tests := []struct {
@@ -1138,7 +1138,7 @@ func TestExecutionConfigIgnoresMinValue(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			var config v2.ExecutionConfig
 			require.NoError(t, json.Unmarshal([]byte(test.input), &config))
-			require.Equal(t, test.expected, config.IgnoresMinValue())
+			require.Equal(t, test.expected, config.HasMinValueWithoutEPBSMinBid())
 		})
 	}
 }
