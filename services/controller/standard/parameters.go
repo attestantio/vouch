@@ -292,28 +292,30 @@ func WithMaxProposalDelay(delay time.Duration) Parameter {
 	})
 }
 
-// WithMaxAttestationDelay sets the maximum delay before attesting.
+// WithMaxAttestationDelay sets the maximum delay before attesting.  It applies to pre-Gloas slots only.
 func WithMaxAttestationDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.maxAttestationDelay = delay
 	})
 }
 
-// WithAttestationAggregationDelay sets the delay before aggregating attestations.
+// WithAttestationAggregationDelay sets the delay before aggregating attestations.  It applies to pre-Gloas slots only.
 func WithAttestationAggregationDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.attestationAggregationDelay = delay
 	})
 }
 
-// WithMaxSyncCommitteeMessageDelay sets the maximum delay before generating sync committee messages.
+// WithMaxSyncCommitteeMessageDelay sets the maximum delay before generating sync committee messages.  It applies to
+// pre-Gloas slots only.
 func WithMaxSyncCommitteeMessageDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.maxSyncCommitteeMessageDelay = delay
 	})
 }
 
-// WithSyncCommitteeAggregationDelay sets the delay before aggregating sync committee messages.
+// WithSyncCommitteeAggregationDelay sets the delay before aggregating sync committee messages.  It applies to
+// pre-Gloas slots only.
 func WithSyncCommitteeAggregationDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.syncCommitteeAggregationDelay = delay
@@ -458,9 +460,7 @@ type dutyTimings struct {
 	syncCommitteeAggregationDelay time.Duration
 }
 
-// applyOverrides replaces each deadline for which the operator supplied an explicit value.  An
-// explicit value is absolute: it applies on both sides of the Gloas fork, as documented for these
-// options.
+// applyOverrides replaces each deadline for which the operator supplied an explicit value.
 func (t *dutyTimings) applyOverrides(overrides dutyTimings) {
 	if overrides.maxAttestationDelay != 0 {
 		t.maxAttestationDelay = overrides.maxAttestationDelay
@@ -479,6 +479,7 @@ func (t *dutyTimings) applyOverrides(overrides dutyTimings) {
 // setDefaultDelays derives both the pre-Gloas and the Gloas duty timings.  Both are derived here,
 // at construction, but which of them applies is decided per duty from that duty's slot; deciding it
 // here would freeze the process on whichever side of the fork it happened to start.
+// Operator overrides apply to the pre-Gloas deadlines only: Gloas deadlines always follow the spec.
 func (p *parameters) setDefaultDelays(spec map[string]any, slotDuration time.Duration) {
 	overrides := dutyTimings{
 		maxAttestationDelay:           p.maxAttestationDelay,
@@ -490,7 +491,6 @@ func (p *parameters) setDefaultDelays(spec map[string]any, slotDuration time.Dur
 	p.preGloasTimings = obtainAttestationTimings(spec, slotDuration, false)
 	p.preGloasTimings.applyOverrides(overrides)
 	p.gloasTimings = obtainAttestationTimings(spec, slotDuration, true)
-	p.gloasTimings.applyOverrides(overrides)
 
 	if p.payloadAttestationDelay == 0 {
 		p.payloadAttestationDelay = obtainPayloadAttestationTiming(spec, slotDuration)

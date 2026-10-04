@@ -1,3 +1,6 @@
+gloas:
+  - deprecate controller.max-attestation-delay, controller.attestation-aggregation-delay, controller.max-sync-committee-message-delay and controller.sync-committee-aggregation-delay; they now apply to pre-gloas slots only, gloas slots always use the spec-derived deadlines, and each one set to a non-zero value logs a warning at startup
+
 1.14.0-alpha.1:
   - add gloas self-build beacon block proposal path: request an ePBS proposal with its payload, sign the beacon block and matching execution payload envelope, then publish the block followed by its envelope
   - refuse a self-build gloas proposal whose execution payload pays no fee recipient, before its envelope is signed
