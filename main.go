@@ -257,16 +257,6 @@ func fetchConfig() error {
 	viper.SetDefault("eth2client.custom-spec-support", false)
 	viper.SetDefault("eth2client.allow-delayed-start", true)
 	viper.SetDefault("controller.max-proposal-delay", 0)
-	// The duty delays below are deprecated.  They default to 0, which the controller reads as
-	// "derive from the chain specification".  A non-zero value overrides pre-Gloas slots only;
-	// Gloas slots always use the spec-derived deadline.  On a 12-second slot the pre-Gloas derived
-	// values are the 4s/8s that were previously hardcoded here, and Gloas moves each of them
-	// earlier.  The comments give the derived values on a 12-second slot, which is what mainnet and
-	// devnet-8 serve.
-	viper.SetDefault("controller.max-attestation-delay", 0)            // 4s pre-Gloas, 3s from Gloas.
-	viper.SetDefault("controller.max-sync-committee-message-delay", 0) // 4s pre-Gloas, 3s from Gloas.
-	viper.SetDefault("controller.attestation-aggregation-delay", 0)    // 8s pre-Gloas, 6s from Gloas.
-	viper.SetDefault("controller.sync-committee-aggregation-delay", 0) // 8s pre-Gloas, 6s from Gloas.
 	viper.SetDefault("controller.verify-sync-committee-inclusion", false)
 	viper.SetDefault("controller.fast-track.attestations", true)
 	viper.SetDefault("controller.fast-track.sync-committees", true)
@@ -523,19 +513,47 @@ func payloadEventsProvider(ctx context.Context, monitor metrics.Service) (eth2cl
 	return provider, nil
 }
 
-// warnDeprecatedControllerDelays warns about each duty delay override that is set, as Gloas slots
-// ignore it and always use the spec-derived deadline.
-func warnDeprecatedControllerDelays() {
-	for _, key := range []string{
-		"controller.max-attestation-delay",
-		"controller.attestation-aggregation-delay",
-		"controller.max-sync-committee-message-delay",
-		"controller.sync-committee-aggregation-delay",
-	} {
-		if viper.GetDuration(key) != 0 {
-			log.Warn().Msg(key + " is deprecated and ignored for Gloas slots")
+// deprecatedControllerDelays are the duty delay overrides.  They are deprecated and apply to
+// pre-Gloas slots only; Gloas slots always use the spec-derived deadline.  Unset, the controller
+// derives each deadline from the chain specification; the comments give the derived values on a
+// 12-second slot.
+var deprecatedControllerDelays = []struct {
+	key    string
+	option func(time.Duration) standardcontroller.Parameter
+}{
+	{"controller.max-attestation-delay", standardcontroller.WithMaxAttestationDelay},                      // 4s pre-Gloas, 3s from Gloas.
+	{"controller.attestation-aggregation-delay", standardcontroller.WithAttestationAggregationDelay},      // 8s pre-Gloas, 6s from Gloas.
+	{"controller.max-sync-committee-message-delay", standardcontroller.WithMaxSyncCommitteeMessageDelay},  // 4s pre-Gloas, 3s from Gloas.
+	{"controller.sync-committee-aggregation-delay", standardcontroller.WithSyncCommitteeAggregationDelay}, // 8s pre-Gloas, 6s from Gloas.
+}
+
+// controllerDelayParameters reads the deprecated duty delay overrides, warning about each one that
+// is set.  Values must carry a unit, as viper would otherwise read "abc" as 0 and 4 as 4ns.
+func controllerDelayParameters() ([]standardcontroller.Parameter, error) {
+	params := make([]standardcontroller.Parameter, 0, len(deprecatedControllerDelays))
+	for _, delay := range deprecatedControllerDelays {
+		var value time.Duration
+		switch raw := viper.Get(delay.key).(type) {
+		case nil:
+		case time.Duration:
+			value = raw
+		case string:
+			var err error
+			if value, err = time.ParseDuration(raw); err != nil {
+				return nil, fmt.Errorf("invalid %s %q: must be a duration with a unit, such as 2s", delay.key, raw)
+			}
+		default:
+			if raw != 0 {
+				return nil, fmt.Errorf("invalid %s %v: must be a duration with a unit, such as 2s", delay.key, raw)
+			}
 		}
+		if value != 0 {
+			log.Warn().Msg(delay.key + " is deprecated and ignored for Gloas slots")
+		}
+		params = append(params, delay.option(value))
 	}
+
+	return params, nil
 }
 
 func initController(ctx context.Context,
@@ -570,7 +588,10 @@ func initController(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to fetch multiclient for controller")
 	}
 
-	warnDeprecatedControllerDelays()
+	delayParams, err := controllerDelayParameters()
+	if err != nil {
+		return nil, err
+	}
 
 	log.Trace().Msg("Starting controller")
 	controllerParams := []standardcontroller.Parameter{
@@ -598,16 +619,13 @@ func initController(ctx context.Context,
 		standardcontroller.WithAccountsRefresher(accountManager.(accountmanager.Refresher)),
 		standardcontroller.WithBlockToSlotSetter(cacheSvc.(cache.BlockRootToSlotSetter)),
 		standardcontroller.WithMaxProposalDelay(viper.GetDuration("controller.max-proposal-delay")),
-		standardcontroller.WithMaxAttestationDelay(viper.GetDuration("controller.max-attestation-delay")),
-		standardcontroller.WithAttestationAggregationDelay(viper.GetDuration("controller.attestation-aggregation-delay")),
-		standardcontroller.WithMaxSyncCommitteeMessageDelay(viper.GetDuration("controller.max-sync-committee-message-delay")),
-		standardcontroller.WithSyncCommitteeAggregationDelay(viper.GetDuration("controller.sync-committee-aggregation-delay")),
 		standardcontroller.WithVerifySyncCommitteeInclusion(viper.GetBool("controller.verify-sync-committee-inclusion")),
 		standardcontroller.WithFastTrackAttestations(viper.GetBool("controller.fast-track.attestations")),
 		standardcontroller.WithFastTrackSyncCommittees(viper.GetBool("controller.fast-track.sync-committees")),
 		standardcontroller.WithFastTrackGrace(viper.GetDuration("controller.fast-track.grace")),
 		standardcontroller.WithMultiInstance(multiInstance),
 	}
+	controllerParams = append(controllerParams, delayParams...)
 	if ptcDutiesProvider, ok := eth2Client.(eth2client.PTCDutiesProvider); ok && payloadAttester != nil {
 		payloadEvents, err := payloadEventsProvider(ctx, monitor)
 		if err != nil {
