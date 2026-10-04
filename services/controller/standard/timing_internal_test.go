@@ -189,16 +189,6 @@ var devnet8GloasTimings = dutyTimings{
 	syncCommitteeAggregationDelay: 6 * time.Second,
 }
 
-// withOverrides provides parameters carrying the supplied operator overrides.
-func withOverrides(overrides dutyTimings) *parameters {
-	return &parameters{
-		maxAttestationDelay:           overrides.maxAttestationDelay,
-		attestationAggregationDelay:   overrides.attestationAggregationDelay,
-		maxSyncCommitteeMessageDelay:  overrides.maxSyncCommitteeMessageDelay,
-		syncCommitteeAggregationDelay: overrides.syncCommitteeAggregationDelay,
-	}
-}
-
 // TestSetDefaultDelaysOverrides confirms that explicit operator values replace the derived
 // deadlines before the fork only, and that Gloas always keeps its spec-derived deadlines.
 func TestSetDefaultDelaysOverrides(t *testing.T) {
@@ -257,7 +247,7 @@ func TestSetDefaultDelaysOverrides(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			p := withOverrides(test.overrides)
+			p := &parameters{overrides: test.overrides}
 			p.setDefaultDelays(test.spec, 12*time.Second)
 			require.Equal(t, test.preGloas, p.preGloasTimings)
 			require.Equal(t, test.gloas, p.gloasTimings)
@@ -271,7 +261,7 @@ func TestTimingsForSlotWithOverrides(t *testing.T) {
 	const slotsPerEpoch = 32
 	const gloasForkEpoch = 5
 
-	p := withOverrides(overrideTimings)
+	p := &parameters{overrides: overrideTimings}
 	p.setDefaultDelays(gloasDevnet8Spec(), 12*time.Second)
 	s := &Service{
 		chainTimeService: &slotEpochChainTime{slotsPerEpoch: slotsPerEpoch},

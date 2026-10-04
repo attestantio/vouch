@@ -41,48 +41,45 @@ import (
 )
 
 type parameters struct {
-	monitor                       metrics.Service
-	specProvider                  eth2client.SpecProvider
-	chainTimeService              chaintime.Service
-	executionConfigProvider       blockrelay.ExecutionConfigProvider
-	proposerDutiesProvider        eth2client.ProposerDutiesProvider
-	proposerDutiesV2Provider      eth2client.ProposerDutiesV2Provider
-	attesterDutiesProvider        eth2client.AttesterDutiesProvider
-	syncCommitteeDutiesProvider   eth2client.SyncCommitteeDutiesProvider
-	ptcDutiesProvider             eth2client.PTCDutiesProvider
-	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
-	eventsProvider                eth2client.EventsProvider
-	payloadEventsProvider         eth2client.EventsProvider
-	beaconBlockHeadersProvider    eth2client.BeaconBlockHeadersProvider
-	signedBeaconBlockProvider     eth2client.SignedBeaconBlockProvider
-	logLevel                      zerolog.Level
-	waitedForGenesis              bool
-	syncCommitteesSubscriber      synccommitteesubscriber.Service
-	proposalsPreparer             proposalpreparer.Service
-	scheduler                     scheduler.Service
-	attester                      attester.Service
-	syncCommitteeMessenger        synccommitteemessenger.Service
-	syncCommitteeAggregator       synccommitteeaggregator.Service
-	payloadAttester               payloadattester.Service
-	beaconBlockProposer           beaconblockproposer.Service
-	proposerPreferences           proposerpreferences.Publisher
-	attestationAggregator         attestationaggregator.Service
-	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
-	accountsRefresher             accountmanager.Refresher
-	blockToSlotSetter             cache.BlockRootToSlotSetter
-	maxProposalDelay              time.Duration
-	maxAttestationDelay           time.Duration
-	attestationAggregationDelay   time.Duration
-	maxSyncCommitteeMessageDelay  time.Duration
-	syncCommitteeAggregationDelay time.Duration
-	payloadAttestationDelay       time.Duration
-	preGloasTimings               dutyTimings
-	gloasTimings                  dutyTimings
-	verifySyncCommitteeInclusion  bool
-	fastTrackAttestations         bool
-	fastTrackSyncCommittees       bool
-	fastTrackGrace                time.Duration
-	multiInstance                 multiinstance.Service
+	monitor                      metrics.Service
+	specProvider                 eth2client.SpecProvider
+	chainTimeService             chaintime.Service
+	executionConfigProvider      blockrelay.ExecutionConfigProvider
+	proposerDutiesProvider       eth2client.ProposerDutiesProvider
+	proposerDutiesV2Provider     eth2client.ProposerDutiesV2Provider
+	attesterDutiesProvider       eth2client.AttesterDutiesProvider
+	syncCommitteeDutiesProvider  eth2client.SyncCommitteeDutiesProvider
+	ptcDutiesProvider            eth2client.PTCDutiesProvider
+	validatingAccountsProvider   accountmanager.ValidatingAccountsProvider
+	eventsProvider               eth2client.EventsProvider
+	payloadEventsProvider        eth2client.EventsProvider
+	beaconBlockHeadersProvider   eth2client.BeaconBlockHeadersProvider
+	signedBeaconBlockProvider    eth2client.SignedBeaconBlockProvider
+	logLevel                     zerolog.Level
+	waitedForGenesis             bool
+	syncCommitteesSubscriber     synccommitteesubscriber.Service
+	proposalsPreparer            proposalpreparer.Service
+	scheduler                    scheduler.Service
+	attester                     attester.Service
+	syncCommitteeMessenger       synccommitteemessenger.Service
+	syncCommitteeAggregator      synccommitteeaggregator.Service
+	payloadAttester              payloadattester.Service
+	beaconBlockProposer          beaconblockproposer.Service
+	proposerPreferences          proposerpreferences.Publisher
+	attestationAggregator        attestationaggregator.Service
+	beaconCommitteeSubscriber    beaconcommitteesubscriber.Service
+	accountsRefresher            accountmanager.Refresher
+	blockToSlotSetter            cache.BlockRootToSlotSetter
+	maxProposalDelay             time.Duration
+	overrides                    dutyTimings
+	payloadAttestationDelay      time.Duration
+	preGloasTimings              dutyTimings
+	gloasTimings                 dutyTimings
+	verifySyncCommitteeInclusion bool
+	fastTrackAttestations        bool
+	fastTrackSyncCommittees      bool
+	fastTrackGrace               time.Duration
+	multiInstance                multiinstance.Service
 }
 
 // Parameter is the interface for service parameters.
@@ -295,14 +292,14 @@ func WithMaxProposalDelay(delay time.Duration) Parameter {
 // WithMaxAttestationDelay sets the maximum delay before attesting.  It applies to pre-Gloas slots only.
 func WithMaxAttestationDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.maxAttestationDelay = delay
+		p.overrides.maxAttestationDelay = delay
 	})
 }
 
 // WithAttestationAggregationDelay sets the delay before aggregating attestations.  It applies to pre-Gloas slots only.
 func WithAttestationAggregationDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.attestationAggregationDelay = delay
+		p.overrides.attestationAggregationDelay = delay
 	})
 }
 
@@ -310,7 +307,7 @@ func WithAttestationAggregationDelay(delay time.Duration) Parameter {
 // pre-Gloas slots only.
 func WithMaxSyncCommitteeMessageDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.maxSyncCommitteeMessageDelay = delay
+		p.overrides.maxSyncCommitteeMessageDelay = delay
 	})
 }
 
@@ -318,7 +315,7 @@ func WithMaxSyncCommitteeMessageDelay(delay time.Duration) Parameter {
 // pre-Gloas slots only.
 func WithSyncCommitteeAggregationDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.syncCommitteeAggregationDelay = delay
+		p.overrides.syncCommitteeAggregationDelay = delay
 	})
 }
 
@@ -481,15 +478,8 @@ func (t *dutyTimings) applyOverrides(overrides dutyTimings) {
 // here would freeze the process on whichever side of the fork it happened to start.
 // Operator overrides apply to the pre-Gloas deadlines only: Gloas deadlines always follow the spec.
 func (p *parameters) setDefaultDelays(spec map[string]any, slotDuration time.Duration) {
-	overrides := dutyTimings{
-		maxAttestationDelay:           p.maxAttestationDelay,
-		attestationAggregationDelay:   p.attestationAggregationDelay,
-		maxSyncCommitteeMessageDelay:  p.maxSyncCommitteeMessageDelay,
-		syncCommitteeAggregationDelay: p.syncCommitteeAggregationDelay,
-	}
-
 	p.preGloasTimings = obtainAttestationTimings(spec, slotDuration, false)
-	p.preGloasTimings.applyOverrides(overrides)
+	p.preGloasTimings.applyOverrides(p.overrides)
 	p.gloasTimings = obtainAttestationTimings(spec, slotDuration, true)
 
 	if p.payloadAttestationDelay == 0 {

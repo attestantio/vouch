@@ -1,5 +1,5 @@
 gloas:
-  - deprecate controller.max-attestation-delay, controller.attestation-aggregation-delay, controller.max-sync-committee-message-delay and controller.sync-committee-aggregation-delay; they now apply to pre-gloas slots only, gloas slots always use the spec-derived deadlines, and each one set to a non-zero value logs a warning at startup
+  - deprecate controller.max-attestation-delay, controller.attestation-aggregation-delay, controller.max-sync-committee-message-delay and controller.sync-committee-aggregation-delay; they now apply to pre-gloas slots only, gloas slots always use the spec-derived deadlines with no way to set an earlier one, and each one set to a non-zero value logs a warning at startup
   - refuse to start if one of those four options is not a duration with a unit, such as 2s; viper previously read "abc" as 0 and 4 as 4ns
 
 1.14.0-alpha.1:
