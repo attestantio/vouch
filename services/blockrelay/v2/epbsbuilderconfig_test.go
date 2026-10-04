@@ -55,6 +55,8 @@ func TestEPBSBuilderConfigValidation(t *testing.T) {
 		{name: "PaymentInvalid", input: config(validBuilder(`,"max_execution_payment":"-1"`)), err: "invalid JSON: invalid ePBS builder config: direct builder max execution payment is invalid"},
 		{name: "MinimumEmpty", input: config(validBuilder(`,"min_bid":""`)), err: "invalid JSON: invalid ePBS builder config: direct builder minimum bid is invalid"},
 		{name: "MinimumInvalid", input: config(validBuilder(`,"min_bid":"1.1"`)), err: "invalid JSON: invalid ePBS builder config: direct builder minimum bid is invalid"},
+		{name: "MinimumNull", input: config(validBuilder(`,"min_bid":null`)), err: "invalid JSON: invalid ePBS builder config: direct builder minimum bid must be a decimal string"},
+		{name: "BoostNull", input: config(validBuilder(`,"builder_boost_factor":null`)), err: "invalid JSON: invalid ePBS builder config: direct builder boost factor must be an unsigned integer"},
 		{name: "BuildersNull", input: []byte(`{"version":2,"epbs_builder_config":{"builders":null}}`), err: "invalid JSON: ePBS direct builders must be an array"},
 		{name: "NullBuilder", input: config("null"), err: "invalid JSON: direct builder 0 is null"},
 		{name: "DuplicateBuilder", input: config(validBuilder("") + "," + validBuilder("")), err: "invalid JSON: direct builder 1 duplicates an earlier URL and authorization"},

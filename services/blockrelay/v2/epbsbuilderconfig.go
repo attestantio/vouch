@@ -155,6 +155,17 @@ func (b *EPBSBuilder) UnmarshalJSON(input []byte) error {
 	if err := json.Unmarshal(input, &data); err != nil {
 		return errors.Wrap(err, "invalid direct builder")
 	}
+	// Omitted bid fields inherit; an explicit null is rejected, as at the root and proposer levels.
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(input, &fields); err != nil {
+		return errors.Wrap(err, "invalid direct builder")
+	}
+	if isNullField(fields, "min_bid") {
+		return errors.New("direct builder minimum bid must be a decimal string")
+	}
+	if isNullField(fields, "builder_boost_factor") {
+		return errors.New("direct builder boost factor must be an unsigned integer")
+	}
 
 	if err := validateEPBSBuilderURL(data.URL); err != nil {
 		return err

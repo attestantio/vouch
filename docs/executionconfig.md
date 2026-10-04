@@ -141,7 +141,7 @@ The top-level `min_bid` is the minimum P2P bid, in Gwei. It is a decimal integer
 
 `builder_boost_factor` is an unsigned 64-bit percentage applied by the beacon node. Its ePBS default is `100`. The legacy `beaconblockproposer.builder-boost-factor` (default `91`) has no effect on Gloas proposals and is not a fallback. A value of `0` prefers the local build but still permits a P2P fallback when the local build is unviable. A value of `100` selects the highest-value viable bid. Vouch does not apply the factor again after the beacon node returns its auction result.
 
-Each direct-builder entry requires `url`, `auth_data`, `builder_pubkeys` and `max_execution_payment`. `min_bid` and `builder_boost_factor` are optional; an omitted value inherits the P2P value resolved for the proposer being served. Configuration dumps and `--proposer-config-check` show the resolved values.
+Each direct-builder entry requires `url`, `auth_data`, `builder_pubkeys` and `max_execution_payment`. `min_bid` and `builder_boost_factor` are optional; an omitted value inherits the P2P value resolved for the proposer being served. An explicit `null` is invalid, as it is for the root and proposer fields. Configuration dumps and `--proposer-config-check` show the resolved values.
 
 - `url` is an absolute HTTP or HTTPS URL, at most 2048 bytes.
 - `auth_data` is non-empty, `0x`-prefixed opaque hex agreed with the builder, at most 4096 decoded bytes. Vouch binds it to the proposal slot and signs it through the validator signer. It is emitted only in that authenticated request. Logs, metrics, errors, configuration dumps, and `--proposer-config-check` never expose its value, hash, or length. Configuration output shows `"redacted"` instead.
