@@ -1124,8 +1124,10 @@ func TestExecutionConfigHasMinValueWithoutEPBSMinBid(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:  "ProposerMinValueWithRootMinBid",
-			input: fmt.Sprintf(`{"version":2,"min_value":"0.1","epbs_builder_config":{"min_bid":"100000000"},"proposers":[{"proposer":%q,"min_value":"0.2"}]}`, pubkeyString),
+			// The proposer's own floor is not carried over by the root min_bid.
+			name:     "ProposerMinValueWithRootMinBid",
+			input:    fmt.Sprintf(`{"version":2,"min_value":"0.1","epbs_builder_config":{"min_bid":"100000000"},"proposers":[{"proposer":%q,"min_value":"0.2"}]}`, pubkeyString),
+			expected: true,
 		},
 		{
 			name:     "ProposerMinValueWithoutAnyMinBid",
