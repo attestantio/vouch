@@ -1,6 +1,6 @@
-gloas:
+1.14.0-alpha.2:
   - deprecate controller.max-attestation-delay, controller.attestation-aggregation-delay, controller.max-sync-committee-message-delay and controller.sync-committee-aggregation-delay; they now apply to pre-gloas slots only, gloas slots always use the spec-derived deadlines with no way to set an earlier one, and each one set to a non-zero value logs a warning at startup
-  - refuse to start unless each of those four options is 0 or a positive duration with a unit that is less than the slot duration, such as 2s; viper previously read "abc" as 0, 4 as 4ns, and accepted negative durations and durations past the end of the slot
+    - refuse to start unless each of those four options is 0 or a positive duration with a unit that is less than the slot duration, such as 2s; viper previously read "abc" as 0, 4 as 4ns, and accepted negative durations and durations past the end of the slot
   - add builderconfig.fallback-min-bid and builderconfig.fallback-builder-boost-factor, fallback gloas ePBS P2P values used when the execution configuration does not supply them, including with no configuration URL, no configuration loaded yet, or a version 1 configuration
   - refuse to start when builderconfig.fallback-min-bid or builderconfig.fallback-builder-boost-factor is not a non-negative integer, instead of silently using 0
   - name the key and the bad value when blockrelay.fallback-gas-limit is not a non-negative integer
