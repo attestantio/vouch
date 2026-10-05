@@ -274,6 +274,8 @@ blockrelay:
   # participating relay, the bid provided, and if the bid was selected for use by Vouch.
   log-results: true
   # builder-configs contain specific configurations for different builders, with each builder defined by its public key.
+  # They apply only to pre-Gloas relay auctions and have no effect from Gloas onwards.  They are unrelated to the
+  # top-level builderconfig key, which holds the Gloas ePBS fallbacks.
   # The base score for each bid is the value to the proposer, in wei.  The final score is calculated by adding
   # the 'offset' value for the specific builder, and then multiplying by the percentage of 'factor' value. For example,
   # if the base value is 1000, the offset is 10 and the factor is 110 then the final score is (1000+10)*110/100 = 1111.  If the
@@ -290,7 +292,9 @@ blockrelay:
       factor: 0
 
 # builderconfig provides fallback Gloas ePBS values for validators that do not have them in the execution configuration.
-# It is unrelated to blockrelay.builder-configs, which applies to pre-Gloas relays.
+# Vouch sends these values to the beacon node, which runs the auction from Gloas onwards.  Despite the similar name it is
+# unrelated to blockrelay.builder-configs, which scores relay bids by builder public key before Gloas only.  Neither key
+# reads the other.
 builderconfig:
   # fallback-min-bid is the minimum P2P bid, in Gwei.  Defaults to 0.
   fallback-min-bid: 0

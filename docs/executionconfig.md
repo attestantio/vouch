@@ -48,7 +48,14 @@ builderconfig:
 
 These values apply whenever the execution configuration does not supply its own: with no configuration URL, when no configuration has loaded because the fetch failed (a later failed fetch keeps the last loaded configuration), with a version 1 configuration, and with a version 2 configuration that omits the fields. They are read once at startup. See [Gloas ePBS builder configuration](#gloas-epbs-builder-configuration) for the full precedence.
 
-`builderconfig` is unrelated to `blockrelay.builder-configs`, which scores pre-Gloas relay bids by builder public key. `beaconblockproposer.builder-boost-factor` is also unrelated: it applies only to pre-Gloas proposals, is not used from Gloas onwards, and is not a fallback for `builderconfig.fallback-builder-boost-factor`.
+`builderconfig` and `blockrelay.builder-configs` have similar names but control different things:
+
+| Key | Applies to | What it does |
+| --- | --- | --- |
+| `builderconfig` | Gloas onwards | Fallback P2P minimum bid and boost factor that Vouch sends to the beacon node, which runs the ePBS auction. |
+| `blockrelay.builder-configs` | Before Gloas only | Per-builder `factor`, `offset` and `category`, keyed by builder public key, that Vouch applies when scoring relay bids in its own auction. It has no effect from Gloas onwards. |
+
+Neither key reads the other. `beaconblockproposer.builder-boost-factor` is also unrelated: it applies only to pre-Gloas proposals, is not used from Gloas onwards, and is not a fallback for `builderconfig.fallback-builder-boost-factor`.
 
 ## Specifying an execution configuration
 For more advanced configurations an execution configuration file is required.  Access to the configuration file is usually through a simple URL, for example:
