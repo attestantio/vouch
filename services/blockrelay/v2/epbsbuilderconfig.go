@@ -263,12 +263,8 @@ func parseRequiredGwei(input string, field string) (phase0.Gwei, error) {
 	if input == "" {
 		return 0, fmt.Errorf("%s is missing", field)
 	}
-	value, err := parseOptionalGwei(&input, field)
-	if err != nil {
-		return 0, err
-	}
 
-	return *value, nil
+	return parseGwei(input, field)
 }
 
 // parseOptionalGwei parses an optional decimal Gwei string; nil means the field was omitted.
@@ -276,11 +272,19 @@ func parseOptionalGwei(input *string, field string) (*phase0.Gwei, error) {
 	if input == nil {
 		return nil, nil
 	}
-	value, err := strconv.ParseUint(*input, 10, 64)
+	value, err := parseGwei(*input, field)
 	if err != nil {
-		return nil, fmt.Errorf("%s is invalid", field)
+		return nil, err
 	}
-	gwei := phase0.Gwei(value)
 
-	return &gwei, nil
+	return &value, nil
+}
+
+func parseGwei(input string, field string) (phase0.Gwei, error) {
+	value, err := strconv.ParseUint(input, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s is invalid", field)
+	}
+
+	return phase0.Gwei(value), nil
 }
