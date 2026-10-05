@@ -89,8 +89,8 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 	pubkey phase0.BLSPubKey,
 	fallbackFeeRecipient bellatrix.ExecutionAddress,
 	fallbackGasLimit uint64,
-	_ phase0.Gwei,
-	_ uint64,
+	fallbackMinBid phase0.Gwei,
+	fallbackBuilderBoostFactor uint64,
 ) (
 	*beaconblockproposer.ProposerConfig,
 	error,
@@ -139,7 +139,13 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 	return &beaconblockproposer.ProposerConfig{
 		FeeRecipient: proposerConfig.FeeRecipient,
 		GasLimit:     proposerConfig.GasLimit,
-		Relays:       relays,
+		// Version 1 has no ePBS policy, so the fallbacks always apply.
+		EPBSBuilderConfig: &beaconblockproposer.EPBSBuilderConfig{
+			MinBid:             fallbackMinBid,
+			BuilderBoostFactor: fallbackBuilderBoostFactor,
+			Builders:           make([]*beaconblockproposer.EPBSBuilder, 0),
+		},
+		Relays: relays,
 	}, nil
 }
 

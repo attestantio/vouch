@@ -18,6 +18,7 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	v2 "github.com/attestantio/vouch/services/blockrelay/v2"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
@@ -31,29 +32,12 @@ func (s *Service) ProposerConfig(ctx context.Context,
 ) {
 	s.executionConfigMu.RLock()
 	defer s.executionConfigMu.RUnlock()
-	var config *beaconblockproposer.ProposerConfig
-	if s.executionConfig == nil {
+	executionConfig := s.executionConfig
+	if executionConfig == nil {
 		s.log.Warn().Msg("No execution configuration available; using fallback information")
-		config = &beaconblockproposer.ProposerConfig{
-			FeeRecipient: s.fallbackFeeRecipient,
-			GasLimit:     s.fallbackGasLimit,
-			Relays:       make([]*beaconblockproposer.RelayConfig, 0),
-		}
-	} else {
-		var err error
-		config, err = s.executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit, s.fallbackMinBid, s.fallbackBuilderBoostFactor)
-		if err != nil {
-			return nil, err
-		}
-	}
-	// Version 1 configurations carry no ePBS policy.
-	if config.EPBSBuilderConfig == nil {
-		config.EPBSBuilderConfig = &beaconblockproposer.EPBSBuilderConfig{
-			MinBid:             s.fallbackMinBid,
-			BuilderBoostFactor: s.fallbackBuilderBoostFactor,
-			Builders:           make([]*beaconblockproposer.EPBSBuilder, 0),
-		}
+		// An empty configuration resolves every value from the fallbacks.
+		executionConfig = &v2.ExecutionConfig{Version: 2}
 	}
 
-	return config, nil
+	return executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit, s.fallbackMinBid, s.fallbackBuilderBoostFactor)
 }
