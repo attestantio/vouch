@@ -438,20 +438,40 @@ This can be configured using the environment variables `VOUCH_<MODULE>_LOG_LEVEL
 
 Advanced options can change the performance of Vouch to be severely detrimental to its operation. It is strongly recommended that these options are not changed unless the user understands completely what they do and their possible performance impact.
 
-The duty timing options below are derived from the chain specification when they are not set. Before the Gloas fork the derived value is a fixed fraction of `SECONDS_PER_SLOT`. From Gloas onwards it is the deadline that the chain serves for that duty, in basis points of `SLOT_DURATION_MS`, falling back to the equivalent Gloas fraction if the chain serves no value for it. Gloas moves all four deadlines earlier, and its values are served under `_GLOAS`-suffixed keys; the unsuffixed keys continue to carry the pre-Gloas deadlines and are not used after the fork. Which of the two applies is decided per duty, from that duty's slot, so a Vouch that runs across the fork uses each side's deadlines for the duties on that side. Setting an option explicitly overrides the derivation on both sides of the fork for the lifetime of the process, so an explicit value that is valid today can schedule duties after the end of the slot on a future fork that shortens it.
+The four duty timing options below are deprecated. Each one sets how far into a slot Vouch runs a duty.
+
+### How Vouch derives the duty deadlines
+
+Vouch reads the chain specification from its beacon nodes at startup and derives two sets of deadlines from it, one for slots before the Gloas fork and one for Gloas slots. For each duty it picks the set from the duty's slot: if the slot's epoch is at or after `GLOAS_FORK_EPOCH` it uses the Gloas deadline, otherwise the pre-Gloas one. A Vouch that runs across the fork therefore switches at the first Gloas slot. A chain that does not schedule Gloas always uses the pre-Gloas deadlines.
+
+- Before Gloas, each deadline is a fixed fraction of `SECONDS_PER_SLOT`. These fractions match the spec's `ATTESTATION_DUE_BPS`, `SYNC_MESSAGE_DUE_BPS` (3333) and `AGGREGATE_DUE_BPS`, `CONTRIBUTION_DUE_BPS` (6667). Vouch does not read the served values.
+- From Gloas, each deadline is the served `_GLOAS`-suffixed value, in basis points (1/10000) of `SLOT_DURATION_MS`. For example, `ATTESTATION_DUE_BPS_GLOAS` of 2500 on a 12000ms slot gives 3s. If the chain does not serve `SLOT_DURATION_MS`, Vouch uses `SECONDS_PER_SLOT`. If the chain does not serve the key, or serves 0 or more than 10000, Vouch uses the fallback fraction of the slot. The unsuffixed keys carry the pre-Gloas deadlines and are not used for Gloas slots.
+
+| Option | Before Gloas | Gloas key | Gloas fallback | 12-second slot |
+|--------|--------------|-----------|----------------|----------------|
+| `controller.max-attestation-delay` | 1/3 of the slot | `ATTESTATION_DUE_BPS_GLOAS` | 1/4 of the slot | 4s, then 3s |
+| `controller.attestation-aggregation-delay` | 2/3 of the slot | `AGGREGATE_DUE_BPS_GLOAS` | 1/2 of the slot | 8s, then 6s |
+| `controller.max-sync-committee-message-delay` | 1/3 of the slot | `SYNC_MESSAGE_DUE_BPS_GLOAS` | 1/4 of the slot | 4s, then 3s |
+| `controller.sync-committee-aggregation-delay` | 2/3 of the slot | `CONTRIBUTION_DUE_BPS_GLOAS` | 1/2 of the slot | 8s, then 6s |
+
+### Overriding the deadlines
+
+An option that is set replaces the derived deadline for slots before the Gloas fork only. Gloas slots ignore it. There is no way to set a Gloas deadline: an operator who set an earlier deadline on purpose, for example to give a slow or distributed signer more time, gets the later spec deadline from the first Gloas slot onwards. Vouch logs a warning at startup for each of these options that is set to a non-zero value.
+
+A value must be a positive duration with a unit that is less than the slot duration, such as `2s`, or `0` to derive the deadline from the chain specification. Vouch refuses to start on any other value, including a number without a unit, a negative duration, or a duration at or past the end of the slot.
 
 ### controller.max-attestation-delay
 
-This is a duration parameter, that defaults to a third of the slot duration before the Gloas fork and to `ATTESTATION_DUE_BPS_GLOAS` from Gloas onwards; on a 12-second slot that is `4s` before Gloas and `3s` from Gloas. It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
+This is a deprecated duration parameter that applies to pre-Gloas slots only. It defaults to a third of the slot duration, `4s` on a 12-second slot. Gloas slots always use `ATTESTATION_DUE_BPS_GLOAS`, `3s` on a 12-second slot. It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
 
 ### controller.attestation-aggregation-delay
 
-This is a duration parameter, that defaults to two thirds of the slot duration before the Gloas fork and to `AGGREGATE_DUE_BPS_GLOAS` from Gloas onwards; on a 12-second slot that is `8s` before Gloas and `6s` from Gloas. It defines the time that Vouch will wait from the start of a slot before aggregating existing attestations.
+This is a deprecated duration parameter that applies to pre-Gloas slots only. It defaults to two thirds of the slot duration, `8s` on a 12-second slot. Gloas slots always use `AGGREGATE_DUE_BPS_GLOAS`, `6s` on a 12-second slot. It defines the time that Vouch will wait from the start of a slot before aggregating existing attestations.
 
 ### controller.max-sync-committee-message-delay
 
-This is a duration parameter, that defaults to a third of the slot duration before the Gloas fork and to `SYNC_MESSAGE_DUE_BPS_GLOAS` from Gloas onwards; on a 12-second slot that is `4s` before Gloas and `3s` from Gloas. It defines the maximum time that Vouch will wait from the start of a slot for a block before generating sync committee messages on the basis that the slot is empty.
+This is a deprecated duration parameter that applies to pre-Gloas slots only. It defaults to a third of the slot duration, `4s` on a 12-second slot. Gloas slots always use `SYNC_MESSAGE_DUE_BPS_GLOAS`, `3s` on a 12-second slot. It defines the maximum time that Vouch will wait from the start of a slot for a block before generating sync committee messages on the basis that the slot is empty.
 
 ### controller.sync-committee-aggregation-delay
 
-This is a duration parameter, that defaults to two thirds of the slot duration before the Gloas fork and to `CONTRIBUTION_DUE_BPS_GLOAS` from Gloas onwards; on a 12-second slot that is `8s` before Gloas and `6s` from Gloas. It defines the time that Vouch will wait from the start of a slot before aggregating existing sync committee messages.
+This is a deprecated duration parameter that applies to pre-Gloas slots only. It defaults to two thirds of the slot duration, `8s` on a 12-second slot. Gloas slots always use `CONTRIBUTION_DUE_BPS_GLOAS`, `6s` on a 12-second slot. It defines the time that Vouch will wait from the start of a slot before aggregating existing sync committee messages.
