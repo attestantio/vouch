@@ -1,4 +1,4 @@
-// Copyright © 2022 - 2024 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -148,8 +148,27 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal execution config")
 	}
+	s.warnIfMinValueIgnored(executionConfig)
 
 	return executionConfig, nil
+}
+
+// minValueChecker is implemented by execution configurations that can carry min_value without an ePBS min_bid.
+type minValueChecker interface {
+	HasMinValueWithoutEPBSMinBid() bool
+}
+
+// warnIfMinValueIgnored warns when a loaded configuration starts to have min_value without an ePBS min_bid.
+func (s *Service) warnIfMinValueIgnored(executionConfig blockrelay.ExecutionConfigurator) {
+	checker, isChecker := executionConfig.(minValueChecker)
+	if !isChecker || !checker.HasMinValueWithoutEPBSMinBid() {
+		s.minValueWarned.Store(false)
+
+		return
+	}
+	if !s.minValueWarned.Swap(true) {
+		s.log.Warn().Msg("Execution configuration min_value is ignored for Gloas proposals; set epbs_builder_config.min_bid instead")
+	}
 }
 
 func pubKeysToArray(pubkeys []phase0.BLSPubKey) string {

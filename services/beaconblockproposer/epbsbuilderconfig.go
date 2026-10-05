@@ -20,6 +20,9 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
+// DefaultBuilderBoostFactor is the ePBS builder boost factor used when nothing else is configured.
+const DefaultBuilderBoostFactor = uint64(100)
+
 // EPBSBuilderConfig is a resolved ePBS policy for a proposer.
 type EPBSBuilderConfig struct {
 	MinBid             phase0.Gwei

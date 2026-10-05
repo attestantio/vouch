@@ -16,6 +16,7 @@ package standard
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	restdaemon "github.com/attestantio/go-block-relay/services/daemon/rest"
 	apiv1 "github.com/attestantio/go-builder-client/api/v1"
@@ -50,6 +51,8 @@ type Service struct {
 	configURL                                 string
 	fallbackFeeRecipient                      bellatrix.ExecutionAddress
 	fallbackGasLimit                          uint64
+	fallbackMinBid                            phase0.Gwei
+	fallbackBuilderBoostFactor                uint64
 	clientCertURL                             string
 	clientKeyURL                              string
 	caCertURL                                 string
@@ -62,6 +65,9 @@ type Service struct {
 	releaseVersion                            string
 	builderConfigs                            map[phase0.BLSPubKey]*blockrelay.BuilderConfig
 	executionConfig                           blockrelay.ExecutionConfigurator
+	// minValueWarned is set while the loaded execution configuration has min_value without an ePBS min_bid,
+	// so the warning is logged once per change rather than on every fetch.
+	minValueWarned atomic.Bool
 	// controlledValidators is a map of validators that are controlled
 	// by Vouch.  Used when receiving registrations from beacon nodes to know
 	// which registrations to forward, and which to drop because we have already
@@ -109,6 +115,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		caCertURL:                    parameters.caCertURL,
 		fallbackFeeRecipient:         parameters.fallbackFeeRecipient,
 		fallbackGasLimit:             parameters.fallbackGasLimit,
+		fallbackMinBid:               parameters.fallbackMinBid,
+		fallbackBuilderBoostFactor:   parameters.fallbackBuilderBoostFactor,
 		accountsProvider:             parameters.accountsProvider,
 		validatorsProvider:           parameters.validatorsProvider,
 		validatingAccountsProvider:   parameters.validatingAccountsProvider,

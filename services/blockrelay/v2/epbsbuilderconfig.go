@@ -45,8 +45,9 @@ type EPBSBuilder struct {
 	AuthData            []byte
 	BuilderPubkeys      []phase0.BLSPubKey
 	MaxExecutionPayment phase0.Gwei
-	MinBid              phase0.Gwei
-	BuilderBoostFactor  uint64
+	// MinBid and BuilderBoostFactor are optional; nil inherits the proposer's resolved value.
+	MinBid             *phase0.Gwei
+	BuilderBoostFactor *uint64
 }
 
 type epbsBuilderConfigJSON struct {
@@ -60,8 +61,8 @@ type epbsBuilderJSON struct {
 	AuthData            string    `json:"auth_data"`
 	BuilderPubkeys      *[]string `json:"builder_pubkeys"`
 	MaxExecutionPayment string    `json:"max_execution_payment"`
-	MinBid              string    `json:"min_bid"`
-	BuilderBoostFactor  *uint64   `json:"builder_boost_factor"`
+	MinBid              *string   `json:"min_bid,omitempty"`
+	BuilderBoostFactor  *uint64   `json:"builder_boost_factor,omitempty"`
 }
 
 // MarshalJSON implements json.Marshaler.
@@ -99,14 +100,11 @@ func (c *EPBSBuilderConfig) UnmarshalJSON(input []byte) error {
 	if err := json.Unmarshal(input, &data); err != nil {
 		return errors.Wrap(err, "invalid ePBS builder config")
 	}
-	if data.MinBid != nil {
-		minBid, err := strconv.ParseUint(*data.MinBid, 10, 64)
-		if err != nil {
-			return errors.Wrap(err, "invalid ePBS minimum bid")
-		}
-		value := phase0.Gwei(minBid)
-		c.MinBid = &value
+	minBid, err := parseOptionalGwei(data.MinBid, "ePBS minimum bid")
+	if err != nil {
+		return err
 	}
+	c.MinBid = minBid
 	if data.Builders != nil {
 		if len(*data.Builders) > maxEPBSBuilders {
 			return errors.New("ePBS builder config has more than 64 direct builders")
@@ -135,15 +133,19 @@ func (b *EPBSBuilder) MarshalJSON() ([]byte, error) {
 	for i := range b.BuilderPubkeys {
 		pubkeys[i] = fmt.Sprintf("%#x", b.BuilderPubkeys[i])
 	}
-	boost := b.BuilderBoostFactor
+	var minBid *string
+	if b.MinBid != nil {
+		value := fmt.Sprintf("%d", *b.MinBid)
+		minBid = &value
+	}
 
 	return json.Marshal(&epbsBuilderJSON{
 		URL:                 b.URL,
 		AuthData:            "redacted",
 		BuilderPubkeys:      &pubkeys,
 		MaxExecutionPayment: fmt.Sprintf("%d", b.MaxExecutionPayment),
-		MinBid:              fmt.Sprintf("%d", b.MinBid),
-		BuilderBoostFactor:  &boost,
+		MinBid:              minBid,
+		BuilderBoostFactor:  b.BuilderBoostFactor,
 	})
 }
 
@@ -152,6 +154,17 @@ func (b *EPBSBuilder) UnmarshalJSON(input []byte) error {
 	var data epbsBuilderJSON
 	if err := json.Unmarshal(input, &data); err != nil {
 		return errors.Wrap(err, "invalid direct builder")
+	}
+	// Omitted bid fields inherit; an explicit null is rejected, as at the root and proposer levels.
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(input, &fields); err != nil {
+		return errors.Wrap(err, "invalid direct builder")
+	}
+	if isNullField(fields, "min_bid") {
+		return errors.New("direct builder minimum bid must be a decimal string")
+	}
+	if isNullField(fields, "builder_boost_factor") {
+		return errors.New("direct builder boost factor must be an unsigned integer")
 	}
 
 	if err := validateEPBSBuilderURL(data.URL); err != nil {
@@ -169,12 +182,9 @@ func (b *EPBSBuilder) UnmarshalJSON(input []byte) error {
 	if err != nil {
 		return err
 	}
-	minBid, err := parseRequiredGwei(data.MinBid, "direct builder minimum bid")
+	minBid, err := parseOptionalGwei(data.MinBid, "direct builder minimum bid")
 	if err != nil {
 		return err
-	}
-	if data.BuilderBoostFactor == nil {
-		return errors.New("direct builder boost factor is missing")
 	}
 
 	b.URL = data.URL
@@ -182,7 +192,7 @@ func (b *EPBSBuilder) UnmarshalJSON(input []byte) error {
 	b.BuilderPubkeys = pubkeys
 	b.MaxExecutionPayment = maxExecutionPayment
 	b.MinBid = minBid
-	b.BuilderBoostFactor = *data.BuilderBoostFactor
+	b.BuilderBoostFactor = data.BuilderBoostFactor
 
 	return nil
 }
@@ -253,6 +263,24 @@ func parseRequiredGwei(input string, field string) (phase0.Gwei, error) {
 	if input == "" {
 		return 0, fmt.Errorf("%s is missing", field)
 	}
+
+	return parseGwei(input, field)
+}
+
+// parseOptionalGwei parses an optional decimal Gwei string; nil means the field was omitted.
+func parseOptionalGwei(input *string, field string) (*phase0.Gwei, error) {
+	if input == nil {
+		return nil, nil
+	}
+	value, err := parseGwei(*input, field)
+	if err != nil {
+		return nil, err
+	}
+
+	return &value, nil
+}
+
+func parseGwei(input string, field string) (phase0.Gwei, error) {
 	value, err := strconv.ParseUint(input, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("%s is invalid", field)

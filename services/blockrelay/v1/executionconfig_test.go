@@ -150,9 +150,10 @@ func TestECProposerConfig(t *testing.T) {
 			fallbackGasLimit:     12345,
 			input:                []byte(`{"default_config":{"fee_recipient":"0x000102030405060708090a0b0c0d0e0f10111213"}}`),
 			pc: &beaconblockproposer.ProposerConfig{
-				FeeRecipient: executionAddress("0x000102030405060708090a0b0c0d0e0f10111213"),
-				GasLimit:     12345,
-				Relays:       []*beaconblockproposer.RelayConfig{},
+				EPBSBuilderConfig: defaultEPBSBuilderConfig(),
+				FeeRecipient:      executionAddress("0x000102030405060708090a0b0c0d0e0f10111213"),
+				GasLimit:          12345,
+				Relays:            []*beaconblockproposer.RelayConfig{},
 			},
 		},
 		{
@@ -161,8 +162,9 @@ func TestECProposerConfig(t *testing.T) {
 			fallbackGasLimit:     12345,
 			input:                []byte(`{"default_config":{"fee_recipient":"0x000102030405060708090a0b0c0d0e0f10111213","builder":{"enabled":true,"relays": ["https://relay1.com/"]}}}`),
 			pc: &beaconblockproposer.ProposerConfig{
-				FeeRecipient: executionAddress("0x000102030405060708090a0b0c0d0e0f10111213"),
-				GasLimit:     12345,
+				EPBSBuilderConfig: defaultEPBSBuilderConfig(),
+				FeeRecipient:      executionAddress("0x000102030405060708090a0b0c0d0e0f10111213"),
+				GasLimit:          12345,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -179,8 +181,9 @@ func TestECProposerConfig(t *testing.T) {
 			fallbackGasLimit:     12345,
 			input:                []byte(`{"default_config":{"fee_recipient":"0x000102030405060708090a0b0c0d0e0f10111213","gas_limit":"23456","builder":{"enabled":true,"relays": ["https://relay1.com/"]}}}`),
 			pc: &beaconblockproposer.ProposerConfig{
-				FeeRecipient: executionAddress("0x000102030405060708090a0b0c0d0e0f10111213"),
-				GasLimit:     23456,
+				EPBSBuilderConfig: defaultEPBSBuilderConfig(),
+				FeeRecipient:      executionAddress("0x000102030405060708090a0b0c0d0e0f10111213"),
+				GasLimit:          23456,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -198,8 +201,9 @@ func TestECProposerConfig(t *testing.T) {
 			input:                []byte(`{"default_config":{"fee_recipient":"0x000102030405060708090a0b0c0d0e0f10111213","gas_limit":"23456","builder":{"enabled":true,"relays": ["https://relay1.com/"]}},"proposer_configs":{"0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111": null}}`),
 			pubkey:               pubkey("0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"),
 			pc: &beaconblockproposer.ProposerConfig{
-				FeeRecipient: executionAddress("0x000102030405060708090a0b0c0d0e0f10111213"),
-				GasLimit:     23456,
+				EPBSBuilderConfig: defaultEPBSBuilderConfig(),
+				FeeRecipient:      executionAddress("0x000102030405060708090a0b0c0d0e0f10111213"),
+				GasLimit:          23456,
 				Relays: []*beaconblockproposer.RelayConfig{
 					{
 						Address:      "https://relay1.com/",
@@ -217,9 +221,10 @@ func TestECProposerConfig(t *testing.T) {
 			input:                []byte(`{"default_config":{"fee_recipient":"0x000102030405060708090a0b0c0d0e0f10111213","gas_limit":"23456","builder":{"enabled":true,"relays": ["https://relay1.com/"]}},"proposer_config":{"0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111": {"fee_recipient":"0x0102030405060708090a0b0c0d0e0f1011121314","gas_limit":"34567"}}}`),
 			pubkey:               pubkey("0x111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"),
 			pc: &beaconblockproposer.ProposerConfig{
-				FeeRecipient: executionAddress("0x0102030405060708090a0b0c0d0e0f1011121314"),
-				GasLimit:     34567,
-				Relays:       []*beaconblockproposer.RelayConfig{},
+				EPBSBuilderConfig: defaultEPBSBuilderConfig(),
+				FeeRecipient:      executionAddress("0x0102030405060708090a0b0c0d0e0f1011121314"),
+				GasLimit:          34567,
+				Relays:            []*beaconblockproposer.RelayConfig{},
 			},
 		},
 	}
@@ -230,7 +235,7 @@ func TestECProposerConfig(t *testing.T) {
 			err := json.Unmarshal(test.input, &ec)
 			require.NoError(t, err)
 
-			pc, err := ec.ProposerConfig(ctx, nil, test.pubkey, test.fallbackFeeRecipient, test.fallbackGasLimit)
+			pc, err := ec.ProposerConfig(ctx, nil, test.pubkey, test.fallbackFeeRecipient, test.fallbackGasLimit, 0, 100)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
@@ -238,5 +243,25 @@ func TestECProposerConfig(t *testing.T) {
 				require.Equal(t, test.pc, pc)
 			}
 		})
+	}
+}
+
+func TestECProposerConfigEPBSFallbacks(t *testing.T) {
+	ec := &v1.ExecutionConfig{}
+
+	pc, err := ec.ProposerConfig(context.Background(), nil, phase0.BLSPubKey{}, bellatrix.ExecutionAddress{0x01}, 30_000_000, 5, 0)
+	require.NoError(t, err)
+	require.Equal(t, &beaconblockproposer.EPBSBuilderConfig{
+		MinBid:             5,
+		BuilderBoostFactor: 0,
+		Builders:           []*beaconblockproposer.EPBSBuilder{},
+	}, pc.EPBSBuilderConfig)
+}
+
+// defaultEPBSBuilderConfig is the ePBS policy resolved from the default fallbacks.
+func defaultEPBSBuilderConfig() *beaconblockproposer.EPBSBuilderConfig {
+	return &beaconblockproposer.EPBSBuilderConfig{
+		BuilderBoostFactor: 100,
+		Builders:           []*beaconblockproposer.EPBSBuilder{},
 	}
 }

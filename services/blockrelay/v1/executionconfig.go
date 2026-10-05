@@ -1,4 +1,4 @@
-// Copyright © 2022, 2023 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -89,6 +89,8 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 	pubkey phase0.BLSPubKey,
 	fallbackFeeRecipient bellatrix.ExecutionAddress,
 	fallbackGasLimit uint64,
+	fallbackMinBid phase0.Gwei,
+	fallbackBuilderBoostFactor uint64,
 ) (
 	*beaconblockproposer.ProposerConfig,
 	error,
@@ -137,7 +139,13 @@ func (e *ExecutionConfig) ProposerConfig(_ context.Context,
 	return &beaconblockproposer.ProposerConfig{
 		FeeRecipient: proposerConfig.FeeRecipient,
 		GasLimit:     proposerConfig.GasLimit,
-		Relays:       relays,
+		// Version 1 has no ePBS policy, so the fallbacks always apply.
+		EPBSBuilderConfig: &beaconblockproposer.EPBSBuilderConfig{
+			MinBid:             fallbackMinBid,
+			BuilderBoostFactor: fallbackBuilderBoostFactor,
+			Builders:           make([]*beaconblockproposer.EPBSBuilder, 0),
+		},
+		Relays: relays,
 	}, nil
 }
 

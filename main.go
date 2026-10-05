@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -264,6 +265,8 @@ func fetchConfig() error {
 	viper.SetDefault("blockrelay.timeout", 1*time.Second)
 	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(36000000))
+	viper.SetDefault("builderconfig.fallback-min-bid", uint64(0))
+	viper.SetDefault("builderconfig.fallback-builder-boost-factor", beaconblockproposer.DefaultBuilderBoostFactor)
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.0005))
 	viper.SetDefault("beaconblockproposer.builder-boost-factor", 91)
@@ -2293,6 +2296,19 @@ func startBlockRelay(ctx context.Context,
 		return nil, errors.New("blockrelay: fee recipient supplied is zero")
 	}
 
+	fallbackGasLimit, err := uint64Setting("blockrelay.fallback-gas-limit")
+	if err != nil {
+		return nil, err
+	}
+	fallbackMinBid, err := uint64Setting("builderconfig.fallback-min-bid")
+	if err != nil {
+		return nil, err
+	}
+	fallbackBuilderBoostFactor, err := uint64Setting("builderconfig.fallback-builder-boost-factor")
+	if err != nil {
+		return nil, err
+	}
+
 	builderConfigs, err := obtainBuilderConfigs(ctx)
 	if err != nil {
 		return nil, err
@@ -2307,7 +2323,9 @@ func startBlockRelay(ctx context.Context,
 		standardblockrelay.WithChainTime(chainTime),
 		standardblockrelay.WithConfigURL(viper.GetString("blockrelay.config.url")),
 		standardblockrelay.WithFallbackFeeRecipient(fallbackFeeRecipient),
-		standardblockrelay.WithFallbackGasLimit(viper.GetUint64("blockrelay.fallback-gas-limit")),
+		standardblockrelay.WithFallbackGasLimit(fallbackGasLimit),
+		standardblockrelay.WithFallbackMinBid(phase0.Gwei(fallbackMinBid)),
+		standardblockrelay.WithFallbackBuilderBoostFactor(fallbackBuilderBoostFactor),
 		standardblockrelay.WithClientCertURL(viper.GetString("blockrelay.config.client-cert")),
 		standardblockrelay.WithClientKeyURL(viper.GetString("blockrelay.config.client-key")),
 		standardblockrelay.WithCACertURL(viper.GetString("blockrelay.config.ca-cert")),
@@ -2380,6 +2398,22 @@ func selectBuilderBidProvider(ctx context.Context,
 	}
 
 	return provider, nil
+}
+
+// uint64Setting returns the named setting as an unsigned integer.
+// Unlike viper.GetUint64 it rejects unset values and values that are not non-negative integers, rather than returning 0.
+// Callers register a default with viper.SetDefault, so an unset value means the default is missing.
+func uint64Setting(key string) (uint64, error) {
+	raw := viper.Get(key)
+	if raw == nil {
+		return 0, fmt.Errorf("%s: not set", key)
+	}
+	value, err := strconv.ParseUint(fmt.Sprint(raw), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s: invalid value %v; must be a non-negative integer", key, raw)
+	}
+
+	return value, nil
 }
 
 func obtainBuilderConfigs(ctx context.Context) (map[phase0.BLSPubKey]*blockrelay.BuilderConfig, error) {

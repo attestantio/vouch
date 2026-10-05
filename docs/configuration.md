@@ -102,8 +102,8 @@ beaconblockproposer:
   # -  50: `builder value` must be more than twice the local value (`local value*(100/50)`) to be used
   # -  91: `builder value` must be more than ~10% higher than the local value (`local value*(100/91)`) to be used
   # - 100: `builder value` must be more than the local value (`local value*(100/100)`) to be used
-  # From Gloas onwards builder policy comes from version 2 execution configuration's epbs_builder_config.
-  # The ePBS boost defaults to 100 rather than inheriting this legacy value.
+  # This value is not used from Gloas onwards.  Gloas builder policy comes from version 2 execution configuration's
+  # epbs_builder_config, with fallbacks in builderconfig; this value is not one of those fallbacks.
   builder-boost-factor: 91
 
 # attester provides control of the attester process.
@@ -274,6 +274,8 @@ blockrelay:
   # participating relay, the bid provided, and if the bid was selected for use by Vouch.
   log-results: true
   # builder-configs contain specific configurations for different builders, with each builder defined by its public key.
+  # They apply only to pre-Gloas relay auctions and have no effect from Gloas onwards.  They are unrelated to the
+  # top-level builderconfig key, which holds the Gloas ePBS fallbacks.
   # The base score for each bid is the value to the proposer, in wei.  The final score is calculated by adding
   # the 'offset' value for the specific builder, and then multiplying by the percentage of 'factor' value. For example,
   # if the base value is 1000, the offset is 10 and the factor is 110 then the final score is (1000+10)*110/100 = 1111.  If the
@@ -288,6 +290,17 @@ blockrelay:
       category: 'excluded'
       # With a factor of 0 bids from this builder will be ignored.
       factor: 0
+
+# builderconfig provides fallback Gloas ePBS values for validators that do not have them in the execution configuration.
+# Vouch sends these values to the beacon node, which runs the auction from Gloas onwards.  Despite the similar name it is
+# unrelated to blockrelay.builder-configs, which scores relay bids by builder public key before Gloas only.  Neither key
+# reads the other.
+builderconfig:
+  # fallback-min-bid is the minimum P2P bid, in Gwei.  Defaults to 0.
+  fallback-min-bid: 0
+  # fallback-builder-boost-factor is the builder boost factor percentage.  Defaults to 100; 0 prefers the local build.
+  # beaconblockproposer.builder-boost-factor is not used from Gloas onwards and is not a fallback for this value.
+  fallback-builder-boost-factor: 100
 
 # builderclient provides timeout configuration for builder/relay communication.
 # Vouch communicates with MEV-boost relays for validator registration, bid fetching, and block unblinding.

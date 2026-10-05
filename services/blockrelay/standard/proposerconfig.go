@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,6 +18,7 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	v2 "github.com/attestantio/vouch/services/blockrelay/v2"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
 
@@ -31,13 +32,12 @@ func (s *Service) ProposerConfig(ctx context.Context,
 ) {
 	s.executionConfigMu.RLock()
 	defer s.executionConfigMu.RUnlock()
-	if s.executionConfig == nil {
+	executionConfig := s.executionConfig
+	if executionConfig == nil {
 		s.log.Warn().Msg("No execution configuration available; using fallback information")
-		return &beaconblockproposer.ProposerConfig{
-			FeeRecipient: s.fallbackFeeRecipient,
-			GasLimit:     s.fallbackGasLimit,
-			Relays:       make([]*beaconblockproposer.RelayConfig, 0),
-		}, nil
+		// An empty configuration resolves every value from the fallbacks.
+		executionConfig = &v2.ExecutionConfig{Version: 2}
 	}
-	return s.executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit)
+
+	return executionConfig.ProposerConfig(ctx, account, pubkey, s.fallbackFeeRecipient, s.fallbackGasLimit, s.fallbackMinBid, s.fallbackBuilderBoostFactor)
 }
