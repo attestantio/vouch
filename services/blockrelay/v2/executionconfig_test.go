@@ -1124,8 +1124,12 @@ func TestExecutionConfigHasMinValueWithoutEPBSMinBid(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "ProposerMinValueWithRootMinBid",
-			input:    fmt.Sprintf(`{"version":2,"epbs_builder_config":{"min_bid":"0"},"proposers":[{"proposer":%q,"min_value":"0.1"}]}`, pubkeyString),
+			name:  "ProposerMinValueWithRootMinBid",
+			input: fmt.Sprintf(`{"version":2,"min_value":"0.1","epbs_builder_config":{"min_bid":"100000000"},"proposers":[{"proposer":%q,"min_value":"0.2"}]}`, pubkeyString),
+		},
+		{
+			name:     "ProposerMinValueWithoutAnyMinBid",
+			input:    fmt.Sprintf(`{"version":2,"epbs_builder_config":{"builder_boost_factor":90},"proposers":[{"proposer":%q,"min_value":"0.2","epbs_builder_config":{"builder_boost_factor":80}}]}`, pubkeyString),
 			expected: true,
 		},
 		{

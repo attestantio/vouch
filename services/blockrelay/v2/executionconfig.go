@@ -173,14 +173,16 @@ func (e *ExecutionConfig) ProposerConfig(ctx context.Context,
 	return config, nil
 }
 
-// HasMinValueWithoutEPBSMinBid returns true if a min_value is set at a level without an ePBS min_bid.
+// HasMinValueWithoutEPBSMinBid returns true if a min_value is set where no ePBS min_bid resolves.
+// A proposer inherits the root min_bid, so a proposer min_value is covered by either.
 // From Gloas onwards min_value applies only to relays, so the operator may expect a floor that is not applied.
 func (e *ExecutionConfig) HasMinValueWithoutEPBSMinBid() bool {
-	if hasMinValueWithoutEPBSMinBid(e.MinValue, e.EPBSBuilderConfig) {
+	rootMinBid := hasEPBSMinBid(e.EPBSBuilderConfig)
+	if e.MinValue != nil && !rootMinBid {
 		return true
 	}
 	for _, proposer := range e.Proposers {
-		if proposer != nil && hasMinValueWithoutEPBSMinBid(proposer.MinValue, proposer.EPBSBuilderConfig) {
+		if proposer != nil && proposer.MinValue != nil && !rootMinBid && !hasEPBSMinBid(proposer.EPBSBuilderConfig) {
 			return true
 		}
 	}
@@ -188,8 +190,8 @@ func (e *ExecutionConfig) HasMinValueWithoutEPBSMinBid() bool {
 	return false
 }
 
-func hasMinValueWithoutEPBSMinBid(minValue *decimal.Decimal, config *EPBSBuilderConfig) bool {
-	return minValue != nil && (config == nil || config.MinBid == nil)
+func hasEPBSMinBid(config *EPBSBuilderConfig) bool {
+	return config != nil && config.MinBid != nil
 }
 
 // resolveEPBSBuilderConfig applies the root and then the matching proposer's ePBS policy.

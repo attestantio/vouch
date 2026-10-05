@@ -146,7 +146,7 @@ From Gloas onwards the beacon node runs the auction between its local build, P2P
 }
 ```
 
-The top-level `min_bid` is the minimum P2P bid, in Gwei. It is a decimal integer string. `min_value` does not affect ePBS: from Gloas onwards it applies only to pre-Gloas relays. When a loaded configuration has a root or proposer `min_value` without an ePBS `min_bid` at the same level, Vouch logs a warning naming `epbs_builder_config.min_bid` as the replacement.
+The top-level `min_bid` is the minimum P2P bid, in Gwei. It is a decimal integer string. `min_value` does not affect ePBS: from Gloas onwards it applies only to pre-Gloas relays. When a loaded configuration has a root or proposer `min_value` with no ePBS `min_bid` covering it, Vouch logs a warning. A proposer is covered by its own `min_bid` or by the root one. The warning names `epbs_builder_config.min_bid` as the replacement.
 
 `builder_boost_factor` is an unsigned 64-bit percentage applied by the beacon node. Its ePBS default is `100`. The legacy `beaconblockproposer.builder-boost-factor` (default `91`) has no effect on Gloas proposals and is not a fallback. A value of `0` prefers the local build but still permits a P2P fallback when the local build is unviable. A value of `100` selects the highest-value viable bid. Vouch does not apply the factor again after the beacon node returns its auction result.
 
