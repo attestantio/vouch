@@ -150,7 +150,7 @@ The top-level `min_bid` is the minimum P2P bid, in Gwei. It is a decimal integer
 
 `builder_boost_factor` is an unsigned 64-bit percentage applied by the beacon node. Its ePBS default is `100`. The legacy `beaconblockproposer.builder-boost-factor` (default `91`) has no effect on Gloas proposals and is not a fallback. A value of `0` prefers the local build but still permits a P2P fallback when the local build is unviable. A value of `100` selects the highest-value viable bid. Vouch does not apply the factor again after the beacon node returns its auction result.
 
-Each direct-builder entry requires `url`, `auth_data`, `builder_pubkeys` and `max_execution_payment`. `min_bid` and `builder_boost_factor` are optional; an omitted value inherits the P2P value resolved for the proposer being served. An explicit `null` is invalid, as it is for the root and proposer fields. Configuration dumps and `--proposer-config-check` show the resolved values.
+Each direct-builder entry requires `url`, `auth_data`, `builder_pubkeys` and `max_execution_payment`. `min_bid` and `builder_boost_factor` are optional; an omitted value inherits the P2P value resolved for the proposer being served. An explicit `null` is invalid, as it is for the root and proposer fields. `--proposer-config-check` shows the resolved values, including the inherited ones. The execution configuration itself is not rewritten: an omitted field stays omitted.
 
 - `url` is an absolute HTTP or HTTPS URL, at most 2048 bytes.
 - `auth_data` is non-empty, `0x`-prefixed opaque hex agreed with the builder, at most 4096 decoded bytes. Vouch binds it to the proposal slot and signs it through the validator signer. It is emitted only in that authenticated request. Logs, metrics, errors, configuration dumps, and `--proposer-config-check` never expose its value, hash, or length. Configuration output shows `"redacted"` instead.
@@ -514,6 +514,20 @@ Proposing blocks is a relatively rare event, and as such it is useful for users 
 vouch --proposer-config-check 0x8021…8bbe | jq .
 {
   "fee_recipient": "000102030405060708090a0b0c0d0e0f10111213",
+  "epbs_builder_config": {
+    "min_bid": "0",
+    "builder_boost_factor": 100,
+    "builders": [
+      {
+        "url": "https://builder.example",
+        "auth_data": "redacted",
+        "builder_pubkeys": [],
+        "max_execution_payment": "0",
+        "min_bid": "0",
+        "builder_boost_factor": 100
+      }
+    ]
+  },
   "relays": [
     {
       "address": "https://relay2.com/",
@@ -525,6 +539,8 @@ vouch --proposer-config-check 0x8021…8bbe | jq .
   ]
 }
 ```
+
+The `epbs_builder_config` block is always present, including on pre-Gloas networks and with a version 1 configuration. It shows the Gloas ePBS policy that would be sent for this proposer, with every fallback and inherited value filled in. A direct builder's `min_bid` and `builder_boost_factor` appear even when the configuration omits them.
 
 (Note that in the above example the output is piped to `jq` to provide formatted output.  This step is unnecessary, and everything at and after the `|` character can be removed from the command if desired, or if `jq` is not installed on the server running Vouch.)
 
