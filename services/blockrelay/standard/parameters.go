@@ -21,6 +21,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
@@ -238,7 +239,7 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
 		logLevel:                   zerolog.GlobalLevel(),
 		builderConfigs:             map[phase0.BLSPubKey]*blockrelay.BuilderConfig{},
-		fallbackBuilderBoostFactor: 100,
+		fallbackBuilderBoostFactor: beaconblockproposer.DefaultBuilderBoostFactor,
 	}
 	for _, p := range params {
 		p.apply(&parameters)

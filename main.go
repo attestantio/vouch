@@ -266,7 +266,7 @@ func fetchConfig() error {
 	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(36000000))
 	viper.SetDefault("builderconfig.fallback-min-bid", uint64(0))
-	viper.SetDefault("builderconfig.fallback-builder-boost-factor", uint64(100))
+	viper.SetDefault("builderconfig.fallback-builder-boost-factor", beaconblockproposer.DefaultBuilderBoostFactor)
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.0005))
 	viper.SetDefault("beaconblockproposer.builder-boost-factor", 91)

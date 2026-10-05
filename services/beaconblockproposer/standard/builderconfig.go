@@ -25,7 +25,7 @@ import (
 
 func (s *Service) builderConfig(ctx context.Context, duty *beaconblockproposer.Duty) (*gloas.BuilderConfig, error) {
 	resolved := &beaconblockproposer.EPBSBuilderConfig{
-		BuilderBoostFactor: 100,
+		BuilderBoostFactor: beaconblockproposer.DefaultBuilderBoostFactor,
 		Builders:           make([]*beaconblockproposer.EPBSBuilder, 0),
 	}
 	proposerConfig, err := s.executionConfigProvider.ProposerConfig(ctx, duty.Account(), util.ValidatorPubkey(duty.Account()))
