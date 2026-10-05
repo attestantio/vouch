@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -2295,6 +2296,19 @@ func startBlockRelay(ctx context.Context,
 		return nil, errors.New("blockrelay: fee recipient supplied is zero")
 	}
 
+	fallbackGasLimit, err := uint64Setting("blockrelay.fallback-gas-limit")
+	if err != nil {
+		return nil, err
+	}
+	fallbackMinBid, err := uint64Setting("builderconfig.fallback-min-bid")
+	if err != nil {
+		return nil, err
+	}
+	fallbackBuilderBoostFactor, err := uint64Setting("builderconfig.fallback-builder-boost-factor")
+	if err != nil {
+		return nil, err
+	}
+
 	builderConfigs, err := obtainBuilderConfigs(ctx)
 	if err != nil {
 		return nil, err
@@ -2309,9 +2323,9 @@ func startBlockRelay(ctx context.Context,
 		standardblockrelay.WithChainTime(chainTime),
 		standardblockrelay.WithConfigURL(viper.GetString("blockrelay.config.url")),
 		standardblockrelay.WithFallbackFeeRecipient(fallbackFeeRecipient),
-		standardblockrelay.WithFallbackGasLimit(viper.GetUint64("blockrelay.fallback-gas-limit")),
-		standardblockrelay.WithFallbackMinBid(phase0.Gwei(viper.GetUint64("builderconfig.fallback-min-bid"))),
-		standardblockrelay.WithFallbackBuilderBoostFactor(viper.GetUint64("builderconfig.fallback-builder-boost-factor")),
+		standardblockrelay.WithFallbackGasLimit(fallbackGasLimit),
+		standardblockrelay.WithFallbackMinBid(phase0.Gwei(fallbackMinBid)),
+		standardblockrelay.WithFallbackBuilderBoostFactor(fallbackBuilderBoostFactor),
 		standardblockrelay.WithClientCertURL(viper.GetString("blockrelay.config.client-cert")),
 		standardblockrelay.WithClientKeyURL(viper.GetString("blockrelay.config.client-key")),
 		standardblockrelay.WithCACertURL(viper.GetString("blockrelay.config.ca-cert")),
@@ -2384,6 +2398,21 @@ func selectBuilderBidProvider(ctx context.Context,
 	}
 
 	return provider, nil
+}
+
+// uint64Setting returns the named setting as an unsigned integer.
+// Unlike viper.GetUint64 it rejects values that are not non-negative integers, rather than returning 0.
+func uint64Setting(key string) (uint64, error) {
+	raw := viper.Get(key)
+	if raw == nil {
+		return 0, nil
+	}
+	value, err := strconv.ParseUint(fmt.Sprint(raw), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s: invalid value %v; must be a non-negative integer", key, raw)
+	}
+
+	return value, nil
 }
 
 func obtainBuilderConfigs(ctx context.Context) (map[phase0.BLSPubKey]*blockrelay.BuilderConfig, error) {

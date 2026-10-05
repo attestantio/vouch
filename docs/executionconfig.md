@@ -46,6 +46,8 @@ builderconfig:
 - `fallback-min-bid` is the minimum P2P bid, in Gwei. It defaults to `0`.
 - `fallback-builder-boost-factor` is the boost factor percentage. It defaults to `100`. An explicit `0` is honoured.
 
+Vouch refuses to start if either value, or `blockrelay.fallback-gas-limit`, is not a non-negative integer. A value such as `-1`, `"90%"` or `0.01` is an error rather than `0`.
+
 These values apply whenever the execution configuration does not supply its own: with no configuration URL, when no configuration has loaded because the fetch failed (a later failed fetch keeps the last loaded configuration), with a version 1 configuration, and with a version 2 configuration that omits the fields. They are read once at startup. See [Gloas ePBS builder configuration](#gloas-epbs-builder-configuration) for the full precedence.
 
 `builderconfig` and `blockrelay.builder-configs` have similar names but control different things:
