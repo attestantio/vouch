@@ -16,9 +16,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
+	standardcontroller "github.com/attestantio/vouch/services/controller/standard"
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -35,8 +38,8 @@ func TestControllerDelayParameters(t *testing.T) {
 			name: "unset",
 		},
 		{
-			// Every key is spelled out here rather than read from the table, so a typo in the
-			// table fails this test.
+			// Every key is spelled out here rather than read from the table, so a typo in a key
+			// fails this test.  TestControllerDelayOptions pins each key to its option.
 			name: "all set",
 			values: map[string]any{
 				"controller.max-attestation-delay":            "5s",
@@ -46,10 +49,10 @@ func TestControllerDelayParameters(t *testing.T) {
 				"controller.max-proposal-delay":               "1s",
 			},
 			warnings: []string{
-				"controller.max-attestation-delay is deprecated and ignored for Gloas slots",
-				"controller.attestation-aggregation-delay is deprecated and ignored for Gloas slots",
-				"controller.max-sync-committee-message-delay is deprecated and ignored for Gloas slots",
-				"controller.sync-committee-aggregation-delay is deprecated and ignored for Gloas slots",
+				"controller.max-attestation-delay is deprecated; it applies to pre-Gloas slots only and is ignored from the Gloas fork onwards",
+				"controller.attestation-aggregation-delay is deprecated; it applies to pre-Gloas slots only and is ignored from the Gloas fork onwards",
+				"controller.max-sync-committee-message-delay is deprecated; it applies to pre-Gloas slots only and is ignored from the Gloas fork onwards",
+				"controller.sync-committee-aggregation-delay is deprecated; it applies to pre-Gloas slots only and is ignored from the Gloas fork onwards",
 			},
 		},
 		{
@@ -58,6 +61,22 @@ func TestControllerDelayParameters(t *testing.T) {
 				"controller.max-attestation-delay":         0,
 				"controller.attestation-aggregation-delay": "0s",
 			},
+		},
+		{
+			// A time.Duration, as from SetDefault or a pflag, carries its unit.
+			name: "durations",
+			values: map[string]any{
+				"controller.max-attestation-delay":         time.Duration(0),
+				"controller.attestation-aggregation-delay": 4 * time.Second,
+			},
+			warnings: []string{
+				"controller.attestation-aggregation-delay is deprecated; it applies to pre-Gloas slots only and is ignored from the Gloas fork onwards",
+			},
+		},
+		{
+			name:   "negative duration",
+			values: map[string]any{"controller.max-attestation-delay": -4 * time.Second},
+			err:    `invalid controller.max-attestation-delay "-4s"`,
 		},
 		{
 			name:   "malformed",
@@ -129,6 +148,7 @@ func TestControllerDelayParameters(t *testing.T) {
 
 // TestControllerDelayParametersConfigFormats reads the keys as each config file format decodes them.
 // JSON decodes numbers to float64 and TOML to int64, where YAML gives int.
+// The environment provides strings, found through AutomaticEnv as the keys have no default.
 func TestControllerDelayParametersConfigFormats(t *testing.T) {
 	tests := []struct {
 		format string
@@ -160,5 +180,43 @@ func TestControllerDelayParametersConfigFormats(t *testing.T) {
 			_, err = controllerDelayParameters()
 			require.ErrorContains(t, err, "invalid controller.max-attestation-delay 4")
 		})
+	}
+
+	t.Run("env", func(t *testing.T) {
+		t.Cleanup(viper.Reset)
+		viper.SetEnvPrefix("VOUCH")
+		viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
+		viper.AutomaticEnv()
+
+		t.Setenv("VOUCH_CONTROLLER_MAX_ATTESTATION_DELAY", "0")
+		delays, err := controllerDelays()
+		require.NoError(t, err)
+		require.Zero(t, delays[0])
+
+		t.Setenv("VOUCH_CONTROLLER_MAX_ATTESTATION_DELAY", "4s")
+		delays, err = controllerDelays()
+		require.NoError(t, err)
+		require.Equal(t, 4*time.Second, delays[0])
+
+		t.Setenv("VOUCH_CONTROLLER_MAX_ATTESTATION_DELAY", "4")
+		_, err = controllerDelays()
+		require.ErrorContains(t, err, `invalid controller.max-attestation-delay "4"`)
+	})
+}
+
+// TestControllerDelayOptions pins each key to the option that consumes it, as a swapped pair would
+// silently swap the operator's deadlines.
+func TestControllerDelayOptions(t *testing.T) {
+	expected := map[string]func(time.Duration) standardcontroller.Parameter{
+		"controller.max-attestation-delay":            standardcontroller.WithMaxAttestationDelay,
+		"controller.attestation-aggregation-delay":    standardcontroller.WithAttestationAggregationDelay,
+		"controller.max-sync-committee-message-delay": standardcontroller.WithMaxSyncCommitteeMessageDelay,
+		"controller.sync-committee-aggregation-delay": standardcontroller.WithSyncCommitteeAggregationDelay,
+	}
+	require.Len(t, deprecatedControllerDelays, len(expected))
+	for _, delay := range deprecatedControllerDelays {
+		option, exists := expected[delay.key]
+		require.True(t, exists, delay.key)
+		require.Equal(t, reflect.ValueOf(option).Pointer(), reflect.ValueOf(delay.option).Pointer(), delay.key)
 	}
 }

@@ -458,7 +458,7 @@ Vouch reads the chain specification from its beacon nodes at startup and derives
 
 An option that is set replaces the derived deadline for slots before the Gloas fork only. Gloas slots ignore it. There is no way to set a Gloas deadline: an operator who set an earlier deadline on purpose, for example to give a slow or distributed signer more time, gets the later spec deadline from the first Gloas slot onwards. Vouch logs a warning at startup for each of these options that is set to a non-zero value.
 
-A value must be a positive duration with a unit, such as `2s`, or `0` to derive the deadline from the chain specification. Vouch refuses to start on any other value, including a number without a unit or a negative duration.
+A value must be a positive duration with a unit that is less than the slot duration, such as `2s`, or `0` to derive the deadline from the chain specification. Vouch refuses to start on any other value, including a number without a unit, a negative duration, or a duration at or past the end of the slot.
 
 ### controller.max-attestation-delay
 

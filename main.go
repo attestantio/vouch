@@ -297,6 +297,11 @@ func fetchConfig() error {
 		}
 	}
 
+	// Check the controller delays here so that a bad value fails before Vouch waits on beacon nodes.
+	if _, err := controllerDelays(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -527,15 +532,20 @@ var deprecatedControllerDelays = []struct {
 	{"controller.sync-committee-aggregation-delay", standardcontroller.WithSyncCommitteeAggregationDelay}, // 8s pre-Gloas, 6s from Gloas.
 }
 
-// controllerDelayParameters reads the deprecated duty delay overrides, warning about each one that
-// is set.  Values must carry a unit, as viper would otherwise read "abc" as 0 and 4 as 4ns.  Config
-// files and the environment provide strings or numbers, and a number is valid only as 0, whose type
-// depends on the file format.
-func controllerDelayParameters() ([]standardcontroller.Parameter, error) {
-	params := make([]standardcontroller.Parameter, 0, len(deprecatedControllerDelays))
+// controllerDelays reads the deprecated duty delay overrides, in the order of
+// deprecatedControllerDelays.  Values must carry a unit, as viper would otherwise read "abc" as 0
+// and 4 as 4ns.  Config files and the environment provide strings or numbers, and a number is valid
+// only as 0, whose type depends on the file format.
+func controllerDelays() ([]time.Duration, error) {
+	delays := make([]time.Duration, 0, len(deprecatedControllerDelays))
 	for _, delay := range deprecatedControllerDelays {
 		var value time.Duration
-		switch raw := viper.Get(delay.key).(type) {
+		raw := viper.Get(delay.key)
+		// A time.Duration, as from SetDefault or a pflag, carries its unit.
+		if duration, ok := raw.(time.Duration); ok {
+			raw = duration.String()
+		}
+		switch raw := raw.(type) {
 		case nil:
 		case string:
 			var err error
@@ -548,10 +558,25 @@ func controllerDelayParameters() ([]standardcontroller.Parameter, error) {
 				return nil, fmt.Errorf("invalid %s %v: must be 0 or a positive duration with a unit, such as 2s", delay.key, raw)
 			}
 		}
-		if value != 0 {
-			log.Warn().Msg(delay.key + " is deprecated and ignored for Gloas slots")
+		delays = append(delays, value)
+	}
+
+	return delays, nil
+}
+
+// controllerDelayParameters provides the deprecated duty delay overrides as controller parameters,
+// warning about each one that is set.
+func controllerDelayParameters() ([]standardcontroller.Parameter, error) {
+	delays, err := controllerDelays()
+	if err != nil {
+		return nil, err
+	}
+	params := make([]standardcontroller.Parameter, 0, len(delays))
+	for i, delay := range deprecatedControllerDelays {
+		if delays[i] != 0 {
+			log.Warn().Msg(delay.key + " is deprecated; it applies to pre-Gloas slots only and is ignored from the Gloas fork onwards")
 		}
-		params = append(params, delay.option(value))
+		params = append(params, delay.option(delays[i]))
 	}
 
 	return params, nil

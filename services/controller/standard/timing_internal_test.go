@@ -380,3 +380,42 @@ func TestObtainPayloadAttestationTiming(t *testing.T) {
 		})
 	}
 }
+
+// TestCheckWithinSlot confirms that an override at or past the end of the slot is rejected, as the
+// duty would always be late.
+func TestCheckWithinSlot(t *testing.T) {
+	tests := []struct {
+		name      string
+		overrides dutyTimings
+		err       string
+	}{
+		{
+			name: "unset",
+		},
+		{
+			name:      "within slot",
+			overrides: dutyTimings{syncCommitteeAggregationDelay: 11999 * time.Millisecond},
+		},
+		{
+			name:      "at slot end",
+			overrides: dutyTimings{maxAttestationDelay: 12 * time.Second},
+			err:       "max attestation delay 12s must be less than the slot duration 12s",
+		},
+		{
+			name:      "past slot end",
+			overrides: dutyTimings{syncCommitteeAggregationDelay: 20 * time.Second},
+			err:       "sync committee aggregation delay 20s must be less than the slot duration 12s",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := test.overrides.checkWithinSlot(12 * time.Second)
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}

@@ -370,6 +370,9 @@ func parseAndCheckParameters(ctx context.Context, params ...Parameter) (*paramet
 	if err != nil {
 		return nil, err
 	}
+	if err := parameters.overrides.checkWithinSlot(slotDuration); err != nil {
+		return nil, err
+	}
 	// maxProposalDelay can be 0, so no check for it here.
 	parameters.setDefaultDelays(spec, slotDuration)
 	// Sync committee duties provider/messenger/aggregator/subscriber are optional so no checks here.
@@ -471,6 +474,27 @@ func (t *dutyTimings) applyOverrides(overrides dutyTimings) {
 	if overrides.syncCommitteeAggregationDelay != 0 {
 		t.syncCommitteeAggregationDelay = overrides.syncCommitteeAggregationDelay
 	}
+}
+
+// checkWithinSlot errors if any deadline falls at or after the end of the slot, where the duty
+// would always be late.
+func (t *dutyTimings) checkWithinSlot(slotDuration time.Duration) error {
+	delays := []struct {
+		name  string
+		delay time.Duration
+	}{
+		{"max attestation delay", t.maxAttestationDelay},
+		{"attestation aggregation delay", t.attestationAggregationDelay},
+		{"max sync committee message delay", t.maxSyncCommitteeMessageDelay},
+		{"sync committee aggregation delay", t.syncCommitteeAggregationDelay},
+	}
+	for _, d := range delays {
+		if d.delay >= slotDuration {
+			return errors.Errorf("%s %s must be less than the slot duration %s", d.name, d.delay, slotDuration)
+		}
+	}
+
+	return nil
 }
 
 // setDefaultDelays derives both the pre-Gloas and the Gloas duty timings.  Both are derived here,
