@@ -156,6 +156,7 @@ Each direct-builder entry requires `url`, `auth_data`, `builder_pubkeys` and `ma
 - `auth_data` is non-empty, `0x`-prefixed opaque hex agreed with the builder, at most 4096 decoded bytes. Vouch binds it to the proposal slot and signs it through the validator signer. It is emitted only in that authenticated request. Logs, metrics, errors, configuration dumps, and `--proposer-config-check` never expose its value, hash, or length. Configuration output shows `"redacted"` instead.
 - `builder_pubkeys` contains at most 64 BLS public keys. An empty list accepts a bid signed by any builder key returned by that endpoint.
 - `max_execution_payment` and `min_bid` are decimal Gwei integer strings in the unsigned 64-bit range.
+- The beacon node values a bid from an entry at its `value` plus `min(execution_payment, max_execution_payment)`, and rejects it if that is below the entry's `min_bid`. So `min_bid` may exceed `max_execution_payment`, including when it is inherited: the bid's `value` must cover the difference.
 - `builder_boost_factor` is an unsigned 64-bit integer with the same weighting semantics as the top-level factor.
 
 A builder list contains at most 64 entries. Entries sharing both URL and authorization are invalid.
