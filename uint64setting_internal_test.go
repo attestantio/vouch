@@ -28,7 +28,7 @@ func TestUint64Setting(t *testing.T) {
 		expected uint64
 		err      string
 	}{
-		{name: "Unset", yaml: "other: 1", expected: 0},
+		{name: "Unset", yaml: "other: 1", err: "key: not set"},
 		{name: "Integer", yaml: "key: 90", expected: 90},
 		{name: "Zero", yaml: "key: 0", expected: 0},
 		{name: "IntegerString", yaml: `key: "90"`, expected: 90},

@@ -2401,11 +2401,12 @@ func selectBuilderBidProvider(ctx context.Context,
 }
 
 // uint64Setting returns the named setting as an unsigned integer.
-// Unlike viper.GetUint64 it rejects values that are not non-negative integers, rather than returning 0.
+// Unlike viper.GetUint64 it rejects unset values and values that are not non-negative integers, rather than returning 0.
+// Callers register a default with viper.SetDefault, so an unset value means the default is missing.
 func uint64Setting(key string) (uint64, error) {
 	raw := viper.Get(key)
 	if raw == nil {
-		return 0, nil
+		return 0, fmt.Errorf("%s: not set", key)
 	}
 	value, err := strconv.ParseUint(fmt.Sprint(raw), 10, 64)
 	if err != nil {
