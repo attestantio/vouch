@@ -3,7 +3,7 @@ gloas:
   - refuse to start unless each of those four options is 0 or a positive duration with a unit that is less than the slot duration, such as 2s; viper previously read "abc" as 0, 4 as 4ns, and accepted negative durations and durations past the end of the slot
   - add builderconfig.fallback-min-bid and builderconfig.fallback-builder-boost-factor, fallback gloas ePBS P2P values used when the execution configuration does not supply them, including with no configuration URL, no configuration loaded yet, or a version 1 configuration
   - refuse to start when builderconfig.fallback-min-bid, builderconfig.fallback-builder-boost-factor or blockrelay.fallback-gas-limit is not a non-negative integer, instead of silently using 0
-  - min_value no longer sets the gloas ePBS min_bid; a configuration with min_value but no ePBS min_bid logs a warning naming epbs_builder_config.min_bid
+  - min_value no longer sets the gloas ePBS min_bid; a configuration with min_value but no ePBS min_bid logs a warning naming epbs_builder_config.min_bid once rather than on every fetch
   - direct-builder entries may omit min_bid and builder_boost_factor, inheriting the P2P values resolved for the proposer being served
 
 1.14.0-alpha.1:

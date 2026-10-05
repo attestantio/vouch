@@ -21,7 +21,6 @@ import (
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/blockrelay"
-	v2 "github.com/attestantio/vouch/services/blockrelay/v2"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	httpconfidant "github.com/wealdtech/go-majordomo/confidants/http"
@@ -149,11 +148,27 @@ func (s *Service) obtainExecutionConfig(ctx context.Context,
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal execution config")
 	}
-	if v2Config, isV2 := executionConfig.(*v2.ExecutionConfig); isV2 && v2Config.HasMinValueWithoutEPBSMinBid() {
-		s.log.Warn().Msg("Execution configuration min_value is ignored for Gloas proposals; set epbs_builder_config.min_bid instead")
-	}
+	s.warnIfMinValueIgnored(executionConfig)
 
 	return executionConfig, nil
+}
+
+// minValueChecker is implemented by execution configurations that can carry min_value without an ePBS min_bid.
+type minValueChecker interface {
+	HasMinValueWithoutEPBSMinBid() bool
+}
+
+// warnIfMinValueIgnored warns when a loaded configuration starts to have min_value without an ePBS min_bid.
+func (s *Service) warnIfMinValueIgnored(executionConfig blockrelay.ExecutionConfigurator) {
+	checker, isChecker := executionConfig.(minValueChecker)
+	if !isChecker || !checker.HasMinValueWithoutEPBSMinBid() {
+		s.minValueWarned.Store(false)
+
+		return
+	}
+	if !s.minValueWarned.Swap(true) {
+		s.log.Warn().Msg("Execution configuration min_value is ignored for Gloas proposals; set epbs_builder_config.min_bid instead")
+	}
 }
 
 func pubKeysToArray(pubkeys []phase0.BLSPubKey) string {
