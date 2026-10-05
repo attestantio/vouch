@@ -528,23 +528,24 @@ var deprecatedControllerDelays = []struct {
 }
 
 // controllerDelayParameters reads the deprecated duty delay overrides, warning about each one that
-// is set.  Values must carry a unit, as viper would otherwise read "abc" as 0 and 4 as 4ns.
+// is set.  Values must carry a unit, as viper would otherwise read "abc" as 0 and 4 as 4ns.  Config
+// files and the environment provide strings or numbers, and a number is valid only as 0, whose type
+// depends on the file format.
 func controllerDelayParameters() ([]standardcontroller.Parameter, error) {
 	params := make([]standardcontroller.Parameter, 0, len(deprecatedControllerDelays))
 	for _, delay := range deprecatedControllerDelays {
 		var value time.Duration
 		switch raw := viper.Get(delay.key).(type) {
 		case nil:
-		case time.Duration:
-			value = raw
 		case string:
 			var err error
-			if value, err = time.ParseDuration(raw); err != nil {
-				return nil, fmt.Errorf("invalid %s %q: must be a duration with a unit, such as 2s", delay.key, raw)
+			value, err = time.ParseDuration(raw)
+			if err != nil || value < 0 {
+				return nil, fmt.Errorf("invalid %s %q: must be 0 or a positive duration with a unit, such as 2s", delay.key, raw)
 			}
 		default:
-			if raw != 0 {
-				return nil, fmt.Errorf("invalid %s %v: must be a duration with a unit, such as 2s", delay.key, raw)
+			if fmt.Sprint(raw) != "0" {
+				return nil, fmt.Errorf("invalid %s %v: must be 0 or a positive duration with a unit, such as 2s", delay.key, raw)
 			}
 		}
 		if value != 0 {

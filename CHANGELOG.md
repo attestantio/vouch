@@ -1,6 +1,6 @@
 gloas:
   - deprecate controller.max-attestation-delay, controller.attestation-aggregation-delay, controller.max-sync-committee-message-delay and controller.sync-committee-aggregation-delay; they now apply to pre-gloas slots only, gloas slots always use the spec-derived deadlines with no way to set an earlier one, and each one set to a non-zero value logs a warning at startup
-  - refuse to start if one of those four options is not a duration with a unit, such as 2s; viper previously read "abc" as 0 and 4 as 4ns
+  - refuse to start unless each of those four options is 0 or a positive duration with a unit, such as 2s; viper previously read "abc" as 0, 4 as 4ns, and accepted negative durations
 
 1.14.0-alpha.1:
   - add gloas self-build beacon block proposal path: request an ePBS proposal with its payload, sign the beacon block and matching execution payload envelope, then publish the block followed by its envelope

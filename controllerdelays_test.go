@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
@@ -43,7 +42,7 @@ func TestControllerDelayParameters(t *testing.T) {
 				"controller.max-attestation-delay":            "5s",
 				"controller.attestation-aggregation-delay":    "7s",
 				"controller.max-sync-committee-message-delay": "2s",
-				"controller.sync-committee-aggregation-delay": 9 * time.Second,
+				"controller.sync-committee-aggregation-delay": "9s",
 				"controller.max-proposal-delay":               "1s",
 			},
 			warnings: []string{
@@ -79,6 +78,12 @@ func TestControllerDelayParameters(t *testing.T) {
 			name:   "number without unit",
 			values: map[string]any{"controller.sync-committee-aggregation-delay": 4},
 			err:    "invalid controller.sync-committee-aggregation-delay 4",
+		},
+		{
+			// A negative delay would schedule the duty before its slot starts.
+			name:   "negative",
+			values: map[string]any{"controller.max-attestation-delay": "-4s"},
+			err:    `invalid controller.max-attestation-delay "-4s"`,
 		},
 	}
 
@@ -118,6 +123,42 @@ func TestControllerDelayParameters(t *testing.T) {
 				warnings = append(warnings, entry.Message)
 			}
 			require.Equal(t, test.warnings, warnings)
+		})
+	}
+}
+
+// TestControllerDelayParametersConfigFormats reads the keys as each config file format decodes them.
+// JSON decodes numbers to float64 and TOML to int64, where YAML gives int.
+func TestControllerDelayParametersConfigFormats(t *testing.T) {
+	tests := []struct {
+		format string
+		zero   string
+		number string
+	}{
+		{format: "yaml", zero: "controller:\n  max-attestation-delay: 0\n", number: "controller:\n  max-attestation-delay: 4\n"},
+		{format: "json", zero: `{"controller":{"max-attestation-delay":0}}`, number: `{"controller":{"max-attestation-delay":4}}`},
+		{format: "toml", zero: "[controller]\nmax-attestation-delay = 0\n", number: "[controller]\nmax-attestation-delay = 4\n"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.format, func(t *testing.T) {
+			original := log
+			t.Cleanup(func() {
+				log = original
+				viper.Reset()
+			})
+			var buf bytes.Buffer
+			log = zerolog.New(&buf)
+			viper.SetConfigType(test.format)
+
+			require.NoError(t, viper.ReadConfig(strings.NewReader(test.zero)))
+			_, err := controllerDelayParameters()
+			require.NoError(t, err)
+			require.Empty(t, buf.String())
+
+			require.NoError(t, viper.ReadConfig(strings.NewReader(test.number)))
+			_, err = controllerDelayParameters()
+			require.ErrorContains(t, err, "invalid controller.max-attestation-delay 4")
 		})
 	}
 }
