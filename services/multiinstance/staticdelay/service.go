@@ -63,7 +63,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("failed to register metrics")
 	}
 
-	preGloasAttestationDelay, gloasAttestationDelay, err := obtainAttestationDelays(ctx, parameters.specProvider)
+	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})
+	if err != nil {
+		return nil, err
+	}
+	preGloasAttestationDelay, gloasAttestationDelay, gloasForkEpoch, err := obtainAttestationDelays(specResponse.Data)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +81,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		chainTime:                  parameters.chainTime,
 		preGloasAttestationDelay:   preGloasAttestationDelay,
 		gloasAttestationDelay:      gloasAttestationDelay,
-		gloasForkEpoch:             parameters.chainTime.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH"),
+		gloasForkEpoch:             gloasForkEpoch,
 		attesterDelay:              parameters.attesterDelay,
 		proposerDelay:              parameters.proposerDelay,
 	}
@@ -114,45 +118,41 @@ func (s *Service) enableProposer(_ context.Context) {
 	monitorActive("proposer", true)
 }
 
-// obtainAttestationDelays provides the pre-Gloas and Gloas attestation deadlines.
-func obtainAttestationDelays(ctx context.Context,
-	specProvider consensusclient.SpecProvider,
-) (
+// obtainAttestationDelays provides both attestation deadlines and their Gloas fork epoch.
+func obtainAttestationDelays(spec map[string]any) (
 	time.Duration,
 	time.Duration,
+	phase0.Epoch,
 	error,
 ) {
-	specResponse, err := specProvider.Spec(ctx, &api.SpecOpts{})
-	if err != nil {
-		return 0, 0, err
+	gloasForkEpoch := phase0.Epoch(^uint64(0))
+	if raw, exists := spec["GLOAS_FORK_EPOCH"]; exists {
+		epoch, ok := raw.(uint64)
+		if !ok {
+			return 0, 0, 0, errors.New("GLOAS_FORK_EPOCH is not a uint64")
+		}
+		gloasForkEpoch = phase0.Epoch(epoch)
 	}
-	spec := specResponse.Data
 
 	tmp, exists := spec["SECONDS_PER_SLOT"]
 	if !exists {
-		return 0, 0, errors.New("failed to obtain SECONDS_PER_SLOT")
+		return 0, 0, 0, errors.New("failed to obtain SECONDS_PER_SLOT")
 	}
 	secondsPerSlot, isDuration := tmp.(time.Duration)
 	if !isDuration {
-		return 0, 0, errors.New("seconds per slot not a duration")
+		return 0, 0, 0, errors.New("seconds per slot not a duration")
 	}
 
-	tmp, exists = spec["INTERVALS_PER_SLOT"]
-	if !exists {
-		// Some nodes do not provide this value, so use the default from mainnet.
-		tmp = uint64(3)
-	}
-	intervalsPerSlot, isUint64 := tmp.(uint64)
-	if !isUint64 {
-		return 0, 0, errors.New("intervals per slot not a uint64")
-	}
+	// Match the controller's pre-Gloas attestation deadline.
+	delay := secondsPerSlot / 3
 
-	delay := secondsPerSlot / time.Duration(intervalsPerSlot)
-
-	// Gloas serves its slot duration in milliseconds, and it can differ from SECONDS_PER_SLOT.
+	// Chaintime uses SECONDS_PER_SLOT for slot starts, including after Gloas.
 	gloasSlotDuration := secondsPerSlot
 	if durationMS, ok := spec["SLOT_DURATION_MS"].(uint64); ok && durationMS != 0 {
 		gloasSlotDuration = time.Duration(durationMS) * time.Millisecond
+		if gloasForkEpoch != phase0.Epoch(^uint64(0)) && gloasSlotDuration != secondsPerSlot {
+			return 0, 0, 0, errors.New("SLOT_DURATION_MS differs from SECONDS_PER_SLOT; chaintime does not support changing slot duration")
+		}
 	}
 	// The fallback is ATTESTATION_DUE_BPS_GLOAS itself, 2500 basis points.
 	gloasDelay := gloasSlotDuration / 4
@@ -160,5 +160,5 @@ func obtainAttestationDelays(ctx context.Context,
 		gloasDelay = gloasSlotDuration * time.Duration(bps) / 10000
 	}
 
-	return delay, gloasDelay, nil
+	return delay, gloasDelay, gloasForkEpoch, nil
 }
