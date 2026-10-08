@@ -1,5 +1,6 @@
 dev:
   - update golang.org/x/net to v0.60.0 and build the Docker image with Go 1.26.10 to pick up HTTP/2, Range header and TLS denial-of-service fixes and a crypto/x509 fix; building now requires Go 1.26
+  - wait from the gloas attestation deadline on gloas slots in static-delay multi-instance, rather than from the pre-gloas one; derive the fork epoch from the same spec snapshot, align the pre-gloas deadline with the controller, and reject differing slot durations when gloas is scheduled
 
 1.14.0-alpha.2:
   - update go-eth2-client to v0.30.0
@@ -10,7 +11,6 @@ dev:
   - name the key and the bad value when blockrelay.fallback-gas-limit is not a non-negative integer
   - min_value no longer sets the gloas ePBS min_bid; a configuration with min_value but no ePBS min_bid logs a warning naming epbs_builder_config.min_bid once rather than on every fetch
   - direct-builder entries may omit min_bid and builder_boost_factor, inheriting the P2P values resolved for the proposer being served
-  - wait from the gloas attestation deadline on gloas slots in static-delay multi-instance, rather than from the pre-gloas one
 
 1.14.0-alpha.1:
   - add gloas self-build beacon block proposal path: request an ePBS proposal with its payload, sign the beacon block and matching execution payload envelope, then publish the block followed by its envelope
