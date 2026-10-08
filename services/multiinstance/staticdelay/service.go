@@ -1,4 +1,4 @@
-// Copyright © 2024, 2025 Attestant Limited.
+// Copyright © 2024 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -22,6 +22,7 @@ import (
 
 	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/pkg/errors"
@@ -36,7 +37,9 @@ type Service struct {
 	attestationPoolProvider    consensusclient.AttestationPoolProvider
 	beaconBlockHeadersProvider consensusclient.BeaconBlockHeadersProvider
 	chainTime                  chaintime.Service
-	specAttestationDelay       time.Duration
+	preGloasAttestationDelay   time.Duration
+	gloasAttestationDelay      time.Duration
+	gloasForkEpoch             phase0.Epoch
 	attesterDelay              time.Duration
 	attesterActive             atomic.Bool
 	proposerDelay              time.Duration
@@ -60,11 +63,15 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, errors.New("failed to register metrics")
 	}
 
-	specAttestationDelay, err := obtainSpecAttestationDelay(ctx, parameters.specProvider)
+	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})
 	if err != nil {
 		return nil, err
 	}
-	log.Trace().Dur("delay", specAttestationDelay).Msg("Obtained spec attestation delay")
+	preGloasAttestationDelay, gloasAttestationDelay, gloasForkEpoch, err := obtainAttestationDelays(specResponse.Data)
+	if err != nil {
+		return nil, err
+	}
+	log.Trace().Dur("pre_gloas_delay", preGloasAttestationDelay).Dur("gloas_delay", gloasAttestationDelay).Msg("Obtained spec attestation delays")
 
 	s := &Service{
 		log:                        log,
@@ -72,7 +79,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		attestationPoolProvider:    parameters.attestationPoolProvider,
 		beaconBlockHeadersProvider: parameters.beaconBlockHeadersProvider,
 		chainTime:                  parameters.chainTime,
-		specAttestationDelay:       specAttestationDelay,
+		preGloasAttestationDelay:   preGloasAttestationDelay,
+		gloasAttestationDelay:      gloasAttestationDelay,
+		gloasForkEpoch:             gloasForkEpoch,
 		attesterDelay:              parameters.attesterDelay,
 		proposerDelay:              parameters.proposerDelay,
 	}
@@ -109,38 +118,47 @@ func (s *Service) enableProposer(_ context.Context) {
 	monitorActive("proposer", true)
 }
 
-func obtainSpecAttestationDelay(ctx context.Context,
-	specProvider consensusclient.SpecProvider,
-) (
+// obtainAttestationDelays provides both attestation deadlines and their Gloas fork epoch.
+func obtainAttestationDelays(spec map[string]any) (
 	time.Duration,
+	time.Duration,
+	phase0.Epoch,
 	error,
 ) {
-	specResponse, err := specProvider.Spec(ctx, &api.SpecOpts{})
-	if err != nil {
-		return 0, err
+	gloasForkEpoch := phase0.Epoch(^uint64(0))
+	if raw, exists := spec["GLOAS_FORK_EPOCH"]; exists {
+		epoch, ok := raw.(uint64)
+		if !ok {
+			return 0, 0, 0, errors.New("GLOAS_FORK_EPOCH is not a uint64")
+		}
+		gloasForkEpoch = phase0.Epoch(epoch)
 	}
-	spec := specResponse.Data
 
 	tmp, exists := spec["SECONDS_PER_SLOT"]
 	if !exists {
-		return 0, errors.New("failed to obtain SECONDS_PER_SLOT")
+		return 0, 0, 0, errors.New("failed to obtain SECONDS_PER_SLOT")
 	}
 	secondsPerSlot, isDuration := tmp.(time.Duration)
 	if !isDuration {
-		return 0, errors.New("seconds per slot not a duration")
+		return 0, 0, 0, errors.New("seconds per slot not a duration")
 	}
 
-	tmp, exists = spec["INTERVALS_PER_SLOT"]
-	if !exists {
-		// Some nodes do not provide this value, so use the default from mainnet.
-		tmp = uint64(3)
+	// Match the controller's pre-Gloas attestation deadline.
+	delay := secondsPerSlot / 3
+
+	// Chaintime uses SECONDS_PER_SLOT for slot starts, including after Gloas.
+	gloasSlotDuration := secondsPerSlot
+	if durationMS, ok := spec["SLOT_DURATION_MS"].(uint64); ok && durationMS != 0 {
+		gloasSlotDuration = time.Duration(durationMS) * time.Millisecond
+		if gloasForkEpoch != phase0.Epoch(^uint64(0)) && gloasSlotDuration != secondsPerSlot {
+			return 0, 0, 0, errors.New("SLOT_DURATION_MS differs from SECONDS_PER_SLOT; chaintime does not support changing slot duration")
+		}
 	}
-	intervalsPerSlot, isUint64 := tmp.(uint64)
-	if !isUint64 {
-		return 0, errors.New("intervals per slot not a uint64")
+	// The fallback is ATTESTATION_DUE_BPS_GLOAS itself, 2500 basis points.
+	gloasDelay := gloasSlotDuration / 4
+	if bps, ok := spec["ATTESTATION_DUE_BPS_GLOAS"].(uint64); ok && bps != 0 && bps <= 10000 {
+		gloasDelay = gloasSlotDuration * time.Duration(bps) / 10000
 	}
 
-	delay := secondsPerSlot / time.Duration(intervalsPerSlot)
-
-	return delay, nil
+	return delay, gloasDelay, gloasForkEpoch, nil
 }
