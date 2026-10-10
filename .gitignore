@@ -5,6 +5,9 @@
 *.dylib
 vouch
 
+# Custom golangci-lint binary built from .custom-gcl.yml
+custom-gcl
+
 # Test binary, build with `go test -c`
 *.test
 

@@ -1,27 +1,22 @@
 minimum_pre_commit_version: '3.2.0'
 default_install_hook_types: [pre-commit, pre-push]
-# Requires Go, goimports, gosilent, and ./custom-gcl built from .custom-gcl.yml.
+default_stages: [pre-commit]
+# Setup and limitations: docs/pre-commit.md.
 repos:
   - repo: local
     hooks:
-      - id: gofmt
-        name: gofmt
-        entry: gofmt -w
-        language: system
-        types: [go]
-        stages: [pre-commit]
       - id: goimports
         name: goimports
         entry: goimports -w
         language: system
         types: [go]
-        stages: [pre-commit]
+        exclude: '_ssz\.go$'
       - id: golangci-lint
         name: golangci-lint on staged lines
         entry: >-
           sh -ec 'patch=$(mktemp);
           trap '\''rm -f "$patch"'\'' EXIT HUP INT TERM;
-          git diff --cached --no-ext-diff --no-color --unified=0 HEAD -- "*.go" > "$patch";
+          git diff --cached --no-ext-diff --no-color --unified=0 --src-prefix=a/ --dst-prefix=b/ HEAD -- "*.go" > "$patch";
           if [ -s "$patch" ]; then
           ./custom-gcl run --timeout=60m --new-from-patch="$patch" ./...;
           fi'
@@ -29,14 +24,12 @@ repos:
         types: [go]
         pass_filenames: false
         require_serial: true
-        stages: [pre-commit]
       - id: go-mod-tidy
         name: go mod tidy no-diff
         entry: go mod tidy -diff
         language: system
         pass_filenames: false
         always_run: true
-        stages: [pre-commit]
       - id: go-test
         name: go test ./... via gosilent
         entry: gosilent test ./...
