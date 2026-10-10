@@ -16,7 +16,7 @@ repos:
         entry: >-
           sh -ec 'patch=$(mktemp);
           trap '\''rm -f "$patch"'\'' EXIT HUP INT TERM;
-          git diff --cached --no-ext-diff --no-color --unified=0 --src-prefix=a/ --dst-prefix=b/ HEAD -- "*.go" > "$patch";
+          git diff --cached --no-ext-diff --no-color --unified=0 --src-prefix=a/ --dst-prefix=b/ -M HEAD -- "*.go" > "$patch";
           if [ -s "$patch" ]; then
           ./custom-gcl run --timeout=60m --new-from-patch="$patch" ./...;
           fi'
@@ -50,4 +50,3 @@ repos:
     rev: v8.30.1
     hooks:
       - id: gitleaks
-        stages: [pre-commit]
