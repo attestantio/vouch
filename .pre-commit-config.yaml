@@ -1,0 +1,60 @@
+minimum_pre_commit_version: '3.2.0'
+default_install_hook_types: [pre-commit, pre-push]
+# Requires Go, goimports, gosilent, and ./custom-gcl built from .custom-gcl.yml.
+repos:
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        entry: gofmt -w
+        language: system
+        types: [go]
+        stages: [pre-commit]
+      - id: goimports
+        name: goimports
+        entry: goimports -w
+        language: system
+        types: [go]
+        stages: [pre-commit]
+      - id: golangci-lint
+        name: golangci-lint on staged lines
+        entry: >-
+          sh -ec 'patch=$(mktemp);
+          trap '\''rm -f "$patch"'\'' EXIT HUP INT TERM;
+          git diff --cached --no-ext-diff --no-color --unified=0 HEAD -- "*.go" > "$patch";
+          if [ -s "$patch" ]; then
+          ./custom-gcl run --timeout=60m --new-from-patch="$patch" ./...;
+          fi'
+        language: system
+        types: [go]
+        pass_filenames: false
+        require_serial: true
+        stages: [pre-commit]
+      - id: go-mod-tidy
+        name: go mod tidy no-diff
+        entry: go mod tidy -diff
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+      - id: go-test
+        name: go test ./... via gosilent
+        entry: gosilent test ./...
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        stages: [pre-commit]
+      - id: end-of-file-fixer
+        stages: [pre-commit]
+      - id: check-added-large-files
+        stages: [pre-commit]
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        stages: [pre-commit]
