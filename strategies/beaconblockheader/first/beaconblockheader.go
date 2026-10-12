@@ -24,6 +24,7 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/vouch/util"
+	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -63,26 +64,7 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 	respCh := make(chan *beaconBlockHeaderResp, len(s.beaconBlockHeadersProviders))
 	for name, provider := range s.beaconBlockHeadersProviders {
 		go func(name string, provider eth2client.BeaconBlockHeadersProvider) {
-			providerLog := log.With().Str("provider", name).Str("block_id", opts.Block).Logger()
-			response, err := provider.BeaconBlockHeader(ctx, opts)
-			s.clientMonitor.ClientOperation(name, "beacon block header", err == nil, time.Since(started))
-			result := &beaconBlockHeaderResp{provider: name, response: response, err: err}
-			switch {
-			case err != nil:
-				var apiErr *api.Error
-				switch {
-				case stderrors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound:
-					result.notFound = true
-				case !stderrors.Is(err, context.Canceled):
-					providerLog.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain beacon block header")
-				}
-			case response == nil || response.Data == nil:
-				result.err = stderrors.New("beacon node returned no beacon block header")
-				providerLog.Debug().Dur("elapsed", time.Since(started)).Err(result.err).Msg("Failed to obtain beacon block header")
-			default:
-				providerLog.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block header")
-			}
-			respCh <- result
+			respCh <- s.fetchHeader(ctx, log, started, name, provider, opts)
 		}(name, provider)
 	}
 
@@ -136,4 +118,35 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 		return nil, ErrBeaconBlockHeaderNotFound
 	}
 	return nil, fmt.Errorf("failed to obtain beacon block header: %w", stderrors.Join(providerErrors...))
+}
+
+// fetchHeader obtains the header from one provider and classifies the outcome.
+func (s *Service) fetchHeader(ctx context.Context,
+	log zerolog.Logger,
+	started time.Time,
+	name string,
+	provider eth2client.BeaconBlockHeadersProvider,
+	opts *api.BeaconBlockHeaderOpts,
+) *beaconBlockHeaderResp {
+	providerLog := log.With().Str("provider", name).Str("block_id", opts.Block).Logger()
+	response, err := provider.BeaconBlockHeader(ctx, opts)
+	s.clientMonitor.ClientOperation(name, "beacon block header", err == nil, time.Since(started))
+	result := &beaconBlockHeaderResp{provider: name, response: response, err: err}
+	switch {
+	case err != nil:
+		var apiErr *api.Error
+		switch {
+		case stderrors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound:
+			result.notFound = true
+		case !stderrors.Is(err, context.Canceled):
+			providerLog.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain beacon block header")
+		}
+	case response == nil || response.Data == nil:
+		result.err = stderrors.New("beacon node returned no beacon block header")
+		providerLog.Debug().Dur("elapsed", time.Since(started)).Err(result.err).Msg("Failed to obtain beacon block header")
+	default:
+		providerLog.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block header")
+	}
+
+	return result
 }
