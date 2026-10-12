@@ -87,28 +87,19 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 		return resp.response
 	}
 	for completed < len(s.beaconBlockHeadersProviders) {
+		var resp *beaconBlockHeaderResp
 		select {
-		case resp := <-respCh:
-			if response := process(resp); response != nil {
-				return response, nil
-			}
+		case resp = <-respCh:
 		case <-ctx.Done():
-			ctxErr := ctx.Err()
-			cancel()
-			for completed < len(s.beaconBlockHeadersProviders) {
-				select {
-				case resp := <-respCh:
-					if response := process(resp); response != nil {
-						return response, nil
-					}
-				default:
-					if stderrors.Is(ctxErr, context.DeadlineExceeded) {
-						log.Debug().Msg("Failed to obtain beacon block header before timeout")
-						return nil, ErrBeaconBlockHeaderTimeout
-					}
-					return nil, ctxErr
-				}
+			// Use answers that have already arrived; abandon providers still running.
+			select {
+			case resp = <-respCh:
+			default:
+				return nil, contextError(ctx, log)
 			}
+		}
+		if response := process(resp); response != nil {
+			return response, nil
 		}
 	}
 	if timedOut {
@@ -118,6 +109,17 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 		return nil, ErrBeaconBlockHeaderNotFound
 	}
 	return nil, fmt.Errorf("failed to obtain beacon block header: %w", stderrors.Join(providerErrors...))
+}
+
+// contextError maps the end of the strategy's context to the error returned to callers.
+func contextError(ctx context.Context, log zerolog.Logger) error {
+	if stderrors.Is(ctx.Err(), context.DeadlineExceeded) {
+		log.Debug().Msg("Failed to obtain beacon block header before timeout")
+
+		return ErrBeaconBlockHeaderTimeout
+	}
+
+	return ctx.Err()
 }
 
 // fetchHeader obtains the header from one provider and classifies the outcome.
