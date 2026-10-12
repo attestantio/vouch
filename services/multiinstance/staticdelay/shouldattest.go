@@ -33,8 +33,7 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 	log := s.log.With().Uint64("slot", uint64(duty.Slot())).Logger()
 	log.Trace().Msg("Checking if we should attest")
 
-	if s.attesterActive.Load() {
-		log.Trace().Msg("We are the active attester")
+	if s.attesterDelay == 0 {
 		s.enableAttester(ctx)
 
 		return true
