@@ -1,4 +1,4 @@
-// Copyright © 2024 Attestant Limited.
+// Copyright © 2024 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,17 +15,99 @@ package first_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	consensusclient "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/strategies/beaconblockheader/first"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
+
+func TestBeaconBlockHeadersReportsDefinitiveAbsenceWhenAllProvidersAnswer(t *testing.T) {
+	provider := &headerErrorProvider{err: &api.Error{StatusCode: 404}}
+	service, err := first.New(context.Background(),
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithTimeout(2*time.Second),
+		first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+			"missing": provider,
+		}),
+	)
+	require.NoError(t, err)
+
+	started := time.Now()
+	_, err = service.BeaconBlockHeader(context.Background(), &api.BeaconBlockHeaderOpts{Block: "1"})
+
+	require.ErrorIs(t, err, first.ErrBeaconBlockHeaderNotFound)
+	require.Less(t, time.Since(started), time.Second)
+}
+
+type headerErrorProvider struct {
+	err error
+}
+
+func (p *headerErrorProvider) BeaconBlockHeader(context.Context, *api.BeaconBlockHeaderOpts) (*api.Response[*apiv1.BeaconBlockHeader], error) {
+	return nil, p.err
+}
+
+func TestBeaconBlockHeadersClassifiesProviderDeadlineAsTimeout(t *testing.T) {
+	service, err := first.New(context.Background(),
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithTimeout(2*time.Second),
+		first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+			"missing":   &headerErrorProvider{err: &api.Error{StatusCode: 404}},
+			"timed-out": &headerErrorProvider{err: context.DeadlineExceeded},
+		}),
+	)
+	require.NoError(t, err)
+
+	_, err = service.BeaconBlockHeader(context.Background(), &api.BeaconBlockHeaderOpts{Block: "1"})
+
+	require.ErrorIs(t, err, first.ErrBeaconBlockHeaderTimeout)
+	require.NotErrorIs(t, err, first.ErrBeaconBlockHeaderNotFound)
+}
+
+func TestBeaconBlockHeadersReturnsProviderErrorsWhenAllAnswer(t *testing.T) {
+	providerErr := errors.New("connection refused")
+	service, err := first.New(context.Background(),
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithTimeout(2*time.Second),
+		first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+			"offline": &headerErrorProvider{err: providerErr},
+		}),
+	)
+	require.NoError(t, err)
+
+	started := time.Now()
+	_, err = service.BeaconBlockHeader(context.Background(), &api.BeaconBlockHeaderOpts{Block: "1"})
+
+	require.ErrorIs(t, err, providerErr)
+	require.Less(t, time.Since(started), time.Second)
+}
+
+func TestBeaconBlockHeadersDoesNotTreatMixedAbsenceAndFailureAsDefinitive(t *testing.T) {
+	service, err := first.New(context.Background(),
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithTimeout(2*time.Second),
+		first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+			"missing": &headerErrorProvider{err: &api.Error{StatusCode: 404}},
+			"offline": &headerErrorProvider{err: errors.New("connection refused")},
+		}),
+	)
+	require.NoError(t, err)
+
+	started := time.Now()
+	_, err = service.BeaconBlockHeader(context.Background(), &api.BeaconBlockHeaderOpts{Block: "1"})
+
+	require.ErrorContains(t, err, "connection refused")
+	require.NotErrorIs(t, err, first.ErrBeaconBlockHeaderNotFound)
+	require.Less(t, time.Since(started), time.Second)
+}
 
 func TestBeaconBlockHeaders(t *testing.T) {
 	tests := []struct {
@@ -34,6 +116,7 @@ func TestBeaconBlockHeaders(t *testing.T) {
 		blockID         string
 		beaconBlockRoot phase0.Root
 		err             string
+		isTimeout       bool
 	}{
 		{
 			name: "Good",
@@ -64,7 +147,8 @@ func TestBeaconBlockHeaders(t *testing.T) {
 				0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 				0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
 			},
-			err: "failed to obtain beacon block header before timeout",
+			err:       "failed to obtain beacon block header before timeout",
+			isTimeout: true,
 		},
 		{
 			name: "GoodMixed",
@@ -94,6 +178,9 @@ func TestBeaconBlockHeaders(t *testing.T) {
 			})
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
+				if test.isTimeout {
+					require.ErrorIs(t, err, first.ErrBeaconBlockHeaderTimeout)
+				}
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, root)
