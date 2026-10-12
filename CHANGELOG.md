@@ -3,6 +3,9 @@ dev:
   - refuse to start static-delay multi-instance when the attestation deadline plus multiinstance.static-delay.attester-delay reaches the end of the slot, where a takeover attestation would always be late
   - update golang.org/x/net to v0.62.0 to pick up the golang.org/x/net/html denial-of-service fix (CVE-2026-78661)
   - build with Go 1.26.11 to pick up the net/http denial-of-service fix (CVE-2026-97054)
+  - static-delay multi-instance re-checks before every duty instead of staying active after a takeover, so it stands down again once the primary recovers; attesting no longer activates proposing, and the active-state metrics follow each decision
+  - static-delay multi-instance proposes only when every beacon node reports no block at the slot; a timeout, 5xx or connection failure now stands down instead of proposing
+  - the first beaconblockheader strategy returns as soon as every beacon node has answered, rather than waiting for its timeout when none has the header
 
 1.14.0-alpha.2:
   - update golang.org/x/net to v0.60.0 and build the Docker image with Go 1.26.10 to pick up HTTP/2, Range header and TLS denial-of-service fixes and a crypto/x509 fix; building now requires Go 1.26

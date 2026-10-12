@@ -327,8 +327,10 @@ builderclient:
 # fail to see expected attestations or proposals within the given time period.
 multiinstance:
   # style can be 'static-delay' or 'always'.  'always' means that the instance will carry out its duties regardless of which other
-  # instances may active.  'static-delay' means that the instance will wait for an amount of time if inactive before becoming
-  # active.  Note that for the 'static-delay' style to operate the beacon node(s) to which Vouch connects must be running with the
+  # instances may active.  'static-delay' means that an instance with a non-zero delay waits that delay before every duty and
+  # carries it out only if no other instance has: an attestation only if none for its validators is in the pool, a proposal only
+  # if every beacon node reports no block at the slot (if any beacon node cannot answer it does not propose).  It returns to
+  # standing down as soon as another instance is seen to be active again.  Note that for the 'static-delay' style to operate the beacon node(s) to which Vouch connects must be running with the
   # 'subscribe all subnets' option enabled.  This is because this style looks at the attestation data to see if other instance(s)
   # of Vouch are active.  However, Vouch cannot detect if the beacon nodes are configured correctly so it is up to the user to
   # carry out this work themselves.  When the Gloas fork is scheduled, the 'static-delay' style also checks that the beacon node's
