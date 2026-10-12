@@ -1,4 +1,4 @@
-// Copyright © 2024 Attestant Limited.
+// Copyright © 2024 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,11 +15,14 @@ package staticdelay
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	beaconblockheader "github.com/attestantio/vouch/strategies/beaconblockheader/first"
 )
 
 // ShouldPropose returns true if this Vouch instance should propose.
@@ -33,8 +36,7 @@ func (s *Service) ShouldPropose(ctx context.Context, duty *beaconblockproposer.D
 	log := s.log.With().Uint64("slot", uint64(duty.Slot())).Logger()
 	log.Trace().Msg("Checking if we should propose")
 
-	if s.proposerActive.Load() {
-		log.Trace().Msg("We are the active proposer")
+	if s.proposerDelay == 0 {
 		s.enableProposer(ctx)
 
 		return true
@@ -47,7 +49,14 @@ func (s *Service) ShouldPropose(ctx context.Context, duty *beaconblockproposer.D
 		Block: fmt.Sprintf("%d", duty.Slot()),
 	})
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to obtain beacon block header; activating proposer")
+		if !headerAbsent(err) {
+			// Without proof that no block exists, proposing risks a duplicate; stand down.
+			log.Warn().Err(err).Msg("Failed to establish whether beacon block exists; not activating proposer")
+			s.disableProposer(ctx)
+
+			return false
+		}
+		log.Trace().Msg("Beacon block header not found; activating proposer")
 		s.enableProposer(ctx)
 
 		return true
@@ -57,4 +66,14 @@ func (s *Service) ShouldPropose(ctx context.Context, duty *beaconblockproposer.D
 	s.disableProposer(ctx)
 
 	return false
+}
+
+// headerAbsent is true when the header lookup definitively reported no block at the slot.
+func headerAbsent(err error) bool {
+	if stderrors.Is(err, beaconblockheader.ErrBeaconBlockHeaderNotFound) {
+		return true
+	}
+	var apiErr *api.Error
+
+	return stderrors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
 }

@@ -8,6 +8,9 @@
   - min_value no longer sets the gloas ePBS min_bid; a configuration with min_value but no ePBS min_bid logs a warning naming epbs_builder_config.min_bid once rather than on every fetch
   - direct-builder entries may omit min_bid and builder_boost_factor, inheriting the P2P values resolved for the proposer being served
   - wait from the gloas attestation deadline on gloas slots in static-delay multi-instance, rather than from the pre-gloas one; derive the fork epoch from the same spec snapshot, align the pre-gloas deadline with the controller, and reject differing slot durations when gloas is scheduled
+  - static-delay multi-instance re-checks before every duty instead of staying active after a takeover, so it stands down again once the primary recovers; attesting no longer activates proposing, and the active-state metrics follow each decision
+  - static-delay multi-instance proposes only when every beacon node reports no block at the slot; a timeout, 5xx or connection failure now stands down instead of proposing
+  - the first beaconblockheader strategy returns as soon as every beacon node has answered, rather than waiting for its timeout when none has the header
 
 1.14.0-alpha.1:
   - add gloas self-build beacon block proposal path: request an ePBS proposal with its payload, sign the beacon block and matching execution payload envelope, then publish the block followed by its envelope
