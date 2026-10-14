@@ -347,19 +347,24 @@ func (s *Service) startTickers(ctx context.Context,
 
 type epochTickerData struct {
 	latestEpochRan int64
+	scheduledEpoch phase0.Epoch
 	atGenesis      bool
 	mutex          sync.Mutex
 }
 
 // startEpochTicker starts a ticker that ticks at the beginning of each epoch.
 func (s *Service) startEpochTicker(ctx context.Context) error {
-	runtimeFunc := func(_ context.Context) (time.Time, error) {
-		// Schedule for the beginning of the next epoch.
-		return s.chainTimeService.StartOfEpoch(s.chainTimeService.CurrentEpoch() + 1), nil
-	}
 	data := &epochTickerData{
 		latestEpochRan: -1,
 		atGenesis:      s.waitedForGenesis,
+	}
+	runtimeFunc := func(_ context.Context) (time.Time, error) {
+		// Schedule for the beginning of the next epoch.
+		data.mutex.Lock()
+		defer data.mutex.Unlock()
+		data.scheduledEpoch = s.chainTimeService.CurrentEpoch() + 1
+
+		return s.chainTimeService.StartOfEpoch(data.scheduledEpoch), nil
 	}
 	if err := s.scheduler.SchedulePeriodicJob(ctx,
 		"Epoch",
@@ -377,8 +382,10 @@ func (s *Service) startEpochTicker(ctx context.Context) error {
 func (s *Service) epochTicker(ctx context.Context, data *epochTickerData) {
 	// Ensure we don't run for the same epoch twice.
 	currentEpoch := s.chainTimeService.CurrentEpoch()
-	s.log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Starting per-epoch job")
 	data.mutex.Lock()
+	// The timer can fire just before the wall clock reaches the scheduled epoch.
+	currentEpoch = max(currentEpoch, data.scheduledEpoch)
+	s.log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Starting per-epoch job")
 	if data.latestEpochRan >= util.EpochToInt64(currentEpoch) {
 		s.log.Trace().Uint64("epoch", uint64(currentEpoch)).Msg("Already ran for this epoch; skipping")
 		data.mutex.Unlock()
