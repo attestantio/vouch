@@ -1,3 +1,6 @@
+gloas:
+  - fix the epoch ticker running the previous epoch's jobs when its timer fires just before the epoch starts; the following epoch then had no block proposals and the one after it no attestations
+
 1.14.0-alpha.2:
   - update go-eth2-client to v0.30.0
   - deprecate controller.max-attestation-delay, controller.attestation-aggregation-delay, controller.max-sync-committee-message-delay and controller.sync-committee-aggregation-delay; they now apply to pre-gloas slots only, gloas slots always use the spec-derived deadlines with no way to set an earlier one, and each one set to a non-zero value logs a warning at startup
