@@ -1,7 +1,7 @@
 dev:
   - wait from the gloas attestation deadline on gloas slots in static-delay multi-instance, rather than from the pre-gloas one; align the pre-gloas deadline with the controller, including controller.max-attestation-delay, and refuse to start when gloas is scheduled and SLOT_DURATION_MS differs from SECONDS_PER_SLOT
   - refuse to start static-delay multi-instance when the attestation deadline plus multiinstance.static-delay.attester-delay reaches the end of the slot, where a takeover attestation would always be late
-  - echo the winning builder's Eth-Builder-Url to every beacon node when publishing a builder-won gloas proposal, only when it exactly matches a direct-builder URL requested for that slot; log builder_url and builder_index on "Selected Gloas proposal"
+  - echo the winning builder's Eth-Builder-Url to every beacon node when publishing a builder-backed ePBS proposal, as the requested direct-builder URL it matches exactly or, failing that, uniquely after normalising scheme and host case, default ports and an empty path; log builder_url (without userinfo or query) and builder_index on "Selected Gloas proposal"
 
 1.14.0-alpha.2:
   - update golang.org/x/net to v0.60.0 and build the Docker image with Go 1.26.10 to pick up HTTP/2, Range header and TLS denial-of-service fixes and a crypto/x509 fix; building now requires Go 1.26
