@@ -31,6 +31,8 @@ const (
 	MetadataProvider = "vouch.provider"
 	// MetadataSource identifies where the beacon node obtained the execution payload bid.
 	MetadataSource = "vouch.source"
+	// MetadataBuilderURL holds the Eth-Builder-Url the beacon node returned with the selected response.
+	MetadataBuilderURL = "vouch.builder_url"
 )
 
 var endpointInError = regexp.MustCompile(`(?i)(?:https?|grpc)://\S+`)
@@ -93,6 +95,11 @@ func ClientDetailsAttributes(provider string) []attribute.KeyValue {
 
 // BuilderURLPresent reports whether response metadata contains a non-empty builder URL.
 func BuilderURLPresent(metadata map[string]any) bool {
+	return BuilderURL(metadata) != ""
+}
+
+// BuilderURL returns the non-empty Eth-Builder-Url in beacon node response metadata, or "".
+func BuilderURL(metadata map[string]any) string {
 	// Metadata keys come from response headers, which can arrive with any casing, so more than
 	// one spelling of the key can be present.  Map iteration order is random, so returning on the
 	// first match would make the answer depend on that order: keep looking until one carries a
@@ -102,9 +109,9 @@ func BuilderURLPresent(metadata map[string]any) bool {
 			continue
 		}
 		if builderURL, isString := value.(string); isString && builderURL != "" {
-			return true
+			return builderURL
 		}
 	}
 
-	return false
+	return ""
 }

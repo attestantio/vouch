@@ -403,7 +403,7 @@ func TestSubmitProposal(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {
-			err := s.SubmitProposal(context.Background(), test.proposal)
+			err := s.SubmitProposal(context.Background(), &api.SubmitProposalOpts{Proposal: test.proposal})
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {

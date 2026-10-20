@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -204,7 +205,7 @@ func (s *Service) proposeBlock(ctx context.Context,
 		}
 	}
 
-	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
+	if err := s.proposalSubmitter.SubmitProposal(ctx, &api.SubmitProposalOpts{Proposal: signedProposal}); err != nil {
 		return errors.Wrap(err, "failed to submit proposal")
 	}
 
@@ -318,6 +319,10 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	if bid.BuilderIndex == gloas.BuilderIndexSelfBuild {
 		publicationPath = "block_and_envelope"
 	}
+	builderURL := ""
+	if bid.BuilderIndex != gloas.BuilderIndexSelfBuild {
+		builderURL = s.echoedBuilderURL(ctx, proposalResponse.Metadata, builderConfig)
+	}
 	requestedPreference := gloasRequestedPreference(builderConfig.BuilderBoostFactor)
 	executionValue := "unknown"
 	if proposal.ExecutionValue != nil {
@@ -340,6 +345,8 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		Bool("value_known", proposal.ExecutionValue != nil).
 		Str("execution_value", executionValue).
 		Str("publication_path", publicationPath).
+		Uint64("builder_index", uint64(bid.BuilderIndex)).
+		Str("builder_url", loggableBuilderURL(builderURL)).
 		Msg("Selected Gloas proposal")
 	trace.SpanFromContext(ctx).SetAttributes(
 		attribute.String("provider", provider),
@@ -353,10 +360,46 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	// ValidateEPBSProposal has already matched the payload to the auction result and rejected a
 	// zero bid fee recipient.
 	if bid.BuilderIndex != gloas.BuilderIndexSelfBuild {
-		return s.proposeBuilderBackedEPBSBlock(ctx, proposal, duty, provider)
+		return s.proposeBuilderBackedEPBSBlock(ctx, proposal, duty, provider, builderURL)
 	}
 
 	return s.proposeSelfBuiltEPBSBlock(ctx, proposal, duty, bid, provider)
+}
+
+// echoedBuilderURL returns the builder URL to echo when publishing a builder-won proposal.  The
+// beacon node supplies the URL, so it is echoed only if it byte-equals a URL Vouch requested.
+func (s *Service) echoedBuilderURL(ctx context.Context,
+	metadata map[string]any,
+	builderConfig *gloas.BuilderConfig,
+) string {
+	builderURL, _ := metadata[beaconblockproposer.MetadataBuilderURL].(string)
+	if builderURL == "" {
+		return ""
+	}
+	for _, builder := range builderConfig.Builders {
+		if string(builder.URL) == builderURL {
+			return builderURL
+		}
+	}
+	s.log.Warn().
+		Str("request_id", beaconblockproposer.RequestID(ctx)).
+		Str("builder_url", loggableBuilderURL(builderURL)).
+		Msg("Beacon node returned a builder URL that matches no configured builder; not echoing it")
+
+	return ""
+}
+
+// loggableBuilderURL drops the parts of a builder URL that can hold credentials.
+func loggableBuilderURL(builderURL string) string {
+	if builderURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(builderURL)
+	if err != nil {
+		return "<invalid>"
+	}
+
+	return (&url.URL{Scheme: parsed.Scheme, Host: parsed.Host, Path: parsed.Path}).String()
 }
 
 func (s *Service) obtainEPBSProposal(ctx context.Context,
@@ -427,12 +470,14 @@ func gloasRequestedPreference(boost uint64) string {
 	}
 }
 
-// proposeBuilderBackedEPBSBlock signs and publishes a proposal whose payload a P2P builder won.
-// The builder reveals that payload, so there is no envelope work to do here.
+// proposeBuilderBackedEPBSBlock signs and publishes a proposal whose payload a builder won.
+// The builder reveals that payload, so there is no envelope work to do here.  A non-empty
+// builderURL is echoed so that each beacon node forwards the signed block to that builder.
 func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
 	proposal *api.VersionedEPBSProposal,
 	duty *beaconblockproposer.Duty,
 	provider string,
+	builderURL string,
 ) error {
 	bodyRoot, err := proposal.BodyRoot()
 	if err != nil {
@@ -453,7 +498,10 @@ func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
 		attribute.String("proposal_root", proposalRoot),
 	}
 	publicationCtx, publicationSpan := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishGloasBlock", trace.WithAttributes(publicationAttributes...))
-	err = s.proposalSubmitter.SubmitProposal(publicationCtx, signedProposal)
+	err = s.proposalSubmitter.SubmitProposal(publicationCtx, &api.SubmitProposalOpts{
+		Proposal:   signedProposal,
+		BuilderURL: builderURL,
+	})
 	if err != nil {
 		recordSpanError(publicationSpan, err, "failed to submit proposal")
 	}
@@ -525,7 +573,7 @@ func (s *Service) proposeSelfBuiltEPBSBlock(ctx context.Context,
 		attribute.String("provider", provider),
 		attribute.String("proposal_root", envelope.BeaconBlockRoot.String()),
 	))
-	err = s.proposalSubmitter.SubmitProposal(publicationCtx, signedProposal)
+	err = s.proposalSubmitter.SubmitProposal(publicationCtx, &api.SubmitProposalOpts{Proposal: signedProposal})
 	if err != nil {
 		recordSpanError(publicationSpan, err, "failed to submit proposal")
 	}

@@ -16,6 +16,7 @@ package standard_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -643,6 +644,110 @@ func TestProposeGloasBuilderSelectionObservability(t *testing.T) {
 	}))
 }
 
+func TestProposeGloasEchoesConfiguredBuilderURL(t *testing.T) {
+	ctx := context.Background()
+	const builderURL = "https://builder.example/gloas"
+	const secretBuilderURL = "https://user:secret@secret.example/gloas?key=secret#secret"
+	builders := []*beaconblockproposer.EPBSBuilder{{URL: "https://other.example"}, {URL: builderURL}, {URL: secretBuilderURL}}
+
+	tests := []struct {
+		name               string
+		executionPayload   bool
+		builders           []*beaconblockproposer.EPBSBuilder
+		returnedBuilderURL string
+		echoedBuilderURL   string
+		loggedBuilderURL   string
+		unmatchedWarning   bool
+	}{
+		{
+			name:               "ConfiguredBuilderWon",
+			builders:           builders,
+			returnedBuilderURL: builderURL,
+			echoedBuilderURL:   builderURL,
+			loggedBuilderURL:   builderURL,
+		},
+		{
+			name:               "ConfiguredBuilderWithSecretsWon",
+			builders:           builders,
+			returnedBuilderURL: secretBuilderURL,
+			echoedBuilderURL:   secretBuilderURL,
+			loggedBuilderURL:   "https://secret.example/gloas",
+		},
+		{
+			name:               "UnconfiguredBuilderURLWithSecrets",
+			builders:           builders,
+			returnedBuilderURL: "https://user:secret@unknown.example?key=secret",
+			loggedBuilderURL:   "https://unknown.example",
+			unmatchedWarning:   true,
+		},
+		{
+			name:               "UnconfiguredBuilderURL",
+			builders:           builders,
+			returnedBuilderURL: "https://unknown.example",
+			loggedBuilderURL:   "https://unknown.example",
+			unmatchedWarning:   true,
+		},
+		{
+			name:               "NearMissBuilderURL",
+			builders:           builders,
+			returnedBuilderURL: builderURL + "/",
+			loggedBuilderURL:   builderURL + "/",
+			unmatchedWarning:   true,
+		},
+		{
+			name:               "NoBuildersConfigured",
+			returnedBuilderURL: builderURL,
+			loggedBuilderURL:   builderURL,
+			unmatchedWarning:   true,
+		},
+		{
+			name:     "P2PBuilderWon",
+			builders: builders,
+		},
+		{
+			name:               "SelfBuilt",
+			executionPayload:   true,
+			builders:           builders,
+			returnedBuilderURL: builderURL,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			capture := logger.NewLogCapture()
+			service, duty, _, _, _, proposalSubmitter := newGloasProposerForSelection(ctx, t, test.executionPayload, nullmetrics.New(), test.builders, func(response *consensusapi.Response[*consensusapi.VersionedEPBSProposal]) {
+				response.Metadata[beaconblockproposer.MetadataBuilderURL] = test.returnedBuilderURL
+			})
+
+			require.NoError(t, service.Propose(ctx, duty))
+			require.Equal(t, 1, proposalSubmitter.calls)
+			require.Equal(t, test.echoedBuilderURL, proposalSubmitter.builderURL)
+			builderIndex := uint64(7)
+			if test.executionPayload {
+				builderIndex = uint64(gloas.BuilderIndexSelfBuild)
+			}
+			selectedBuilderURL := ""
+			if test.echoedBuilderURL != "" {
+				selectedBuilderURL = test.loggedBuilderURL
+			}
+			require.True(t, capture.HasLog(map[string]any{
+				"message":       "Selected Gloas proposal",
+				"builder_url":   selectedBuilderURL,
+				"builder_index": builderIndex,
+			}), "%v", capture.Entries())
+			require.Equal(t, test.unmatchedWarning, capture.HasLog(map[string]any{
+				"message":     "Beacon node returned a builder URL that matches no configured builder; not echoing it",
+				"level":       "warn",
+				"builder_url": test.loggedBuilderURL,
+			}), "%v", capture.Entries())
+			for _, entry := range capture.Entries() {
+				require.NotContains(t, fmt.Sprint(entry), "secret@")
+				require.NotContains(t, fmt.Sprint(entry), "key=secret")
+			}
+		})
+	}
+}
+
 func TestProposeGloasKeepsStrategyProviderName(t *testing.T) {
 	ctx := context.Background()
 	capture := logger.NewLogCapture()
@@ -687,7 +792,7 @@ func TestProposeGloasSelectionReportsStrategyAndUnknownValue(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			capture := logger.NewLogCapture()
 			before := gloasSelectionCount(t, test.strategy, "value_maximizing", test.source)
-			service, duty, _, _, _, _ := newGloasProposerForSelection(ctx, t, false, monitor, func(response *consensusapi.Response[*consensusapi.VersionedEPBSProposal]) {
+			service, duty, _, _, _, _ := newGloasProposerForSelection(ctx, t, false, monitor, nil, func(response *consensusapi.Response[*consensusapi.VersionedEPBSProposal]) {
 				response.Data.ExecutionValue = nil
 				response.Metadata[beaconblockproposer.MetadataStrategy] = test.strategy
 				response.Metadata[beaconblockproposer.MetadataSource] = test.source
@@ -932,7 +1037,7 @@ func newGloasProposerForProposalSource(
 ) {
 	t.Helper()
 
-	return newGloasProposerForSelection(ctx, t, executionPayloadIncluded, monitor, nil)
+	return newGloasProposerForSelection(ctx, t, executionPayloadIncluded, monitor, nil, nil)
 }
 
 // newGloasProposerForSelection lets mutate change the strategy's response before the proposer sees it.
@@ -941,6 +1046,7 @@ func newGloasProposerForSelection(
 	t *testing.T,
 	executionPayloadIncluded bool,
 	monitor metrics.Service,
+	builders []*beaconblockproposer.EPBSBuilder,
 	mutate func(*consensusapi.Response[*consensusapi.VersionedEPBSProposal]),
 ) (*standard.Service,
 	*beaconblockproposer.Duty,
@@ -995,6 +1101,7 @@ func newGloasProposerForSelection(
 			EPBSBuilderConfig: &beaconblockproposer.EPBSBuilderConfig{
 				MinBid:             11,
 				BuilderBoostFactor: 100,
+				Builders:           builders,
 			},
 		}}),
 		standard.WithChainTime(&forkChainTime{gloasForkEpoch: 0}),
@@ -1533,17 +1640,20 @@ func TestProposePreGloas(t *testing.T) {
 	require.NoError(t, service.Propose(ctx, duty))
 	require.NotNil(t, proposalSubmitter.proposal)
 	require.Nil(t, proposalSubmitter.proposal.Gloas)
+	require.Empty(t, proposalSubmitter.builderURL)
 }
 
 type capturingProposalSubmitter struct {
-	proposal *consensusapi.VersionedSignedProposal
-	calls    int
-	err      error
+	proposal   *consensusapi.VersionedSignedProposal
+	builderURL string
+	calls      int
+	err        error
 }
 
-func (s *capturingProposalSubmitter) SubmitProposal(_ context.Context, proposal *consensusapi.VersionedSignedProposal) error {
+func (s *capturingProposalSubmitter) SubmitProposal(_ context.Context, opts *consensusapi.SubmitProposalOpts) error {
 	s.calls++
-	s.proposal = proposal
+	s.proposal = opts.Proposal
+	s.builderURL = opts.BuilderURL
 
 	return s.err
 }

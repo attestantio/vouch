@@ -579,7 +579,10 @@ func TestSimpleProposalProviderGatesBuilderBidsOnReadiness(t *testing.T) {
 					return nil, test.providerErr
 				}
 
-				return &api.Response[*api.VersionedEPBSProposal]{Data: proposal}, nil
+				return &api.Response[*api.VersionedEPBSProposal]{
+					Data:     proposal,
+					Metadata: map[string]any{"Eth-Builder-Url": "https://builder.example"},
+				}, nil
 			}
 			viper.Set("strategies.beaconblockproposal.style", "simple")
 			viper.Set("strategies.beaconblockproposal.beacon-node-addresses", []string{address})
@@ -620,6 +623,7 @@ func TestSimpleProposalProviderGatesBuilderBidsOnReadiness(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Same(t, proposal, response.Data)
+			require.Equal(t, "https://builder.example", response.Metadata["vouch.builder_url"])
 		})
 	}
 }

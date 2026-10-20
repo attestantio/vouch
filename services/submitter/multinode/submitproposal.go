@@ -29,13 +29,13 @@ import (
 )
 
 // SubmitProposal submits a proposal.
-func (s *Service) SubmitProposal(ctx context.Context, proposal *api.VersionedSignedProposal) error {
+func (s *Service) SubmitProposal(ctx context.Context, opts *api.SubmitProposalOpts) error {
 	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "SubmitProposal", trace.WithAttributes(
 		attribute.String("strategy", "multinode"),
 	))
 	defer span.End()
 
-	if proposal == nil {
+	if opts == nil || opts.Proposal == nil {
 		return errors.New("no proposal supplied")
 	}
 
@@ -45,7 +45,7 @@ func (s *Service) SubmitProposal(ctx context.Context, proposal *api.VersionedSig
 	w := sync.NewCond(&sync.Mutex{})
 	w.L.Lock()
 	for name, submitter := range s.proposalSubmitters {
-		go s.submitProposal(ctx, sem, w, submissionCompleted, name, proposal, submitter)
+		go s.submitProposal(ctx, sem, w, submissionCompleted, name, opts, submitter)
 	}
 	// Also set a timeout condition, in case no submitters return.
 	go func(s *Service, w *sync.Cond) {
@@ -69,7 +69,7 @@ func (s *Service) submitProposal(ctx context.Context,
 	w *sync.Cond,
 	submissionCompleted *atomic.Bool,
 	name string,
-	proposal *api.VersionedSignedProposal,
+	opts *api.SubmitProposalOpts,
 	submitter eth2client.ProposalSubmitter,
 ) {
 	ctx, span := otel.Tracer("attestantio.vouch.service.submitter.multinode").Start(ctx, "submitProposal", trace.WithAttributes(
@@ -77,7 +77,7 @@ func (s *Service) submitProposal(ctx context.Context,
 	))
 	defer span.End()
 
-	slot, err := proposal.Slot()
+	slot, err := opts.Proposal.Slot()
 	if err != nil {
 		s.log.Error().Err(err).Msg("Failed to obtain slot")
 		return
@@ -92,9 +92,7 @@ func (s *Service) submitProposal(ctx context.Context,
 	_, address := s.serviceInfo(ctx, submitter)
 	started := time.Now()
 
-	err = submitter.SubmitProposal(ctx, &api.SubmitProposalOpts{
-		Proposal: proposal,
-	})
+	err = submitter.SubmitProposal(ctx, opts)
 	s.clientMonitor.ClientOperation(address, "submit proposal", err == nil, time.Since(started))
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to submit proposal")
