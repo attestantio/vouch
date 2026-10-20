@@ -367,7 +367,8 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 }
 
 // echoedBuilderURL returns the builder URL to echo when publishing a builder-won proposal.  The
-// beacon node supplies the URL, so it is echoed only if it byte-equals a URL Vouch requested.
+// beacon node supplies the URL, so Vouch echoes the requested entry's URL that it matches: exactly,
+// or else after normalisation, because some beacon nodes return the URL normalised.
 func (s *Service) echoedBuilderURL(ctx context.Context,
 	metadata map[string]any,
 	builderConfig *gloas.BuilderConfig,
@@ -381,12 +382,55 @@ func (s *Service) echoedBuilderURL(ctx context.Context,
 			return builderURL
 		}
 	}
-	s.log.Warn().
+
+	requested := make([]string, 0, len(builderConfig.Builders))
+	matches := make(map[string]struct{})
+	normalized, valid := normalizedBuilderURL(builderURL)
+	for _, builder := range builderConfig.Builders {
+		requested = append(requested, loggableBuilderURL(string(builder.URL)))
+		if candidate, isValid := normalizedBuilderURL(string(builder.URL)); valid && isValid && candidate == normalized {
+			matches[string(builder.URL)] = struct{}{}
+		}
+	}
+	if len(matches) == 1 {
+		for match := range matches {
+			return match
+		}
+	}
+
+	event := s.log.Warn().
 		Str("request_id", beaconblockproposer.RequestID(ctx)).
 		Str("builder_url", loggableBuilderURL(builderURL)).
-		Msg("Beacon node returned a builder URL that matches no configured builder; not echoing it")
+		Strs("requested_builder_urls", requested)
+	if len(matches) > 1 {
+		event.Msg("Beacon node returned a builder URL that matches more than one requested builder; not echoing it")
+	} else {
+		event.Msg("Beacon node returned a builder URL that matches no requested builder; not echoing it")
+	}
 
 	return ""
+}
+
+// normalizedBuilderURL lowercases the scheme and host, drops the scheme's default port and
+// writes an empty path as a slash, as Lighthouse does when it returns Eth-Builder-Url.
+func normalizedBuilderURL(builderURL string) (string, bool) {
+	parsed, err := url.Parse(builderURL)
+	if err != nil || parsed.Host == "" {
+		return "", false
+	}
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
+	parsed.Host = strings.ToLower(parsed.Host)
+	switch parsed.Scheme {
+	case "http":
+		parsed.Host = strings.TrimSuffix(parsed.Host, ":80")
+	case "https":
+		parsed.Host = strings.TrimSuffix(parsed.Host, ":443")
+	}
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	}
+
+	return parsed.String(), true
 }
 
 // loggableBuilderURL drops the parts of a builder URL that can hold credentials.
