@@ -17,3 +17,7 @@ To run the linters locally:
 ```shell
 golangci-lint run ./...
 ```
+
+### Pre-commit pilot
+
+See [pre-commit setup](docs/pre-commit.md) for the optional hooks and their limits.
