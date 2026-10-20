@@ -78,12 +78,16 @@ github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAE
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
 github.com/attestantio/go-block-relay v0.6.0 h1:xZG4Lp57+66ScqD6NP4HbqHgSgN4O73s1G8WpqhvAfs=
 github.com/attestantio/go-block-relay v0.6.0/go.mod h1:irqvZ0uYWsikG0SG7BNgeCJMIvflQXFDV3QUTHLSEMc=
+github.com/attestantio/go-block-relay v0.7.0 h1:Avcp8ZPVF9Ifr0yZlq1R7uYumenc44J+/Sojae8vsd4=
+github.com/attestantio/go-block-relay v0.7.0/go.mod h1:d3yBp3QZpMS+HvME9eBOuRpIK7T2sHjIMONkqk5ysWs=
 github.com/attestantio/go-builder-client v0.8.0 h1:paYTXZLtpCBG/9/Y99f9OjPNh4C+ZuIavRs07WWgjYc=
 github.com/attestantio/go-builder-client v0.8.0/go.mod h1:M3rNO3ntGg+CE7aBDl+MVlwnEStZCiSRUzADG2ZoL+s=
+github.com/attestantio/go-builder-client v0.9.1/go.mod h1:IcPQk0AICP5kxt6OOmYIKXgkueBacL0iQ6iKzD9WMks=
 github.com/attestantio/go-certmanager v0.2.0 h1:Hzj12L5fofK7b281uohMBN0HQuSx+8RfU2UA9eHl84k=
 github.com/attestantio/go-certmanager v0.2.0/go.mod h1:Dn+C/okccD+2RugizT1ryrjX65cBMZl55fNYtmaVYAg=
 github.com/attestantio/go-eth2-client v0.30.0 h1:SbEhbmuL5U+GoCjiG6pyfjknkBeW1Q/LJ2KF/niyt2U=
 github.com/attestantio/go-eth2-client v0.30.0/go.mod h1:yhVnKAzIsFhtawbq6k/rA/Dy4vsPpu2Z2cGdQVrIjd0=
+github.com/attestantio/go-eth2-client v0.30.2/go.mod h1:IcbypY5iD/c/T5OLWVuZyWS8kM8HXkGc0ZW12uikfys=
 github.com/aws/aws-sdk-go v1.44.81/go.mod h1:y4AeaBuwd2Lk+GepC1E9v0qOiTws0MIWAX4oIKwKHZo=
 github.com/aws/aws-sdk-go v1.55.6 h1:cSg4pvZ3m8dgYcgqB97MrcdjUmZ1BeMYKUxMMB89IPk=
 github.com/aws/aws-sdk-go v1.55.6/go.mod h1:eRwEWoyTWFMVYVQzKMNHWP5/RV4xIUGMQfXQHfHkpNU=
@@ -350,8 +354,10 @@ github.com/petermattis/goid v0.0.0-20250813065127-a731cc31b4fe h1:vHpqOnPlnkba8i
 github.com/petermattis/goid v0.0.0-20250813065127-a731cc31b4fe/go.mod h1:pxMtw7cyUw6B2bRH0ZBANSPg+AoSud1I1iyJHI69jH4=
 github.com/pk910/dynamic-ssz v1.3.2 h1:65UR/O+ss+U2Dn86Rdl7LwehHo3u2ElutduS/pcuUXE=
 github.com/pk910/dynamic-ssz v1.3.2/go.mod h1:lqmnou2bjr2UWQ3C/L3082TGW0SFl/SwT7ionwM0+FU=
+github.com/pk910/dynamic-ssz v1.4.0/go.mod h1:mnRbhjX+4YMyP4jYMncTUA3aDpMzBLqAbjcvfCyOyRI=
 github.com/pk910/hashtree-bindings v0.2.2 h1:gkczxxekBW2NeMK9N3OLj7Jepe7zPmJGVwr8LyofGsA=
 github.com/pk910/hashtree-bindings v0.2.2/go.mod h1:zrWt88783JmhBfcgni6kkIMYRdXTZi/FL//OyI5T/l4=
+github.com/pk910/hashtree-bindings v0.2.6/go.mod h1:zrWt88783JmhBfcgni6kkIMYRdXTZi/FL//OyI5T/l4=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 h1:GFCKgmp0tecUJ0sJuv4pzYCqS9+RGSn52M3FUwPs+uo=
