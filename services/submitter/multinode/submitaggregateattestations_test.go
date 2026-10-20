@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -33,7 +33,7 @@ import (
 func TestSubmitAggregateAttestationsEmpty(t *testing.T) {
 	ctx := context.Background()
 
-	s, err := multinode.New(context.Background(),
+	s, err := newTestService(context.Background(),
 		multinode.WithLogLevel(zerolog.Disabled),
 		multinode.WithTimeout(2*time.Second),
 		multinode.WithProcessConcurrency(2),
@@ -76,7 +76,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 
 	capture := logger.NewLogCapture()
 
-	s, err := multinode.New(context.Background(),
+	s, err := newTestService(context.Background(),
 		multinode.WithLogLevel(zerolog.TraceLevel),
 		multinode.WithTimeout(100*time.Millisecond),
 		multinode.WithProcessConcurrency(2),
@@ -137,14 +137,17 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 	require.NoError(t, err)
 
 	// Return happens prior to the log message, so wait before asserting.
-	time.Sleep(time.Millisecond)
-	capture.AssertHasEntry(t, "Submitted aggregate attestations")
+	require.Eventually(t, func() bool {
+		return capture.HasLog(map[string]any{
+			"message": "Submitted aggregate attestations",
+		})
+	}, time.Second, time.Millisecond)
 }
 
 func TestSubmitAggregateAttestationsErroring(t *testing.T) {
 	ctx := context.Background()
 
-	s, err := multinode.New(context.Background(),
+	s, err := newTestService(context.Background(),
 		multinode.WithLogLevel(zerolog.Disabled),
 		multinode.WithTimeout(100*time.Millisecond),
 		multinode.WithProcessConcurrency(2),
@@ -209,7 +212,7 @@ func TestSubmitAggregateAttestationsErroring(t *testing.T) {
 func TestSubmitAggregateAttestationsSleepy(t *testing.T) {
 	ctx := context.Background()
 
-	s, err := multinode.New(context.Background(),
+	s, err := newTestService(context.Background(),
 		multinode.WithLogLevel(zerolog.Disabled),
 		multinode.WithTimeout(100*time.Millisecond),
 		multinode.WithProcessConcurrency(2),
@@ -274,7 +277,7 @@ func TestSubmitAggregateAttestationsSleepy(t *testing.T) {
 func TestSubmitAggregateAttestationsSleepySuccess(t *testing.T) {
 	ctx := context.Background()
 
-	s, err := multinode.New(context.Background(),
+	s, err := newTestService(context.Background(),
 		multinode.WithLogLevel(zerolog.Disabled),
 		multinode.WithTimeout(200*time.Millisecond),
 		multinode.WithProcessConcurrency(2),

@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -24,6 +24,11 @@ import (
 // Service is the submitter service.
 type Service interface{}
 
+// PayloadAttestationMessagesSubmitter provides methods to submit payload attestation messages.
+type PayloadAttestationMessagesSubmitter interface {
+	SubmitPayloadAttestationMessages(ctx context.Context, opts *api.SubmitPayloadAttestationMessagesOpts) error
+}
+
 // AttestationsSubmitter is the interface for a submitter of attestations.
 type AttestationsSubmitter interface {
 	// SubmitAttestations submits multiple attestations.
@@ -34,6 +39,12 @@ type AttestationsSubmitter interface {
 type ProposalSubmitter interface {
 	// SubmitProposal submits a proposal.
 	SubmitProposal(ctx context.Context, proposal *api.VersionedSignedProposal) error
+}
+
+// ExecutionPayloadEnvelopeSubmitter is the interface for a submitter of execution payload envelopes.
+type ExecutionPayloadEnvelopeSubmitter interface {
+	// SubmitExecutionPayloadEnvelope submits a signed execution payload envelope.
+	SubmitExecutionPayloadEnvelope(ctx context.Context, opts *api.SubmitExecutionPayloadEnvelopeOpts) error
 }
 
 // BeaconCommitteeSubscriptionsSubmitter is the interface for a submitter of beacon committee subscriptions.

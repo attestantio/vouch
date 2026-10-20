@@ -20,9 +20,12 @@ import (
 
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/attestationaggregator"
 	"github.com/attestantio/vouch/services/attester"
+	"github.com/attestantio/vouch/services/beaconcommitteesubscriber"
+	"github.com/rs/zerolog"
 )
 
 // scheduleAttestations schedules attestations for the given epoch and validator indices.
@@ -107,7 +110,7 @@ func (s *Service) scheduleAttestations(ctx context.Context,
 		s.pendingAttestationsMutex.Unlock()
 
 		go func(duty *attester.Duty) {
-			jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.maxAttestationDelay)
+			jobTime := s.chainTimeService.StartOfSlot(duty.Slot()).Add(s.timingsForSlot(duty.Slot()).maxAttestationDelay)
 			if err := s.scheduler.ScheduleJob(ctx,
 				"Attest",
 				fmt.Sprintf("Attestations for slot %d", duty.Slot()),
@@ -172,6 +175,15 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester
 		return
 	}
 
+	s.scheduleAttestationAggregations(ctx, log, epoch, subscriptionInfoMap, attestations)
+}
+
+func (s *Service) scheduleAttestationAggregations(ctx context.Context,
+	log zerolog.Logger,
+	epoch phase0.Epoch,
+	subscriptionInfoMap map[phase0.Slot]map[phase0.CommitteeIndex]*beaconcommitteesubscriber.Subscription,
+	attestations []*spec.VersionedAttestation,
+) {
 	for _, attestation := range attestations {
 		attestationData, err := attestation.Data()
 		if err != nil {
@@ -232,7 +244,7 @@ func (s *Service) AttestAndScheduleAggregate(ctx context.Context, duty *attester
 			if err := s.scheduler.ScheduleJob(ctx,
 				"Aggregate attestations",
 				fmt.Sprintf("Beacon block attestation aggregation for slot %d committee %d", attestationData.Slot, committeeIndex),
-				s.chainTimeService.StartOfSlot(attestationData.Slot).Add(s.attestationAggregationDelay),
+				s.chainTimeService.StartOfSlot(attestationData.Slot).Add(s.timingsForSlot(attestationData.Slot).attestationAggregationDelay),
 				func(ctx context.Context) { s.attestationAggregator.Aggregate(ctx, aggregatorDuty) },
 			); err != nil {
 				// Don't return here; we want to try to set up as many aggregator jobs as possible.

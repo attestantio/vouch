@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -30,6 +30,8 @@ type ExecutionConfigurator interface {
 		pubkey phase0.BLSPubKey,
 		fallbackFeeRecipient bellatrix.ExecutionAddress,
 		fallbackGasLimit uint64,
+		fallbackMinBid phase0.Gwei,
+		fallbackBuilderBoostFactor uint64,
 	) (
 		*beaconblockproposer.ProposerConfig,
 		error,

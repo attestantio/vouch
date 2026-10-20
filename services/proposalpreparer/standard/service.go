@@ -1,4 +1,4 @@
-// Copyright © 2022, 2024 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -30,8 +30,8 @@ type Service struct {
 	log                            zerolog.Logger
 	chainTimeService               chaintime.Service
 	validatingAccountsProvider     accountmanager.ValidatingAccountsProvider
-	proposalPreparationsSubmitters []eth2client.ProposalPreparationsSubmitter
 	executionConfigProvider        blockrelay.ExecutionConfigProvider
+	proposalPreparationsSubmitters []eth2client.ProposalPreparationsSubmitter
 }
 
 // New creates a new proposal preparer.

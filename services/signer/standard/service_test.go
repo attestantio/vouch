@@ -17,6 +17,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
 	"github.com/attestantio/vouch/services/signer/standard"
@@ -24,6 +26,21 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
+
+type minimalSpecProvider struct{}
+
+func (*minimalSpecProvider) Spec(_ context.Context, _ *api.SpecOpts) (*api.Response[map[string]any], error) {
+	return &api.Response[map[string]any]{
+		Data: map[string]any{
+			"SLOTS_PER_EPOCH":            uint64(32),
+			"DOMAIN_BEACON_ATTESTER":     phase0.DomainType{0x01},
+			"DOMAIN_BEACON_PROPOSER":     phase0.DomainType{0x02},
+			"DOMAIN_RANDAO":              phase0.DomainType{0x03},
+			"DOMAIN_SELECTION_PROOF":     phase0.DomainType{0x04},
+			"DOMAIN_AGGREGATE_AND_PROOF": phase0.DomainType{0x05},
+		},
+	}, nil
+}
 
 func TestService(t *testing.T) {
 	specProvider := mock.NewSpecProvider()
@@ -104,4 +121,16 @@ func TestService(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServiceWithOptionalDomainsAbsent(t *testing.T) {
+	service, err := standard.New(context.Background(),
+		standard.WithLogLevel(zerolog.Disabled),
+		standard.WithMonitor(nullmetrics.New()),
+		standard.WithClientMonitor(nullmetrics.New()),
+		standard.WithSpecProvider(&minimalSpecProvider{}),
+		standard.WithDomainProvider(mock.NewDomainProvider()),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, service)
 }

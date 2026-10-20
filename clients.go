@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,8 +18,10 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
 	httpclient "github.com/attestantio/go-eth2-client/http"
 	multiclient "github.com/attestantio/go-eth2-client/multi"
 	"github.com/attestantio/vouch/services/metrics"
@@ -50,6 +52,7 @@ func fetchClient(ctx context.Context, monitor metrics.Service, address string) (
 			httpclient.WithMonitor(monitor),
 			httpclient.WithTimeout(util.Timeout(fmt.Sprintf("eth2client.%s", address))),
 			httpclient.WithAddress(address),
+			httpclient.WithCustomSpecSupport(viper.GetBool("eth2client.custom-spec-support")),
 			httpclient.WithAllowDelayedStart(viper.GetBool("eth2client.allow-delayed-start")),
 			httpclient.WithExtraHeaders(map[string]string{
 				"User-Agent": fmt.Sprintf("Vouch/%s", ReleaseVersion),
@@ -63,6 +66,17 @@ func fetchClient(ctx context.Context, monitor metrics.Service, address string) (
 		knownClientsMu.Lock()
 		knownClients[address] = client
 		knownClientsMu.Unlock()
+		// NodeVersion is cached by go-eth2-client, so this is a startup snapshot.
+		if versionProvider, ok := client.(eth2client.NodeVersionProvider); ok {
+			go func() {
+				queryCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+				defer cancel()
+				response, err := versionProvider.NodeVersion(queryCtx, &api.NodeVersionOpts{})
+				if err == nil && response != nil {
+					util.RecordBeaconNodeVersion(address, response.Data)
+				}
+			}()
+		}
 	}
 	return client, nil
 }

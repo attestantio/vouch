@@ -1,4 +1,4 @@
-// Copyright © 2020, 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,11 +15,17 @@ package first
 
 import (
 	"context"
+	stderrors "errors"
+	"fmt"
+	"sync"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/proposerpreferences"
+	"github.com/attestantio/vouch/strategies/beaconblockproposal"
 	"github.com/attestantio/vouch/util"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -33,8 +39,344 @@ import (
 type Service struct {
 	log               zerolog.Logger
 	clientMonitor     metrics.ClientMonitor
-	proposalProviders map[string]eth2client.ProposalProvider
+	proposalProviders map[string]eth2client.MultiForkProposalProvider
+	providerReadiness proposerpreferences.ProviderReadiness
 	timeout           time.Duration
+}
+
+type proposalResult[T any] struct {
+	provider string
+	proposal T
+	err      error
+}
+
+func proposalResults[P any, T any](providers map[string]P,
+	request func(string, P) *proposalResult[T],
+) <-chan *proposalResult[T] {
+	results := make(chan *proposalResult[T], len(providers))
+	var wg sync.WaitGroup
+	for name, provider := range providers {
+		wg.Add(1)
+		go func(name string, provider P) {
+			defer wg.Done()
+			results <- request(name, provider)
+		}(name, provider)
+	}
+	// Closed once every provider has answered, so a reader can drain the results it did not use.
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	return results
+}
+
+func fetchProviderProposal[R any, T any](s *Service,
+	log zerolog.Logger,
+	name string,
+	operation string,
+	request func() (*api.Response[R], error),
+	proposal func(*api.Response[R]) (T, error),
+) *proposalResult[T] {
+	result := &proposalResult[T]{provider: name}
+	started := time.Now()
+	response, err := request()
+	s.clientMonitor.ClientOperation(name, operation, err == nil, time.Since(started))
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			log.Debug().Err(err).Msg("Failed to obtain " + operation)
+		}
+		result.err = err
+
+		return result
+	}
+
+	result.proposal, result.err = proposal(response)
+	if result.err == nil {
+		log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained " + operation)
+	}
+
+	return result
+}
+
+func firstProposal[T any](ctx context.Context,
+	log zerolog.Logger,
+	results <-chan *proposalResult[T],
+	providers int,
+	validate func(string, T) error,
+	failure string,
+	timeoutMessage string,
+) (
+	T,
+	error,
+) {
+	var zero T
+	proposalErrors := make([]error, 0, providers)
+	processResult := func(result *proposalResult[T]) (T, bool) {
+		if result.err != nil {
+			proposalErrors = append(proposalErrors, fmt.Errorf("%s: %w", beaconblockproposer.StableProviderName(result.provider), result.err))
+
+			return zero, false
+		}
+		if validate != nil {
+			if err := validate(result.provider, result.proposal); err != nil {
+				proposalErrors = append(proposalErrors, fmt.Errorf("%s: %w", beaconblockproposer.StableProviderName(result.provider), err))
+
+				return zero, false
+			}
+		}
+
+		return result.proposal, true
+	}
+
+	completed := 0
+	for completed < providers {
+		select {
+		case result := <-results:
+			completed++
+			if proposal, valid := processResult(result); valid {
+				return proposal, nil
+			}
+		case <-ctx.Done():
+			log.Debug().Msg(timeoutMessage)
+			for completed < providers {
+				select {
+				case result := <-results:
+					completed++
+					if proposal, valid := processResult(result); valid {
+						return proposal, nil
+					}
+				default:
+					proposalErrors = append(proposalErrors, ctx.Err())
+
+					return zero, errors.Wrap(stderrors.Join(proposalErrors...), failure)
+				}
+			}
+		}
+	}
+
+	return zero, errors.Wrap(stderrors.Join(proposalErrors...), failure)
+}
+
+// EPBSProposal provides the first ePBS proposal from a number of beacon nodes.
+func (s *Service) EPBSProposal(ctx context.Context,
+	opts *api.EPBSProposalOpts,
+) (
+	*api.Response[*api.VersionedEPBSProposal],
+	error,
+) {
+	ctx, requestID := beaconblockproposer.EnsureRequestID(ctx)
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.first").Start(ctx, "EPBSProposal", trace.WithAttributes(
+		attribute.Int64("slot", util.SlotToInt64(opts.Slot)),
+		attribute.String("request_id", requestID),
+		attribute.String("provider", "unknown"),
+		attribute.String("proposal_root", "unknown"),
+		attribute.String("source", "unknown"),
+	))
+	defer span.End()
+	started := time.Now()
+
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+
+	results := proposalResults(s.proposalProviders, func(name string,
+		provider eth2client.MultiForkProposalProvider,
+	) *proposalResult[*beaconblockproposal.ProviderOutcome] {
+		return s.fetchEPBSProposal(ctx, name, provider, opts)
+	})
+
+	response, err := firstProposal(ctx,
+		s.log,
+		results,
+		len(s.proposalProviders),
+		func(provider string, response *beaconblockproposal.ProviderOutcome) error {
+			return s.validateEPBSProposal(provider, response, opts)
+		},
+		"failed to obtain ePBS beacon block proposal",
+		"Failed to obtain ePBS beacon block proposal before timeout",
+	)
+	go s.logUnreadEPBSResults(results)
+	if err != nil {
+		outcome := "no_valid_proposal"
+		deadlineReached := errors.Is(ctx.Err(), context.DeadlineExceeded)
+		if deadlineReached {
+			outcome = "timeout"
+		}
+		s.log.Info().
+			Uint64("slot", uint64(opts.Slot)).
+			Str("request_id", requestID).
+			Str("provider", "unknown").
+			Str("proposal_root", "unknown").
+			Dur("elapsed", time.Since(started)).
+			Int("providers", len(s.proposalProviders)).
+			Str("outcome", outcome).
+			Bool("deadline_reached", deadlineReached).
+			Msg("ePBS proposal selection completed")
+
+		return nil, err
+	}
+
+	source := beaconblockproposal.EPBSProposalSource(response.Proposal, response.Metadata)
+	valueKnown := response.Proposal.Value() != nil
+	stableProvider := beaconblockproposer.StableProviderName(response.Provider)
+	proposalRootString := "unknown"
+	if proposalRoot, err := response.Proposal.Root(); err == nil {
+		proposalRootString = proposalRoot.String()
+	}
+	span.SetAttributes(
+		attribute.String("proposal_root", proposalRootString),
+		attribute.String("provider", stableProvider),
+		attribute.String("source", source),
+		attribute.Bool("value_known", valueKnown),
+	)
+	span.SetAttributes(beaconblockproposer.ClientDetailsAttributes(response.Provider)...)
+	selectionEvent := s.log.Info().
+		Uint64("slot", uint64(opts.Slot)).
+		Str("request_id", requestID).
+		Str("provider", stableProvider).
+		Str("proposal_root", proposalRootString).
+		Str("source", source).
+		Dur("elapsed", time.Since(started)).
+		Int("providers", len(s.proposalProviders)).
+		Bool("value_known", valueKnown).
+		Str("outcome", "selected").
+		Bool("deadline_reached", false)
+	beaconblockproposer.WithClientDetails(selectionEvent, response.Provider)
+	selectionEvent.Msg("ePBS proposal selection completed")
+	metadata := make(map[string]any, 3)
+	metadata[beaconblockproposer.MetadataStrategy] = "first"
+	metadata[beaconblockproposer.MetadataProvider] = stableProvider
+	metadata[beaconblockproposer.MetadataSource] = source
+
+	return &api.Response[*api.VersionedEPBSProposal]{
+		Data:     response.Proposal,
+		Metadata: metadata,
+	}, nil
+}
+
+var errNoEPBSProposalResponse = errors.New("beacon node returned no ePBS proposal response")
+
+// fetchEPBSProposal obtains an ePBS proposal from a single provider, logging a provider that fails.
+func (s *Service) fetchEPBSProposal(ctx context.Context,
+	name string,
+	provider eth2client.MultiForkProposalProvider,
+	opts *api.EPBSProposalOpts,
+) *proposalResult[*beaconblockproposal.ProviderOutcome] {
+	providerOpts := *opts
+	providerGraffiti, err := beaconblockproposal.GraffitiForProvider(ctx, provider, providerOpts.Graffiti)
+	if err != nil {
+		s.log.Warn().Str("error", beaconblockproposer.SafeError(err, name)).Msg("Failed to obtain node client; not updating graffiti")
+	}
+	providerOpts.Graffiti = providerGraffiti
+	stableProvider := beaconblockproposer.StableProviderName(name)
+	log := s.log.With().Str("provider", stableProvider).Uint64("slot", uint64(providerOpts.Slot)).Logger()
+
+	ctx, span := otel.Tracer("attestantio.vouch.strategies.beaconblockproposal.first").Start(ctx, "ePBSBeaconBlockProposal", trace.WithAttributes(
+		attribute.Int64("slot", util.SlotToInt64(opts.Slot)),
+		attribute.String("request_id", beaconblockproposer.RequestID(ctx)),
+		attribute.String("provider", stableProvider),
+		attribute.String("proposal_root", "unknown"),
+		attribute.String("source", "unknown"),
+	))
+	defer span.End()
+	span.SetAttributes(beaconblockproposer.ClientDetailsAttributes(name)...)
+
+	started := time.Now()
+	result := fetchProviderProposal(s,
+		log,
+		name,
+		"ePBS beacon block proposal",
+		func() (*api.Response[*api.VersionedEPBSProposal], error) {
+			return provider.EPBSProposal(ctx, &providerOpts)
+		},
+		func(response *api.Response[*api.VersionedEPBSProposal]) (*beaconblockproposal.ProviderOutcome, error) {
+			if response == nil {
+				return nil, errNoEPBSProposalResponse
+			}
+
+			return &beaconblockproposal.ProviderOutcome{
+				Slot:      opts.Slot,
+				RequestID: beaconblockproposer.RequestID(ctx),
+				Provider:  name,
+				Proposal:  response.Data,
+				Metadata:  response.Metadata,
+			}, nil
+		},
+	)
+	elapsed := time.Since(started)
+	if result.err != nil {
+		outcome := "error"
+		rejectionReason := "provider_error"
+		switch {
+		case errors.Is(result.err, context.Canceled):
+			outcome = "cancelled"
+			rejectionReason = "selection_completed"
+		case errors.Is(result.err, context.DeadlineExceeded):
+			outcome = "timeout"
+			rejectionReason = "deadline_reached"
+		case errors.Is(result.err, errNoEPBSProposalResponse) && ctx.Err() == nil:
+			outcome = "rejected"
+			rejectionReason = "empty_response"
+		case errors.Is(result.err, errNoEPBSProposalResponse):
+			outcome = "cancelled"
+			rejectionReason = "selection_completed"
+		}
+		beaconblockproposal.LogProviderOutcome(s.log, &beaconblockproposal.ProviderOutcome{
+			Slot:            opts.Slot,
+			RequestID:       beaconblockproposer.RequestID(ctx),
+			Provider:        name,
+			Elapsed:         elapsed,
+			Outcome:         outcome,
+			RejectionReason: rejectionReason,
+			Err:             result.err,
+		})
+
+		return result
+	}
+	result.proposal.Elapsed = elapsed
+	if proposal := result.proposal.Proposal; proposal != nil {
+		span.SetAttributes(attribute.String("source", beaconblockproposal.EPBSProposalSource(proposal, result.proposal.Metadata)))
+		if proposalRoot, err := proposal.Root(); err == nil {
+			span.SetAttributes(attribute.String("proposal_root", proposalRoot.String()))
+		}
+	}
+
+	return result
+}
+
+// logUnreadEPBSResults logs the proposals that arrived after selection finished.  Failed
+// requests were logged when they ended.
+func (s *Service) logUnreadEPBSResults(results <-chan *proposalResult[*beaconblockproposal.ProviderOutcome]) {
+	for result := range results {
+		if result.err != nil {
+			continue
+		}
+		result.proposal.Outcome = "cancelled"
+		result.proposal.RejectionReason = "selection_completed"
+		beaconblockproposal.LogProviderOutcome(s.log, result.proposal)
+	}
+}
+
+// validateEPBSProposal rejects an invalid proposal, or a builder-backed Gloas proposal from a
+// provider that has not accepted the current proposer preferences, and logs the outcome.
+func (s *Service) validateEPBSProposal(provider string,
+	response *beaconblockproposal.ProviderOutcome,
+	opts *api.EPBSProposalOpts,
+) error {
+	err := beaconblockproposal.ValidateEPBSProposal(response.Proposal, opts.IncludePayload)
+	if err != nil {
+		s.log.Warn().Err(err).Msg("Discarding invalid ePBS proposal")
+	} else if err = beaconblockproposal.ValidateBuilderBidReadiness(s.providerReadiness, provider, opts.Slot, response.Proposal); err != nil {
+		s.log.Warn().Str("provider", beaconblockproposer.StableProviderName(provider)).Msg("Discarding builder-backed ePBS proposal from provider without current preferences")
+	}
+	response.Outcome = "accepted"
+	if err != nil {
+		response.Outcome = "rejected"
+		response.RejectionReason = beaconblockproposal.RejectionReason(err)
+	}
+	beaconblockproposal.LogProviderOutcome(s.log, response)
+
+	return err
 }
 
 // New creates a new beacon block proposal strategy.
@@ -53,6 +395,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 	s := &Service{
 		log:               log,
 		proposalProviders: parameters.proposalProviders,
+		providerReadiness: parameters.providerReadiness,
 		timeout:           parameters.timeout,
 		clientMonitor:     parameters.clientMonitor,
 	}
@@ -72,42 +415,51 @@ func (s *Service) Proposal(ctx context.Context,
 	))
 	defer span.End()
 
-	// We create a cancelable context with a timeout.  As soon as the first provider has responded we
-	// cancel the context to cancel the other requests.
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
 
-	proposalCh := make(chan *api.VersionedProposal, 1)
-	for name, provider := range s.proposalProviders {
-		go func(ctx context.Context, name string, provider eth2client.ProposalProvider, ch chan *api.VersionedProposal) {
-			log := s.log.With().Str("provider", name).Uint64("slot", uint64(opts.Slot)).Logger()
+	results := proposalResults(s.proposalProviders, func(name string,
+		provider eth2client.MultiForkProposalProvider,
+	) *proposalResult[*api.VersionedProposal] {
+		providerOpts := *opts
+		providerGraffiti, err := beaconblockproposal.GraffitiForProvider(ctx, provider, providerOpts.Graffiti)
+		if err != nil {
+			s.log.Warn().Err(err).Msg("Failed to obtain node client; not updating graffiti")
+		}
+		providerOpts.Graffiti = providerGraffiti
+		log := s.log.With().Str("provider", name).Uint64("slot", uint64(providerOpts.Slot)).Logger()
 
-			started := time.Now()
-			proposalResponse, err := provider.Proposal(ctx, opts)
-			s.clientMonitor.ClientOperation(name, "beacon block proposal", err == nil, time.Since(started))
-			if err != nil {
-				if !errors.Is(err, context.Canceled) {
-					log.Debug().Err(err).Msg("Failed to obtain beacon block proposal")
+		return fetchProviderProposal(s,
+			log,
+			name,
+			"beacon block proposal",
+			func() (*api.Response[*api.VersionedProposal], error) {
+				return provider.Proposal(ctx, &providerOpts)
+			},
+			func(response *api.Response[*api.VersionedProposal]) (*api.VersionedProposal, error) {
+				if response == nil || response.Data == nil {
+					return nil, errors.New("beacon node returned no beacon block proposal")
 				}
 
-				return
-			}
-			proposal := proposalResponse.Data
-			log.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block proposal")
+				return response.Data, nil
+			},
+		)
+	})
 
-			ch <- proposal
-		}(ctx, name, provider, proposalCh)
+	proposal, err := firstProposal(ctx,
+		s.log,
+		results,
+		len(s.proposalProviders),
+		nil,
+		"failed to obtain beacon block proposal",
+		"Failed to obtain beacon block proposal before timeout",
+	)
+	if err != nil {
+		return nil, err
 	}
 
-	select {
-	case <-ctx.Done():
-		cancel()
-		s.log.Debug().Msg("Failed to obtain beacon block proposal before timeout")
-		return nil, errors.New("failed to obtain beacon block proposal before timeout")
-	case proposal := <-proposalCh:
-		cancel()
-		return &api.Response[*api.VersionedProposal]{
-			Data:     proposal,
-			Metadata: make(map[string]any),
-		}, nil
-	}
+	return &api.Response[*api.VersionedProposal]{
+		Data:     proposal,
+		Metadata: make(map[string]any),
+	}, nil
 }

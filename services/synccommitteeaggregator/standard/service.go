@@ -1,4 +1,4 @@
-// Copyright © 2021, 2024 Attestant Limited.
+// Copyright © 2021 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -39,18 +39,18 @@ import (
 type Service struct {
 	log                                  zerolog.Logger
 	monitor                              metrics.Service
+	beaconBlockRootProvider              eth2client.BeaconBlockRootProvider
+	validatingAccountsProvider           accountmanager.ValidatingAccountsProvider
+	syncCommitteeContributionProvider    eth2client.SyncCommitteeContributionProvider
 	slotsPerEpoch                        uint64
 	syncCommitteeSize                    uint64
 	syncCommitteeSubnetCount             uint64
 	targetAggregatorsPerSyncSubcommittee uint64
-	beaconBlockRootProvider              eth2client.BeaconBlockRootProvider
 	contributionAndProofSigner           signer.ContributionAndProofSigner
-	validatingAccountsProvider           accountmanager.ValidatingAccountsProvider
-	syncCommitteeContributionProvider    eth2client.SyncCommitteeContributionProvider
 	syncCommitteeContributionsSubmitter  eth2client.SyncCommitteeContributionsSubmitter
 	beaconBlockRoots                     map[phase0.Slot]phase0.Root
-	beaconBlockRootsMu                   sync.Mutex
 	chainTime                            chaintime.Service
+	beaconBlockRootsMu                   sync.Mutex
 }
 
 // New creates a new sync committee aggregator.

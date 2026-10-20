@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,6 +14,7 @@
 package main
 
 import (
+	"io"
 	"os"
 
 	"github.com/attestantio/vouch/util"
@@ -23,7 +24,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// log.
+// Log.
 var log zerolog.Logger
 
 // initLogging initialises logging.
@@ -32,16 +33,21 @@ func initLogging() error {
 	// local log level the local level is ignored.  It is then overridden for each module.
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 
-	zerolog.TimeFieldFormat = viper.GetString("logging.timestamp.format")
+	// Skip an unchanged value: a write races with goroutines that are already logging.
+	if format := viper.GetString("logging.timestamp.format"); format != zerolog.TimeFieldFormat {
+		zerolog.TimeFieldFormat = format
+	}
 
 	// Change the output file.
+	var output io.Writer = os.Stderr
 	if viper.GetString("log-file") != "" {
 		f, err := os.OpenFile(resolvePath(viper.GetString("log-file")), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		if err != nil {
 			return errors.Wrap(err, "failed to open log file")
 		}
-		zerologger.Logger = zerologger.Logger.Output(f)
+		output = f
 	}
+	zerologger.Logger = zerologger.Logger.Output(util.BeaconNodeLogWriter(output))
 
 	// Set the local logger from the global logger.
 	log = zerologger.Logger.With().Logger().Level(util.LogLevel(""))

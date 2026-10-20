@@ -1,4 +1,4 @@
-// Copyright © 2022 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,12 +14,9 @@
 package v2
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -31,24 +28,26 @@ import (
 // ProposerConfig contains proposer-specific configuration for validators
 // proposing execution payloads.
 type ProposerConfig struct {
-	Validator    phase0.BLSPubKey
-	Account      *regexp.Regexp
-	FeeRecipient *bellatrix.ExecutionAddress
-	GasLimit     *uint64
-	Grace        *time.Duration
-	MinValue     *decimal.Decimal
-	ResetRelays  bool
-	Relays       map[string]*ProposerRelayConfig
+	Validator         phase0.BLSPubKey
+	Account           *regexp.Regexp
+	FeeRecipient      *bellatrix.ExecutionAddress
+	GasLimit          *uint64
+	Grace             *time.Duration
+	MinValue          *decimal.Decimal
+	EPBSBuilderConfig *EPBSBuilderConfig
+	ResetRelays       bool
+	Relays            map[string]*ProposerRelayConfig
 }
 
 type proposerConfigJSON struct {
-	Proposer     string                          `json:"proposer"`
-	FeeRecipient string                          `json:"fee_recipient,omitempty"`
-	GasLimit     string                          `json:"gas_limit,omitempty"`
-	Grace        string                          `json:"grace,omitempty"`
-	MinValue     string                          `json:"min_value,omitempty"`
-	ResetRelays  bool                            `json:"reset_relays,omitempty"`
-	Relays       map[string]*ProposerRelayConfig `json:"relays,omitempty"`
+	Proposer          string                          `json:"proposer"`
+	FeeRecipient      string                          `json:"fee_recipient,omitempty"`
+	GasLimit          string                          `json:"gas_limit,omitempty"`
+	Grace             string                          `json:"grace,omitempty"`
+	MinValue          string                          `json:"min_value,omitempty"`
+	EPBSBuilderConfig *EPBSBuilderConfig              `json:"epbs_builder_config,omitempty"`
+	ResetRelays       bool                            `json:"reset_relays,omitempty"`
+	Relays            map[string]*ProposerRelayConfig `json:"relays,omitempty"`
 }
 
 // MarshalJSON implements json.Marshaler.
@@ -77,13 +76,14 @@ func (p *ProposerConfig) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(&proposerConfigJSON{
-		Proposer:     proposer,
-		FeeRecipient: feeRecipient,
-		GasLimit:     gasLimit,
-		Grace:        grace,
-		MinValue:     minValue,
-		ResetRelays:  p.ResetRelays,
-		Relays:       p.Relays,
+		Proposer:          proposer,
+		FeeRecipient:      feeRecipient,
+		GasLimit:          gasLimit,
+		Grace:             grace,
+		MinValue:          minValue,
+		EPBSBuilderConfig: p.EPBSBuilderConfig,
+		ResetRelays:       p.ResetRelays,
+		Relays:            p.Relays,
 	})
 }
 
@@ -93,74 +93,31 @@ func (p *ProposerConfig) UnmarshalJSON(input []byte) error {
 	if err := json.Unmarshal(input, &data); err != nil {
 		return errors.Wrap(err, "invalid JSON")
 	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(input, &fields); err != nil {
+		return errors.Wrap(err, "invalid JSON")
+	}
+	if isNullField(fields, "epbs_builder_config") {
+		return errors.New("invalid JSON: ePBS builder config must be an object")
+	}
 
-	if data.Proposer == "" {
-		return errors.New("proposer is missing")
+	var err error
+	if p.Validator, p.Account, err = parseProposer(data.Proposer); err != nil {
+		return err
 	}
-	if strings.HasPrefix(data.Proposer, "0x") {
-		tmp, err := hex.DecodeString(strings.TrimPrefix(data.Proposer, "0x"))
-		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("failed to decode proposer %s", data.Proposer))
-		}
-		if len(tmp) != phase0.PublicKeyLength {
-			return fmt.Errorf("incorrect length for proposer %s", data.Proposer)
-		}
-		copy(p.Validator[:], tmp)
-	} else {
-		proposer := data.Proposer
-		if !strings.HasPrefix(proposer, "^") {
-			proposer = fmt.Sprintf("^%s", proposer)
-		}
-		if !strings.HasSuffix(proposer, "$") {
-			proposer = fmt.Sprintf("%s$", proposer)
-		}
-		account, err := regexp.Compile(proposer)
-		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("invalid account proposer %s", data.Proposer))
-		}
-		p.Account = account
+	if p.FeeRecipient, err = parseFeeRecipient(data.FeeRecipient); err != nil {
+		return err
 	}
-	if data.FeeRecipient != "" {
-		tmp, err := hex.DecodeString(strings.TrimPrefix(data.FeeRecipient, "0x"))
-		if err != nil {
-			return errors.Wrap(err, "failed to decode fee recipient")
-		}
-		if len(tmp) != bellatrix.ExecutionAddressLength {
-			return errors.New("incorrect length for fee recipient")
-		}
-		var feeRecipient bellatrix.ExecutionAddress
-		copy(feeRecipient[:], tmp)
-		p.FeeRecipient = &feeRecipient
+	if p.GasLimit, err = parseGasLimit(data.GasLimit); err != nil {
+		return err
 	}
-	if data.GasLimit != "" {
-		gasLimit, err := strconv.ParseUint(data.GasLimit, 10, 64)
-		if err != nil {
-			return errors.Wrap(err, "invalid gas limit")
-		}
-		p.GasLimit = &gasLimit
+	if p.Grace, err = parseGrace(data.Grace); err != nil {
+		return err
 	}
-	if data.Grace != "" {
-		tmp, err := strconv.ParseInt(data.Grace, 10, 64)
-		if err != nil {
-			return errors.Wrap(err, "grace invalid")
-		}
-		if tmp < 0 {
-			return errors.New("grace cannot be negative")
-		}
-		grace := time.Duration(tmp) * time.Millisecond
-		p.Grace = &grace
+	if p.MinValue, err = parseMinValue(data.MinValue); err != nil {
+		return err
 	}
-	if data.MinValue != "" {
-		minValue, err := decimal.NewFromString(data.MinValue)
-		if err != nil {
-			return errors.Wrap(err, "min value invalid")
-		}
-		if minValue.Sign() == -1 {
-			return errors.New("min value cannot be negative")
-		}
-		minValue = minValue.Mul(weiPerETH)
-		p.MinValue = &minValue
-	}
+	p.EPBSBuilderConfig = data.EPBSBuilderConfig
 	p.ResetRelays = data.ResetRelays
 	p.Relays = data.Relays
 

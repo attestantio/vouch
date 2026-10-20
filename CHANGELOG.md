@@ -1,3 +1,46 @@
+1.14.0-alpha.2:
+  - update go-eth2-client to v0.30.0
+  - deprecate controller.max-attestation-delay, controller.attestation-aggregation-delay, controller.max-sync-committee-message-delay and controller.sync-committee-aggregation-delay; they now apply to pre-gloas slots only, gloas slots always use the spec-derived deadlines with no way to set an earlier one, and each one set to a non-zero value logs a warning at startup
+  - refuse to start unless each of those four options is 0 or a positive duration with a unit that is less than the slot duration, such as 2s; viper previously read "abc" as 0, 4 as 4ns, and accepted negative durations and durations past the end of the slot
+  - add builderconfig.fallback-min-bid and builderconfig.fallback-builder-boost-factor, fallback gloas ePBS P2P values used when the execution configuration does not supply them, including with no configuration URL, no configuration loaded yet, or a version 1 configuration
+  - refuse to start when builderconfig.fallback-min-bid or builderconfig.fallback-builder-boost-factor is not a non-negative integer, instead of silently using 0
+  - name the key and the bad value when blockrelay.fallback-gas-limit is not a non-negative integer
+  - min_value no longer sets the gloas ePBS min_bid; a configuration with min_value but no ePBS min_bid logs a warning naming epbs_builder_config.min_bid once rather than on every fetch
+  - direct-builder entries may omit min_bid and builder_boost_factor, inheriting the P2P values resolved for the proposer being served
+
+1.14.0-alpha.1:
+  - add gloas self-build beacon block proposal path: request an ePBS proposal with its payload, sign the beacon block and matching execution payload envelope, then publish the block followed by its envelope
+  - refuse a self-build gloas proposal whose execution payload pays no fee recipient, before its envelope is signed
+  - extend the first and best beaconblockproposal strategies for ePBS proposals, rejecting malformed or payload-excluded responses when payload inclusion was requested
+  - route the simple beaconblockproposal style through the first strategy; beacon node clients that do not support ePBS proposals now fail at startup
+  - skip the relay auction under gloas and warn operators that their relay settings are ignored
+  - add eth2client.custom-spec-support to enable dynamic SSZ encoding and decoding for beacon nodes using a non-mainnet preset
+  - cache the hard fork schedule in chaintime; known-fork lookups are allocation-free and unknown forks trigger a coalesced refresh
+  - do not update execution chain head state from gloas blocks, as an execution payload bid carries no execution block number
+  - report "builder" as a beacon block proposal source method
+  - preserve the beacon node's gloas payload vote in both the attestation signing root and the submitted attestation, rejecting an invalid vote before signing
+  - convert gloas aggregate attestations and signed aggregate-and-proof containers for aggregation and submission, rejecting a missing gloas arm before signing
+  - derive the four controller duty deadlines from the chain specification, choosing the pre-gloas or gloas deadline per duty from that duty's slot and retaining the legacy timing for pre-gloas networks
+  - default controller.max-attestation-delay, controller.attestation-aggregation-delay, controller.max-sync-committee-message-delay and controller.sync-committee-aggregation-delay to 0; the hardcoded defaults made the spec-derived deadlines unreachable
+  - add the payload timeliness committee duty: fetch PTC duties for the epoch, group each slot's validators into one job scheduled inside the gloas payload timing window, and vote on whether the slot's execution payload was revealed on time
+  - submit versioned payload attestations through the immediate, multinode and null submitters, batching signatures for validators that share a slot
+  - cast the payload timeliness vote on the first execution_payload_available event from the payload attestation data beacon nodes, keeping the payload attestation deadline as the fallback, and drop the 250ms delay after that deadline
+  - retry unavailable payload attestation data every 50ms for up to 500ms before giving up on the vote
+  - retry the payload timeliness vote at the attestation deadline when an early, event-triggered attempt fails before signing, such as when the payload attestation data beacon nodes disagree
+  - log and count a payload timeliness vote failure before signing only on the deadline attempt, and trace every payload attestation data request and attempt with its error
+  - report missing payload attestation data from the first and majority strategies when a beacon node has no data yet, including below the majority threshold and when the strategy times out, so the payload attester retries it
+  - obtain payload attestation data from a dedicated multiclient (the 'simple' style), configurable with strategies.payloadattestationdata.beacon-node-addresses
+  - add first and majority payloadattestationdata strategies, selected with strategies.payloadattestationdata.style; the majority strategy breaks a tie in favour of the payload-present vote, rejects responses that disagree on the beacon block root, and proceeds with the responses received when the timeout fires rather than discarding them
+  - default strategies.payloadattestationdata.timeout to 1s, tighter than the global timeout because payload attestation data is due 75% of the way through the slot; the per-style timeouts and beacon-node-addresses inherit from it
+  - resolve Gloas P2P and direct-builder policy from version 2 execution configuration, sign slot-bound direct-builder authorization, and send the same non-nil BuilderConfig to each beacon node's auction
+  - accept the beacon node's gloas auction result: sign and publish only the block for a builder-backed result, and continue to publish the execution payload envelope for a self-built one
+  - log value_known on a gloas proposal selection, so a best selection made when no valid ePBS response reported a value is visible
+  - add gloas proposal observability: per-provider and final selection logs, correlated request, provider, selection and publication spans, client and client_version fields from a node version query at startup, and the vouch_beaconblockproposal_process_gloas_selections_total metric
+  - add the vouch_proposerpreferences_provider_events_total metric, and count proposer preferences signing refused for an unavailable domain as domain_unavailable rather than sign_failed
+  - replace configured beacon node endpoints in log output, gloas proposal spans and first strategy errors with their beacon-N position; client and strategy operation metrics keep the endpoint label
+  - update go-eth2-client to a gloas pseudo-version
+  - satisfy the attgo struct field order and comment capitalisation rules across services and strategies
+
 1.13.1:
   - initialise sync committee verification metrics to 0
   - use dynssz v1.3.2 and corresponding lib updates

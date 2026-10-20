@@ -1,4 +1,4 @@
-// Copyright © 2022, 2023 Attestant Limited.
+// Copyright © 2022 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,6 +21,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/accountmanager"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
@@ -33,8 +34,12 @@ import (
 )
 
 type parameters struct {
-	logLevel                                  zerolog.Level
 	monitor                                   metrics.Service
+	accountsProvider                          accountmanager.AccountsProvider
+	validatorsProvider                        consensusclient.ValidatorsProvider
+	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
+	builderBidProvider                        builderbid.Provider
+	logLevel                                  zerolog.Level
 	majordomo                                 majordomo.Service
 	scheduler                                 scheduler.Service
 	listenAddress                             string
@@ -42,17 +47,15 @@ type parameters struct {
 	configURL                                 string
 	fallbackFeeRecipient                      bellatrix.ExecutionAddress
 	fallbackGasLimit                          uint64
+	fallbackMinBid                            phase0.Gwei
+	fallbackBuilderBoostFactor                uint64
 	clientCertURL                             string
 	clientKeyURL                              string
 	caCertURL                                 string
-	accountsProvider                          accountmanager.AccountsProvider
-	validatorsProvider                        consensusclient.ValidatorsProvider
-	validatingAccountsProvider                accountmanager.ValidatingAccountsProvider
 	validatorRegistrationSigner               signer.ValidatorRegistrationSigner
 	secondaryValidatorRegistrationsSubmitters []consensusclient.ValidatorRegistrationsSubmitter
 	logResults                                bool
 	releaseVersion                            string
-	builderBidProvider                        builderbid.Provider
 	builderConfigs                            map[phase0.BLSPubKey]*blockrelay.BuilderConfig
 }
 
@@ -120,6 +123,20 @@ func WithConfigURL(url string) Parameter {
 func WithFallbackFeeRecipient(feeRecipient bellatrix.ExecutionAddress) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.fallbackFeeRecipient = feeRecipient
+	})
+}
+
+// WithFallbackMinBid sets the fallback ePBS minimum bid for all validators.
+func WithFallbackMinBid(minBid phase0.Gwei) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.fallbackMinBid = minBid
+	})
+}
+
+// WithFallbackBuilderBoostFactor sets the fallback ePBS builder boost factor for all validators.
+func WithFallbackBuilderBoostFactor(factor uint64) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.fallbackBuilderBoostFactor = factor
 	})
 }
 
@@ -220,59 +237,59 @@ var zeroExecutionAddress bellatrix.ExecutionAddress
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
-		logLevel:       zerolog.GlobalLevel(),
-		builderConfigs: map[phase0.BLSPubKey]*blockrelay.BuilderConfig{},
+		logLevel:                   zerolog.GlobalLevel(),
+		builderConfigs:             map[phase0.BLSPubKey]*blockrelay.BuilderConfig{},
+		fallbackBuilderBoostFactor: beaconblockproposer.DefaultBuilderBoostFactor,
 	}
 	for _, p := range params {
 		p.apply(&parameters)
 	}
 
-	if parameters.monitor == nil {
-		return nil, errors.New("no monitor specified")
-	}
-	if parameters.majordomo == nil {
-		return nil, errors.New("no majordomo specified")
-	}
-	if parameters.scheduler == nil {
-		return nil, errors.New("no scheduler specified")
-	}
-	if parameters.chainTime == nil {
-		return nil, errors.New("no chaintime specified")
-	}
-	if bytes.Equal(parameters.fallbackFeeRecipient[:], zeroExecutionAddress[:]) {
-		return nil, errors.New("no fallback fee recipient specified")
-	}
-	if parameters.fallbackGasLimit == 0 {
-		return nil, errors.New("no fallback gas limit specified")
-	}
-	if parameters.accountsProvider == nil {
-		return nil, errors.New("no accounts provider specified")
-	}
-	if parameters.validatorsProvider == nil {
-		return nil, errors.New("no validators provider specified")
-	}
-	if parameters.validatingAccountsProvider == nil {
-		return nil, errors.New("no validating accounts provider specified")
-	}
-	if parameters.validatorRegistrationSigner == nil {
-		return nil, errors.New("no validator registration signer specified")
-	}
-	if parameters.listenAddress == "" {
-		return nil, errors.New("no listen address specified")
-	}
-	if _, _, err := net.SplitHostPort(parameters.listenAddress); err != nil {
-		return nil, errors.New("listen address malformed")
-	}
-	// config URL can be empty.
-	if parameters.releaseVersion == "" {
-		return nil, errors.New("no release version specified")
-	}
-	if parameters.builderBidProvider == nil {
-		return nil, errors.New("no builder bid provider specified")
-	}
-	if parameters.builderConfigs == nil {
-		return nil, errors.New("no builder configs specified")
+	if err := parameters.validate(); err != nil {
+		return nil, err
 	}
 
 	return &parameters, nil
+}
+
+func (p *parameters) validate() error {
+	checks := []struct {
+		valid bool
+		err   string
+	}{
+		{p.monitor != nil, "no monitor specified"},
+		{p.majordomo != nil, "no majordomo specified"},
+		{p.scheduler != nil, "no scheduler specified"},
+		{p.chainTime != nil, "no chaintime specified"},
+		{!bytes.Equal(p.fallbackFeeRecipient[:], zeroExecutionAddress[:]), "no fallback fee recipient specified"},
+		{p.fallbackGasLimit != 0, "no fallback gas limit specified"},
+		{p.accountsProvider != nil, "no accounts provider specified"},
+		{p.validatorsProvider != nil, "no validators provider specified"},
+		{p.validatingAccountsProvider != nil, "no validating accounts provider specified"},
+		{p.validatorRegistrationSigner != nil, "no validator registration signer specified"},
+		{p.listenAddress != "", "no listen address specified"},
+	}
+	for _, check := range checks {
+		if !check.valid {
+			return errors.New(check.err)
+		}
+	}
+	if _, _, err := net.SplitHostPort(p.listenAddress); err != nil {
+		return errors.New("listen address malformed")
+	}
+	checks = []struct {
+		valid bool
+		err   string
+	}{
+		{p.releaseVersion != "", "no release version specified"},
+		{p.builderBidProvider != nil, "no builder bid provider specified"},
+		{p.builderConfigs != nil, "no builder configs specified"},
+	}
+	for _, check := range checks {
+		if !check.valid {
+			return errors.New(check.err)
+		}
+	}
+
+	return nil
 }

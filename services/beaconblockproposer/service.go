@@ -1,4 +1,4 @@
-// Copyright © 2020, 2022 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -20,6 +20,17 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 )
+
+// ExecutionConfigProvider provides resolved execution configuration for a proposer.
+type ExecutionConfigProvider interface {
+	ProposerConfig(ctx context.Context,
+		account e2wtypes.Account,
+		pubkey phase0.BLSPubKey,
+	) (
+		*ProposerConfig,
+		error,
+	)
+}
 
 // Duty contains information about a beacon block proposal duty.
 type Duty struct {

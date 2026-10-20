@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,12 +16,14 @@ package standard
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/payloadattester"
 	"github.com/attestantio/vouch/util"
 	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
 	"go.opentelemetry.io/otel"
@@ -34,6 +36,38 @@ func (s *Service) HandleBlockEvent(_ context.Context, data *apiv1.BlockEvent) {
 	// We update the block to slot cache here, in an attempt to avoid
 	// unnecessary lookups.
 	s.blockToSlotSetter.SetBlockRootToSlot(data.Block, data.Slot)
+}
+
+// HandleExecutionPayloadAvailableEvent handles the "execution_payload_available" events from the beacon node.
+func (s *Service) HandleExecutionPayloadAvailableEvent(ctx context.Context, data *apiv1.ExecutionPayloadAvailableEvent) {
+	s.payloadAttestationsMutex.Lock()
+	attestation := s.payloadAttestations[data.Slot]
+	s.payloadAttestationsMutex.Unlock()
+	if attestation == nil {
+		return
+	}
+
+	attestation.mutex.Lock()
+	s.payloadAttestationsMutex.Lock()
+	currentAttestation := s.payloadAttestations[data.Slot] == attestation
+	s.payloadAttestationsMutex.Unlock()
+	if !currentAttestation || !time.Now().Before(attestation.deadline) || attestation.eventAttempted || attestation.attemptFinished {
+		attestation.mutex.Unlock()
+		return
+	}
+	attestation.eventAttempted = true
+	attemptCtx, cancel := context.WithDeadline(ctx, s.chainTimeService.StartOfSlot(data.Slot+1))
+	_, err := s.payloadAttester.Attest(attemptCtx, attestation.duty, false)
+	cancel()
+	if !errors.Is(err, payloadattester.ErrPayloadAttestationDataUnavailable) {
+		attestation.attemptFinished = true
+	}
+	attemptFinished := attestation.attemptFinished
+	attestation.mutex.Unlock()
+
+	if attemptFinished && s.removePayloadAttestation(data.Slot, attestation) {
+		s.scheduler.CancelJobIfExists(ctx, payloadAttestationJobName(data.Slot))
+	}
 }
 
 // HandleHeadEvent handles the "head" events from the beacon node.
@@ -78,6 +112,21 @@ func (s *Service) HandleHeadEvent(ctx context.Context, data *apiv1.HeadEvent) {
 
 		// Remove old sync committee data.
 		s.syncCommitteeMessenger.RemoveHistoricDataUsedForSlotVerification(data.Slot)
+	}
+}
+
+// HandleHeadV2Event handles the "head_v2" events from the beacon node.
+// A head from an earlier slot, such as a late block or a reorg, still carries valid roots for its epoch.
+func (s *Service) HandleHeadV2Event(ctx context.Context, data *apiv1.HeadEventV2) {
+	if data.Slot > s.chainTimeService.CurrentSlot() {
+		return
+	}
+
+	epoch := s.chainTimeService.SlotToEpoch(data.Slot)
+	s.recordProposerPreferencesDependentRoot(epoch, data.CurrentEpochDependentRoot)
+	s.recordProposerPreferencesDependentRoot(epoch+1, data.NextEpochDependentRoot)
+	if s.proposerPreferencesEnabled() {
+		s.queueProposerPreferencesPublication(ctx)
 	}
 }
 
@@ -178,6 +227,8 @@ func (s *Service) handlePreviousDependentRootChanged(ctx context.Context) {
 
 	// We need to refresh the attester duties for this epoch.
 	s.refreshAttesterDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
+	// The payload timeliness committee is derived from the same epoch state.
+	s.refreshPayloadAttestationDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch())
 }
 
 // handleCurrentDependentRootChanged handles the situation where the current
@@ -194,6 +245,8 @@ func (s *Service) handleCurrentDependentRootChanged(ctx context.Context) {
 	}
 	// We need to refresh the attester duties for the next epoch.
 	go s.refreshAttesterDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch()+1)
+	// The payload timeliness committee for the next epoch uses the current dependent root.
+	go s.refreshPayloadAttestationDutiesForEpoch(ctx, s.chainTimeService.CurrentEpoch()+1)
 }
 
 func (s *Service) refreshProposerDutiesForEpoch(ctx context.Context, epoch phase0.Epoch) {

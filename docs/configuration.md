@@ -51,6 +51,9 @@ eth2client:
   # operation, for example fetching the current list of active validators.  These operations are not time-sensitive,
   # and can contain large amounts of information, hence the longer timeout.
   timeout: '2m'
+  # custom-spec-support enables dynamic SSZ encoding and decoding for beacon nodes that use a non-mainnet preset.
+  # It is slower than the generated mainnet path, so enable it only when the network requires it.
+  custom-spec-support: false
   #
   # allow-delayed-start allows Vouch to start if some of the consensus nodes are unavailable.
   # Note that this can result in Vouch being active without being able to validate, however, if strategies use
@@ -99,6 +102,8 @@ beaconblockproposer:
   # -  50: `builder value` must be more than twice the local value (`local value*(100/50)`) to be used
   # -  91: `builder value` must be more than ~10% higher than the local value (`local value*(100/91)`) to be used
   # - 100: `builder value` must be more than the local value (`local value*(100/100)`) to be used
+  # This value is not used from Gloas onwards.  Gloas builder policy comes from version 2 execution configuration's
+  # epbs_builder_config, with fallbacks in builderconfig; this value is not one of those fallbacks.
   builder-boost-factor: 91
 
 # attester provides control of the attester process.
@@ -215,6 +220,24 @@ strategies:
       deadline: '1s'
       # bid-gap is the gap between receiving a response from a relay and querying it again.
       bid-gap: '100ms'
+  # The payloadattestationdata strategy obtains payload attestation data for payload timeliness committee duties.
+  payloadattestationdata:
+    # style can be 'simple', 'first', or 'majority'. Unknown or absent values use 'simple'.
+    style: 'simple'
+    # beacon-node-addresses are the addresses from which to receive payload attestation data, falling back to the
+    # top-level beacon-node-addresses if not set.
+    beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
+    first:
+      # beacon-node-addresses and timeout fall back to payloadattestationdata and then the top-level setting.
+      beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
+      timeout: '1s'
+    majority:
+      # beacon-node-addresses and timeout fall back to payloadattestationdata and then the top-level setting.
+      beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
+      timeout: '1s'
+      # threshold is the minimum number of matching valid responses. 0 is valid.
+      # At the timeout the strategy proceeds with the responses it has received.
+      threshold: 0
   # The signedbeaconblock strategy obtains the signed beacon blocks from multiple beacon nodes.
   signedbeaconblock:
     # style can be 'first'. If not defined, the 'first' style will be used.
@@ -251,6 +274,8 @@ blockrelay:
   # participating relay, the bid provided, and if the bid was selected for use by Vouch.
   log-results: true
   # builder-configs contain specific configurations for different builders, with each builder defined by its public key.
+  # They apply only to pre-Gloas relay auctions and have no effect from Gloas onwards.  They are unrelated to the
+  # top-level builderconfig key, which holds the Gloas ePBS fallbacks.
   # The base score for each bid is the value to the proposer, in wei.  The final score is calculated by adding
   # the 'offset' value for the specific builder, and then multiplying by the percentage of 'factor' value. For example,
   # if the base value is 1000, the offset is 10 and the factor is 110 then the final score is (1000+10)*110/100 = 1111.  If the
@@ -265,6 +290,17 @@ blockrelay:
       category: 'excluded'
       # With a factor of 0 bids from this builder will be ignored.
       factor: 0
+
+# builderconfig provides fallback Gloas ePBS values for validators that do not have them in the execution configuration.
+# Vouch sends these values to the beacon node, which runs the auction from Gloas onwards.  Despite the similar name it is
+# unrelated to blockrelay.builder-configs, which scores relay bids by builder public key before Gloas only.  Neither key
+# reads the other.
+builderconfig:
+  # fallback-min-bid is the minimum P2P bid, in Gwei.  Defaults to 0.
+  fallback-min-bid: 0
+  # fallback-builder-boost-factor is the builder boost factor percentage.  Defaults to 100; 0 prefers the local build.
+  # beaconblockproposer.builder-boost-factor is not used from Gloas onwards and is not a fallback for this value.
+  fallback-builder-boost-factor: 100
 
 # builderclient provides timeout configuration for builder/relay communication.
 # Vouch communicates with MEV-boost relays for validator registration, bid fetching, and block unblinding.
@@ -415,18 +451,40 @@ This can be configured using the environment variables `VOUCH_<MODULE>_LOG_LEVEL
 
 Advanced options can change the performance of Vouch to be severely detrimental to its operation. It is strongly recommended that these options are not changed unless the user understands completely what they do and their possible performance impact.
 
+The four duty timing options below are deprecated. Each one sets how far into a slot Vouch runs a duty.
+
+### How Vouch derives the duty deadlines
+
+Vouch reads the chain specification from its beacon nodes at startup and derives two sets of deadlines from it, one for slots before the Gloas fork and one for Gloas slots. For each duty it picks the set from the duty's slot: if the slot's epoch is at or after `GLOAS_FORK_EPOCH` it uses the Gloas deadline, otherwise the pre-Gloas one. A Vouch that runs across the fork therefore switches at the first Gloas slot. A chain that does not schedule Gloas always uses the pre-Gloas deadlines.
+
+- Before Gloas, each deadline is a fixed fraction of `SECONDS_PER_SLOT`. These fractions match the spec's `ATTESTATION_DUE_BPS`, `SYNC_MESSAGE_DUE_BPS` (3333) and `AGGREGATE_DUE_BPS`, `CONTRIBUTION_DUE_BPS` (6667). Vouch does not read the served values.
+- From Gloas, each deadline is the served `_GLOAS`-suffixed value, in basis points (1/10000) of `SLOT_DURATION_MS`. For example, `ATTESTATION_DUE_BPS_GLOAS` of 2500 on a 12000ms slot gives 3s. If the chain does not serve `SLOT_DURATION_MS`, Vouch uses `SECONDS_PER_SLOT`. If the chain does not serve the key, or serves 0 or more than 10000, Vouch uses the fallback fraction of the slot. The unsuffixed keys carry the pre-Gloas deadlines and are not used for Gloas slots.
+
+| Option | Before Gloas | Gloas key | Gloas fallback | 12-second slot |
+|--------|--------------|-----------|----------------|----------------|
+| `controller.max-attestation-delay` | 1/3 of the slot | `ATTESTATION_DUE_BPS_GLOAS` | 1/4 of the slot | 4s, then 3s |
+| `controller.attestation-aggregation-delay` | 2/3 of the slot | `AGGREGATE_DUE_BPS_GLOAS` | 1/2 of the slot | 8s, then 6s |
+| `controller.max-sync-committee-message-delay` | 1/3 of the slot | `SYNC_MESSAGE_DUE_BPS_GLOAS` | 1/4 of the slot | 4s, then 3s |
+| `controller.sync-committee-aggregation-delay` | 2/3 of the slot | `CONTRIBUTION_DUE_BPS_GLOAS` | 1/2 of the slot | 8s, then 6s |
+
+### Overriding the deadlines
+
+An option that is set replaces the derived deadline for slots before the Gloas fork only. Gloas slots ignore it. There is no way to set a Gloas deadline: an operator who set an earlier deadline on purpose, for example to give a slow or distributed signer more time, gets the later spec deadline from the first Gloas slot onwards. Vouch logs a warning at startup for each of these options that is set to a non-zero value.
+
+A value must be a positive duration with a unit that is less than the slot duration, such as `2s`, or `0` to derive the deadline from the chain specification. Vouch refuses to start on any other value, including a number without a unit, a negative duration, or a duration at or past the end of the slot.
+
 ### controller.max-attestation-delay
 
-This is a duration parameter, that defaults to `4s`. It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
+This is a deprecated duration parameter that applies to pre-Gloas slots only. It defaults to a third of the slot duration, `4s` on a 12-second slot. Gloas slots always use `ATTESTATION_DUE_BPS_GLOAS`, `3s` on a 12-second slot. It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
 
 ### controller.attestation-aggregation-delay
 
-This is a duration parameter, that defaults to `8s`. It defines the time that Vouch will wait from the start of a slot before aggregating existing attestations.
+This is a deprecated duration parameter that applies to pre-Gloas slots only. It defaults to two thirds of the slot duration, `8s` on a 12-second slot. Gloas slots always use `AGGREGATE_DUE_BPS_GLOAS`, `6s` on a 12-second slot. It defines the time that Vouch will wait from the start of a slot before aggregating existing attestations.
 
 ### controller.max-sync-committee-message-delay
 
-This is a duration parameter, that defaults to `4s`. It defines the maximum time that Vouch will wait from the start of a slot for a block before generating sync committee messages on the basis that the slot is empty.
+This is a deprecated duration parameter that applies to pre-Gloas slots only. It defaults to a third of the slot duration, `4s` on a 12-second slot. Gloas slots always use `SYNC_MESSAGE_DUE_BPS_GLOAS`, `3s` on a 12-second slot. It defines the maximum time that Vouch will wait from the start of a slot for a block before generating sync committee messages on the basis that the slot is empty.
 
 ### controller.sync-committee-aggregation-delay
 
-This is a duration parameter, that defaults to `8s`. It defines the time that Vouch will wait from the start of a slot before aggregating existing sync committee messages.
+This is a deprecated duration parameter that applies to pre-Gloas slots only. It defaults to two thirds of the slot duration, `8s` on a 12-second slot. Gloas slots always use `CONTRIBUTION_DUE_BPS_GLOAS`, `6s` on a 12-second slot. It defines the time that Vouch will wait from the start of a slot before aggregating existing sync committee messages.

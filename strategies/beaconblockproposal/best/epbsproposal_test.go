@@ -1,0 +1,1584 @@
+// Copyright © 2026 Attestant Limited.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package best_test
+
+import (
+	"context"
+	"errors"
+	"math/big"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	eth2client "github.com/attestantio/go-eth2-client"
+	"github.com/attestantio/go-eth2-client/api"
+	apiv1gloas "github.com/attestantio/go-eth2-client/api/v1/gloas"
+	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/mock"
+	"github.com/attestantio/vouch/services/cache"
+	mockcache "github.com/attestantio/vouch/services/cache/mock"
+	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
+	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	"github.com/attestantio/vouch/strategies/beaconblockproposal/best"
+	"github.com/attestantio/vouch/testing/logger"
+	"github.com/attestantio/vouch/util"
+	"github.com/rs/zerolog"
+	zerologger "github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+)
+
+func TestEPBSProposal(t *testing.T) {
+	ctx := context.Background()
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+	previousTracerProvider := otel.GetTracerProvider()
+	otel.SetTracerProvider(tracerProvider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		require.NoError(t, tracerProvider.Shutdown(ctx))
+	})
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	providerOne := &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x01})}
+	providerTwo := &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x02})}
+
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"one": providerOne,
+			"two": providerTwo,
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	builderConfig := &gloas.BuilderConfig{MinBid: 12, BuilderBoostFactor: 100, Builders: []*gloas.BuilderEntry{}}
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{
+		Slot:          phase0.Slot(1),
+		BuilderConfig: builderConfig,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, response)
+	require.NotNil(t, response.Data)
+	require.Same(t, builderConfig, providerOne.opts.BuilderConfig)
+	require.Same(t, builderConfig, providerTwo.opts.BuilderConfig)
+
+	var epbsProposalSpan sdktrace.ReadOnlySpan
+	providerSpans := make(map[string]sdktrace.ReadOnlySpan)
+	for _, span := range spanRecorder.Ended() {
+		switch span.Name() {
+		case "EPBSProposal":
+			epbsProposalSpan = span
+		case "ePBSBeaconBlockProposal":
+			for _, attribute := range span.Attributes() {
+				if string(attribute.Key) == "provider" {
+					providerSpans[attribute.Value.AsString()] = span
+				}
+			}
+		}
+	}
+	require.NotNil(t, epbsProposalSpan)
+	for _, provider := range []string{"one", "two"} {
+		span, exists := providerSpans[provider]
+		require.True(t, exists, "provider %q should create a span", provider)
+		require.Equal(t, epbsProposalSpan.SpanContext(), span.Parent())
+	}
+}
+
+func TestEPBSProposalObservability(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	util.RecordBeaconNodeVersion("stable-provider", "Lighthouse/v7.1.0")
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+	previousTracerProvider := otel.GetTracerProvider()
+	otel.SetTracerProvider(tracerProvider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		require.NoError(t, tracerProvider.Shutdown(ctx))
+	})
+
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	proposal := testGloasProposalWithoutPayload(1, bellatrix.ExecutionAddress{0x01})
+	proposal.ExecutionValue = big.NewInt(123)
+	bodyRoot := phase0.Root{0x42}
+	proposal.BeaconBlockBodyRoot = &bodyRoot
+
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.TraceLevel),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"stable-provider": &testEPBSProposalProvider{
+				proposal: proposal,
+				metadata: map[string]any{"Eth-Builder-Url": "https://builder.example"},
+			},
+		}),
+		best.WithProviderReadiness(&providerReadiness{ready: map[readyDuty]bool{{provider: "stable-provider", slot: 1}: true}}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	includePayload := true
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{
+		Slot:           1,
+		IncludePayload: &includePayload,
+		BuilderConfig: &gloas.BuilderConfig{
+			MinBid:             11,
+			BuilderBoostFactor: 100,
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "best", response.Metadata["vouch.strategy"])
+	require.Equal(t, "stable-provider", response.Metadata["vouch.provider"])
+	require.Equal(t, "builder_api", response.Metadata["vouch.source"])
+	require.True(t, capture.HasLog(map[string]any{
+		"message":             "ePBS proposal provider completed",
+		"slot":                uint64(1),
+		"provider":            "stable-provider",
+		"client":              "lighthouse",
+		"client_version":      "7.1.0",
+		"source":              "builder_api",
+		"builder_index":       uint64(7),
+		"value_known":         true,
+		"execution_value":     "123",
+		"payload_included":    false,
+		"builder_url_present": true,
+		"outcome":             "accepted",
+		"rejection_reason":    "",
+	}))
+	require.NotContains(t, response.Metadata, "vouch.fallback")
+	for _, entry := range capture.Entries() {
+		require.NotContains(t, entry, "fallback")
+	}
+	require.True(t, capture.HasLog(map[string]any{
+		"message":        "ePBS proposal selection completed",
+		"provider":       "stable-provider",
+		"client":         "lighthouse",
+		"client_version": "7.1.0",
+	}))
+
+	var requestID string
+	for _, recordedSpan := range spanRecorder.Ended() {
+		attributes := make(map[string]any)
+		for _, attr := range recordedSpan.Attributes() {
+			attributes[string(attr.Key)] = attr.Value.AsInterface()
+		}
+		if recordedSpan.Name() == "EPBSProposal" {
+			requestID, _ = attributes["request_id"].(string)
+			require.Equal(t, int64(1), attributes["slot"])
+			require.Equal(t, "stable-provider", attributes["provider"])
+			require.Equal(t, "lighthouse", attributes["client"])
+			require.Equal(t, "7.1.0", attributes["client_version"])
+			require.Equal(t, "builder_api", attributes["source"])
+			require.NotEmpty(t, attributes["proposal_root"])
+		}
+		if recordedSpan.Name() == "ePBSBeaconBlockProposal" {
+			require.Equal(t, int64(1), attributes["slot"])
+			require.Equal(t, "stable-provider", attributes["provider"])
+			require.Equal(t, "lighthouse", attributes["client"])
+			require.Equal(t, "7.1.0", attributes["client_version"])
+			require.Equal(t, "builder_api", attributes["source"])
+			require.Equal(t, true, attributes["value_known"])
+			require.Equal(t, "123", attributes["execution_value"])
+			require.Equal(t, "124", attributes["score"])
+			require.NotEmpty(t, attributes["proposal_root"])
+		}
+	}
+	require.NotEmpty(t, requestID)
+}
+
+func TestEPBSProposalMasksProviderAddress(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	const providerAddress = "https://user:secret@example.com/path?token=secret"
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.TraceLevel),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			providerAddress: &testEPBSProposalProvider{proposal: &api.VersionedEPBSProposal{}},
+			"https://user:othersecret@example.com/path?token=othersecret": &testEPBSProposalProvider{
+				err: errors.New("request to https://user:othersecret@example.com/path?token=othersecret failed"),
+			},
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.NoError(t, err)
+	providerName, ok := response.Metadata["vouch.provider"].(string)
+	require.True(t, ok)
+	require.NotEqual(t, providerAddress, providerName)
+	require.NotContains(t, providerName, "secret")
+	for _, entry := range capture.Entries() {
+		provider, _ := entry["provider"].(string)
+		require.NotContains(t, provider, "secret")
+		errorText, _ := entry["error"].(string)
+		require.NotContains(t, errorText, "secret")
+	}
+}
+
+func TestEPBSProposalLogsProviderError(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.TraceLevel),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"failed-provider": &testEPBSProposalProvider{err: errors.New("connection failed")},
+		}),
+		best.WithTimeout(10*time.Millisecond),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+	require.Nil(t, response)
+	require.EqualError(t, err, "no ePBS proposals received")
+	require.True(t, capture.HasLog(map[string]any{
+		"message":             "ePBS proposal provider completed",
+		"slot":                uint64(1),
+		"provider":            "failed-provider",
+		"source":              "unknown",
+		"value_known":         false,
+		"execution_value":     "unknown",
+		"payload_included":    false,
+		"builder_url_present": false,
+		"outcome":             "error",
+		"rejection_reason":    "provider_error",
+	}))
+	require.True(t, capture.HasLog(map[string]any{
+		"message":               "ePBS proposal selection completed",
+		"slot":                  uint64(1),
+		"outcome":               "no_valid_proposal",
+		"responded":             0,
+		"errored":               1,
+		"timed_out":             0,
+		"soft_deadline_reached": false,
+		"hard_deadline_reached": false,
+	}))
+}
+
+func TestEPBSProposalLogsProviderTimeout(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.TraceLevel),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"slow-provider":     &testEPBSProposalProvider{waitForCancellation: true},
+			"deadline-provider": &testEPBSProposalProvider{err: context.DeadlineExceeded},
+		}),
+		best.WithTimeout(20*time.Millisecond),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+	require.Nil(t, response)
+	require.EqualError(t, err, "no ePBS proposals received")
+	require.True(t, capture.HasLog(map[string]any{
+		"message":          "ePBS proposal provider completed",
+		"provider":         "slow-provider",
+		"outcome":          "timeout",
+		"rejection_reason": "deadline_reached",
+	}))
+	require.True(t, capture.HasLog(map[string]any{
+		"message":          "ePBS proposal provider completed",
+		"provider":         "deadline-provider",
+		"outcome":          "timeout",
+		"rejection_reason": "deadline_reached",
+	}))
+	require.True(t, capture.HasLog(map[string]any{
+		"message":          "ePBS proposal selection completed",
+		"slot":             uint64(1),
+		"outcome":          "timeout",
+		"deadline_reached": true,
+	}))
+}
+
+func TestEPBSProposalGatesBuilderBidsByProviderReadiness(t *testing.T) {
+	builderBid := func(value int64, proposerIndex phase0.ValidatorIndex) *api.VersionedEPBSProposal {
+		proposal := testGloasProposalWithoutPayload(value, bellatrix.ExecutionAddress{0x01})
+		proposal.ExecutionValue = big.NewInt(value)
+		proposal.Gloas.ProposerIndex = proposerIndex
+		proposal.Gloas.Body.SignedExecutionPayloadBid.Message.BuilderIndex = 1
+
+		return proposal
+	}
+	readyBid := builderBid(1, 7)
+	tests := []struct {
+		name      string
+		providers map[string]*api.VersionedEPBSProposal
+		ready     map[readyDuty]bool
+		expected  *api.VersionedEPBSProposal
+		err       string
+	}{
+		{
+			name:      "Ready",
+			providers: map[string]*api.VersionedEPBSProposal{"ready": readyBid},
+			ready:     map[readyDuty]bool{{provider: "ready", slot: 1, index: 7}: true},
+			expected:  readyBid,
+		},
+		{
+			name:      "Unready",
+			providers: map[string]*api.VersionedEPBSProposal{"unready": builderBid(1, 7)},
+			err:       "no ePBS proposals received",
+		},
+		{
+			name:      "ReadyForOtherSlot",
+			providers: map[string]*api.VersionedEPBSProposal{"ready": builderBid(1, 7)},
+			ready:     map[readyDuty]bool{{provider: "ready", slot: 2, index: 7}: true},
+			err:       "no ePBS proposals received",
+		},
+		{
+			name:      "ReadyForOtherValidator",
+			providers: map[string]*api.VersionedEPBSProposal{"ready": builderBid(1, 7)},
+			ready:     map[readyDuty]bool{{provider: "ready", slot: 1, index: 8}: true},
+			err:       "no ePBS proposals received",
+		},
+		{
+			name: "HigherValueFromUnreadyProviderDiscarded",
+			providers: map[string]*api.VersionedEPBSProposal{
+				"ready":   readyBid,
+				"unready": builderBid(2, 7),
+			},
+			ready:    map[readyDuty]bool{{provider: "ready", slot: 1, index: 7}: true},
+			expected: readyBid,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			specProvider := mock.NewSpecProvider()
+			chainTime, err := standardchaintime.New(ctx,
+				standardchaintime.WithLogLevel(zerolog.Disabled),
+				standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+				standardchaintime.WithSpecProvider(specProvider),
+			)
+			require.NoError(t, err)
+			providers := make(map[string]eth2client.MultiForkProposalProvider, len(test.providers))
+			for name, proposal := range test.providers {
+				providers[name] = &testEPBSProposalProvider{proposal: proposal}
+			}
+			service, err := best.New(ctx,
+				best.WithLogLevel(zerolog.Disabled),
+				best.WithClientMonitor(nullmetrics.New()),
+				best.WithProcessConcurrency(int64(len(providers))),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
+				best.WithProposalProviders(providers),
+				best.WithProviderReadiness(&providerReadiness{ready: test.ready}),
+				best.WithTimeout(time.Second),
+				best.WithBlockRootToSlotCache(mockcache.New(map[phase0.Root]phase0.Slot{}).(cache.BlockRootToSlotProvider)),
+			)
+			require.NoError(t, err)
+
+			response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+			if test.err != "" {
+				require.Nil(t, response)
+				require.EqualError(t, err, test.err)
+
+				return
+			}
+			require.NoError(t, err)
+			require.Same(t, test.expected, response.Data)
+		})
+	}
+}
+
+func TestEPBSProposalReturnsIncludedCandidateAtSoftTimeout(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	includePayload := true
+	candidate := &api.VersionedEPBSProposal{ExecutionPayloadIncluded: true}
+	const timeout = 200 * time.Millisecond
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.TraceLevel),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"included": &testEPBSProposalProvider{proposal: candidate},
+			"error":    &testEPBSProposalProvider{err: errors.New("failed")},
+			"slow":     &testEPBSProposalProvider{waitForCancellation: true},
+		}),
+		best.WithTimeout(timeout),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	started := time.Now()
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{IncludePayload: &includePayload})
+	elapsed := time.Since(started)
+	require.NoError(t, err)
+	require.Same(t, candidate, response.Data)
+	require.Less(t, elapsed, 3*timeout/4)
+	require.True(t, capture.HasLog(map[string]any{
+		"message":          "ePBS proposal provider completed",
+		"provider":         "slow",
+		"outcome":          "timeout",
+		"rejection_reason": "soft_deadline_reached",
+	}))
+	require.NotContains(t, response.Metadata, "vouch.fallback")
+	for _, entry := range capture.Entries() {
+		require.NotContains(t, entry, "fallback")
+	}
+}
+
+func TestEPBSProposalPrefersIncludedCandidate(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	includePayload := true
+	includedCandidate := &api.VersionedEPBSProposal{
+		ExecutionPayloadIncluded: true,
+		ConsensusValue:           big.NewInt(1),
+	}
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"included": &testEPBSProposalProvider{proposal: includedCandidate},
+			"external": &testEPBSProposalProvider{proposal: &api.VersionedEPBSProposal{
+				ConsensusValue: big.NewInt(100),
+			}},
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{IncludePayload: &includePayload})
+	require.NoError(t, err)
+	require.Same(t, includedCandidate, response.Data)
+}
+
+func TestEPBSProposalRejectsZeroFeeRecipient(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	zeroFeeCandidate := testGloasProposal(100, bellatrix.ExecutionAddress{})
+	validCandidate := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(2),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"zero-fee": &testEPBSProposalProvider{proposal: zeroFeeCandidate},
+			"valid":    &testEPBSProposalProvider{proposal: validCandidate},
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.NoError(t, err)
+	require.Same(t, validCandidate, response.Data)
+}
+
+func TestEPBSProposalRejectsZeroFeeRecipientWithoutPayload(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	// The zero-fee bid is worth more, so only the fee recipient check keeps it from winning.
+	zeroFeeCandidate := testGloasProposalWithoutPayload(100, bellatrix.ExecutionAddress{})
+	zeroFeeCandidate.ExecutionValue = big.NewInt(0)
+	validCandidate := testGloasProposalWithoutPayload(1, bellatrix.ExecutionAddress{0x01})
+	validCandidate.ExecutionValue = big.NewInt(0)
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(2),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"zero-fee": &testEPBSProposalProvider{proposal: zeroFeeCandidate},
+			"valid":    &testEPBSProposalProvider{proposal: validCandidate},
+		}),
+		best.WithProviderReadiness(&providerReadiness{ready: map[readyDuty]bool{
+			{provider: "zero-fee"}: true,
+			{provider: "valid"}:    true,
+		}}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.NoError(t, err)
+	require.Same(t, validCandidate, response.Data)
+}
+
+func TestEPBSProposalDoesNotWeightExecutionPayloadGas(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	consensusCandidate := testGloasProposal(2, bellatrix.ExecutionAddress{0x01})
+	consensusCandidate.ExecutionValue = big.NewInt(2)
+	executionCandidate := testGloasProposal(0, bellatrix.ExecutionAddress{0x02})
+	executionCandidate.ConsensusValue = nil
+	executionCandidate.ExecutionValue = big.NewInt(0)
+	executionCandidate.GloasContents.ExecutionPayloadEnvelope = &gloas.ExecutionPayloadEnvelope{
+		Payload: &gloas.ExecutionPayload{GasUsed: 3},
+	}
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.WarnLevel),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(2),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"consensus": &testEPBSProposalProvider{proposal: consensusCandidate},
+			"execution": &testEPBSProposalProvider{proposal: executionCandidate},
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+		best.WithExecutionPayloadFactor(1),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.NoError(t, err)
+	require.Same(t, consensusCandidate, response.Data)
+}
+
+func TestEPBSProposalComparesLargeValuesExactly(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	base := new(big.Int).Lsh(big.NewInt(1), 54)
+	lowerValueCandidate := testGloasProposal(0, bellatrix.ExecutionAddress{0x01})
+	lowerValueCandidate.ExecutionValue = new(big.Int).Add(base, big.NewInt(1))
+	higherValueCandidate := testGloasProposal(0, bellatrix.ExecutionAddress{0x02})
+	higherValueCandidate.ExecutionValue = new(big.Int).Add(base, big.NewInt(2))
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(2),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"lower":  &testEPBSProposalProvider{proposal: lowerValueCandidate},
+			"higher": &testEPBSProposalProvider{proposal: higherValueCandidate, delay: 10 * time.Millisecond},
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+	require.NoError(t, err)
+	require.Same(t, higherValueCandidate, response.Data)
+}
+
+func TestEPBSProposalRejectsNilData(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	validCandidate := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.TraceLevel),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(2),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"nil":   &testEPBSProposalProvider{},
+			"valid": &testEPBSProposalProvider{proposal: validCandidate},
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	includePayload := true
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{IncludePayload: &includePayload})
+	require.NoError(t, err)
+	require.Same(t, validCandidate, response.Data)
+	require.True(t, capture.HasLog(map[string]any{
+		"message":          "ePBS proposal provider completed",
+		"provider":         "nil",
+		"outcome":          "rejected",
+		"rejection_reason": "empty_response",
+	}))
+}
+
+func TestEPBSProposalRejectsMalformedIncludedGloasProposal(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	tests := []struct {
+		name     string
+		proposal *api.VersionedEPBSProposal
+	}{
+		{
+			name: "MissingGloasContents",
+			proposal: &api.VersionedEPBSProposal{
+				Version:                  spec.DataVersionGloas,
+				ExecutionPayloadIncluded: true,
+			},
+		},
+		{
+			name: "MissingBlock",
+			proposal: &api.VersionedEPBSProposal{
+				Version:                  spec.DataVersionGloas,
+				ExecutionPayloadIncluded: true,
+				GloasContents:            &apiv1gloas.BlockContents{},
+			},
+		},
+		{
+			name: "MissingBody",
+			proposal: &api.VersionedEPBSProposal{
+				Version:                  spec.DataVersionGloas,
+				ExecutionPayloadIncluded: true,
+				GloasContents:            &apiv1gloas.BlockContents{Block: &gloas.BeaconBlock{}},
+			},
+		},
+		{
+			name: "MissingSignedExecutionPayloadBid",
+			proposal: &api.VersionedEPBSProposal{
+				Version:                  spec.DataVersionGloas,
+				ExecutionPayloadIncluded: true,
+				GloasContents: &apiv1gloas.BlockContents{Block: &gloas.BeaconBlock{
+					Body: &gloas.BeaconBlockBody{},
+				}},
+			},
+		},
+		{
+			name: "MissingExecutionPayloadBidMessage",
+			proposal: &api.VersionedEPBSProposal{
+				Version:                  spec.DataVersionGloas,
+				ExecutionPayloadIncluded: true,
+				GloasContents: &apiv1gloas.BlockContents{Block: &gloas.BeaconBlock{
+					Body: &gloas.BeaconBlockBody{
+						SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{},
+					},
+				}},
+			},
+		},
+		{
+			name: "CachedMissingBlock",
+			proposal: &api.VersionedEPBSProposal{
+				Version: spec.DataVersionGloas,
+			},
+		},
+		{
+			name: "CachedMissingBody",
+			proposal: &api.VersionedEPBSProposal{
+				Version: spec.DataVersionGloas,
+				Gloas:   &gloas.BeaconBlock{},
+			},
+		},
+		{
+			name: "CachedMissingSignedExecutionPayloadBid",
+			proposal: &api.VersionedEPBSProposal{
+				Version: spec.DataVersionGloas,
+				Gloas: &gloas.BeaconBlock{
+					Body: &gloas.BeaconBlockBody{},
+				},
+			},
+		},
+		{
+			name: "CachedMissingExecutionPayloadBidMessage",
+			proposal: &api.VersionedEPBSProposal{
+				Version: spec.DataVersionGloas,
+				Gloas: &gloas.BeaconBlock{
+					Body: &gloas.BeaconBlockBody{
+						SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{},
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			validCandidate := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
+			service, err := best.New(ctx,
+				best.WithLogLevel(zerolog.Disabled),
+				best.WithClientMonitor(nullmetrics.New()),
+				best.WithProcessConcurrency(2),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
+				best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+					"malformed": &testEPBSProposalProvider{proposal: test.proposal},
+					"valid":     &testEPBSProposalProvider{proposal: validCandidate},
+				}),
+				best.WithTimeout(time.Second),
+				best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+			)
+			require.NoError(t, err)
+
+			response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{})
+			require.NoError(t, err)
+			require.Same(t, validCandidate, response.Data)
+		})
+	}
+}
+
+// testGloasProposal returns a self-built proposal: it carries the payload, which only the
+// beacon node's own build can do.
+func testGloasProposal(value int64, feeRecipient bellatrix.ExecutionAddress) *api.VersionedEPBSProposal {
+	return &api.VersionedEPBSProposal{
+		Version:                  spec.DataVersionGloas,
+		ExecutionPayloadIncluded: true,
+		ConsensusValue:           big.NewInt(value),
+		GloasContents: &apiv1gloas.BlockContents{
+			Block: &gloas.BeaconBlock{
+				Body: &gloas.BeaconBlockBody{
+					SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{
+						Message: &gloas.ExecutionPayloadBid{BuilderIndex: gloas.BuilderIndexSelfBuild, FeeRecipient: feeRecipient},
+					},
+				},
+			},
+		},
+	}
+}
+
+// testGloasProposalWithoutPayload returns a builder-backed proposal, which carries only the
+// block: the winning builder reveals the payload itself.
+func testGloasProposalWithoutPayload(value int64, feeRecipient bellatrix.ExecutionAddress) *api.VersionedEPBSProposal {
+	proposal := testGloasProposal(value, feeRecipient)
+	proposal.Gloas = proposal.GloasContents.Block
+	proposal.GloasContents = nil
+	proposal.ExecutionPayloadIncluded = false
+	proposal.Gloas.Body.SignedExecutionPayloadBid.Message.BuilderIndex = 7
+
+	return proposal
+}
+
+func TestEPBSProposalExpandsClientGraffitiPerProvider(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	firstProvider := &clientGraffitiEPBSProposalProvider{
+		client:   "first",
+		graffiti: make(chan [32]byte, 1),
+	}
+	const longClient = "second-client-version-with-more-than-thirty-two-bytes"
+	secondProvider := &clientGraffitiEPBSProposalProvider{
+		client:   longClient,
+		graffiti: make(chan [32]byte, 1),
+	}
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(2),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"first":  firstProvider,
+			"second": secondProvider,
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+	var graffiti [32]byte
+	copy(graffiti[:], "{{CLIENT}}")
+
+	_, err = service.EPBSProposal(ctx, &api.EPBSProposalOpts{Graffiti: graffiti})
+	require.NoError(t, err)
+	var expectedFirst [32]byte
+	copy(expectedFirst[:], "first")
+	require.Equal(t, expectedFirst, <-firstProvider.graffiti)
+	var expectedSecond [32]byte
+	copy(expectedSecond[:], longClient)
+	require.Equal(t, expectedSecond, <-secondProvider.graffiti)
+}
+
+func TestEPBSProposalPreservesGraffitiWhenClientLookupFails(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	provider := &clientGraffitiEPBSProposalProvider{
+		nodeClientErr: errors.New("node client unavailable"),
+		graffiti:      make(chan [32]byte, 1),
+	}
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"provider": provider,
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	var graffiti [32]byte
+	copy(graffiti[:], "configured {{CLIENT}}")
+	_, err = service.EPBSProposal(ctx, &api.EPBSProposalOpts{Graffiti: graffiti})
+	require.NoError(t, err)
+	require.Equal(t, graffiti, <-provider.graffiti)
+}
+
+func TestEPBSProposalStartsProvidersWhileGraffitiClientLookupIsSlow(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	slowProvider := &slowClientGraffitiEPBSProposalProvider{
+		nodeClientStarted: make(chan struct{}),
+		release:           make(chan struct{}),
+	}
+	releaseSlowProvider := slowProvider.release
+	t.Cleanup(func() {
+		select {
+		case <-releaseSlowProvider:
+		default:
+			close(releaseSlowProvider)
+		}
+	})
+	healthyProvider := &waitingClientGraffitiEPBSProposalProvider{
+		waitFor:         slowProvider.nodeClientStarted,
+		proposalStarted: make(chan struct{}),
+	}
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(2),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"slow":    slowProvider,
+			"healthy": healthyProvider,
+		}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+	var graffiti [32]byte
+	copy(graffiti[:], "{{CLIENT}}")
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Graffiti: graffiti})
+		errCh <- err
+	}()
+
+	select {
+	case <-slowProvider.nodeClientStarted:
+	case <-time.After(200 * time.Millisecond):
+		require.Fail(t, "slow provider client lookup did not start")
+	}
+	select {
+	case <-healthyProvider.proposalStarted:
+	case <-time.After(200 * time.Millisecond):
+		require.Fail(t, "healthy provider proposal did not start promptly")
+	}
+	close(releaseSlowProvider)
+	require.NoError(t, <-errCh)
+}
+
+type readyDuty struct {
+	provider string
+	slot     phase0.Slot
+	index    phase0.ValidatorIndex
+}
+
+type providerReadiness struct {
+	ready map[readyDuty]bool
+}
+
+func (p *providerReadiness) ProviderReady(provider string, slot phase0.Slot, index phase0.ValidatorIndex) bool {
+	return p.ready[readyDuty{provider: provider, slot: slot, index: index}]
+}
+
+type testEPBSProposalProvider struct {
+	proposal            *api.VersionedEPBSProposal
+	metadata            map[string]any
+	opts                *api.EPBSProposalOpts
+	err                 error
+	delay               time.Duration
+	waitForCancellation bool
+}
+
+type clientGraffitiEPBSProposalProvider struct {
+	client        string
+	nodeClientErr error
+	graffiti      chan [32]byte
+}
+
+func (p *clientGraffitiEPBSProposalProvider) Proposal(ctx context.Context,
+	opts *api.ProposalOpts,
+) (*api.Response[*api.VersionedProposal], error) {
+	p.graffiti <- opts.Graffiti
+
+	return mock.NewProposalProvider().Proposal(ctx, opts)
+}
+
+func (p *clientGraffitiEPBSProposalProvider) EPBSProposal(
+	_ context.Context,
+	opts *api.EPBSProposalOpts,
+) (*api.Response[*api.VersionedEPBSProposal], error) {
+	p.graffiti <- opts.Graffiti
+	return &api.Response[*api.VersionedEPBSProposal]{Data: &api.VersionedEPBSProposal{}}, nil
+}
+
+func (p *clientGraffitiEPBSProposalProvider) NodeClient(
+	_ context.Context,
+) (*api.Response[string], error) {
+	if p.nodeClientErr != nil {
+		return nil, p.nodeClientErr
+	}
+	return &api.Response[string]{Data: p.client}, nil
+}
+
+var _ eth2client.NodeClientProvider = (*clientGraffitiEPBSProposalProvider)(nil)
+
+type slowClientGraffitiEPBSProposalProvider struct {
+	nodeClientStarted chan struct{}
+	release           chan struct{}
+	startOnce         sync.Once
+}
+
+func (*slowClientGraffitiEPBSProposalProvider) Proposal(
+	_ context.Context,
+	_ *api.ProposalOpts,
+) (*api.Response[*api.VersionedProposal], error) {
+	return nil, nil
+}
+
+func (*slowClientGraffitiEPBSProposalProvider) EPBSProposal(
+	_ context.Context,
+	_ *api.EPBSProposalOpts,
+) (*api.Response[*api.VersionedEPBSProposal], error) {
+	return &api.Response[*api.VersionedEPBSProposal]{Data: &api.VersionedEPBSProposal{}}, nil
+}
+
+func (p *slowClientGraffitiEPBSProposalProvider) NodeClient(
+	ctx context.Context,
+) (*api.Response[string], error) {
+	p.startOnce.Do(func() {
+		close(p.nodeClientStarted)
+	})
+	select {
+	case <-p.release:
+		return &api.Response[string]{Data: "slow"}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+var _ eth2client.NodeClientProvider = (*slowClientGraffitiEPBSProposalProvider)(nil)
+
+type waitingClientGraffitiEPBSProposalProvider struct {
+	waitFor         <-chan struct{}
+	proposalStarted chan struct{}
+	proposalOnce    sync.Once
+}
+
+func (*waitingClientGraffitiEPBSProposalProvider) Proposal(
+	_ context.Context,
+	_ *api.ProposalOpts,
+) (*api.Response[*api.VersionedProposal], error) {
+	return nil, nil
+}
+
+func (p *waitingClientGraffitiEPBSProposalProvider) EPBSProposal(
+	_ context.Context,
+	_ *api.EPBSProposalOpts,
+) (*api.Response[*api.VersionedEPBSProposal], error) {
+	p.proposalOnce.Do(func() {
+		close(p.proposalStarted)
+	})
+	return &api.Response[*api.VersionedEPBSProposal]{Data: &api.VersionedEPBSProposal{}}, nil
+}
+
+func (p *waitingClientGraffitiEPBSProposalProvider) NodeClient(
+	ctx context.Context,
+) (*api.Response[string], error) {
+	select {
+	case <-p.waitFor:
+		return &api.Response[string]{Data: "healthy"}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+var _ eth2client.NodeClientProvider = (*waitingClientGraffitiEPBSProposalProvider)(nil)
+
+func (*testEPBSProposalProvider) Proposal(_ context.Context, _ *api.ProposalOpts) (*api.Response[*api.VersionedProposal], error) {
+	return nil, nil
+}
+
+func (p *testEPBSProposalProvider) EPBSProposal(ctx context.Context,
+	opts *api.EPBSProposalOpts,
+) (
+	*api.Response[*api.VersionedEPBSProposal],
+	error,
+) {
+	p.opts = opts
+	if p.delay != 0 {
+		time.Sleep(p.delay)
+	}
+	if p.waitForCancellation {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	if p.err != nil {
+		return nil, p.err
+	}
+
+	return &api.Response[*api.VersionedEPBSProposal]{Data: p.proposal, Metadata: p.metadata}, nil
+}
+
+// TestEPBSProposalRecordsDegradedSelectionWithUnknownValues proves that when no valid
+// response reports a value, the strategy still selects one but records that the selection
+// was made without value information.  A selection known to be economically blind is worth
+// distinguishing from a normal one.
+func TestEPBSProposalRecordsDegradedSelectionWithUnknownValues(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+
+	tests := []struct {
+		name     string
+		value    *big.Int
+		degraded bool
+	}{
+		{
+			name:     "AllUnknown",
+			degraded: true,
+		},
+		{
+			name:  "KnownValue",
+			value: big.NewInt(2),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			capture := logger.NewLogCapture()
+			proposal := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
+			proposal.ExecutionValue = test.value
+			service, err := best.New(ctx,
+				best.WithLogLevel(zerolog.TraceLevel),
+				best.WithClientMonitor(nullmetrics.New()),
+				best.WithProcessConcurrency(1),
+				best.WithChainTimeService(chainTime),
+				best.WithSpecProvider(specProvider),
+				best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+					"one": &testEPBSProposalProvider{proposal: proposal},
+				}),
+				best.WithTimeout(time.Second),
+				best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+			)
+			require.NoError(t, err)
+
+			response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+			require.NoError(t, err)
+			require.Same(t, proposal, response.Data)
+			require.NotContains(t, response.Metadata, "vouch.fallback")
+			require.True(t, capture.HasLog(map[string]any{
+				"message":     "ePBS proposal selection completed",
+				"value_known": !test.degraded,
+			}), "%v", capture.Entries())
+			for _, entry := range capture.Entries() {
+				require.NotContains(t, entry, "fallback")
+			}
+		})
+	}
+}
+
+// TestEPBSProposalAcceptsBuilderBackedProposal proves that a proposal the beacon node
+// awarded to a P2P builder is a valid candidate even though Vouch asked for the payload:
+// the node never holds a builder's payload, so it cannot return one.
+func TestEPBSProposalAcceptsBuilderBackedProposal(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	proposal := testGloasProposalWithoutPayload(1, bellatrix.ExecutionAddress{0x01})
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"builder": &testEPBSProposalProvider{proposal: proposal},
+		}),
+		best.WithProviderReadiness(&providerReadiness{ready: map[readyDuty]bool{{provider: "builder", slot: 1}: true}}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	includePayload := true
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, IncludePayload: &includePayload})
+	require.NoError(t, err)
+	require.Same(t, proposal, response.Data)
+}
+
+// TestEPBSProposalRejectsBuilderBackedProposalWithPayload proves that a builder-backed
+// proposal claiming to carry an execution payload is discarded: the two cannot both be true.
+func TestEPBSProposalRejectsBuilderBackedProposalWithPayload(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	inconsistent := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
+	inconsistent.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = 7
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"inconsistent": &testEPBSProposalProvider{proposal: inconsistent},
+		}),
+		// The provider is ready, so only the payload check can reject the proposal.
+		best.WithProviderReadiness(&providerReadiness{ready: map[readyDuty]bool{{provider: "inconsistent", slot: 1}: true}}),
+		best.WithTimeout(100*time.Millisecond),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	includePayload := true
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, IncludePayload: &includePayload})
+	require.Nil(t, response)
+	require.EqualError(t, err, "no ePBS proposals received")
+}
+
+// TestEPBSProposalForwardsBuilderConfigUnchanged proves that the strategy passes the
+// operator's auction policy to each beacon node as given and ranks the results on their raw
+// values: the boost is the beacon node's to apply, and applying it again here would express a
+// preference nobody configured.
+func TestEPBSProposalForwardsBuilderConfigUnchanged(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	// With a boost of 50 applied again, the builder bid would drop to 50 and lose to the
+	// self-build's 90.
+	selfBuilt := testGloasProposal(0, bellatrix.ExecutionAddress{0x01})
+	selfBuilt.ExecutionValue = big.NewInt(90)
+	builderBacked := testGloasProposalWithoutPayload(0, bellatrix.ExecutionAddress{0x01})
+	builderBacked.ExecutionValue = big.NewInt(100)
+	localProvider := &testEPBSProposalProvider{proposal: selfBuilt}
+	builderProvider := &testEPBSProposalProvider{proposal: builderBacked}
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(2),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"local":   localProvider,
+			"builder": builderProvider,
+		}),
+		best.WithProviderReadiness(&providerReadiness{ready: map[readyDuty]bool{{provider: "builder", slot: 1}: true}}),
+		best.WithTimeout(time.Second),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	builderConfig := &gloas.BuilderConfig{
+		MinBid:             phase0.Gwei(12345),
+		BuilderBoostFactor: 50,
+		Builders:           []*gloas.BuilderEntry{},
+	}
+	includePayload := true
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, IncludePayload: &includePayload, BuilderConfig: builderConfig})
+	require.NoError(t, err)
+	require.Same(t, builderBacked, response.Data)
+
+	for _, provider := range []*testEPBSProposalProvider{localProvider, builderProvider} {
+		require.NotNil(t, provider.opts)
+		require.Same(t, builderConfig, provider.opts.BuilderConfig)
+		require.Equal(t, uint64(50), provider.opts.BuilderConfig.BuilderBoostFactor)
+	}
+}
+
+// TestEPBSProposalRejectsSelfBuiltProposalWithoutPayload proves that a self-built proposal
+// that did not carry the requested payload is discarded: only its producing node could
+// publish it, so it is unusable here.
+func TestEPBSProposalRejectsSelfBuiltProposalWithoutPayload(t *testing.T) {
+	ctx := context.Background()
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	selfBuilt := testGloasProposalWithoutPayload(1, bellatrix.ExecutionAddress{0x01})
+	selfBuilt.Gloas.Body.SignedExecutionPayloadBid.Message.BuilderIndex = gloas.BuilderIndexSelfBuild
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.Disabled),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(map[string]eth2client.MultiForkProposalProvider{
+			"self-built": &testEPBSProposalProvider{proposal: selfBuilt},
+		}),
+		best.WithTimeout(100*time.Millisecond),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	includePayload := true
+	response, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1, IncludePayload: &includePayload})
+	require.Nil(t, response)
+	require.EqualError(t, err, "no ePBS proposals received")
+}
+
+// rawLogCapture keeps log lines as written, because LogCapture's map hides duplicate keys.
+type rawLogCapture struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+func (c *rawLogCapture) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lines = append(c.lines, string(p))
+
+	return len(p), nil
+}
+
+func (c *rawLogCapture) linesWith(message string) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	matching := make([]string, 0)
+	for _, line := range c.lines {
+		if strings.Contains(line, `"message":"`+message+`"`) {
+			matching = append(matching, line)
+		}
+	}
+
+	return matching
+}
+
+func newTestEPBSService(ctx context.Context, t *testing.T, providers map[string]eth2client.MultiForkProposalProvider) *best.Service {
+	t.Helper()
+
+	specProvider := mock.NewSpecProvider()
+	chainTime, err := standardchaintime.New(ctx,
+		standardchaintime.WithLogLevel(zerolog.Disabled),
+		standardchaintime.WithGenesisProvider(mock.NewGenesisProvider(time.Now())),
+		standardchaintime.WithSpecProvider(specProvider),
+	)
+	require.NoError(t, err)
+	cacheSvc := mockcache.New(map[phase0.Root]phase0.Slot{})
+	service, err := best.New(ctx,
+		best.WithLogLevel(zerolog.TraceLevel),
+		best.WithClientMonitor(nullmetrics.New()),
+		best.WithProcessConcurrency(1),
+		best.WithChainTimeService(chainTime),
+		best.WithSpecProvider(specProvider),
+		best.WithProposalProviders(providers),
+		best.WithProviderReadiness(&providerReadiness{ready: map[readyDuty]bool{{provider: "node", slot: 1}: true}}),
+		best.WithTimeout(100*time.Millisecond),
+		best.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
+	)
+	require.NoError(t, err)
+
+	return service
+}
+
+func TestEPBSProposalSelectionLogHasNoDuplicateKeys(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider *testEPBSProposalProvider
+	}{
+		{
+			name:     "Selected",
+			provider: &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x01})},
+		},
+		{
+			name:     "Failed",
+			provider: &testEPBSProposalProvider{err: errors.New("boom")},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			raw := &rawLogCapture{}
+			zerolog.SetGlobalLevel(zerolog.TraceLevel)
+			zerologger.Logger = zerolog.New(raw)
+			service := newTestEPBSService(ctx, t, map[string]eth2client.MultiForkProposalProvider{"node": test.provider})
+
+			_, _ = service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+			lines := raw.linesWith("ePBS proposal selection completed")
+			require.Len(t, lines, 1)
+			for _, key := range []string{"request_id", "slot"} {
+				require.Equal(t, 1, strings.Count(lines[0], `"`+key+`":`), "%s in %s", key, lines[0])
+			}
+		})
+	}
+}
+
+func TestEPBSProposalLogsRejectedProposalDetails(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	inconsistent := testGloasProposal(1, bellatrix.ExecutionAddress{0x01})
+	inconsistent.GloasContents.Block.Body.SignedExecutionPayloadBid.Message.BuilderIndex = 7
+	service := newTestEPBSService(ctx, t, map[string]eth2client.MultiForkProposalProvider{
+		"node": &testEPBSProposalProvider{proposal: inconsistent},
+	})
+
+	_, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+	require.Error(t, err)
+	require.True(t, capture.HasLog(map[string]any{
+		"message":          "ePBS proposal provider completed",
+		"outcome":          "rejected",
+		"rejection_reason": "builder_payload_included",
+		"builder_index":    uint64(7),
+		"payload_included": true,
+		"source":           "p2p_builder",
+	}), "%v", capture.Entries())
+}
+
+func TestEPBSProposalOmitsBuilderIndexWithoutBid(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	service := newTestEPBSService(ctx, t, map[string]eth2client.MultiForkProposalProvider{
+		"node": &testEPBSProposalProvider{err: errors.New("boom")},
+	})
+
+	_, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+	require.Error(t, err)
+	found := false
+	for _, entry := range capture.Entries() {
+		if entry["message"] == "ePBS proposal provider completed" {
+			found = true
+			require.NotContains(t, entry, "builder_index")
+			require.Equal(t, "provider_error", entry["rejection_reason"])
+		}
+	}
+	require.True(t, found)
+}
+
+func TestEPBSProposalLogsStrategyID(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	service := newTestEPBSService(ctx, t, map[string]eth2client.MultiForkProposalProvider{
+		"node": &testEPBSProposalProvider{proposal: testGloasProposal(1, bellatrix.ExecutionAddress{0x01})},
+	})
+
+	_, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+	require.NoError(t, err)
+	for _, entry := range capture.Entries() {
+		if entry["message"] == "ePBS proposal selection completed" {
+			require.NotEmpty(t, entry["strategy_id"])
+			return
+		}
+	}
+	require.Fail(t, "no selection log", "%v", capture.Entries())
+}
+
+func TestEPBSProposalFailureSpansShareCorrelation(t *testing.T) {
+	ctx := context.Background()
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+	previousTracerProvider := otel.GetTracerProvider()
+	otel.SetTracerProvider(tracerProvider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousTracerProvider)
+		require.NoError(t, tracerProvider.Shutdown(ctx))
+	})
+	service := newTestEPBSService(ctx, t, map[string]eth2client.MultiForkProposalProvider{
+		"node": &testEPBSProposalProvider{err: errors.New("boom")},
+	})
+
+	_, err := service.EPBSProposal(ctx, &api.EPBSProposalOpts{Slot: 1})
+	require.Error(t, err)
+	spans := make(map[string]map[string]any)
+	for _, recordedSpan := range spanRecorder.Ended() {
+		attributes := make(map[string]any)
+		for _, attr := range recordedSpan.Attributes() {
+			attributes[string(attr.Key)] = attr.Value.AsInterface()
+		}
+		spans[recordedSpan.Name()] = attributes
+	}
+	require.Contains(t, spans, "EPBSProposal")
+	require.Contains(t, spans, "ePBSBeaconBlockProposal")
+	require.NotEmpty(t, spans["EPBSProposal"]["request_id"])
+	require.Equal(t, spans["EPBSProposal"]["request_id"], spans["ePBSBeaconBlockProposal"]["request_id"])
+	require.Equal(t, int64(1), spans["ePBSBeaconBlockProposal"]["slot"])
+	require.Equal(t, "node", spans["ePBSBeaconBlockProposal"]["provider"])
+	require.Equal(t, "unknown", spans["EPBSProposal"]["proposal_root"])
+}

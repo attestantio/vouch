@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -18,6 +18,7 @@ import (
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -26,6 +27,7 @@ type parameters struct {
 	logLevel                              zerolog.Level
 	clientMonitor                         metrics.ClientMonitor
 	proposalSubmitter                     eth2client.ProposalSubmitter
+	executionPayloadEnvelopeSubmitter     eth2client.ExecutionPayloadEnvelopeSubmitter
 	attestationsSubmitter                 eth2client.AttestationsSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
@@ -33,6 +35,9 @@ type parameters struct {
 	syncCommitteeMessagesSubmitter        eth2client.SyncCommitteeMessagesSubmitter
 	syncCommitteeSubscriptionsSubmitter   eth2client.SyncCommitteeSubscriptionsSubmitter
 	syncCommitteeContributionsSubmitter   eth2client.SyncCommitteeContributionsSubmitter
+	payloadAttestationMessagesSubmitter   submitter.PayloadAttestationMessagesSubmitter
+	proposerPreferencesSubmitter          eth2client.ProposerPreferencesSubmitter
+	proposerPreferencesSubmitters         map[string]eth2client.ProposerPreferencesSubmitter
 }
 
 // Parameter is the interface for service parameters.
@@ -64,6 +69,13 @@ func WithClientMonitor(clientMonitor metrics.ClientMonitor) Parameter {
 func WithProposalSubmitter(submitter eth2client.ProposalSubmitter) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalSubmitter = submitter
+	})
+}
+
+// WithExecutionPayloadEnvelopeSubmitter sets the execution payload envelope submitter.
+func WithExecutionPayloadEnvelopeSubmitter(submitter eth2client.ExecutionPayloadEnvelopeSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.executionPayloadEnvelopeSubmitter = submitter
 	})
 }
 
@@ -116,6 +128,27 @@ func WithProposalPreparationsSubmitter(submitter eth2client.ProposalPreparations
 	})
 }
 
+// WithPayloadAttestationMessagesSubmitter sets the payload attestation messages submitter.
+func WithPayloadAttestationMessagesSubmitter(submitter submitter.PayloadAttestationMessagesSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.payloadAttestationMessagesSubmitter = submitter
+	})
+}
+
+// WithProposerPreferencesSubmitter sets the proposer preferences submitter.
+func WithProposerPreferencesSubmitter(submitter eth2client.ProposerPreferencesSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.proposerPreferencesSubmitter = submitter
+	})
+}
+
+// WithProposerPreferencesSubmitters sets the proposer preferences submitters.
+func WithProposerPreferencesSubmitters(submitters map[string]eth2client.ProposerPreferencesSubmitter) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.proposerPreferencesSubmitters = submitters
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -133,6 +166,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.proposalSubmitter == nil {
 		return nil, errors.New("no proposal submitter specified")
+	}
+	if parameters.executionPayloadEnvelopeSubmitter == nil {
+		return nil, errors.New("no execution payload envelope submitter specified")
 	}
 	if parameters.attestationsSubmitter == nil {
 		return nil, errors.New("no attestations submitter specified")

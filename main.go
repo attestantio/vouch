@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2025 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -63,8 +64,12 @@ import (
 	"github.com/attestantio/vouch/services/multiinstance"
 	alwaysmultiinstance "github.com/attestantio/vouch/services/multiinstance/always"
 	staticdelaymultiinstance "github.com/attestantio/vouch/services/multiinstance/staticdelay"
+	"github.com/attestantio/vouch/services/payloadattester"
+	standardpayloadattester "github.com/attestantio/vouch/services/payloadattester/standard"
 	"github.com/attestantio/vouch/services/proposalpreparer"
 	standardproposalpreparer "github.com/attestantio/vouch/services/proposalpreparer/standard"
+	"github.com/attestantio/vouch/services/proposerpreferences"
+	standardproposerpreferences "github.com/attestantio/vouch/services/proposerpreferences/standard"
 	"github.com/attestantio/vouch/services/scheduler"
 	advancedscheduler "github.com/attestantio/vouch/services/scheduler/advanced"
 	"github.com/attestantio/vouch/services/signer"
@@ -88,6 +93,7 @@ import (
 	majorityattestationdatastrategy "github.com/attestantio/vouch/strategies/attestationdata/majority"
 	combinedattestationpoolstrategy "github.com/attestantio/vouch/strategies/attestationpool/combined"
 	firstbeaconblockheaderstrategy "github.com/attestantio/vouch/strategies/beaconblockheader/first"
+	"github.com/attestantio/vouch/strategies/beaconblockproposal"
 	bestbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/best"
 	firstbeaconblockproposalstrategy "github.com/attestantio/vouch/strategies/beaconblockproposal/first"
 	firstbeaconblockrootstrategy "github.com/attestantio/vouch/strategies/beaconblockroot/first"
@@ -96,6 +102,8 @@ import (
 	"github.com/attestantio/vouch/strategies/builderbid"
 	bestbuilderbidstrategy "github.com/attestantio/vouch/strategies/builderbid/best"
 	deadlinebuilderbidstrategy "github.com/attestantio/vouch/strategies/builderbid/deadline"
+	firstpayloadattestationdatastrategy "github.com/attestantio/vouch/strategies/payloadattestationdata/first"
+	majoritypayloadattestationdatastrategy "github.com/attestantio/vouch/strategies/payloadattestationdata/majority"
 	firstsignedbeaconblockstrategy "github.com/attestantio/vouch/strategies/signedbeaconblock/first"
 	bestsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/best"
 	firstsynccommitteecontributionstrategy "github.com/attestantio/vouch/strategies/synccommitteecontribution/first"
@@ -116,7 +124,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.13.1-dev.3"
+var ReleaseVersion = "1.14.0-alpha.2"
 
 func main() {
 	exitCode := main2()
@@ -247,12 +255,9 @@ func fetchConfig() error {
 	viper.SetDefault("process-concurrency", int64(runtime.GOMAXPROCS(-1)))
 	viper.SetDefault("timeout", 2*time.Second)
 	viper.SetDefault("eth2client.timeout", 2*time.Minute)
+	viper.SetDefault("eth2client.custom-spec-support", false)
 	viper.SetDefault("eth2client.allow-delayed-start", true)
 	viper.SetDefault("controller.max-proposal-delay", 0)
-	viper.SetDefault("controller.max-attestation-delay", 4*time.Second)
-	viper.SetDefault("controller.max-sync-committee-message-delay", 4*time.Second)
-	viper.SetDefault("controller.attestation-aggregation-delay", 8*time.Second)
-	viper.SetDefault("controller.sync-committee-aggregation-delay", 8*time.Second)
 	viper.SetDefault("controller.verify-sync-committee-inclusion", false)
 	viper.SetDefault("controller.fast-track.attestations", true)
 	viper.SetDefault("controller.fast-track.sync-committees", true)
@@ -260,11 +265,16 @@ func fetchConfig() error {
 	viper.SetDefault("blockrelay.timeout", 1*time.Second)
 	viper.SetDefault("blockrelay.listen-address", "0.0.0.0:18550")
 	viper.SetDefault("blockrelay.fallback-gas-limit", uint64(36000000))
+	viper.SetDefault("builderconfig.fallback-min-bid", uint64(0))
+	viper.SetDefault("builderconfig.fallback-builder-boost-factor", beaconblockproposer.DefaultBuilderBoostFactor)
 	viper.SetDefault("accountmanager.dirk.timeout", 30*time.Second)
 	viper.SetDefault("strategies.beaconblockproposal.best.execution-payload-factor", float64(0.0005))
 	viper.SetDefault("beaconblockproposer.builder-boost-factor", 91)
 	viper.SetDefault("strategies.builderbid.deadline.deadline", time.Second)
 	viper.SetDefault("strategies.builderbid.deadline.bid-gap", 100*time.Millisecond)
+	// Payload attestation data is due 75% of the way through the slot, so default tighter than the
+	// global timeout.  Set at the strategy level so that the per-style timeouts still inherit from it.
+	viper.SetDefault("strategies.payloadattestationdata.timeout", time.Second)
 	viper.SetDefault("submitter.style", "multinode")
 	viper.SetDefault("multiinstance.static-delay.attester-delay", time.Second)
 	viper.SetDefault("multiinstance.static-delay.proposer-delay", 2*time.Second)
@@ -288,6 +298,11 @@ func fetchConfig() error {
 		default:
 			return errors.Wrap(err, "failed to obtain configuration")
 		}
+	}
+
+	// Check the controller delays here so that a bad value fails before Vouch waits on beacon nodes.
+	if _, err := controllerDelays(); err != nil {
+		return err
 	}
 
 	return nil
@@ -351,24 +366,113 @@ func startServices(ctx context.Context,
 		return nil, nil, err
 	}
 
-	signedBeaconBlockProvider, beaconBlockHeaderProvider, err := startProviderServices(ctx, monitor)
+	services, err := startServiceFamily(ctx, majordomo, monitor, eth2Client, chainTime)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	var syncCommitteeSubscriber synccommitteesubscriber.Service
+	var syncCommitteeMessenger synccommitteemessenger.Service
+	var syncCommitteeAggregator synccommitteeaggregator.Service
+	if altairCapable {
+		syncCommitteeSubscriber, syncCommitteeMessenger, syncCommitteeAggregator, err = startAltairServices(ctx, monitor, eth2Client, services.submitter, services.signer, services.accountManager, chainTime, services.cache)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// We need to submit proposal preparations to all nodes that are acting as beacon block proposers.
+	proposalPreparer, err := initProposalPreparer(ctx, monitor, chainTime, bellatrixCapable, services.accountManager, services.blockRelay)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	multiInstance, err := startMultiInstance(ctx, monitor, chainTime, eth2Client, services.beaconBlockHeaderProvider)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	controller, err := initController(ctx,
+		monitor,
+		chainTime,
+		eth2Client,
+		services.scheduler,
+		services.attester,
+		services.cache,
+		waitedForGenesis,
+		services.accountManager,
+		services.beaconBlockProposer,
+		services.signedBeaconBlockProvider,
+		proposalPreparer,
+		services.attestationAggregator,
+		services.beaconCommitteeSubscriber,
+		syncCommitteeMessenger,
+		syncCommitteeAggregator,
+		syncCommitteeSubscriber,
+		services.beaconBlockHeaderProvider,
+		multiInstance,
+		services.payloadAttester,
+		services.proposerPreferences,
+		services.blockRelay,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return chainTime, controller, nil
+}
+
+type serviceFamily struct {
+	signedBeaconBlockProvider eth2client.SignedBeaconBlockProvider
+	beaconBlockHeaderProvider eth2client.BeaconBlockHeadersProvider
+	cache                     cache.Service
+	scheduler                 scheduler.Service
+	signer                    signer.Service
+	accountManager            accountmanager.Service
+	submitter                 submitter.Service
+	payloadAttester           payloadattester.Service
+	proposerPreferences       proposerpreferences.Service
+	blockRelay                blockrelay.Service
+	beaconBlockProposer       beaconblockproposer.Service
+	attester                  attester.Service
+	attestationAggregator     attestationaggregator.Service
+	beaconCommitteeSubscriber beaconcommitteesubscriber.Service
+}
+
+func startServiceFamily(ctx context.Context,
+	majordomo majordomo.Service,
+	monitor metrics.Service,
+	eth2Client eth2client.Service,
+	chainTime chaintime.Service,
+) (*serviceFamily, error) {
+	signedBeaconBlockProvider, beaconBlockHeaderProvider, err := startProviderServices(ctx, monitor)
+	if err != nil {
+		return nil, err
 	}
 
 	schedulerSvc, cacheSvc, signerSvc, accountManager, err := startSharedServices(ctx, eth2Client, majordomo, chainTime, monitor, beaconBlockHeaderProvider, signedBeaconBlockProvider)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	submitter, err := selectSubmitterStrategy(ctx, monitor, eth2Client)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to select submitter")
+		return nil, errors.Wrap(err, "failed to select submitter")
+	}
+
+	payloadAttester, err := startPayloadAttester(ctx, monitor, signerSvc, submitter)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start payload attester")
+	}
+
+	proposerPreferences, err := startProposerPreferences(ctx, monitor, signerSvc, submitter)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start proposer preferences")
 	}
 
 	blockRelay, err := startBlockRelay(ctx, majordomo, monitor, eth2Client, schedulerSvc, chainTime, accountManager, signerSvc, cacheSvc)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	beaconBlockProposer, attesterSvc, attestationAggregator, beaconCommitteeSubscriber, err := startSigningServices(ctx,
@@ -381,57 +485,104 @@ func startServices(ctx context.Context,
 		blockRelay,
 		accountManager,
 		submitter,
+		proposerPreferences,
 	)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	var syncCommitteeSubscriber synccommitteesubscriber.Service
-	var syncCommitteeMessenger synccommitteemessenger.Service
-	var syncCommitteeAggregator synccommitteeaggregator.Service
-	if altairCapable {
-		syncCommitteeSubscriber, syncCommitteeMessenger, syncCommitteeAggregator, err = startAltairServices(ctx, monitor, eth2Client, submitter, signerSvc, accountManager, chainTime, cacheSvc)
-		if err != nil {
-			return nil, nil, err
+	return &serviceFamily{
+		signedBeaconBlockProvider: signedBeaconBlockProvider,
+		beaconBlockHeaderProvider: beaconBlockHeaderProvider,
+		cache:                     cacheSvc,
+		scheduler:                 schedulerSvc,
+		signer:                    signerSvc,
+		accountManager:            accountManager,
+		submitter:                 submitter,
+		payloadAttester:           payloadAttester,
+		proposerPreferences:       proposerPreferences,
+		blockRelay:                blockRelay,
+		beaconBlockProposer:       beaconBlockProposer,
+		attester:                  attesterSvc,
+		attestationAggregator:     attestationAggregator,
+		beaconCommitteeSubscriber: beaconCommitteeSubscriber,
+	}, nil
+}
+
+func payloadEventsProvider(ctx context.Context, monitor metrics.Service) (eth2client.EventsProvider, error) {
+	client, err := fetchMultiClient(ctx, monitor, "payload events", util.BeaconNodeAddressesForPayloadAttestationData())
+	if err != nil {
+		return nil, err
+	}
+	provider, ok := client.(eth2client.EventsProvider)
+	if !ok {
+		return nil, errors.New("payload attestation data client does not provide events")
+	}
+	return provider, nil
+}
+
+// deprecatedControllerDelays are the duty delay overrides.  They are deprecated and apply to
+// pre-Gloas slots only; Gloas slots always use the spec-derived deadline.  Unset, the controller
+// derives each deadline from the chain specification; the comments give the derived values on a
+// 12-second slot.
+var deprecatedControllerDelays = []struct {
+	key    string
+	option func(time.Duration) standardcontroller.Parameter
+}{
+	{"controller.max-attestation-delay", standardcontroller.WithMaxAttestationDelay},                      // 4s pre-Gloas, 3s from Gloas.
+	{"controller.attestation-aggregation-delay", standardcontroller.WithAttestationAggregationDelay},      // 8s pre-Gloas, 6s from Gloas.
+	{"controller.max-sync-committee-message-delay", standardcontroller.WithMaxSyncCommitteeMessageDelay},  // 4s pre-Gloas, 3s from Gloas.
+	{"controller.sync-committee-aggregation-delay", standardcontroller.WithSyncCommitteeAggregationDelay}, // 8s pre-Gloas, 6s from Gloas.
+}
+
+// controllerDelays reads the deprecated duty delay overrides, in the order of
+// deprecatedControllerDelays.  Values must carry a unit, as viper would otherwise read "abc" as 0
+// and 4 as 4ns.  Config files and the environment provide strings or numbers, and a number is valid
+// only as 0, whose type depends on the file format.
+func controllerDelays() ([]time.Duration, error) {
+	delays := make([]time.Duration, 0, len(deprecatedControllerDelays))
+	for _, delay := range deprecatedControllerDelays {
+		var value time.Duration
+		raw := viper.Get(delay.key)
+		// A time.Duration, as from SetDefault or a pflag, carries its unit.
+		if duration, ok := raw.(time.Duration); ok {
+			raw = duration.String()
 		}
+		switch raw := raw.(type) {
+		case nil:
+		case string:
+			var err error
+			value, err = time.ParseDuration(raw)
+			if err != nil || value < 0 {
+				return nil, fmt.Errorf("invalid %s %q: must be 0 or a positive duration with a unit, such as 2s", delay.key, raw)
+			}
+		default:
+			if fmt.Sprint(raw) != "0" {
+				return nil, fmt.Errorf("invalid %s %v: must be 0 or a positive duration with a unit, such as 2s", delay.key, raw)
+			}
+		}
+		delays = append(delays, value)
 	}
 
-	// We need to submit proposal preparations to all nodes that are acting as beacon block proposers.
-	proposalPreparer, err := initProposalPreparer(ctx, monitor, chainTime, bellatrixCapable, accountManager, blockRelay)
+	return delays, nil
+}
+
+// controllerDelayParameters provides the deprecated duty delay overrides as controller parameters,
+// warning about each one that is set.
+func controllerDelayParameters() ([]standardcontroller.Parameter, error) {
+	delays, err := controllerDelays()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
+	}
+	params := make([]standardcontroller.Parameter, 0, len(delays))
+	for i, delay := range deprecatedControllerDelays {
+		if delays[i] != 0 {
+			log.Warn().Msg(delay.key + " is deprecated; it applies to pre-Gloas slots only and is ignored from the Gloas fork onwards")
+		}
+		params = append(params, delay.option(delays[i]))
 	}
 
-	multiInstance, err := startMultiInstance(ctx, monitor, chainTime, eth2Client, beaconBlockHeaderProvider)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	controller, err := initController(ctx,
-		monitor,
-		chainTime,
-		eth2Client,
-		schedulerSvc,
-		attesterSvc,
-		cacheSvc,
-		waitedForGenesis,
-		accountManager,
-		beaconBlockProposer,
-		signedBeaconBlockProvider,
-		proposalPreparer,
-		attestationAggregator,
-		beaconCommitteeSubscriber,
-		syncCommitteeMessenger,
-		syncCommitteeAggregator,
-		syncCommitteeSubscriber,
-		beaconBlockHeaderProvider,
-		multiInstance,
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return chainTime, controller, nil
+	return params, nil
 }
 
 func initController(ctx context.Context,
@@ -453,6 +604,9 @@ func initController(ctx context.Context,
 	syncCommitteeSubscriber synccommitteesubscriber.Service,
 	beaconBlockHeaderProvider eth2client.BeaconBlockHeadersProvider,
 	multiInstance multiinstance.Service,
+	payloadAttester payloadattester.Service,
+	proposerPreferences proposerpreferences.Publisher,
+	blockRelay blockrelay.Service,
 ) (
 	*standardcontroller.Service,
 	error,
@@ -463,8 +617,13 @@ func initController(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to fetch multiclient for controller")
 	}
 
+	delayParams, err := controllerDelayParameters()
+	if err != nil {
+		return nil, err
+	}
+
 	log.Trace().Msg("Starting controller")
-	controller, err := standardcontroller.New(ctx,
+	controllerParams := []standardcontroller.Parameter{
 		standardcontroller.WithLogLevel(util.LogLevel("controller")),
 		standardcontroller.WithMonitor(monitor),
 		standardcontroller.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
@@ -489,16 +648,38 @@ func initController(ctx context.Context,
 		standardcontroller.WithAccountsRefresher(accountManager.(accountmanager.Refresher)),
 		standardcontroller.WithBlockToSlotSetter(cacheSvc.(cache.BlockRootToSlotSetter)),
 		standardcontroller.WithMaxProposalDelay(viper.GetDuration("controller.max-proposal-delay")),
-		standardcontroller.WithMaxAttestationDelay(viper.GetDuration("controller.max-attestation-delay")),
-		standardcontroller.WithAttestationAggregationDelay(viper.GetDuration("controller.attestation-aggregation-delay")),
-		standardcontroller.WithMaxSyncCommitteeMessageDelay(viper.GetDuration("controller.max-sync-committee-message-delay")),
-		standardcontroller.WithSyncCommitteeAggregationDelay(viper.GetDuration("controller.sync-committee-aggregation-delay")),
 		standardcontroller.WithVerifySyncCommitteeInclusion(viper.GetBool("controller.verify-sync-committee-inclusion")),
 		standardcontroller.WithFastTrackAttestations(viper.GetBool("controller.fast-track.attestations")),
 		standardcontroller.WithFastTrackSyncCommittees(viper.GetBool("controller.fast-track.sync-committees")),
 		standardcontroller.WithFastTrackGrace(viper.GetDuration("controller.fast-track.grace")),
 		standardcontroller.WithMultiInstance(multiInstance),
-	)
+	}
+	controllerParams = append(controllerParams, delayParams...)
+	if ptcDutiesProvider, ok := eth2Client.(eth2client.PTCDutiesProvider); ok && payloadAttester != nil {
+		payloadEvents, err := payloadEventsProvider(ctx, monitor)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch payload events provider for controller")
+		}
+		controllerParams = append(controllerParams,
+			standardcontroller.WithPayloadEventsProvider(payloadEvents),
+			standardcontroller.WithPTCDutiesProvider(ptcDutiesProvider),
+			standardcontroller.WithPayloadAttester(payloadAttester),
+		)
+	}
+	if proposerPreferences != nil {
+		executionConfigProvider, ok := blockRelay.(blockrelay.ExecutionConfigProvider)
+		if !ok {
+			return nil, errors.New("block relay does not provide execution configuration")
+		}
+		controllerParams = append(controllerParams,
+			standardcontroller.WithProposerPreferences(proposerPreferences),
+			standardcontroller.WithExecutionConfigProvider(executionConfigProvider),
+		)
+		if proposerDutiesV2Provider, ok := eth2Client.(eth2client.ProposerDutiesV2Provider); ok {
+			controllerParams = append(controllerParams, standardcontroller.WithProposerDutiesV2Provider(proposerDutiesV2Provider))
+		}
+	}
+	controller, err := standardcontroller.New(ctx, controllerParams...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start controller service")
 	}
@@ -668,9 +849,10 @@ func startProviders(ctx context.Context,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cache cache.Service,
+	providerReadiness proposerpreferences.ProviderReadiness,
 ) (
 	graffitiprovider.Service,
-	eth2client.ProposalProvider,
+	eth2client.MultiForkProposalProvider,
 	eth2client.AttestationDataProvider,
 	eth2client.AggregateAttestationProvider,
 	error,
@@ -682,7 +864,7 @@ func startProviders(ctx context.Context,
 	}
 
 	log.Trace().Msg("Selecting beacon block proposal provider")
-	beaconBlockProposalProvider, err := selectProposalProvider(ctx, monitor, eth2Client, chainTime, cache)
+	beaconBlockProposalProvider, err := selectProposalProvider(ctx, monitor, eth2Client, chainTime, cache, providerReadiness)
 	if err != nil {
 		return nil, nil, nil, nil, errors.Wrap(err, "failed to select beacon block proposal provider")
 	}
@@ -786,6 +968,7 @@ func startSigningServices(ctx context.Context,
 	blockRelay blockrelay.Service,
 	accountManager accountmanager.Service,
 	submitterStrategy submitter.Service,
+	providerReadiness proposerpreferences.ProviderReadiness,
 ) (
 	beaconblockproposer.Service,
 	attester.Service,
@@ -799,6 +982,7 @@ func startSigningServices(ctx context.Context,
 		eth2Client,
 		chainTime,
 		cacheSvc,
+		providerReadiness,
 	)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -808,14 +992,18 @@ func startSigningServices(ctx context.Context,
 		standardbeaconblockproposer.WithLogLevel(util.LogLevel("beaconblockproposer")),
 		standardbeaconblockproposer.WithChainTime(chainTime),
 		standardbeaconblockproposer.WithProposalDataProvider(proposalProvider),
+		standardbeaconblockproposer.WithExecutionConfigProvider(blockRelay.(blockrelay.ExecutionConfigProvider)),
 		standardbeaconblockproposer.WithBlockAuctioneer(blockRelay.(blockauctioneer.BlockAuctioneer)),
 		standardbeaconblockproposer.WithValidatingAccountsProvider(accountManager.(accountmanager.ValidatingAccountsProvider)),
 		standardbeaconblockproposer.WithExecutionChainHeadProvider(cacheSvc.(cache.ExecutionChainHeadProvider)),
 		standardbeaconblockproposer.WithGraffitiProvider(graffitiProvider),
 		standardbeaconblockproposer.WithMonitor(monitor),
 		standardbeaconblockproposer.WithProposalSubmitter(submitterStrategy.(submitter.ProposalSubmitter)),
+		standardbeaconblockproposer.WithExecutionPayloadEnvelopeSubmitter(submitterStrategy.(submitter.ExecutionPayloadEnvelopeSubmitter)),
 		standardbeaconblockproposer.WithRANDAORevealSigner(signerSvc.(signer.RANDAORevealSigner)),
 		standardbeaconblockproposer.WithBeaconBlockSigner(signerSvc.(signer.BeaconBlockSigner)),
+		standardbeaconblockproposer.WithBuilderRequestAuthSigner(signerSvc.(signer.BuilderRequestAuthSigner)),
+		standardbeaconblockproposer.WithExecutionPayloadEnvelopeSigner(signerSvc.(signer.ExecutionPayloadEnvelopeSigner)),
 		standardbeaconblockproposer.WithBlobSidecarSigner(signerSvc.(signer.BlobSidecarSigner)),
 		standardbeaconblockproposer.WithUnblindFromAllRelays(viper.GetBool("beaconblockproposer.unblind-from-all-relays")),
 		standardbeaconblockproposer.WithBuilderBoostFactor(viper.GetUint64("beaconblockproposer.builder-boost-factor")),
@@ -1398,19 +1586,24 @@ func selectProposalProvider(ctx context.Context,
 	eth2Client eth2client.Service,
 	chainTime chaintime.Service,
 	cacheSvc cache.Service,
-) (eth2client.ProposalProvider, error) {
-	var proposalProvider eth2client.ProposalProvider
+	providerReadiness proposerpreferences.ProviderReadiness,
+) (eth2client.MultiForkProposalProvider, error) {
+	var proposalProvider eth2client.MultiForkProposalProvider
 	var err error
 	switch viper.GetString("strategies.beaconblockproposal.style") {
 	case "best":
 		log.Info().Msg("Starting best beacon block proposal strategy")
-		proposalProviders := make(map[string]eth2client.ProposalProvider)
+		proposalProviders := make(map[string]eth2client.MultiForkProposalProvider)
 		for _, address := range util.BeaconNodeAddresses("strategies.beaconblockproposal.best") {
 			client, err := fetchClient(ctx, monitor, address)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block proposal strategy", address))
 			}
-			proposalProviders[address] = client.(eth2client.ProposalProvider)
+			provider, isProvider := client.(eth2client.MultiForkProposalProvider)
+			if !isProvider {
+				return nil, errors.New("beacon block proposal client does not support ePBS proposals")
+			}
+			proposalProviders[address] = provider
 		}
 		proposalProvider, err = bestbeaconblockproposalstrategy.New(ctx,
 			bestbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
@@ -1419,6 +1612,7 @@ func selectProposalProvider(ctx context.Context,
 			bestbeaconblockproposalstrategy.WithChainTimeService(chainTime),
 			bestbeaconblockproposalstrategy.WithSpecProvider(eth2Client.(eth2client.SpecProvider)),
 			bestbeaconblockproposalstrategy.WithProposalProviders(proposalProviders),
+			bestbeaconblockproposalstrategy.WithProviderReadiness(providerReadiness),
 			bestbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.best")),
 			bestbeaconblockproposalstrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
 			bestbeaconblockproposalstrategy.WithExecutionPayloadFactor(viper.GetFloat64("strategies.beaconblockproposal.best.execution-payload-factor")),
@@ -1428,18 +1622,23 @@ func selectProposalProvider(ctx context.Context,
 		}
 	case "first":
 		log.Info().Msg("Starting first beacon block proposal strategy")
-		proposalProviders := make(map[string]eth2client.ProposalProvider)
+		proposalProviders := make(map[string]eth2client.MultiForkProposalProvider)
 		for _, address := range util.BeaconNodeAddresses("strategies.beaconblockproposal.first") {
 			client, err := fetchClient(ctx, monitor, address)
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for beacon block proposal strategy", address))
 			}
-			proposalProviders[address] = client.(eth2client.ProposalProvider)
+			provider, isProvider := client.(eth2client.MultiForkProposalProvider)
+			if !isProvider {
+				return nil, errors.New("beacon block proposal client does not support ePBS proposals")
+			}
+			proposalProviders[address] = provider
 		}
 		proposalProvider, err = firstbeaconblockproposalstrategy.New(ctx,
 			firstbeaconblockproposalstrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			firstbeaconblockproposalstrategy.WithLogLevel(util.LogLevel("strategies.beaconblockproposal.first")),
 			firstbeaconblockproposalstrategy.WithProposalProviders(proposalProviders),
+			firstbeaconblockproposalstrategy.WithProviderReadiness(providerReadiness),
 			firstbeaconblockproposalstrategy.WithTimeout(util.Timeout("strategies.beaconblockproposal.first")),
 		)
 		if err != nil {
@@ -1451,10 +1650,55 @@ func selectProposalProvider(ctx context.Context,
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch clients for simple beacon block proposal strategy")
 		}
-		proposalProvider = beaconBlockProposalClient.(eth2client.ProposalProvider)
+		provider, isProvider := beaconBlockProposalClient.(eth2client.MultiForkProposalProvider)
+		if !isProvider {
+			return nil, errors.New("beacon block proposal client does not support ePBS proposals")
+		}
+		proposalProvider = &readinessGatedProposalProvider{
+			MultiForkProposalProvider: provider,
+			providerReadiness:         providerReadiness,
+		}
 	}
 
 	return proposalProvider, nil
+}
+
+// readinessGatedProposalProvider applies the proposer preferences readiness gate to the simple
+// style's multiclient without wrapping it in another strategy.
+type readinessGatedProposalProvider struct {
+	eth2client.MultiForkProposalProvider
+
+	providerReadiness proposerpreferences.ProviderReadiness
+}
+
+// EPBSProposal obtains an ePBS proposal, rejecting a builder-backed bid until every endpoint
+// has accepted the current proposer preferences.
+func (p *readinessGatedProposalProvider) EPBSProposal(ctx context.Context,
+	opts *api.EPBSProposalOpts,
+) (
+	*api.Response[*api.VersionedEPBSProposal],
+	error,
+) {
+	response, err := p.MultiForkProposalProvider.EPBSProposal(ctx, opts)
+	if err != nil || response == nil {
+		return response, err
+	}
+	if err := beaconblockproposal.ValidateEPBSProposal(response.Data, opts.IncludePayload); err != nil {
+		return nil, err
+	}
+	if err := beaconblockproposal.ValidateBuilderBidReadiness(p.providerReadiness, proposerpreferences.SimpleProvider, opts.Slot, response.Data); err != nil {
+		return nil, err
+	}
+
+	// Label the selection as the first and best strategies do.
+	return &api.Response[*api.VersionedEPBSProposal]{
+		Data: response.Data,
+		Metadata: map[string]any{
+			beaconblockproposer.MetadataStrategy: "simple",
+			beaconblockproposer.MetadataProvider: proposerpreferences.SimpleProvider,
+			beaconblockproposer.MetadataSource:   beaconblockproposal.EPBSProposalSource(response.Data, response.Metadata),
+		},
+	}, nil
 }
 
 // selectSyncCommitteeContributionProvider selects the appropriate sync committee contribution provider given user input.
@@ -1605,13 +1849,14 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 	switch viper.GetString("submitter.style") {
 	case "multinode", "all":
 		log.Info().Msg("Starting multinode submitter strategy")
-		submitter, err = startMultinodeSubmitter(ctx, monitor)
+		submitter, err = startMultinodeSubmitter(ctx, monitor, eth2Client)
 	default:
 		log.Info().Msg("Starting standard submitter strategy")
-		submitter, err = immediatesubmitter.New(ctx,
+		params := []immediatesubmitter.Parameter{
 			immediatesubmitter.WithLogLevel(util.LogLevel("submitter.immediate")),
 			immediatesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 			immediatesubmitter.WithProposalSubmitter(eth2Client.(eth2client.ProposalSubmitter)),
+			immediatesubmitter.WithExecutionPayloadEnvelopeSubmitter(eth2Client.(eth2client.ExecutionPayloadEnvelopeSubmitter)),
 			immediatesubmitter.WithAttestationsSubmitter(eth2Client.(eth2client.AttestationsSubmitter)),
 			immediatesubmitter.WithSyncCommitteeMessagesSubmitter(eth2Client.(eth2client.SyncCommitteeMessagesSubmitter)),
 			immediatesubmitter.WithSyncCommitteeContributionsSubmitter(eth2Client.(eth2client.SyncCommitteeContributionsSubmitter)),
@@ -1619,7 +1864,18 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 			immediatesubmitter.WithBeaconCommitteeSubscriptionsSubmitter(eth2Client.(eth2client.BeaconCommitteeSubscriptionsSubmitter)),
 			immediatesubmitter.WithAggregateAttestationsSubmitter(eth2Client.(eth2client.AggregateAttestationsSubmitter)),
 			immediatesubmitter.WithProposalPreparationsSubmitter(eth2Client.(eth2client.ProposalPreparationsSubmitter)),
-		)
+		}
+		if payloadAttestationMessagesSubmitter, ok := eth2Client.(eth2client.PayloadAttestationMessagesSubmitter); ok {
+			params = append(params, immediatesubmitter.WithPayloadAttestationMessagesSubmitter(payloadAttestationMessagesSubmitter))
+		}
+		proposerPreferencesSubmitters, mapErr := addressToClientMapper[eth2client.ProposerPreferencesSubmitter](ctx, monitor,
+			util.BeaconNodeAddressesForBeaconBlockProposal(),
+			"proposer preferences submitter strategy")
+		if mapErr != nil {
+			return nil, mapErr
+		}
+		params = append(params, immediatesubmitter.WithProposerPreferencesSubmitters(proposerPreferencesSubmitters))
+		submitter, err = immediatesubmitter.New(ctx, params...)
 	}
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start submitter service")
@@ -1627,9 +1883,137 @@ func selectSubmitterStrategy(ctx context.Context, monitor metrics.Service, eth2C
 	return submitter, nil
 }
 
+// startPayloadAttester starts the payload attester when the signer and submitter both provide
+// their side of the payload attestation flow.  A missing signer or submitter side leaves the
+// service disabled rather than making startup fail; a misconfigured or unreachable set of
+// payload attestation data addresses does fail startup, as it would otherwise silently drop
+// every payload attestation duty.  Whether the network is at Gloas is not decided here:
+// the controller schedules no payload attestation duty before GLOAS_FORK_EPOCH.
+func startPayloadAttester(ctx context.Context,
+	monitor metrics.Service,
+	signerSvc signer.Service,
+	submitterStrategy submitter.Service,
+) (payloadattester.Service, error) {
+	payloadAttestationDataSigner, ok := signerSvc.(signer.PayloadAttestationDataSigner)
+	if !ok {
+		return nil, nil
+	}
+	payloadAttestationMessagesSubmitter, ok := submitterStrategy.(submitter.PayloadAttestationMessagesSubmitter)
+	if !ok {
+		return nil, nil
+	}
+	payloadAttestationDataProvider, err := selectPayloadAttestationDataProvider(ctx, monitor)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to obtain payload attestation data provider")
+	}
+	if payloadAttestationDataProvider == nil {
+		return nil, nil
+	}
+
+	log.Trace().Msg("Starting payload attester")
+	service, err := standardpayloadattester.New(ctx,
+		standardpayloadattester.WithLogLevel(util.LogLevel("payloadattester")),
+		standardpayloadattester.WithMonitor(monitor),
+		standardpayloadattester.WithPayloadAttestationDataProvider(payloadAttestationDataProvider),
+		standardpayloadattester.WithPayloadAttestationDataSigner(payloadAttestationDataSigner),
+		standardpayloadattester.WithPayloadAttestationMessagesSubmitter(payloadAttestationMessagesSubmitter),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start standard payload attester service")
+	}
+
+	return service, nil
+}
+
+// startProposerPreferences starts proposer preferences publishing when the signer and submitter
+// both support it.  The controller publishes only for proposal epochs at or after GLOAS_FORK_EPOCH.
+func startProposerPreferences(ctx context.Context,
+	monitor metrics.Service,
+	signerSvc signer.Service,
+	submitterStrategy submitter.Service,
+) (proposerpreferences.Service, error) {
+	proposerPreferencesSigner, ok := signerSvc.(signer.ProposerPreferencesSigner)
+	if !ok {
+		return nil, nil
+	}
+	proposerPreferencesSubmitter, ok := submitterStrategy.(submitter.ProposerPreferencesSubmitter)
+	if !ok {
+		return nil, nil
+	}
+
+	service, err := standardproposerpreferences.New(ctx,
+		standardproposerpreferences.WithLogLevel(util.LogLevel("proposerpreferences")),
+		standardproposerpreferences.WithMonitor(monitor),
+		standardproposerpreferences.WithSigner(proposerPreferencesSigner),
+		standardproposerpreferences.WithSubmitter(proposerPreferencesSubmitter),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to start standard proposer preferences service")
+	}
+
+	return service, nil
+}
+
+func selectPayloadAttestationDataProvider(ctx context.Context, monitor metrics.Service) (eth2client.PayloadAttestationDataProvider, error) {
+	switch viper.GetString("strategies.payloadattestationdata.style") {
+	case "first":
+		providers, err := genericAddressToClientMapper[eth2client.PayloadAttestationDataProvider](ctx, monitor,
+			"strategies.payloadattestationdata.first",
+			"first payload attestation data strategy")
+		if err != nil {
+			return nil, err
+		}
+		provider, err := firstpayloadattestationdatastrategy.New(ctx,
+			firstpayloadattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			firstpayloadattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.payloadattestationdata.first")),
+			firstpayloadattestationdatastrategy.WithPayloadAttestationDataProviders(providers),
+			firstpayloadattestationdatastrategy.WithTimeout(util.Timeout("strategies.payloadattestationdata.first")),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start first payload attestation data strategy")
+		}
+		return provider, nil
+	case "majority":
+		providers, err := genericAddressToClientMapper[eth2client.PayloadAttestationDataProvider](ctx, monitor,
+			"strategies.payloadattestationdata.majority",
+			"majority payload attestation data strategy")
+		if err != nil {
+			return nil, err
+		}
+		provider, err := majoritypayloadattestationdatastrategy.New(ctx,
+			majoritypayloadattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+			majoritypayloadattestationdatastrategy.WithLogLevel(util.LogLevel("strategies.payloadattestationdata.majority")),
+			majoritypayloadattestationdatastrategy.WithPayloadAttestationDataProviders(providers),
+			majoritypayloadattestationdatastrategy.WithTimeout(util.Timeout("strategies.payloadattestationdata.majority")),
+			majoritypayloadattestationdatastrategy.WithThreshold(viper.GetInt("strategies.payloadattestationdata.majority.threshold")),
+		)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to start majority payload attestation data strategy")
+		}
+		return provider, nil
+	default:
+		payloadAttestationDataClient, err := fetchMultiClient(ctx, monitor,
+			"payloadattestationdata",
+			util.BeaconNodeAddressesForPayloadAttestationData(),
+		)
+		if err != nil {
+			return nil, err
+		}
+		provider, ok := payloadAttestationDataClient.(eth2client.PayloadAttestationDataProvider)
+		if !ok {
+			return nil, nil
+		}
+		return provider, nil
+	}
+}
+
 func genericAddressToClientMapper[T any](ctx context.Context, monitor metrics.Service, path, description string) (map[string]T, error) {
+	return addressToClientMapper[T](ctx, monitor, util.BeaconNodeAddresses(path), description)
+}
+
+func addressToClientMapper[T any](ctx context.Context, monitor metrics.Service, addresses []string, description string) (map[string]T, error) {
 	addressToClientMap := make(map[string]T)
-	for _, address := range util.BeaconNodeAddresses(path) {
+	for _, address := range addresses {
 		client, err := fetchClient(ctx, monitor, address)
 		if err != nil {
 			return nil, errors.Wrap(err, fmt.Sprintf("failed to fetch client %s for %s", address, description))
@@ -1645,85 +2029,183 @@ func genericAddressToClientMapper[T any](ctx context.Context, monitor metrics.Se
 
 func startMultinodeSubmitter(ctx context.Context,
 	monitor metrics.Service,
+	eth2Client eth2client.Service,
 ) (
 	submitter.Service,
 	error,
 ) {
-	aggregateAttestationSubmitters, err := genericAddressToClientMapper[eth2client.AggregateAttestationsSubmitter](ctx, monitor,
+	attestationSubmitters, err := startMultinodeAttestationSubmitters(ctx, monitor)
+	if err != nil {
+		return nil, err
+	}
+	proposalSubmitters, err := startMultinodeProposalSubmitters(ctx, monitor)
+	if err != nil {
+		return nil, err
+	}
+	beaconSubscriptions, err := startMultinodeBeaconCommitteeSubmitters(ctx, monitor)
+	if err != nil {
+		return nil, err
+	}
+	proposalPreparations, err := startMultinodeProposalPreparations(ctx, monitor)
+	if err != nil {
+		return nil, err
+	}
+	committeeSubmitters, err := startMultinodeCommitteeSubmitters(ctx, monitor)
+	if err != nil {
+		return nil, err
+	}
+	optionalSubmitters, err := startMultinodeOptionalSubmitters(ctx, monitor, eth2Client)
+	if err != nil {
+		return nil, err
+	}
+
+	params := []multinodesubmitter.Parameter{
+		multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
+		multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
+		multinodesubmitter.WithLogLevel(util.LogLevel("submitter.multinode")),
+		multinodesubmitter.WithTimeout(util.Timeout("submitter.multinode")),
+		multinodesubmitter.WithProposalSubmitters(proposalSubmitters.proposals),
+		multinodesubmitter.WithExecutionPayloadEnvelopeSubmitters(proposalSubmitters.executionPayloadEnvelopes),
+		multinodesubmitter.WithAttestationsSubmitters(attestationSubmitters.attestations),
+		multinodesubmitter.WithSyncCommitteeMessagesSubmitters(committeeSubmitters.messages),
+		multinodesubmitter.WithSyncCommitteeContributionsSubmitters(committeeSubmitters.contributions),
+		multinodesubmitter.WithSyncCommitteeSubscriptionsSubmitters(committeeSubmitters.subscriptions),
+		multinodesubmitter.WithAggregateAttestationsSubmitters(attestationSubmitters.aggregates),
+		multinodesubmitter.WithBeaconCommitteeSubscriptionsSubmitters(beaconSubscriptions),
+		multinodesubmitter.WithProposalPreparationsSubmitters(proposalPreparations),
+	}
+	if optionalSubmitters.payloadAttestationMessages != nil {
+		params = append(params, multinodesubmitter.WithPayloadAttestationMessagesSubmitters(optionalSubmitters.payloadAttestationMessages))
+	}
+	if optionalSubmitters.proposerPreferences != nil {
+		params = append(params, multinodesubmitter.WithProposerPreferencesSubmitters(optionalSubmitters.proposerPreferences))
+	}
+	submitterService, err := multinodesubmitter.New(ctx, params...)
+	if err != nil {
+		return nil, err
+	}
+
+	return submitterService, nil
+}
+
+type multinodeAttestationSubmitters struct {
+	aggregates   map[string]eth2client.AggregateAttestationsSubmitter
+	attestations map[string]eth2client.AttestationsSubmitter
+}
+
+func startMultinodeAttestationSubmitters(ctx context.Context, monitor metrics.Service) (*multinodeAttestationSubmitters, error) {
+	aggregates, err := genericAddressToClientMapper[eth2client.AggregateAttestationsSubmitter](ctx, monitor,
 		"submitter.aggregateattestation.multinode",
 		"aggregate attestation submitter strategy")
 	if err != nil {
 		return nil, err
 	}
-
-	attestationsSubmitters, err := genericAddressToClientMapper[eth2client.AttestationsSubmitter](ctx, monitor,
+	attestations, err := genericAddressToClientMapper[eth2client.AttestationsSubmitter](ctx, monitor,
 		"submitter.attestation.multinode",
 		"attestation submitter strategy")
 	if err != nil {
 		return nil, err
 	}
 
-	proposalSubmitters, err := genericAddressToClientMapper[eth2client.ProposalSubmitter](ctx, monitor,
+	return &multinodeAttestationSubmitters{aggregates: aggregates, attestations: attestations}, nil
+}
+
+type multinodeProposalSubmitters struct {
+	proposals                 map[string]eth2client.ProposalSubmitter
+	executionPayloadEnvelopes map[string]eth2client.ExecutionPayloadEnvelopeSubmitter
+}
+
+func startMultinodeProposalSubmitters(ctx context.Context, monitor metrics.Service) (*multinodeProposalSubmitters, error) {
+	proposals, err := genericAddressToClientMapper[eth2client.ProposalSubmitter](ctx, monitor,
 		"submitter.proposal.multinode",
 		"proposal submitter strategy")
 	if err != nil {
 		return nil, err
 	}
+	executionPayloadEnvelopes, err := genericAddressToClientMapper[eth2client.ExecutionPayloadEnvelopeSubmitter](ctx, monitor,
+		"submitter.proposal.multinode",
+		"execution payload envelope submitter strategy")
+	if err != nil {
+		return nil, err
+	}
+	return &multinodeProposalSubmitters{
+		proposals:                 proposals,
+		executionPayloadEnvelopes: executionPayloadEnvelopes,
+	}, nil
+}
 
-	beaconCommitteeSubscriptionsSubmitters, err := genericAddressToClientMapper[eth2client.BeaconCommitteeSubscriptionsSubmitter](ctx, monitor,
+func startMultinodeBeaconCommitteeSubmitters(ctx context.Context, monitor metrics.Service) (map[string]eth2client.BeaconCommitteeSubscriptionsSubmitter, error) {
+	return genericAddressToClientMapper[eth2client.BeaconCommitteeSubscriptionsSubmitter](ctx, monitor,
 		"submitter.beaconcommitteesubscription.multinode",
 		"beacon committee subscription submitter strategy")
-	if err != nil {
-		return nil, err
-	}
+}
 
-	proposalPreparationSubmitters, err := genericAddressToClientMapper[eth2client.ProposalPreparationsSubmitter](ctx, monitor,
+func startMultinodeProposalPreparations(ctx context.Context, monitor metrics.Service) (map[string]eth2client.ProposalPreparationsSubmitter, error) {
+	return genericAddressToClientMapper[eth2client.ProposalPreparationsSubmitter](ctx, monitor,
 		"submitter.proposalpreparation.multinode",
 		"proposal preparation submitter strategy")
-	if err != nil {
-		return nil, err
-	}
+}
 
-	syncCommitteeContributionsSubmitters, err := genericAddressToClientMapper[eth2client.SyncCommitteeContributionsSubmitter](ctx, monitor,
+type multinodeCommitteeSubmitters struct {
+	contributions map[string]eth2client.SyncCommitteeContributionsSubmitter
+	messages      map[string]eth2client.SyncCommitteeMessagesSubmitter
+	subscriptions map[string]eth2client.SyncCommitteeSubscriptionsSubmitter
+}
+
+func startMultinodeCommitteeSubmitters(ctx context.Context, monitor metrics.Service) (*multinodeCommitteeSubmitters, error) {
+	contributions, err := genericAddressToClientMapper[eth2client.SyncCommitteeContributionsSubmitter](ctx, monitor,
 		"submitter.synccommitteecontribution.multinode",
 		"sync committee contribution submitter strategy")
 	if err != nil {
 		return nil, err
 	}
-
-	syncCommitteeMessagesSubmitters, err := genericAddressToClientMapper[eth2client.SyncCommitteeMessagesSubmitter](ctx, monitor,
+	messages, err := genericAddressToClientMapper[eth2client.SyncCommitteeMessagesSubmitter](ctx, monitor,
 		"submitter.synccommitteemessage.multinode",
 		"sync committee message submitter strategy")
 	if err != nil {
 		return nil, err
 	}
-
-	syncCommitteeSubscriptionsSubmitters, err := genericAddressToClientMapper[eth2client.SyncCommitteeSubscriptionsSubmitter](ctx, monitor,
+	subscriptions, err := genericAddressToClientMapper[eth2client.SyncCommitteeSubscriptionsSubmitter](ctx, monitor,
 		"submitter.synccommitteesubscription.multinode",
 		"sync committee subscription submitter strategy")
 	if err != nil {
 		return nil, err
 	}
 
-	submitterService, err := multinodesubmitter.New(ctx,
-		multinodesubmitter.WithClientMonitor(monitor.(metrics.ClientMonitor)),
-		multinodesubmitter.WithProcessConcurrency(util.ProcessConcurrency("submitter.multinode")),
-		multinodesubmitter.WithLogLevel(util.LogLevel("submitter.multinode")),
-		multinodesubmitter.WithTimeout(util.Timeout("submitter.multinode")),
-		multinodesubmitter.WithProposalSubmitters(proposalSubmitters),
-		multinodesubmitter.WithAttestationsSubmitters(attestationsSubmitters),
-		multinodesubmitter.WithSyncCommitteeMessagesSubmitters(syncCommitteeMessagesSubmitters),
-		multinodesubmitter.WithSyncCommitteeContributionsSubmitters(syncCommitteeContributionsSubmitters),
-		multinodesubmitter.WithSyncCommitteeSubscriptionsSubmitters(syncCommitteeSubscriptionsSubmitters),
-		multinodesubmitter.WithAggregateAttestationsSubmitters(aggregateAttestationSubmitters),
-		multinodesubmitter.WithBeaconCommitteeSubscriptionsSubmitters(beaconCommitteeSubscriptionsSubmitters),
-		multinodesubmitter.WithProposalPreparationsSubmitters(proposalPreparationSubmitters),
-	)
-	if err != nil {
-		return nil, err
+	return &multinodeCommitteeSubmitters{
+		contributions: contributions,
+		messages:      messages,
+		subscriptions: subscriptions,
+	}, nil
+}
+
+type multinodeOptionalSubmitters struct {
+	payloadAttestationMessages map[string]submitter.PayloadAttestationMessagesSubmitter
+	proposerPreferences        map[string]eth2client.ProposerPreferencesSubmitter
+}
+
+func startMultinodeOptionalSubmitters(ctx context.Context, monitor metrics.Service, eth2Client eth2client.Service) (*multinodeOptionalSubmitters, error) {
+	optionalSubmitters := new(multinodeOptionalSubmitters)
+	if _, ok := eth2Client.(eth2client.PayloadAttestationMessagesSubmitter); ok {
+		payloadAttestationMessages, err := genericAddressToClientMapper[submitter.PayloadAttestationMessagesSubmitter](ctx, monitor,
+			"submitter.payloadattestation.multinode",
+			"payload attestation message submitter strategy")
+		if err != nil {
+			return nil, err
+		}
+		optionalSubmitters.payloadAttestationMessages = payloadAttestationMessages
+	}
+	if _, ok := eth2Client.(eth2client.ProposerPreferencesSubmitter); ok {
+		proposerPreferences, err := addressToClientMapper[eth2client.ProposerPreferencesSubmitter](ctx, monitor,
+			util.BeaconNodeAddressesForBeaconBlockProposal(),
+			"proposer preferences submitter strategy")
+		if err != nil {
+			return nil, err
+		}
+		optionalSubmitters.proposerPreferences = proposerPreferences
 	}
 
-	return submitterService, nil
+	return optionalSubmitters, nil
 }
 
 // runCommands potentially runs commands.
@@ -1814,6 +2296,19 @@ func startBlockRelay(ctx context.Context,
 		return nil, errors.New("blockrelay: fee recipient supplied is zero")
 	}
 
+	fallbackGasLimit, err := uint64Setting("blockrelay.fallback-gas-limit")
+	if err != nil {
+		return nil, err
+	}
+	fallbackMinBid, err := uint64Setting("builderconfig.fallback-min-bid")
+	if err != nil {
+		return nil, err
+	}
+	fallbackBuilderBoostFactor, err := uint64Setting("builderconfig.fallback-builder-boost-factor")
+	if err != nil {
+		return nil, err
+	}
+
 	builderConfigs, err := obtainBuilderConfigs(ctx)
 	if err != nil {
 		return nil, err
@@ -1828,7 +2323,9 @@ func startBlockRelay(ctx context.Context,
 		standardblockrelay.WithChainTime(chainTime),
 		standardblockrelay.WithConfigURL(viper.GetString("blockrelay.config.url")),
 		standardblockrelay.WithFallbackFeeRecipient(fallbackFeeRecipient),
-		standardblockrelay.WithFallbackGasLimit(viper.GetUint64("blockrelay.fallback-gas-limit")),
+		standardblockrelay.WithFallbackGasLimit(fallbackGasLimit),
+		standardblockrelay.WithFallbackMinBid(phase0.Gwei(fallbackMinBid)),
+		standardblockrelay.WithFallbackBuilderBoostFactor(fallbackBuilderBoostFactor),
 		standardblockrelay.WithClientCertURL(viper.GetString("blockrelay.config.client-cert")),
 		standardblockrelay.WithClientKeyURL(viper.GetString("blockrelay.config.client-key")),
 		standardblockrelay.WithCACertURL(viper.GetString("blockrelay.config.ca-cert")),
@@ -1901,6 +2398,22 @@ func selectBuilderBidProvider(ctx context.Context,
 	}
 
 	return provider, nil
+}
+
+// uint64Setting returns the named setting as an unsigned integer.
+// Unlike viper.GetUint64 it rejects unset values and values that are not non-negative integers, rather than returning 0.
+// Callers register a default with viper.SetDefault, so an unset value means the default is missing.
+func uint64Setting(key string) (uint64, error) {
+	raw := viper.Get(key)
+	if raw == nil {
+		return 0, fmt.Errorf("%s: not set", key)
+	}
+	value, err := strconv.ParseUint(fmt.Sprint(raw), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s: invalid value %v; must be a non-negative integer", key, raw)
+	}
+
+	return value, nil
 }
 
 func obtainBuilderConfigs(ctx context.Context) (map[phase0.BLSPubKey]*blockrelay.BuilderConfig, error) {
@@ -2011,7 +2524,7 @@ func obtainBuilderConfigsForPrivilegedBuilders(_ context.Context,
 	return nil
 }
 
-// select the signed beacon block provider based on user input.
+// Select the signed beacon block provider based on user input.
 func selectSignedBeaconBlockProvider(ctx context.Context,
 	monitor metrics.Service,
 ) (
@@ -2059,7 +2572,7 @@ func selectSignedBeaconBlockProvider(ctx context.Context,
 	return provider, nil
 }
 
-// select the beacon header provider based on user input.
+// Select the beacon header provider based on user input.
 func selectBeaconHeaderProvider(ctx context.Context,
 	monitor metrics.Service,
 ) (

@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,13 +16,16 @@ package immediate
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -35,12 +38,16 @@ type Service struct {
 	clientMonitor                         metrics.ClientMonitor
 	attestationsSubmitter                 eth2client.AttestationsSubmitter
 	proposalSubmitter                     eth2client.ProposalSubmitter
+	executionPayloadEnvelopeSubmitter     eth2client.ExecutionPayloadEnvelopeSubmitter
 	beaconCommitteeSubscriptionsSubmitter eth2client.BeaconCommitteeSubscriptionsSubmitter
 	aggregateAttestationsSubmitter        eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitter         eth2client.ProposalPreparationsSubmitter
 	syncCommitteeMessagesSubmitter        eth2client.SyncCommitteeMessagesSubmitter
 	syncCommitteeSubscriptionsSubmitter   eth2client.SyncCommitteeSubscriptionsSubmitter
 	syncCommitteeContributionsSubmitter   eth2client.SyncCommitteeContributionsSubmitter
+	payloadAttestationMessagesSubmitter   submitter.PayloadAttestationMessagesSubmitter
+	proposerPreferencesSubmitter          eth2client.ProposerPreferencesSubmitter
+	proposerPreferencesSubmitters         map[string]eth2client.ProposerPreferencesSubmitter
 }
 
 // New creates a new submitter.
@@ -61,15 +68,58 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		clientMonitor:                         parameters.clientMonitor,
 		attestationsSubmitter:                 parameters.attestationsSubmitter,
 		proposalSubmitter:                     parameters.proposalSubmitter,
+		executionPayloadEnvelopeSubmitter:     parameters.executionPayloadEnvelopeSubmitter,
 		beaconCommitteeSubscriptionsSubmitter: parameters.beaconCommitteeSubscriptionsSubmitter,
 		aggregateAttestationsSubmitter:        parameters.aggregateAttestationsSubmitter,
 		proposalPreparationsSubmitter:         parameters.proposalPreparationsSubmitter,
 		syncCommitteeMessagesSubmitter:        parameters.syncCommitteeMessagesSubmitter,
 		syncCommitteeSubscriptionsSubmitter:   parameters.syncCommitteeSubscriptionsSubmitter,
 		syncCommitteeContributionsSubmitter:   parameters.syncCommitteeContributionsSubmitter,
+		payloadAttestationMessagesSubmitter:   parameters.payloadAttestationMessagesSubmitter,
+		proposerPreferencesSubmitter:          parameters.proposerPreferencesSubmitter,
+		proposerPreferencesSubmitters:         parameters.proposerPreferencesSubmitters,
 	}
 
 	return s, nil
+}
+
+// SubmitProposerPreferences submits signed proposer preferences to the configured beacon node.
+func (s *Service) SubmitProposerPreferences(ctx context.Context, preferences []*gloas.SignedProposerPreferences, providers []string) map[string]error {
+	if len(s.proposerPreferencesSubmitters) > 0 {
+		outcomes := make(map[string]error, len(s.proposerPreferencesSubmitters))
+		for address, submitter := range s.proposerPreferencesSubmitters {
+			if len(providers) > 0 && !slices.Contains(providers, address) {
+				continue
+			}
+			started := time.Now()
+			err := submitter.SubmitProposerPreferences(ctx, &api.SubmitProposerPreferencesOpts{Preferences: preferences})
+			s.clientMonitor.ClientOperation(address, "submit proposer preferences", err == nil, time.Since(started))
+			if err != nil {
+				s.log.Warn().Err(err).Str("beacon_node_address", address).Msg("Failed to submit proposer preferences")
+			}
+			outcomes[address] = err
+		}
+		return outcomes
+	}
+	if s.proposerPreferencesSubmitter == nil {
+		return map[string]error{"<unknown>": errors.New("no proposer preferences submitter configured")}
+	}
+
+	address := "<unknown>"
+	if service, isService := s.proposerPreferencesSubmitter.(eth2client.Service); isService {
+		address = service.Address()
+	}
+	if len(providers) > 0 && !slices.Contains(providers, address) {
+		return map[string]error{}
+	}
+	started := time.Now()
+	err := s.proposerPreferencesSubmitter.SubmitProposerPreferences(ctx, &api.SubmitProposerPreferencesOpts{Preferences: preferences})
+	s.clientMonitor.ClientOperation(address, "submit proposer preferences", err == nil, time.Since(started))
+	if err != nil {
+		s.log.Warn().Err(err).Msg("Failed to submit proposer preferences")
+	}
+
+	return map[string]error{address: err}
 }
 
 // SubmitProposal submits a proposal.

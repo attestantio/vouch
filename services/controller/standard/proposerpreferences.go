@@ -1,0 +1,317 @@
+// Copyright © 2026 Attestant Limited.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package standard
+
+import (
+	"context"
+	"sort"
+	"time"
+
+	"github.com/attestantio/go-eth2-client/api"
+	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/proposerpreferences"
+	"github.com/attestantio/vouch/util"
+	e2wtypes "github.com/wealdtech/go-eth2-wallet-types/v2"
+)
+
+// startProposerPreferencesSlotTicker queues proposer preferences publication at the start of each slot.
+func (s *Service) startProposerPreferencesSlotTicker(ctx context.Context) error {
+	if !s.proposerPreferencesEnabled() {
+		return nil
+	}
+	return s.scheduler.SchedulePeriodicJob(ctx, "Slot", "Proposer preferences slot ticker",
+		func(_ context.Context) (time.Time, error) {
+			return s.chainTimeService.StartOfSlot(s.chainTimeService.CurrentSlot() + 1), nil
+		},
+		s.queueProposerPreferencesPublication,
+	)
+}
+
+type proposerDutiesCacheKey struct {
+	epoch phase0.Epoch
+	root  phase0.Root
+}
+
+
+// recordProposerPreferencesDependentRoot retains the root used to derive proposer duties for an epoch.
+func (s *Service) recordProposerPreferencesDependentRoot(epoch phase0.Epoch, root phase0.Root) {
+	if root == (phase0.Root{}) {
+		return
+	}
+	s.proposerPreferencesDependentRootMutex.Lock()
+	defer s.proposerPreferencesDependentRootMutex.Unlock()
+	s.storeProposerPreferencesDependentRoot(epoch, root)
+}
+
+// seedProposerPreferencesDependentRoot retains a root only if none is recorded for the epoch, so a slow
+// startup fetch cannot overwrite a newer head_v2 root.
+func (s *Service) seedProposerPreferencesDependentRoot(epoch phase0.Epoch, root phase0.Root) {
+	if root == (phase0.Root{}) {
+		return
+	}
+	s.proposerPreferencesDependentRootMutex.Lock()
+	defer s.proposerPreferencesDependentRootMutex.Unlock()
+	if _, exists := s.proposerPreferencesDependentRoots[epoch]; exists {
+		return
+	}
+	s.storeProposerPreferencesDependentRoot(epoch, root)
+}
+
+// storeProposerPreferencesDependentRoot records the root here and in the publisher under one lock, so both
+// always hold the same root.  The caller holds proposerPreferencesDependentRootMutex.
+func (s *Service) storeProposerPreferencesDependentRoot(epoch phase0.Epoch, root phase0.Root) {
+	if s.proposerPreferencesDependentRoots == nil {
+		s.proposerPreferencesDependentRoots = make(map[phase0.Epoch]phase0.Root)
+	}
+	s.proposerPreferencesDependentRoots[epoch] = root
+	for storedEpoch := range s.proposerPreferencesDependentRoots {
+		if storedEpoch+phase0.Epoch(s.proposerPreferencesLookahead) < s.chainTimeService.CurrentEpoch() {
+			delete(s.proposerPreferencesDependentRoots, storedEpoch)
+			for key := range s.proposerPreferencesDutiesCache {
+				if key.epoch == storedEpoch {
+					delete(s.proposerPreferencesDutiesCache, key)
+				}
+			}
+		}
+	}
+
+	if s.proposerPreferences != nil {
+		fromSlot := s.chainTimeService.FirstSlotOfEpoch(epoch)
+		s.proposerPreferences.UpdateDependentRoot(fromSlot, s.chainTimeService.FirstSlotOfEpoch(epoch+1)-1, root)
+	}
+}
+
+// seedProposerPreferencesDependentRoots records the current and next epoch roots from proposer duties and
+// queues publication, so preferences go out at startup without waiting for the first head_v2 event.
+func (s *Service) seedProposerPreferencesDependentRoots(ctx context.Context) {
+	currentEpoch := s.chainTimeService.CurrentEpoch()
+	for _, epoch := range []phase0.Epoch{currentEpoch, currentEpoch + 1} {
+		response, err := s.proposerDutiesV2Provider.ProposerDutiesV2(ctx, &api.ProposerDutiesOpts{Epoch: epoch})
+		if err != nil {
+			s.log.Warn().Err(err).Uint64("epoch", uint64(epoch)).Msg("Failed to seed proposer preferences dependent root")
+			continue
+		}
+		root := proposerDutiesDependentRoot(response)
+		if root == (phase0.Root{}) {
+			s.log.Warn().Uint64("epoch", uint64(epoch)).Msg("No dependent root to seed proposer preferences")
+			continue
+		}
+		s.seedProposerPreferencesDependentRoot(epoch, root)
+	}
+	s.queueProposerPreferencesPublication(ctx)
+}
+
+func (s *Service) queueProposerPreferencesPublication(ctx context.Context) {
+	s.proposerPreferencesPublicationMutex.Lock()
+	s.proposerPreferencesPublicationPending = true
+	if s.proposerPreferencesPublicationRunning {
+		s.proposerPreferencesPublicationMutex.Unlock()
+		return
+	}
+	s.proposerPreferencesPublicationRunning = true
+	s.proposerPreferencesPublicationMutex.Unlock()
+
+	go func() {
+		for {
+			s.proposerPreferencesPublicationMutex.Lock()
+			s.proposerPreferencesPublicationPending = false
+			s.proposerPreferencesPublicationMutex.Unlock()
+
+			s.publishProposerPreferencesForKnownRoots(ctx)
+
+			s.proposerPreferencesPublicationMutex.Lock()
+			if !s.proposerPreferencesPublicationPending {
+				s.proposerPreferencesPublicationRunning = false
+				s.proposerPreferencesPublicationMutex.Unlock()
+				return
+			}
+			s.proposerPreferencesPublicationMutex.Unlock()
+		}
+	}()
+}
+
+// publishProposerPreferencesForKnownRoots publishes each recorded root whose lookahead target has not passed.
+func (s *Service) publishProposerPreferencesForKnownRoots(ctx context.Context) {
+	s.proposerPreferencesDependentRootMutex.RLock()
+	epochs := make([]phase0.Epoch, 0, len(s.proposerPreferencesDependentRoots))
+	roots := make(map[phase0.Epoch]phase0.Root, len(s.proposerPreferencesDependentRoots))
+	for epoch, root := range s.proposerPreferencesDependentRoots {
+		epochs = append(epochs, epoch)
+		roots[epoch] = root
+	}
+	s.proposerPreferencesDependentRootMutex.RUnlock()
+	sort.Slice(epochs, func(i, j int) bool { return epochs[i] < epochs[j] })
+	for _, epoch := range epochs {
+		s.publishProposerPreferences(ctx, epoch, roots[epoch])
+	}
+	if s.proposerPreferences != nil {
+		s.proposerPreferences.FlushConfigChangeWarnings()
+	}
+}
+
+// proposerPreferencesEnabled reports whether proposer preferences are configured and published by this node.
+func (s *Service) proposerPreferencesEnabled() bool {
+	return s.proposerPreferences != nil && s.executionConfigProvider != nil && s.proposerPreferencesLookahead != 0
+}
+
+// publishProposerPreferences publishes preferences for the proposal epoch whose duties share the supplied dependent root.
+func (s *Service) publishProposerPreferences(ctx context.Context, proposalEpoch phase0.Epoch, dependentRoot phase0.Root) {
+	if !s.proposerPreferencesEnabled() {
+		return
+	}
+	s.proposerPreferences.Prune(s.chainTimeService.CurrentSlot())
+	if dependentRoot == (phase0.Root{}) || proposalEpoch < s.gloasForkEpoch || proposalEpoch < s.chainTimeService.CurrentEpoch() {
+		return
+	}
+	key := proposerDutiesCacheKey{epoch: proposalEpoch, root: dependentRoot}
+	s.proposerPreferencesDependentRootMutex.RLock()
+	cached, exists := s.proposerPreferencesDutiesCache[key]
+	s.proposerPreferencesDependentRootMutex.RUnlock()
+	if !exists {
+		duties, root := s.proposerPreferencesDuties(ctx, proposalEpoch, dependentRoot)
+		if root == (phase0.Root{}) {
+			return
+		}
+		cached = duties
+		s.proposerPreferencesDependentRootMutex.Lock()
+		if s.proposerPreferencesDependentRoots[proposalEpoch] == root {
+			s.proposerPreferencesDutiesCache[key] = cached
+		}
+		s.proposerPreferencesDependentRootMutex.Unlock()
+	}
+	if len(cached) == 0 {
+		return
+	}
+	s.publishProposerPreferencesDuties(ctx, proposalEpoch, dependentRoot, s.currentProposerPreferencesDuties(cached, proposalEpoch))
+}
+
+func (s *Service) proposerPreferencesDuties(
+	ctx context.Context,
+	proposalEpoch phase0.Epoch,
+	dependentRoot phase0.Root,
+) ([]*apiv1.ProposerDuty, phase0.Root) {
+	response, err := s.proposerDutiesV2Provider.ProposerDutiesV2(ctx, &api.ProposerDutiesOpts{Epoch: proposalEpoch})
+	if err != nil {
+		s.log.Error().Err(err).Uint64("epoch", uint64(proposalEpoch)).Msg("Failed to fetch proposer preferences duties")
+		return nil, phase0.Root{}
+	}
+	if response == nil {
+		return nil, phase0.Root{}
+	}
+	responseDependentRoot := proposerDutiesDependentRoot(response)
+	if responseDependentRoot == (phase0.Root{}) {
+		s.log.Error().Uint64("epoch", uint64(proposalEpoch)).Msg("No dependent root for proposer preferences duties")
+		return nil, phase0.Root{}
+	}
+	if responseDependentRoot != dependentRoot {
+		s.log.Debug().Uint64("epoch", uint64(proposalEpoch)).Stringer("duties_root", responseDependentRoot).Stringer("recorded_root", dependentRoot).Msg("Stale dependent root for proposer preferences duties")
+		return nil, phase0.Root{}
+	}
+
+	return response.Data, responseDependentRoot
+}
+
+// proposerDutiesDependentRoot returns the dependent root of a proposer duties response, or a zero root if it has none.
+func proposerDutiesDependentRoot(response *api.Response[[]*apiv1.ProposerDuty]) phase0.Root {
+	if response == nil {
+		return phase0.Root{}
+	}
+	root, _ := response.Metadata["dependent_root"].(phase0.Root)
+
+	return root
+}
+
+func (s *Service) currentProposerPreferencesDuties(
+	duties []*apiv1.ProposerDuty,
+	proposalEpoch phase0.Epoch,
+) []*apiv1.ProposerDuty {
+	firstSlot := s.chainTimeService.FirstSlotOfEpoch(proposalEpoch)
+	lastSlot := s.chainTimeService.FirstSlotOfEpoch(proposalEpoch+1) - 1
+	currentSlot := s.chainTimeService.CurrentSlot()
+	result := make([]*apiv1.ProposerDuty, 0, len(duties))
+	for _, duty := range duties {
+		if duty != nil && duty.Slot >= firstSlot && duty.Slot <= lastSlot && duty.Slot > currentSlot {
+			result = append(result, duty)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Slot < result[j].Slot })
+
+	return result
+}
+
+func (s *Service) publishProposerPreferencesDuties(
+	ctx context.Context,
+	proposalEpoch phase0.Epoch,
+	dependentRoot phase0.Root,
+	duties []*apiv1.ProposerDuty,
+) {
+	accounts, err := s.validatingAccountsProvider.ValidatingAccountsForEpochByIndex(ctx, proposalEpoch, proposerPreferencesIndices(duties))
+	if err != nil {
+		s.log.Error().Err(err).Uint64("epoch", uint64(proposalEpoch)).Msg("Failed to obtain proposer preferences accounts")
+		return
+	}
+	for _, duty := range duties {
+		s.publishProposerPreferencesDuty(ctx, dependentRoot, duty, accounts)
+	}
+}
+
+func proposerPreferencesIndices(duties []*apiv1.ProposerDuty) []phase0.ValidatorIndex {
+	indices := make([]phase0.ValidatorIndex, 0, len(duties))
+	seen := make(map[phase0.ValidatorIndex]struct{})
+	for _, duty := range duties {
+		if _, exists := seen[duty.ValidatorIndex]; !exists {
+			seen[duty.ValidatorIndex] = struct{}{}
+			indices = append(indices, duty.ValidatorIndex)
+		}
+	}
+
+	return indices
+}
+
+func (s *Service) publishProposerPreferencesDuty(
+	ctx context.Context,
+	dependentRoot phase0.Root,
+	duty *apiv1.ProposerDuty,
+	accounts map[phase0.ValidatorIndex]e2wtypes.Account,
+) {
+	account, exists := accounts[duty.ValidatorIndex]
+	if !exists {
+		// Duties cover every proposer in the epoch, not just ours.
+		s.log.Trace().Uint64("validator_index", uint64(duty.ValidatorIndex)).Msg("No account for proposer preferences duty")
+		return
+	}
+	config, err := s.executionConfigProvider.ProposerConfig(ctx, account, util.ValidatorPubkey(account))
+	if err != nil {
+		s.log.Error().Err(err).Uint64("validator_index", uint64(duty.ValidatorIndex)).Msg("Failed to obtain proposer preferences execution configuration")
+		return
+	}
+	if config == nil {
+		s.log.Error().Uint64("validator_index", uint64(duty.ValidatorIndex)).Msg("No proposer preferences execution configuration")
+		return
+	}
+	preferenceDuty := &proposerpreferences.Duty{
+		DependentRoot:  dependentRoot,
+		ProposalSlot:   duty.Slot,
+		CurrentSlot:    s.chainTimeService.CurrentSlot(),
+		CurrentEpoch:   s.chainTimeService.CurrentEpoch(),
+		ValidatorIndex: duty.ValidatorIndex,
+		Account:        account,
+		FeeRecipient:   config.FeeRecipient,
+		TargetGasLimit: config.GasLimit,
+	}
+	if err := s.proposerPreferences.Publish(ctx, preferenceDuty); err != nil {
+		s.log.Error().Err(err).Uint64("proposal_slot", uint64(duty.Slot)).Msg("Failed to publish proposer preferences")
+	}
+}

@@ -35,6 +35,30 @@ blockrelay:
 
 Although in general it is better to leave this value out, as Vouch has its own fallback value configured and changing this could affect the execution network.
 
+From Gloas onwards the ePBS minimum P2P bid and builder boost factor also have fallback values, provided under the `builderconfig` key:
+
+```yaml
+builderconfig:
+  fallback-min-bid: 10000000
+  fallback-builder-boost-factor: 90
+```
+
+- `fallback-min-bid` is the minimum P2P bid, in Gwei. It defaults to `0`.
+- `fallback-builder-boost-factor` is the boost factor percentage. It defaults to `100`. An explicit `0` is honoured.
+
+Vouch refuses to start if either value is not a non-negative integer. A value such as `-1`, `"90%"` or `0.01` is an error rather than `0`. An invalid `blockrelay.fallback-gas-limit` already stopped Vouch; the error now names the key and the value.
+
+These values apply whenever the execution configuration does not supply its own: with no configuration URL, when no configuration has loaded because the fetch failed (a later failed fetch keeps the last loaded configuration), with a version 1 configuration, and with a version 2 configuration that omits the fields. They are read once at startup. See [Gloas ePBS builder configuration](#gloas-epbs-builder-configuration) for the full precedence.
+
+`builderconfig` and `blockrelay.builder-configs` have similar names but control different things:
+
+| Key | Applies to | What it does |
+| --- | --- | --- |
+| `builderconfig` | Gloas onwards | Fallback P2P minimum bid and boost factor that Vouch sends to the beacon node, which runs the ePBS auction. |
+| `blockrelay.builder-configs` | Before Gloas only | Per-builder `factor`, `offset` and `category`, keyed by builder public key, that Vouch applies when scoring relay bids in its own auction. It has no effect from Gloas onwards. |
+
+Neither key reads the other. `beaconblockproposer.builder-boost-factor` is also unrelated: it applies only to pre-Gloas proposals, is not used from Gloas onwards, and is not a fallback for `builderconfig.fallback-builder-boost-factor`.
+
 ## Specifying an execution configuration
 For more advanced configurations an execution configuration file is required.  Access to the configuration file is usually through a simple URL, for example:
 
@@ -98,7 +122,63 @@ It is also possible to add the gas limit here:
 }
 ```
 
-So far, all execution block building will be local.  If use of MEV relays is required to obtain blocks this can be added as follows:
+## Gloas ePBS builder configuration
+
+From Gloas onwards the beacon node runs the auction between its local build, P2P bids, and any direct builders configured by Vouch. Version 2 execution configuration accepts an optional `epbs_builder_config` at the root and in proposer entries:
+
+```json
+{
+  "version": 2,
+  "epbs_builder_config": {
+    "min_bid": "10000000",
+    "builder_boost_factor": 100,
+    "builders": [
+      {
+        "url": "https://builder.example",
+        "auth_data": "0x…",
+        "builder_pubkeys": [],
+        "max_execution_payment": "0",
+        "min_bid": "10000000",
+        "builder_boost_factor": 100
+      }
+    ]
+  }
+}
+```
+
+The top-level `min_bid` is the minimum P2P bid, in Gwei. It is a decimal integer string. `min_value` does not affect ePBS: from Gloas onwards it applies only to pre-Gloas relays. When a loaded configuration has a root or proposer `min_value` with no ePBS `min_bid` covering it, Vouch logs a warning. It warns once, and again only if a later configuration clears the condition and then restores it. A proposer `min_value` is covered only by that proposer's own `min_bid`; the root `min_bid` does not carry a proposer-specific floor. The warning names `epbs_builder_config.min_bid` as the replacement.
+
+`builder_boost_factor` is an unsigned 64-bit percentage applied by the beacon node. Its ePBS default is `100`. The legacy `beaconblockproposer.builder-boost-factor` (default `91`) has no effect on Gloas proposals and is not a fallback. A value of `0` prefers the local build but still permits a P2P fallback when the local build is unviable. A value of `100` selects the highest-value viable bid. Vouch does not apply the factor again after the beacon node returns its auction result.
+
+Each direct-builder entry requires `url`, `auth_data`, `builder_pubkeys` and `max_execution_payment`. `min_bid` and `builder_boost_factor` are optional; an omitted value inherits the P2P value resolved for the proposer being served. An explicit `null` is invalid, as it is for the root and proposer fields. `--proposer-config-check` shows the resolved values, including the inherited ones. The execution configuration itself is not rewritten: an omitted field stays omitted.
+
+- `url` is an absolute HTTP or HTTPS URL, at most 2048 bytes.
+- `auth_data` is non-empty, `0x`-prefixed opaque hex agreed with the builder, at most 4096 decoded bytes. Vouch binds it to the proposal slot and signs it through the validator signer. It is emitted only in that authenticated request. Logs, metrics, errors, configuration dumps, and `--proposer-config-check` never expose its value, hash, or length. Configuration output shows `"redacted"` instead.
+- `builder_pubkeys` contains at most 64 BLS public keys. An empty list accepts a bid signed by any builder key returned by that endpoint.
+- `max_execution_payment` and `min_bid` are decimal Gwei integer strings in the unsigned 64-bit range.
+- The beacon node values a bid from an entry at its `value` plus `min(execution_payment, max_execution_payment)`, and rejects it if that is below the entry's `min_bid`. So `min_bid` may exceed `max_execution_payment`, including when it is inherited: the bid's `value` must cover the difference.
+- `builder_boost_factor` is an unsigned 64-bit integer with the same weighting semantics as the top-level factor.
+
+A builder list contains at most 64 entries. Entries sharing both URL and authorization are invalid.
+
+If Vouch cannot sign the authorization for a proposal, it logs a warning and requests that block without direct builders. Local and P2P bids remain eligible.
+
+Each field resolves independently, and the first value present wins:
+
+| Field | 1 | 2 | 3 | 4 |
+| --- | --- | --- | --- | --- |
+| P2P `min_bid` | first matching proposer `epbs_builder_config.min_bid` | root `epbs_builder_config.min_bid` | `builderconfig.fallback-min-bid` | `0` |
+| P2P `builder_boost_factor` | first matching proposer `epbs_builder_config.builder_boost_factor` | root `epbs_builder_config.builder_boost_factor` | `builderconfig.fallback-builder-boost-factor` | `100` |
+| Entry `min_bid` | the entry's `min_bid` | resolved P2P `min_bid` for this proposer | | |
+| Entry `builder_boost_factor` | the entry's `builder_boost_factor` | resolved P2P `builder_boost_factor` for this proposer | | |
+
+With no configuration URL, no configuration loaded yet, or a version 1 configuration, only columns 3 and 4 apply.
+
+An omitted proposer `builders` field inherits the root list, an explicit empty list disables direct builders for that proposer, and a non-empty proposer list replaces the root list as a whole. An entry inherited from the root list takes the resolved values of the proposer it serves, not the root's values. Builder entries are never merged by URL or public key.
+
+An empty direct-builder list does not disable P2P bids. The Beacon API has no switch that absolutely disables P2P bidding.
+
+So far, all pre-Gloas execution block building will be local. If use of MEV relays is required to obtain pre-Gloas blocks this can be added as follows:
 
 ```json
 {
@@ -435,6 +515,20 @@ Proposing blocks is a relatively rare event, and as such it is useful for users 
 vouch --proposer-config-check 0x8021…8bbe | jq .
 {
   "fee_recipient": "000102030405060708090a0b0c0d0e0f10111213",
+  "epbs_builder_config": {
+    "min_bid": "0",
+    "builder_boost_factor": 100,
+    "builders": [
+      {
+        "url": "https://builder.example",
+        "auth_data": "redacted",
+        "builder_pubkeys": [],
+        "max_execution_payment": "0",
+        "min_bid": "0",
+        "builder_boost_factor": 100
+      }
+    ]
+  },
   "relays": [
     {
       "address": "https://relay2.com/",
@@ -446,6 +540,8 @@ vouch --proposer-config-check 0x8021…8bbe | jq .
   ]
 }
 ```
+
+The `epbs_builder_config` block is always present, including on pre-Gloas networks and with a version 1 configuration. It shows the Gloas ePBS policy that would be sent for this proposer, with every fallback and inherited value filled in. A direct builder's `min_bid` and `builder_boost_factor` appear even when the configuration omits them.
 
 (Note that in the above example the output is piped to `jq` to provide formatted output.  This step is unnecessary, and everything at and after the `|` character can be removed from the command if desired, or if `jq` is not installed on the server running Vouch.)
 

@@ -1,4 +1,4 @@
-// Copyright © 2020 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,20 +15,26 @@ package immediate_test
 
 import (
 	"context"
-	"github.com/attestantio/go-eth2-client/spec"
+	"errors"
 	"testing"
 
+	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	apiv1 "github.com/attestantio/go-eth2-client/api/v1"
+	mockconsensusclient "github.com/attestantio/go-eth2-client/mock"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/submitter"
 	"github.com/attestantio/vouch/services/submitter/immediate"
+	"github.com/attestantio/vouch/testing/logger"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
 func TestService(t *testing.T) {
+	ctx := context.Background()
 	attestationsSubmitter := mock.NewAttestationsSubmitter()
 	proposalSubmitter := mock.NewProposalSubmitter()
 	beaconCommitteeSubscriptionSubmitter := mock.NewBeaconCommitteeSubscriptionsSubmitter()
@@ -37,6 +43,8 @@ func TestService(t *testing.T) {
 	syncCommitteeMessagesSubmitter := mock.NewSyncCommitteeMessagesSubmitter()
 	syncCommitteeSubscriptionsSubmitter := mock.NewSyncCommitteeSubscriptionsSubmitter()
 	syncCommitteeContributionsSubmitter := mock.NewSyncCommitteeContributionsSubmitter()
+	executionPayloadEnvelopeSubmitter, err := mockconsensusclient.New(ctx)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name   string
@@ -86,6 +94,21 @@ func TestService(t *testing.T) {
 				immediate.WithSyncCommitteeContributionsSubmitter(syncCommitteeContributionsSubmitter),
 			},
 			err: "problem with parameters: no proposal submitter specified",
+		},
+		{
+			name: "ExecutionPayloadEnvelopeSubmitterMissing",
+			params: []immediate.Parameter{
+				immediate.WithLogLevel(zerolog.Disabled),
+				immediate.WithAttestationsSubmitter(attestationsSubmitter),
+				immediate.WithProposalSubmitter(proposalSubmitter),
+				immediate.WithBeaconCommitteeSubscriptionsSubmitter(beaconCommitteeSubscriptionSubmitter),
+				immediate.WithAggregateAttestationsSubmitter(aggregateAttestationSubmitter),
+				immediate.WithProposalPreparationsSubmitter(proposalPreparationsSubmitter),
+				immediate.WithSyncCommitteeSubscriptionsSubmitter(syncCommitteeSubscriptionsSubmitter),
+				immediate.WithSyncCommitteeMessagesSubmitter(syncCommitteeMessagesSubmitter),
+				immediate.WithSyncCommitteeContributionsSubmitter(syncCommitteeContributionsSubmitter),
+			},
+			err: "problem with parameters: no execution payload envelope submitter specified",
 		},
 		{
 			name: "AttestationSubnetSubscriptionsSubmitterMissing",
@@ -189,7 +212,11 @@ func TestService(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := immediate.New(context.Background(), test.params...)
+			params := test.params
+			if test.name != "ExecutionPayloadEnvelopeSubmitterMissing" {
+				params = append(params, immediate.WithExecutionPayloadEnvelopeSubmitter(executionPayloadEnvelopeSubmitter))
+			}
+			_, err := immediate.New(ctx, params...)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 			} else {
@@ -199,8 +226,18 @@ func TestService(t *testing.T) {
 	}
 }
 
+func newTestService(ctx context.Context, params ...immediate.Parameter) (*immediate.Service, error) {
+	executionPayloadEnvelopeSubmitter, err := mockconsensusclient.New(ctx)
+	if err != nil {
+		return nil, err
+	}
+	params = append(params, immediate.WithExecutionPayloadEnvelopeSubmitter(executionPayloadEnvelopeSubmitter))
+
+	return immediate.New(ctx, params...)
+}
+
 func TestInterfaces(t *testing.T) {
-	s, err := immediate.New(context.Background(),
+	s, err := newTestService(context.Background(),
 		immediate.WithLogLevel(zerolog.Disabled),
 		immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
 		immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
@@ -220,6 +257,75 @@ func TestInterfaces(t *testing.T) {
 	require.Implements(t, (*submitter.SyncCommitteeMessagesSubmitter)(nil), s)
 	require.Implements(t, (*submitter.SyncCommitteeSubscriptionsSubmitter)(nil), s)
 	require.Implements(t, (*submitter.SyncCommitteeContributionsSubmitter)(nil), s)
+	require.Implements(t, (*submitter.ProposerPreferencesSubmitter)(nil), s)
+}
+
+func TestSubmitProposerPreferences(t *testing.T) {
+	ctx := context.Background()
+	preferencesSubmitter := &recordingProposerPreferencesSubmitter{}
+	service, err := newTestService(ctx,
+		immediate.WithLogLevel(zerolog.Disabled),
+		immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+		immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
+		immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+		immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+		immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
+		immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+		immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+		immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+		immediate.WithProposerPreferencesSubmitter(preferencesSubmitter),
+	)
+	require.NoError(t, err)
+
+	preferences := []*gloas.SignedProposerPreferences{{}}
+
+	require.Equal(t, map[string]error{"test": nil}, service.SubmitProposerPreferences(ctx, preferences, nil))
+	require.Equal(t, preferences, preferencesSubmitter.preferences)
+}
+
+func TestSubmitProposerPreferencesWarnsForFailingNode(t *testing.T) {
+	ctx := context.Background()
+	capture := logger.NewLogCapture()
+	service, err := newTestService(ctx,
+		immediate.WithAttestationsSubmitter(mock.NewAttestationsSubmitter()),
+		immediate.WithProposalSubmitter(mock.NewProposalSubmitter()),
+		immediate.WithBeaconCommitteeSubscriptionsSubmitter(mock.NewBeaconCommitteeSubscriptionsSubmitter()),
+		immediate.WithAggregateAttestationsSubmitter(mock.NewAggregateAttestationsSubmitter()),
+		immediate.WithProposalPreparationsSubmitter(mock.NewProposalPreparationsSubmitter()),
+		immediate.WithSyncCommitteeSubscriptionsSubmitter(mock.NewSyncCommitteeSubscriptionsSubmitter()),
+		immediate.WithSyncCommitteeMessagesSubmitter(mock.NewSyncCommitteeMessagesSubmitter()),
+		immediate.WithSyncCommitteeContributionsSubmitter(mock.NewSyncCommitteeContributionsSubmitter()),
+		immediate.WithProposerPreferencesSubmitters(map[string]eth2client.ProposerPreferencesSubmitter{
+			"good": &recordingProposerPreferencesSubmitter{},
+			"bad":  &recordingProposerPreferencesSubmitter{err: errors.New("rejected")},
+		}),
+	)
+	require.NoError(t, err)
+
+	outcomes := service.SubmitProposerPreferences(ctx, []*gloas.SignedProposerPreferences{{}}, nil)
+
+	require.NoError(t, outcomes["good"])
+	require.EqualError(t, outcomes["bad"], "rejected")
+	require.True(t, capture.HasLog(map[string]any{"level": "warn", "message": "Failed to submit proposer preferences", "beacon_node_address": "bad"}))
+	require.False(t, capture.HasLog(map[string]any{"level": "warn", "beacon_node_address": "good"}))
+}
+
+type recordingProposerPreferencesSubmitter struct {
+	preferences []*gloas.SignedProposerPreferences
+	err         error
+}
+
+func (*recordingProposerPreferencesSubmitter) Name() string { return "test" }
+
+func (*recordingProposerPreferencesSubmitter) Address() string { return "test" }
+
+func (*recordingProposerPreferencesSubmitter) IsActive() bool { return true }
+
+func (*recordingProposerPreferencesSubmitter) IsSynced() bool { return true }
+
+func (s *recordingProposerPreferencesSubmitter) SubmitProposerPreferences(_ context.Context, opts *api.SubmitProposerPreferencesOpts) error {
+	s.preferences = opts.Preferences
+	return s.err
 }
 
 func TestSubmitProposal(t *testing.T) {
@@ -293,7 +399,7 @@ func TestSubmitProposal(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		s, err := immediate.New(context.Background(), test.params...)
+		s, err := newTestService(context.Background(), test.params...)
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {
@@ -379,7 +485,7 @@ func TestSubmitAttestations(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		s, err := immediate.New(context.Background(), test.params...)
+		s, err := newTestService(context.Background(), test.params...)
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {
@@ -472,7 +578,7 @@ func TestSubmitAggregateAttestations(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		s, err := immediate.New(context.Background(), test.params...)
+		s, err := newTestService(context.Background(), test.params...)
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {
@@ -566,7 +672,7 @@ func TestSubmitProposalPreparations(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		s, err := immediate.New(context.Background(), test.params...)
+		s, err := newTestService(context.Background(), test.params...)
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {
@@ -656,7 +762,7 @@ func TestSubmitBeaconCommitteeSubscriptions(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		s, err := immediate.New(context.Background(), test.params...)
+		s, err := newTestService(context.Background(), test.params...)
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {
@@ -746,7 +852,7 @@ func TestSubmitSyncCommitteeSubscriptions(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		s, err := immediate.New(context.Background(), test.params...)
+		s, err := newTestService(context.Background(), test.params...)
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {
@@ -836,7 +942,7 @@ func TestSubmitSyncCommitteeMessages(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		s, err := immediate.New(context.Background(), test.params...)
+		s, err := newTestService(context.Background(), test.params...)
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {
@@ -926,7 +1032,7 @@ func TestSubmitSyncCommitteeContributions(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		s, err := immediate.New(context.Background(), test.params...)
+		s, err := newTestService(context.Background(), test.params...)
 		require.NoError(t, err)
 
 		t.Run(test.name, func(t *testing.T) {

@@ -1,0 +1,110 @@
+// Copyright © 2026 Attestant Limited.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package beaconblockproposer
+
+import (
+	"context"
+	"regexp"
+	"strings"
+
+	"github.com/attestantio/vouch/util"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/attribute"
+)
+
+const (
+	// MetadataStrategy identifies the proposal strategy that selected a response.
+	MetadataStrategy = "vouch.strategy"
+	// MetadataProvider identifies the stable provider name that supplied a response.
+	MetadataProvider = "vouch.provider"
+	// MetadataSource identifies where the beacon node obtained the execution payload bid.
+	MetadataSource = "vouch.source"
+)
+
+var endpointInError = regexp.MustCompile(`(?i)(?:https?|grpc)://\S+`)
+
+type requestIDContextKey struct{}
+
+// EnsureRequestID returns a context carrying the proposal request ID and the ID itself.
+func EnsureRequestID(ctx context.Context) (context.Context, string) {
+	if requestID := RequestID(ctx); requestID != "" {
+		return ctx, requestID
+	}
+	requestID := uuid.NewString()
+	return context.WithValue(ctx, requestIDContextKey{}, requestID), requestID
+}
+
+// RequestID returns the proposal request ID carried by ctx.
+func RequestID(ctx context.Context) string {
+	requestID, _ := ctx.Value(requestIDContextKey{}).(string)
+	return requestID
+}
+
+// SafeError returns an error message with endpoint values removed.
+func SafeError(err error, sensitiveValues ...string) string {
+	if err == nil {
+		return ""
+	}
+	message := err.Error()
+	for _, value := range sensitiveValues {
+		if value != "" {
+			message = strings.ReplaceAll(message, value, "<redacted>")
+		}
+	}
+	return endpointInError.ReplaceAllString(message, "<redacted>")
+}
+
+// StableProviderName returns the configured provider's position without exposing its endpoint.
+func StableProviderName(provider string) string {
+	return util.BeaconNodeName(provider)
+}
+
+// WithClientDetails adds known, validated client details to a provider log event.
+func WithClientDetails(event *zerolog.Event, provider string) {
+	client, version := util.BeaconNodeClientDetails(provider)
+	if client != "" {
+		event.Str("client", client).Str("client_version", version)
+	}
+}
+
+// ClientDetailsAttributes adds known, validated client details to a provider span.
+func ClientDetailsAttributes(provider string) []attribute.KeyValue {
+	client, version := util.BeaconNodeClientDetails(provider)
+	if client == "" {
+		return nil
+	}
+	return []attribute.KeyValue{
+		attribute.String("client", client),
+		attribute.String("client_version", version),
+	}
+}
+
+// BuilderURLPresent reports whether response metadata contains a non-empty builder URL.
+func BuilderURLPresent(metadata map[string]any) bool {
+	// Metadata keys come from response headers, which can arrive with any casing, so more than
+	// one spelling of the key can be present.  Map iteration order is random, so returning on the
+	// first match would make the answer depend on that order: keep looking until one carries a
+	// value.
+	for key, value := range metadata {
+		if !strings.EqualFold(key, "Eth-Builder-Url") {
+			continue
+		}
+		if builderURL, isString := value.(string); isString && builderURL != "" {
+			return true
+		}
+	}
+
+	return false
+}

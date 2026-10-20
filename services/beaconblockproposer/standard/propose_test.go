@@ -1,4 +1,4 @@
-// Copyright © 2021 - 2023 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -15,6 +15,7 @@ package standard_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -70,6 +71,7 @@ func TestPropose(t *testing.T) {
 	require.NoError(t, err)
 	blockAuctioneer := mockblockauctioneer.New()
 	cacheService := mockcache.New(map[phase0.Root]phase0.Slot{})
+	executionConfigProvider := &recordingExecutionConfigProvider{err: errors.New("must not be called before Gloas")}
 
 	// Create an account.
 	require.NoError(t, e2types.InitBLS())
@@ -118,13 +120,18 @@ func TestPropose(t *testing.T) {
 			s, err := standard.New(ctx,
 				standard.WithMonitor(nullmetrics.New()),
 				standard.WithProposalDataProvider(consensusClient),
+				standard.WithExecutionConfigProvider(executionConfigProvider),
 				standard.WithChainTime(chainTime),
 				standard.WithValidatingAccountsProvider(validatingAccountsProvider),
-				standard.WithProposalSubmitter(consensusClient),
+				standard.WithProposalSubmitter(&capturingProposalSubmitter{}),
+				standard.WithExecutionPayloadEnvelopeSubmitter(consensusClient),
 				standard.WithRANDAORevealSigner(signer),
 				standard.WithGraffitiProvider(graffitiProvider),
 				standard.WithBeaconBlockSigner(signer),
+				standard.WithExecutionPayloadEnvelopeSigner(signer),
 				standard.WithBlobSidecarSigner(signer),
+				standard.WithExecutionConfigProvider(&recordingExecutionConfigProvider{}),
+				standard.WithBuilderRequestAuthSigner(&capturingBuilderRequestAuthSigner{}),
 				standard.WithBlockAuctioneer(blockAuctioneer),
 				standard.WithExecutionChainHeadProvider(cacheService.(cache.ExecutionChainHeadProvider)),
 			)
@@ -142,4 +149,5 @@ func TestPropose(t *testing.T) {
 			}
 		})
 	}
+	require.Zero(t, executionConfigProvider.calls)
 }

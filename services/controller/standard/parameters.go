@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -24,11 +24,14 @@ import (
 	"github.com/attestantio/vouch/services/attester"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/beaconcommitteesubscriber"
+	"github.com/attestantio/vouch/services/blockrelay"
 	"github.com/attestantio/vouch/services/cache"
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/attestantio/vouch/services/multiinstance"
+	"github.com/attestantio/vouch/services/payloadattester"
 	"github.com/attestantio/vouch/services/proposalpreparer"
+	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/attestantio/vouch/services/scheduler"
 	"github.com/attestantio/vouch/services/synccommitteeaggregator"
 	"github.com/attestantio/vouch/services/synccommitteemessenger"
@@ -38,39 +41,45 @@ import (
 )
 
 type parameters struct {
-	logLevel                      zerolog.Level
-	monitor                       metrics.Service
-	specProvider                  eth2client.SpecProvider
-	chainTimeService              chaintime.Service
-	waitedForGenesis              bool
-	proposerDutiesProvider        eth2client.ProposerDutiesProvider
-	attesterDutiesProvider        eth2client.AttesterDutiesProvider
-	syncCommitteeDutiesProvider   eth2client.SyncCommitteeDutiesProvider
-	syncCommitteesSubscriber      synccommitteesubscriber.Service
-	validatingAccountsProvider    accountmanager.ValidatingAccountsProvider
-	proposalsPreparer             proposalpreparer.Service
-	scheduler                     scheduler.Service
-	eventsProvider                eth2client.EventsProvider
-	attester                      attester.Service
-	syncCommitteeMessenger        synccommitteemessenger.Service
-	syncCommitteeAggregator       synccommitteeaggregator.Service
-	beaconBlockProposer           beaconblockproposer.Service
-	beaconBlockHeadersProvider    eth2client.BeaconBlockHeadersProvider
-	signedBeaconBlockProvider     eth2client.SignedBeaconBlockProvider
-	attestationAggregator         attestationaggregator.Service
-	beaconCommitteeSubscriber     beaconcommitteesubscriber.Service
-	accountsRefresher             accountmanager.Refresher
-	blockToSlotSetter             cache.BlockRootToSlotSetter
-	maxProposalDelay              time.Duration
-	maxAttestationDelay           time.Duration
-	attestationAggregationDelay   time.Duration
-	maxSyncCommitteeMessageDelay  time.Duration
-	syncCommitteeAggregationDelay time.Duration
-	verifySyncCommitteeInclusion  bool
-	fastTrackAttestations         bool
-	fastTrackSyncCommittees       bool
-	fastTrackGrace                time.Duration
-	multiInstance                 multiinstance.Service
+	monitor                      metrics.Service
+	specProvider                 eth2client.SpecProvider
+	chainTimeService             chaintime.Service
+	executionConfigProvider      blockrelay.ExecutionConfigProvider
+	proposerDutiesProvider       eth2client.ProposerDutiesProvider
+	proposerDutiesV2Provider     eth2client.ProposerDutiesV2Provider
+	attesterDutiesProvider       eth2client.AttesterDutiesProvider
+	syncCommitteeDutiesProvider  eth2client.SyncCommitteeDutiesProvider
+	ptcDutiesProvider            eth2client.PTCDutiesProvider
+	validatingAccountsProvider   accountmanager.ValidatingAccountsProvider
+	eventsProvider               eth2client.EventsProvider
+	payloadEventsProvider        eth2client.EventsProvider
+	beaconBlockHeadersProvider   eth2client.BeaconBlockHeadersProvider
+	signedBeaconBlockProvider    eth2client.SignedBeaconBlockProvider
+	logLevel                     zerolog.Level
+	waitedForGenesis             bool
+	syncCommitteesSubscriber     synccommitteesubscriber.Service
+	proposalsPreparer            proposalpreparer.Service
+	scheduler                    scheduler.Service
+	attester                     attester.Service
+	syncCommitteeMessenger       synccommitteemessenger.Service
+	syncCommitteeAggregator      synccommitteeaggregator.Service
+	payloadAttester              payloadattester.Service
+	beaconBlockProposer          beaconblockproposer.Service
+	proposerPreferences          proposerpreferences.Publisher
+	attestationAggregator        attestationaggregator.Service
+	beaconCommitteeSubscriber    beaconcommitteesubscriber.Service
+	accountsRefresher            accountmanager.Refresher
+	blockToSlotSetter            cache.BlockRootToSlotSetter
+	maxProposalDelay             time.Duration
+	overrides                    dutyTimings
+	payloadAttestationDelay      time.Duration
+	preGloasTimings              dutyTimings
+	gloasTimings                 dutyTimings
+	verifySyncCommitteeInclusion bool
+	fastTrackAttestations        bool
+	fastTrackSyncCommittees      bool
+	fastTrackGrace               time.Duration
+	multiInstance                multiinstance.Service
 }
 
 // Parameter is the interface for service parameters.
@@ -126,6 +135,13 @@ func WithProposerDutiesProvider(provider eth2client.ProposerDutiesProvider) Para
 	})
 }
 
+// WithProposerDutiesV2Provider sets the proposer duties v2 provider used for proposer preferences.
+func WithProposerDutiesV2Provider(provider eth2client.ProposerDutiesV2Provider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.proposerDutiesV2Provider = provider
+	})
+}
+
 // WithAttesterDutiesProvider sets the attester duties provider.
 func WithAttesterDutiesProvider(provider eth2client.AttesterDutiesProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -151,6 +167,13 @@ func WithSyncCommitteeSubscriber(subscriber synccommitteesubscriber.Service) Par
 func WithEventsProvider(provider eth2client.EventsProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.eventsProvider = provider
+	})
+}
+
+// WithPayloadEventsProvider sets the payload events provider.
+func WithPayloadEventsProvider(provider eth2client.EventsProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.payloadEventsProvider = provider
 	})
 }
 
@@ -217,6 +240,20 @@ func WithBeaconBlockProposer(proposer beaconblockproposer.Service) Parameter {
 	})
 }
 
+// WithProposerPreferences sets the proposer preferences publisher.
+func WithProposerPreferences(preferences proposerpreferences.Publisher) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.proposerPreferences = preferences
+	})
+}
+
+// WithExecutionConfigProvider sets the execution configuration provider.
+func WithExecutionConfigProvider(provider blockrelay.ExecutionConfigProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.executionConfigProvider = provider
+	})
+}
+
 // WithAttestationAggregator sets the attestation aggregator.
 func WithAttestationAggregator(aggregator attestationaggregator.Service) Parameter {
 	return parameterFunc(func(p *parameters) {
@@ -252,31 +289,33 @@ func WithMaxProposalDelay(delay time.Duration) Parameter {
 	})
 }
 
-// WithMaxAttestationDelay sets the maximum delay before attesting.
+// WithMaxAttestationDelay sets the maximum delay before attesting.  It applies to pre-Gloas slots only.
 func WithMaxAttestationDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.maxAttestationDelay = delay
+		p.overrides.maxAttestationDelay = delay
 	})
 }
 
-// WithAttestationAggregationDelay sets the delay before aggregating attestations.
+// WithAttestationAggregationDelay sets the delay before aggregating attestations.  It applies to pre-Gloas slots only.
 func WithAttestationAggregationDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.attestationAggregationDelay = delay
+		p.overrides.attestationAggregationDelay = delay
 	})
 }
 
-// WithMaxSyncCommitteeMessageDelay sets the maximum delay before generating sync committee messages.
+// WithMaxSyncCommitteeMessageDelay sets the maximum delay before generating sync committee messages.  It applies to
+// pre-Gloas slots only.
 func WithMaxSyncCommitteeMessageDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.maxSyncCommitteeMessageDelay = delay
+		p.overrides.maxSyncCommitteeMessageDelay = delay
 	})
 }
 
-// WithSyncCommitteeAggregationDelay sets the delay before aggregating sync committee messages.
+// WithSyncCommitteeAggregationDelay sets the delay before aggregating sync committee messages.  It applies to
+// pre-Gloas slots only.
 func WithSyncCommitteeAggregationDelay(delay time.Duration) Parameter {
 	return parameterFunc(func(p *parameters) {
-		p.syncCommitteeAggregationDelay = delay
+		p.overrides.syncCommitteeAggregationDelay = delay
 	})
 }
 
@@ -324,87 +363,209 @@ func parseAndCheckParameters(ctx context.Context, params ...Parameter) (*paramet
 		p.apply(&parameters)
 	}
 
-	if parameters.monitor == nil {
-		return nil, errors.New("no monitor specified")
+	if err := parameters.validate(); err != nil {
+		return nil, err
 	}
-	if parameters.specProvider == nil {
-		return nil, errors.New("no spec provider specified")
-	}
-	if parameters.chainTimeService == nil {
-		return nil, errors.New("no chain time service specified")
-	}
-	if parameters.proposerDutiesProvider == nil {
-		return nil, errors.New("no proposer duties provider specified")
-	}
-	if parameters.attesterDutiesProvider == nil {
-		return nil, errors.New("no attester duties provider specified")
-	}
-	if parameters.eventsProvider == nil {
-		return nil, errors.New("no events provider specified")
-	}
-	if parameters.validatingAccountsProvider == nil {
-		return nil, errors.New("no validating accounts provider specified")
-	}
-	if parameters.proposalsPreparer == nil {
-		return nil, errors.New("no proposals preparer specified")
-	}
-	if parameters.scheduler == nil {
-		return nil, errors.New("no scheduler service specified")
-	}
-	if parameters.attester == nil {
-		return nil, errors.New("no attester specified")
-	}
-	if parameters.beaconBlockProposer == nil {
-		return nil, errors.New("no beacon block proposer specified")
-	}
-	if parameters.beaconBlockHeadersProvider == nil {
-		return nil, errors.New("no beacon block headers provider specified")
-	}
-	if parameters.signedBeaconBlockProvider == nil {
-		return nil, errors.New("no signed beacon block provider specified")
-	}
-	if parameters.attestationAggregator == nil {
-		return nil, errors.New("no attestation aggregator specified")
-	}
-	if parameters.beaconCommitteeSubscriber == nil {
-		return nil, errors.New("no beacon committee subscriber specified")
-	}
-	if parameters.accountsRefresher == nil {
-		return nil, errors.New("no accounts refresher specified")
-	}
-	if parameters.blockToSlotSetter == nil {
-		return nil, errors.New("no block to slot setter specified")
-	}
-	if parameters.multiInstance == nil {
-		return nil, errors.New("no multi instance service specified")
-	}
-	specResponse, err := parameters.specProvider.Spec(ctx, &api.SpecOpts{})
+	spec, slotDuration, err := parameters.slotDuration(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to obtain spec")
+		return nil, err
 	}
-	spec := specResponse.Data
-	tmp, exists := spec["SECONDS_PER_SLOT"]
-	if !exists {
-		return nil, errors.New("SECONDS_PER_SLOT not found in spec")
-	}
-	slotDuration, ok := tmp.(time.Duration)
-	if !ok {
-		return nil, errors.New("SECONDS_PER_SLOT of unexpected type")
+	if err := parameters.overrides.checkWithinSlot(slotDuration); err != nil {
+		return nil, err
 	}
 	// maxProposalDelay can be 0, so no check for it here.
-	if parameters.maxAttestationDelay == 0 {
-		parameters.maxAttestationDelay = slotDuration / 3
-	}
-	if parameters.attestationAggregationDelay == 0 {
-		parameters.attestationAggregationDelay = slotDuration * 2 / 3
-	}
-	if parameters.maxSyncCommitteeMessageDelay == 0 {
-		parameters.maxSyncCommitteeMessageDelay = slotDuration / 3
-	}
-	if parameters.syncCommitteeAggregationDelay == 0 {
-		parameters.syncCommitteeAggregationDelay = slotDuration * 2 / 3
-	}
+	parameters.setDefaultDelays(spec, slotDuration)
 	// Sync committee duties provider/messenger/aggregator/subscriber are optional so no checks here.
 
 	return &parameters, nil
+}
+
+func (p *parameters) validate() error {
+	checks := []struct {
+		valid bool
+		err   string
+	}{
+		{p.monitor != nil, "no monitor specified"},
+		{p.specProvider != nil, "no spec provider specified"},
+		{p.chainTimeService != nil, "no chain time service specified"},
+		{p.proposerDutiesProvider != nil, "no proposer duties provider specified"},
+		{p.proposerPreferences == nil || p.proposerDutiesV2Provider != nil, "no proposer duties v2 provider specified"},
+		{p.attesterDutiesProvider != nil, "no attester duties provider specified"},
+		{p.eventsProvider != nil, "no events provider specified"},
+		{p.validatingAccountsProvider != nil, "no validating accounts provider specified"},
+		{p.proposalsPreparer != nil, "no proposals preparer specified"},
+		{p.scheduler != nil, "no scheduler service specified"},
+		{p.attester != nil, "no attester specified"},
+		{p.beaconBlockProposer != nil, "no beacon block proposer specified"},
+		{p.beaconBlockHeadersProvider != nil, "no beacon block headers provider specified"},
+		{p.signedBeaconBlockProvider != nil, "no signed beacon block provider specified"},
+		{p.attestationAggregator != nil, "no attestation aggregator specified"},
+		{p.beaconCommitteeSubscriber != nil, "no beacon committee subscriber specified"},
+		{p.accountsRefresher != nil, "no accounts refresher specified"},
+		{p.blockToSlotSetter != nil, "no block to slot setter specified"},
+		{p.multiInstance != nil, "no multi instance service specified"},
+	}
+	for _, check := range checks {
+		if !check.valid {
+			return errors.New(check.err)
+		}
+	}
+
+	return nil
+}
+
+func (p *parameters) slotDuration(ctx context.Context) (map[string]any, time.Duration, error) {
+	specResponse, err := p.specProvider.Spec(ctx, &api.SpecOpts{})
+	if err != nil {
+		return nil, 0, errors.Wrap(err, "failed to obtain spec")
+	}
+	secondsPerSlot, exists := specResponse.Data["SECONDS_PER_SLOT"]
+	if !exists {
+		return nil, 0, errors.New("SECONDS_PER_SLOT not found in spec")
+	}
+	slotDuration, ok := secondsPerSlot.(time.Duration)
+	if !ok {
+		return nil, 0, errors.New("SECONDS_PER_SLOT of unexpected type")
+	}
+
+	return specResponse.Data, slotDuration, nil
+}
+
+// WithPTCDutiesProvider sets the payload timeliness committee duties provider.
+func WithPTCDutiesProvider(provider eth2client.PTCDutiesProvider) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.ptcDutiesProvider = provider
+	})
+}
+
+// WithPayloadAttester sets the payload attester service.
+func WithPayloadAttester(attester payloadattester.Service) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.payloadAttester = attester
+	})
+}
+
+// WithPayloadAttestationDelay sets the delay before submitting payload attestations.
+func WithPayloadAttestationDelay(delay time.Duration) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.payloadAttestationDelay = delay
+	})
+}
+
+// dutyTimings holds the duty scheduling deadlines, as offsets in to the slot.
+type dutyTimings struct {
+	maxAttestationDelay           time.Duration
+	attestationAggregationDelay   time.Duration
+	maxSyncCommitteeMessageDelay  time.Duration
+	syncCommitteeAggregationDelay time.Duration
+}
+
+// applyOverrides replaces each deadline for which the operator supplied an explicit value.
+func (t *dutyTimings) applyOverrides(overrides dutyTimings) {
+	if overrides.maxAttestationDelay != 0 {
+		t.maxAttestationDelay = overrides.maxAttestationDelay
+	}
+	if overrides.attestationAggregationDelay != 0 {
+		t.attestationAggregationDelay = overrides.attestationAggregationDelay
+	}
+	if overrides.maxSyncCommitteeMessageDelay != 0 {
+		t.maxSyncCommitteeMessageDelay = overrides.maxSyncCommitteeMessageDelay
+	}
+	if overrides.syncCommitteeAggregationDelay != 0 {
+		t.syncCommitteeAggregationDelay = overrides.syncCommitteeAggregationDelay
+	}
+}
+
+// checkWithinSlot errors if any deadline falls at or after the end of the slot, where the duty
+// would always be late.
+func (t *dutyTimings) checkWithinSlot(slotDuration time.Duration) error {
+	delays := []struct {
+		name  string
+		delay time.Duration
+	}{
+		{"max attestation delay", t.maxAttestationDelay},
+		{"attestation aggregation delay", t.attestationAggregationDelay},
+		{"max sync committee message delay", t.maxSyncCommitteeMessageDelay},
+		{"sync committee aggregation delay", t.syncCommitteeAggregationDelay},
+	}
+	for _, d := range delays {
+		if d.delay >= slotDuration {
+			return errors.Errorf("%s %s must be less than the slot duration %s", d.name, d.delay, slotDuration)
+		}
+	}
+
+	return nil
+}
+
+// setDefaultDelays derives both the pre-Gloas and the Gloas duty timings.  Both are derived here,
+// at construction, but which of them applies is decided per duty from that duty's slot; deciding it
+// here would freeze the process on whichever side of the fork it happened to start.
+// Operator overrides apply to the pre-Gloas deadlines only: Gloas deadlines always follow the spec.
+func (p *parameters) setDefaultDelays(spec map[string]any, slotDuration time.Duration) {
+	p.preGloasTimings = obtainAttestationTimings(spec, slotDuration, false)
+	p.preGloasTimings.applyOverrides(p.overrides)
+	p.gloasTimings = obtainAttestationTimings(spec, slotDuration, true)
+
+	if p.payloadAttestationDelay == 0 {
+		p.payloadAttestationDelay = obtainPayloadAttestationTiming(spec, slotDuration)
+	}
+}
+
+// gloasSlotDuration provides the slot duration in effect after Gloas.  Gloas serves this in
+// milliseconds, and it can differ from SECONDS_PER_SLOT, so every Gloas-derived deadline must be a
+// fraction of this value rather than of SECONDS_PER_SLOT.
+func gloasSlotDuration(spec map[string]any, slotDuration time.Duration) time.Duration {
+	if durationMS, ok := spec["SLOT_DURATION_MS"].(uint64); ok && durationMS != 0 {
+		return time.Duration(durationMS) * time.Millisecond
+	}
+
+	return slotDuration
+}
+
+// dueBPS provides the deadline held in the named spec value, in basis points of the slot duration,
+// falling back to the supplied default if the value is not served or is out of range.  The name is
+// the exact key.  Gloas redefines the attestation and sync committee deadlines under
+// _GLOAS-suffixed keys and keeps serving the unsuffixed keys for the slots before the fork, so
+// reading the unsuffixed key after the fork would schedule duties to the deadlines it moved away
+// from; the payload attestation deadline is new in Gloas and has no suffixed form.
+func dueBPS(spec map[string]any, name string, slotDuration, fallback time.Duration) time.Duration {
+	bps, ok := spec[name].(uint64)
+	if !ok || bps == 0 || bps > 10000 {
+		return fallback
+	}
+
+	return slotDuration * time.Duration(bps) / 10000
+}
+
+func obtainAttestationTimings(spec map[string]any, slotDuration time.Duration, gloasActive bool) dutyTimings {
+	if !gloasActive {
+		// The ratios are the pre-Gloas basis-point deadlines: ATTESTATION_DUE_BPS and
+		// SYNC_MESSAGE_DUE_BPS are 3333, AGGREGATE_DUE_BPS and CONTRIBUTION_DUE_BPS are 6667.
+		return dutyTimings{
+			maxAttestationDelay:           slotDuration / 3,     // 4s on a 12-second slot.
+			attestationAggregationDelay:   slotDuration * 2 / 3, // 8s on a 12-second slot.
+			maxSyncCommitteeMessageDelay:  slotDuration / 3,     // 4s on a 12-second slot.
+			syncCommitteeAggregationDelay: slotDuration * 2 / 3, // 8s on a 12-second slot.
+		}
+	}
+
+	slotDuration = gloasSlotDuration(spec, slotDuration)
+
+	// The fallbacks are the Gloas deadlines themselves: ATTESTATION_DUE_BPS_GLOAS and
+	// SYNC_MESSAGE_DUE_BPS_GLOAS are 2500, AGGREGATE_DUE_BPS_GLOAS and CONTRIBUTION_DUE_BPS_GLOAS
+	// are 5000.  A node that does not serve them still schedules to this fork's timings.
+	return dutyTimings{
+		maxAttestationDelay:           dueBPS(spec, "ATTESTATION_DUE_BPS_GLOAS", slotDuration, slotDuration/4),  // 3s on a 12-second slot.
+		attestationAggregationDelay:   dueBPS(spec, "AGGREGATE_DUE_BPS_GLOAS", slotDuration, slotDuration/2),    // 6s on a 12-second slot.
+		maxSyncCommitteeMessageDelay:  dueBPS(spec, "SYNC_MESSAGE_DUE_BPS_GLOAS", slotDuration, slotDuration/4), // 3s on a 12-second slot.
+		syncCommitteeAggregationDelay: dueBPS(spec, "CONTRIBUTION_DUE_BPS_GLOAS", slotDuration, slotDuration/2), // 6s on a 12-second slot.
+	}
+}
+
+// obtainPayloadAttestationTiming provides the payload attestation deadline.  The duty exists only
+// after Gloas, so it always follows the Gloas slot duration.
+func obtainPayloadAttestationTiming(spec map[string]any, slotDuration time.Duration) time.Duration {
+	slotDuration = gloasSlotDuration(spec, slotDuration)
+
+	return dueBPS(spec, "PAYLOAD_ATTESTATION_DUE_BPS", slotDuration, slotDuration*3/4)
 }

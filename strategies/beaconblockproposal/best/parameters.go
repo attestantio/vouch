@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2023 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -23,17 +23,19 @@ import (
 	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/attestantio/vouch/services/metrics"
 	nullmetrics "github.com/attestantio/vouch/services/metrics/null"
+	"github.com/attestantio/vouch/services/proposerpreferences"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 type parameters struct {
+	specProvider           eth2client.SpecProvider
 	logLevel               zerolog.Level
 	clientMonitor          metrics.ClientMonitor
 	processConcurrency     int64
 	chainTime              chaintime.Service
-	specProvider           eth2client.SpecProvider
-	proposalProviders      map[string]eth2client.ProposalProvider
+	proposalProviders      map[string]eth2client.MultiForkProposalProvider
+	providerReadiness      proposerpreferences.ProviderReadiness
 	timeout                time.Duration
 	blockRootToSlotCache   cache.BlockRootToSlotProvider
 	executionPayloadFactor float64
@@ -93,9 +95,16 @@ func WithSpecProvider(provider eth2client.SpecProvider) Parameter {
 }
 
 // WithProposalProviders sets the proposal providers.
-func WithProposalProviders(providers map[string]eth2client.ProposalProvider) Parameter {
+func WithProposalProviders(providers map[string]eth2client.MultiForkProposalProvider) Parameter {
 	return parameterFunc(func(p *parameters) {
 		p.proposalProviders = providers
+	})
+}
+
+// WithProviderReadiness sets the proposer-preferences readiness provider.
+func WithProviderReadiness(provider proposerpreferences.ProviderReadiness) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.providerReadiness = provider
 	})
 }
 

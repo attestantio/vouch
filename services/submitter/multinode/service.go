@@ -1,4 +1,4 @@
-// Copyright © 2020 - 2024 Attestant Limited.
+// Copyright © 2020 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -19,6 +19,7 @@ import (
 
 	eth2client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/vouch/services/metrics"
+	"github.com/attestantio/vouch/services/submitter"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -31,6 +32,7 @@ type Service struct {
 	timeout                               time.Duration
 	processConcurrency                    int64
 	proposalSubmitters                    map[string]eth2client.ProposalSubmitter
+	executionPayloadEnvelopeSubmitters    map[string]eth2client.ExecutionPayloadEnvelopeSubmitter
 	attestationsSubmitters                map[string]eth2client.AttestationsSubmitter
 	aggregateAttestationsSubmitters       map[string]eth2client.AggregateAttestationsSubmitter
 	proposalPreparationsSubmitters        map[string]eth2client.ProposalPreparationsSubmitter
@@ -38,6 +40,8 @@ type Service struct {
 	syncCommitteeMessagesSubmitter        map[string]eth2client.SyncCommitteeMessagesSubmitter
 	syncCommitteeSubscriptionSubmitters   map[string]eth2client.SyncCommitteeSubscriptionsSubmitter
 	syncCommitteeContributionsSubmitters  map[string]eth2client.SyncCommitteeContributionsSubmitter
+	payloadAttestationMessagesSubmitters  map[string]submitter.PayloadAttestationMessagesSubmitter
+	proposerPreferencesSubmitters         map[string]eth2client.ProposerPreferencesSubmitter
 }
 
 // New creates a new multinode submitter.
@@ -59,6 +63,7 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		timeout:                               parameters.timeout,
 		processConcurrency:                    parameters.processConcurrency,
 		proposalSubmitters:                    parameters.proposalSubmitters,
+		executionPayloadEnvelopeSubmitters:    parameters.executionPayloadEnvelopeSubmitters,
 		attestationsSubmitters:                parameters.attestationsSubmitters,
 		aggregateAttestationsSubmitters:       parameters.aggregateAttestationsSubmitters,
 		proposalPreparationsSubmitters:        parameters.proposalPreparationsSubmitters,
@@ -66,6 +71,8 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 		syncCommitteeMessagesSubmitter:        parameters.syncCommitteeMessagesSubmitter,
 		syncCommitteeSubscriptionSubmitters:   parameters.syncCommitteeSubscriptionsSubmitters,
 		syncCommitteeContributionsSubmitters:  parameters.syncCommitteeContributionsSubmitters,
+		payloadAttestationMessagesSubmitters:  parameters.payloadAttestationMessagesSubmitters,
+		proposerPreferencesSubmitters:         parameters.proposerPreferencesSubmitters,
 	}
 	log.Trace().Int64("process_concurrency", s.processConcurrency).Msg("Set process concurrency")
 
