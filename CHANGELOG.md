@@ -42,6 +42,7 @@ dev:
   - replace configured beacon node endpoints in log output, gloas proposal spans and first strategy errors with their beacon-N position; client and strategy operation metrics keep the endpoint label
   - update go-eth2-client to a gloas pseudo-version
   - satisfy the attgo struct field order and comment capitalisation rules across services and strategies
+  - update golang.org/x/net to v0.60.0 and build the Docker image with Go 1.26.9 to pick up HTTP/2, Range header and TLS denial-of-service fixes; building now requires Go 1.26
 
 1.13.1:
   - initialise sync committee verification metrics to 0
