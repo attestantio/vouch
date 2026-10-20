@@ -1,3 +1,6 @@
+dev:
+  - update golang.org/x/net to v0.60.0 and build the Docker image with Go 1.26.9 to pick up HTTP/2, Range header and TLS denial-of-service fixes; building now requires Go 1.26
+
 1.14.0-alpha.2:
   - update go-eth2-client to v0.30.0
   - deprecate controller.max-attestation-delay, controller.attestation-aggregation-delay, controller.max-sync-committee-message-delay and controller.sync-committee-aggregation-delay; they now apply to pre-gloas slots only, gloas slots always use the spec-derived deadlines with no way to set an earlier one, and each one set to a non-zero value logs a warning at startup
