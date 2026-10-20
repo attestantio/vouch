@@ -648,7 +648,19 @@ func TestProposeGloasEchoesConfiguredBuilderURL(t *testing.T) {
 	ctx := context.Background()
 	const builderURL = "https://builder.example/gloas"
 	const secretBuilderURL = "https://user:secret@secret.example/gloas?key=secret#secret"
-	builders := []*beaconblockproposer.EPBSBuilder{{URL: "https://other.example"}, {URL: builderURL}, {URL: secretBuilderURL}}
+	const noMatch = "Beacon node returned a builder URL that matches no requested builder; not echoing it"
+	const ambiguous = "Beacon node returned a builder URL that matches more than one requested builder; not echoing it"
+	builders := []*beaconblockproposer.EPBSBuilder{
+		{URL: "https://other.example"},
+		{URL: builderURL},
+		{URL: secretBuilderURL},
+		{URL: "https://lighthouse.example"},
+		{URL: "https://Mixed.Example/Gloas"},
+		{URL: "https://port.example:443/gloas"},
+		{URL: "http://plain.example:8080"},
+		{URL: "https://dup.example"},
+		{URL: "https://DUP.example:443/"},
+	}
 
 	tests := []struct {
 		name               string
@@ -657,14 +669,13 @@ func TestProposeGloasEchoesConfiguredBuilderURL(t *testing.T) {
 		returnedBuilderURL string
 		echoedBuilderURL   string
 		loggedBuilderURL   string
-		unmatchedWarning   bool
+		warning            string
 	}{
 		{
 			name:               "ConfiguredBuilderWon",
 			builders:           builders,
 			returnedBuilderURL: builderURL,
 			echoedBuilderURL:   builderURL,
-			loggedBuilderURL:   builderURL,
 		},
 		{
 			name:               "ConfiguredBuilderWithSecretsWon",
@@ -674,31 +685,77 @@ func TestProposeGloasEchoesConfiguredBuilderURL(t *testing.T) {
 			loggedBuilderURL:   "https://secret.example/gloas",
 		},
 		{
-			name:               "UnconfiguredBuilderURLWithSecrets",
+			// Lighthouse returns the URL normalised, with an empty path as a slash.
+			name:               "LighthouseTrailingSlash",
 			builders:           builders,
-			returnedBuilderURL: "https://user:secret@unknown.example?key=secret",
-			loggedBuilderURL:   "https://unknown.example",
-			unmatchedWarning:   true,
+			returnedBuilderURL: "https://lighthouse.example/",
+			echoedBuilderURL:   "https://lighthouse.example",
+		},
+		{
+			name:               "SchemeAndHostCase",
+			builders:           builders,
+			returnedBuilderURL: "HTTPS://mixed.example/Gloas",
+			echoedBuilderURL:   "https://Mixed.Example/Gloas",
+		},
+		{
+			name:               "PathCaseDiffers",
+			builders:           builders,
+			returnedBuilderURL: "https://mixed.example/gloas",
+			loggedBuilderURL:   "https://mixed.example/gloas",
+			warning:            noMatch,
+		},
+		{
+			name:               "ExplicitDefaultPort",
+			builders:           builders,
+			returnedBuilderURL: "https://port.example/gloas",
+			echoedBuilderURL:   "https://port.example:443/gloas",
+		},
+		{
+			name:               "NonDefaultPortKept",
+			builders:           builders,
+			returnedBuilderURL: "http://plain.example/",
+			loggedBuilderURL:   "http://plain.example/",
+			warning:            noMatch,
+		},
+		{
+			name:               "AmbiguousNormalizedMatch",
+			builders:           builders,
+			returnedBuilderURL: "https://dup.example/",
+			loggedBuilderURL:   "https://dup.example/",
+			warning:            ambiguous,
+		},
+		{
+			name:               "ExactMatchBeatsNormalizedAmbiguity",
+			builders:           builders,
+			returnedBuilderURL: "https://dup.example",
+			echoedBuilderURL:   "https://dup.example",
 		},
 		{
 			name:               "UnconfiguredBuilderURL",
 			builders:           builders,
 			returnedBuilderURL: "https://unknown.example",
 			loggedBuilderURL:   "https://unknown.example",
-			unmatchedWarning:   true,
+			warning:            noMatch,
+		},
+		{
+			name:               "UnconfiguredBuilderURLWithSecrets",
+			builders:           builders,
+			returnedBuilderURL: "https://user:secret@unknown.example?key=secret",
+			loggedBuilderURL:   "https://unknown.example",
+			warning:            noMatch,
 		},
 		{
 			name:               "NearMissBuilderURL",
 			builders:           builders,
 			returnedBuilderURL: builderURL + "/",
 			loggedBuilderURL:   builderURL + "/",
-			unmatchedWarning:   true,
+			warning:            noMatch,
 		},
 		{
 			name:               "NoBuildersConfigured",
 			returnedBuilderURL: builderURL,
 			loggedBuilderURL:   builderURL,
-			unmatchedWarning:   true,
+			warning:            noMatch,
 		},
 		{
 			name:     "P2PBuilderWon",
@@ -726,8 +783,8 @@ func TestProposeGloasEchoesConfiguredBuilderURL(t *testing.T) {
 			if test.executionPayload {
 				builderIndex = uint64(gloas.BuilderIndexSelfBuild)
 			}
-			selectedBuilderURL := ""
-			if test.echoedBuilderURL != "" {
+			selectedBuilderURL := test.echoedBuilderURL
+			if test.loggedBuilderURL != "" && test.warning == "" {
 				selectedBuilderURL = test.loggedBuilderURL
 			}
 			require.True(t, capture.HasLog(map[string]any{
@@ -735,11 +792,13 @@ func TestProposeGloasEchoesConfiguredBuilderURL(t *testing.T) {
 				"builder_url":   selectedBuilderURL,
 				"builder_index": builderIndex,
 			}), "%v", capture.Entries())
-			require.Equal(t, test.unmatchedWarning, capture.HasLog(map[string]any{
-				"message":     "Beacon node returned a builder URL that matches no configured builder; not echoing it",
-				"level":       "warn",
-				"builder_url": test.loggedBuilderURL,
-			}), "%v", capture.Entries())
+			for _, message := range []string{noMatch, ambiguous} {
+				require.Equal(t, message == test.warning, capture.HasLog(map[string]any{
+					"message":     message,
+					"level":       "warn",
+					"builder_url": test.loggedBuilderURL,
+				}), "%s: %v", message, capture.Entries())
+			}
 			for _, entry := range capture.Entries() {
 				require.NotContains(t, fmt.Sprint(entry), "secret@")
 				require.NotContains(t, fmt.Sprint(entry), "key=secret")

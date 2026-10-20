@@ -1,5 +1,5 @@
 dev:
-  - echo the winning builder's Eth-Builder-Url to every beacon node when publishing a builder-won gloas proposal, only when it exactly matches a direct-builder URL requested for that slot; log builder_url and builder_index on "Selected Gloas proposal"
+  - echo the winning builder's Eth-Builder-Url to every beacon node when publishing a builder-backed ePBS proposal, as the requested direct-builder URL it matches exactly or, failing that, uniquely after normalising scheme and host case, default ports and an empty path; log builder_url (without userinfo or query) and builder_index on "Selected Gloas proposal"
 
 1.14.0-beta.1:
   - update go-eth2-client to v0.30.0
