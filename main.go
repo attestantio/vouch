@@ -1694,9 +1694,10 @@ func (p *readinessGatedProposalProvider) EPBSProposal(ctx context.Context,
 	return &api.Response[*api.VersionedEPBSProposal]{
 		Data: response.Data,
 		Metadata: map[string]any{
-			beaconblockproposer.MetadataStrategy: "simple",
-			beaconblockproposer.MetadataProvider: proposerpreferences.SimpleProvider,
-			beaconblockproposer.MetadataSource:   beaconblockproposal.EPBSProposalSource(response.Data, response.Metadata),
+			beaconblockproposer.MetadataStrategy:   "simple",
+			beaconblockproposer.MetadataProvider:   proposerpreferences.SimpleProvider,
+			beaconblockproposer.MetadataSource:     beaconblockproposal.EPBSProposalSource(response.Data, response.Metadata),
+			beaconblockproposer.MetadataBuilderURL: beaconblockproposer.BuilderURL(response.Metadata),
 		},
 	}, nil
 }

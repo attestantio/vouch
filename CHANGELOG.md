@@ -1,3 +1,6 @@
+dev:
+  - echo the winning builder's Eth-Builder-Url to every beacon node when publishing a builder-won gloas proposal, only when it exactly matches a direct-builder URL requested for that slot; log builder_url and builder_index on "Selected Gloas proposal"
+
 1.14.0-beta.1:
   - update go-eth2-client to v0.30.0
   - deprecate controller.max-attestation-delay, controller.attestation-aggregation-delay, controller.max-sync-committee-message-delay and controller.sync-committee-aggregation-delay; they now apply to pre-gloas slots only, gloas slots always use the spec-derived deadlines with no way to set an earlier one, and each one set to a non-zero value logs a warning at startup
