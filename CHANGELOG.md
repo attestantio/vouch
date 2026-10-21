@@ -1,5 +1,6 @@
 dev:
   - update golang.org/x/net to v0.60.0 and build the Docker image with Go 1.26.10 to pick up HTTP/2, Range header and TLS denial-of-service fixes and a crypto/x509 fix; building now requires Go 1.26
+  - wait from the gloas attestation deadline on gloas slots in static-delay multi-instance, rather than from the pre-gloas one; align the pre-gloas deadline with the controller, including controller.max-attestation-delay, and refuse to start when gloas is scheduled and SLOT_DURATION_MS differs from SECONDS_PER_SLOT
 
 1.14.0-alpha.2:
   - update go-eth2-client to v0.30.0

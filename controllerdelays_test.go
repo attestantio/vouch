@@ -219,4 +219,6 @@ func TestControllerDelayOptions(t *testing.T) {
 		require.True(t, exists, delay.key)
 		require.Equal(t, reflect.ValueOf(option).Pointer(), reflect.ValueOf(delay.option).Pointer(), delay.key)
 	}
+	// Static-delay reads the first entry as its pre-Gloas attestation deadline override.
+	require.Equal(t, "controller.max-attestation-delay", deprecatedControllerDelays[0].key)
 }

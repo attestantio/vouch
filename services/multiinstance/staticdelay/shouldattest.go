@@ -1,4 +1,4 @@
-// Copyright © 2024, 2025 Attestant Limited.
+// Copyright © 2024 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -41,8 +41,8 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 	}
 
 	// Sleep to let other instances do their work.
-	// Start off by sleeping until 4 seconds into the slot.
-	time.Sleep(time.Until(s.chainTime.StartOfSlot(duty.Slot()).Add(s.specAttestationDelay)))
+	// Start off by sleeping until the attestation deadline.
+	time.Sleep(time.Until(s.chainTime.StartOfSlot(duty.Slot()).Add(s.attestationDelay(duty.Slot()))))
 	// Now sleep for the additional attester delay.
 	time.Sleep(s.attesterDelay)
 	log.Trace().Msg("Checking for attestations from an active instance")
@@ -101,4 +101,13 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 	s.enableAttester(ctx)
 
 	return true
+}
+
+// attestationDelay provides the attestation deadline that applies at the given slot.
+func (s *Service) attestationDelay(slot phase0.Slot) time.Duration {
+	if s.chainTime.SlotToEpoch(slot) >= s.gloasForkEpoch {
+		return s.gloasAttestationDelay
+	}
+
+	return s.preGloasAttestationDelay
 }

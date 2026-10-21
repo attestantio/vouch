@@ -2653,6 +2653,13 @@ func startMultiInstance(ctx context.Context,
 			return nil, errors.Wrap(err, "failed to instantiate attestation pool strategy")
 		}
 
+		// The first entry is controller.max-attestation-delay.
+		var delays []time.Duration
+		delays, err = controllerDelays()
+		if err != nil {
+			return nil, err
+		}
+
 		service, err = staticdelaymultiinstance.New(ctx,
 			staticdelaymultiinstance.WithLogLevel(util.LogLevel("multiinstance.static-delay")),
 			staticdelaymultiinstance.WithMonitor(monitor),
@@ -2662,6 +2669,7 @@ func startMultiInstance(ctx context.Context,
 			staticdelaymultiinstance.WithChainTime(chainTime),
 			staticdelaymultiinstance.WithAttesterDelay(viper.GetDuration("multiinstance.static-delay.attester-delay")),
 			staticdelaymultiinstance.WithProposerDelay(viper.GetDuration("multiinstance.static-delay.proposer-delay")),
+			staticdelaymultiinstance.WithMaxAttestationDelay(delays[0]),
 		)
 	default:
 		service, err = alwaysmultiinstance.New(ctx,
