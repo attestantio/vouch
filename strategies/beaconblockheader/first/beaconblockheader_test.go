@@ -16,6 +16,7 @@ package first_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -29,6 +30,44 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
+
+// TestBeaconBlockHeadersCountsEmptyResponseAsClientFailure checks that a response without a header is not
+// recorded as a successful client call.
+func TestBeaconBlockHeadersCountsEmptyResponseAsClientFailure(t *testing.T) {
+	monitor := &clientOperationRecorder{}
+	s, err := first.New(context.Background(),
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithTimeout(2*time.Second),
+		first.WithClientMonitor(monitor),
+		first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+			"empty": &emptyHeaderProvider{},
+		}),
+	)
+	require.NoError(t, err)
+
+	_, err = s.BeaconBlockHeader(context.Background(), &api.BeaconBlockHeaderOpts{Block: "1"})
+	require.ErrorContains(t, err, "no beacon block header")
+	require.Equal(t, []bool{false}, monitor.succeeded)
+}
+
+type clientOperationRecorder struct {
+	mu        sync.Mutex
+	succeeded []bool
+}
+
+func (m *clientOperationRecorder) ClientOperation(_ string, _ string, succeeded bool, _ time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.succeeded = append(m.succeeded, succeeded)
+}
+
+func (*clientOperationRecorder) StrategyOperation(string, string, string, time.Duration) {}
+
+type emptyHeaderProvider struct{}
+
+func (*emptyHeaderProvider) BeaconBlockHeader(context.Context, *api.BeaconBlockHeaderOpts) (*api.Response[*apiv1.BeaconBlockHeader], error) {
+	return &api.Response[*apiv1.BeaconBlockHeader]{}, nil
+}
 
 type headerErrorProvider struct {
 	err error
@@ -50,6 +89,7 @@ func TestBeaconBlockHeaders(t *testing.T) {
 		err             string
 		errIs           error
 		errIsNot        error
+		errContains     string
 		// answered is true when every provider answers at once, so the strategy must not wait for its timeout.
 		answered bool
 	}{
@@ -125,10 +165,39 @@ func TestBeaconBlockHeaders(t *testing.T) {
 					"timed-out": &headerErrorProvider{err: context.DeadlineExceeded},
 				}),
 			},
+			blockID:     "1",
+			errIs:       first.ErrBeaconBlockHeaderTimeout,
+			errIsNot:    notFound,
+			errContains: "timed-out",
+			answered:    true,
+		},
+		{
+			name: "ProviderFailureThenStrategyTimeout",
+			params: []first.Parameter{
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(time.Second),
+				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+					"offline": &headerErrorProvider{err: errConnectionRefused},
+					"sleepy":  mock.NewSleepyBeaconBlockHeadersProvider(5*time.Second, mock.NewBeaconBlockHeadersProvider()),
+				}),
+			},
+			blockID:     "1",
+			errIs:       first.ErrBeaconBlockHeaderTimeout,
+			errContains: "offline",
+		},
+		{
+			name: "NotFoundThenStrategyTimeout",
+			params: []first.Parameter{
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(time.Second),
+				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+					"missing": &headerErrorProvider{err: notFound},
+					"sleepy":  mock.NewSleepyBeaconBlockHeadersProvider(5*time.Second, mock.NewBeaconBlockHeadersProvider()),
+				}),
+			},
 			blockID:  "1",
 			errIs:    first.ErrBeaconBlockHeaderTimeout,
 			errIsNot: notFound,
-			answered: true,
 		},
 		{
 			name: "ProviderFailure",
@@ -197,6 +266,9 @@ func TestBeaconBlockHeaders(t *testing.T) {
 			}
 			if test.errIsNot != nil {
 				require.NotErrorIs(t, err, test.errIsNot)
+			}
+			if test.errContains != "" {
+				require.ErrorContains(t, err, test.errContains)
 			}
 			if test.answered {
 				require.Less(t, time.Since(started), time.Second)
