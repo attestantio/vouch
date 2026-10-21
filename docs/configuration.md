@@ -331,7 +331,8 @@ multiinstance:
   # active.  Note that for the 'static-delay' style to operate the beacon node(s) to which Vouch connects must be running with the
   # 'subscribe all subnets' option enabled.  This is because this style looks at the attestation data to see if other instance(s)
   # of Vouch are active.  However, Vouch cannot detect if the beacon nodes are configured correctly so it is up to the user to
-  # carry out this work themselves.
+  # carry out this work themselves.  When the Gloas fork is scheduled, the 'static-delay' style refuses to start if the beacon node's
+  # SLOT_DURATION_MS differs from its SECONDS_PER_SLOT, because Vouch times every slot from SECONDS_PER_SLOT.
   style: 'always'
   static-delay:
     # attester-delay is the time for inactive Vouch instances to wait to see expected attestations prior to becoming active
