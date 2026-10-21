@@ -1,5 +1,5 @@
 dev:
-  - update golang.org/x/net to v0.60.0 and build the Docker image with Go 1.26.9 to pick up HTTP/2, Range header and TLS denial-of-service fixes; building now requires Go 1.26
+  - update golang.org/x/net to v0.60.0 and build the Docker image with Go 1.26.10 to pick up HTTP/2, Range header and TLS denial-of-service fixes and a crypto/x509 fix; building now requires Go 1.26
 
 1.14.0-alpha.2:
   - update go-eth2-client to v0.30.0
