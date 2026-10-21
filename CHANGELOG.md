@@ -3,7 +3,7 @@ dev:
   - wait from the gloas attestation deadline on gloas slots in static-delay multi-instance, rather than from the pre-gloas one; align the pre-gloas deadline with the controller, including controller.max-attestation-delay, and refuse to start when gloas is scheduled and SLOT_DURATION_MS differs from SECONDS_PER_SLOT
   - static-delay multi-instance re-checks before every duty instead of staying active after a takeover, so it stands down again once the primary recovers; attesting no longer activates proposing, and the active-state metrics follow each decision
   - static-delay multi-instance proposes only when the beacon block header lookup reports no block at the slot (with the default first strategy, every beacon node); a timeout, 5xx or connection failure now stands down instead of proposing
-  - the first beaconblockheader strategy returns as soon as every beacon node has answered, rather than waiting for its timeout when none has the header
+  - the first beaconblockheader strategy returns as soon as every beacon node has answered, rather than waiting for its timeout when none has the header; its timeout error now includes the errors from beacon nodes that answered, and a response without a header counts as a failed client call
 
 1.14.0-alpha.2:
   - update go-eth2-client to v0.30.0
