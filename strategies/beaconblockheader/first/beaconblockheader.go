@@ -74,7 +74,7 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 			select {
 			case resp = <-respCh:
 			default:
-				return nil, contextError(ctx, log)
+				return nil, contextError(ctx, log, providerErrors)
 			}
 		}
 		switch {
@@ -91,23 +91,28 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 	if len(providerErrors) == 0 {
 		return nil, fmt.Errorf("no beacon node has the beacon block header: %w", notFound[0])
 	}
+	// Never wrap the 404s here: callers read a wrapped 404 as proof that no block exists.
 	err := errors.Join(providerErrors...)
 	if errors.Is(err, context.DeadlineExceeded) {
-		return nil, ErrBeaconBlockHeaderTimeout
+		return nil, fmt.Errorf("%w: %w", ErrBeaconBlockHeaderTimeout, err)
 	}
 
 	return nil, fmt.Errorf("failed to obtain beacon block header: %w", err)
 }
 
-// contextError maps the end of the strategy's context to the error returned to callers.
-func contextError(ctx context.Context, log zerolog.Logger) error {
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+// contextError maps the end of the strategy's context to the error returned to callers,
+// keeping the errors from providers that answered before it ended.
+func contextError(ctx context.Context, log zerolog.Logger, providerErrors []error) error {
+	err := ctx.Err()
+	if errors.Is(err, context.DeadlineExceeded) {
 		log.Debug().Msg("Failed to obtain beacon block header before timeout")
-
-		return ErrBeaconBlockHeaderTimeout
+		err = ErrBeaconBlockHeaderTimeout
+	}
+	if len(providerErrors) == 0 {
+		return err
 	}
 
-	return ctx.Err()
+	return fmt.Errorf("%w: %w", err, errors.Join(providerErrors...))
 }
 
 // fetchHeader obtains the header from one provider and classifies the outcome.
@@ -120,7 +125,6 @@ func (s *Service) fetchHeader(ctx context.Context,
 ) *beaconBlockHeaderResp {
 	providerLog := log.With().Str("provider", name).Str("block_id", opts.Block).Logger()
 	response, err := provider.BeaconBlockHeader(ctx, opts)
-	s.clientMonitor.ClientOperation(name, "beacon block header", err == nil, time.Since(started))
 	result := &beaconBlockHeaderResp{provider: name, response: response, err: err}
 	switch {
 	case err != nil:
@@ -133,6 +137,7 @@ func (s *Service) fetchHeader(ctx context.Context,
 	default:
 		providerLog.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block header")
 	}
+	s.clientMonitor.ClientOperation(name, "beacon block header", result.err == nil, time.Since(started))
 
 	return result
 }
