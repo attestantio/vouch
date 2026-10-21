@@ -37,7 +37,7 @@ func (s fixedSpecProvider) Spec(_ context.Context, _ *api.SpecOpts) (*api.Respon
 	return &api.Response[map[string]any]{Data: s}, nil
 }
 
-func newStaticDelayService(t *testing.T, spec consensusclient.SpecProvider) (*Service, error) {
+func newStaticDelayService(t *testing.T, spec consensusclient.SpecProvider, params ...Parameter) (*Service, error) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -48,14 +48,14 @@ func newStaticDelayService(t *testing.T, spec consensusclient.SpecProvider) (*Se
 	)
 	require.NoError(t, err)
 
-	return New(ctx,
+	return New(ctx, append([]Parameter{
 		WithLogLevel(zerolog.Disabled),
 		WithSpecProvider(spec),
 		WithAttestationPoolProvider(mock.NewAttestationPoolProvider()),
 		WithBeaconBlockHeadersProvider(mock.NewBeaconBlockHeadersProvider()),
 		WithChainTime(chainTime),
 		WithAttesterDelay(time.Second),
-	)
+	}, params...)...)
 }
 
 const (
@@ -109,6 +109,20 @@ func TestAttestationDelay(t *testing.T) {
 			require.Equal(t, test.expected, s.attestationDelay(test.slot))
 		})
 	}
+}
+
+// TestMaxAttestationDelayOverride confirms the controller's override moves the pre-Gloas deadline
+// only, as the controller ignores it on Gloas slots.
+func TestMaxAttestationDelayOverride(t *testing.T) {
+	s, err := newStaticDelayService(t, fixedSpecProvider{
+		"SECONDS_PER_SLOT": 12 * time.Second,
+		"SLOTS_PER_EPOCH":  uint64(slotsPerEpoch),
+		"GLOAS_FORK_EPOCH": uint64(gloasForkEpoch),
+	}, WithMaxAttestationDelay(6*time.Second))
+	require.NoError(t, err)
+
+	require.Equal(t, 6*time.Second, s.attestationDelay(slotsPerEpoch*gloasForkEpoch-1))
+	require.Equal(t, 3*time.Second, s.attestationDelay(slotsPerEpoch*gloasForkEpoch))
 }
 
 // TestGloasAttestationDelay confirms the Gloas deadline follows the spec, and falls back to the
