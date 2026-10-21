@@ -16,7 +16,6 @@ package staticdelay
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -234,7 +233,7 @@ func TestProposerActivatesOnlyOnDefinitiveHeaderAbsence(t *testing.T) {
 		activate bool
 	}{
 		{name: "NotFound", err: &api.Error{StatusCode: 404}, activate: true},
-		{name: "WrappedNotFound", err: fmt.Errorf("no beacon node has the beacon block header: %w", &api.Error{StatusCode: 404}), activate: true},
+		{name: "WrappedNotFound", err: errors.Join(errors.New("no beacon node has the beacon block header"), &api.Error{StatusCode: 404}), activate: true},
 		{name: "ProviderFailure", err: errors.New("connection refused"), activate: false},
 		{name: "ServerError", err: &api.Error{StatusCode: 503}, activate: false},
 		{name: "Timeout", err: context.DeadlineExceeded, activate: false},
