@@ -15,14 +15,12 @@ package staticdelay
 
 import (
 	"context"
-	stderrors "errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
-	beaconblockheader "github.com/attestantio/vouch/strategies/beaconblockheader/first"
+	"github.com/attestantio/vouch/util"
 )
 
 // ShouldPropose returns true if this Vouch instance should propose.
@@ -37,7 +35,7 @@ func (s *Service) ShouldPropose(ctx context.Context, duty *beaconblockproposer.D
 	log.Trace().Msg("Checking if we should propose")
 
 	if s.proposerDelay == 0 {
-		s.enableProposer(ctx)
+		monitorActive("proposer", true)
 
 		return true
 	}
@@ -49,31 +47,21 @@ func (s *Service) ShouldPropose(ctx context.Context, duty *beaconblockproposer.D
 		Block: fmt.Sprintf("%d", duty.Slot()),
 	})
 	if err != nil {
-		if !headerAbsent(err) {
+		if !util.IsNotFound(err) {
 			// Without proof that no block exists, proposing risks a duplicate; stand down.
 			log.Warn().Err(err).Msg("Failed to establish whether beacon block exists; not activating proposer")
-			s.disableProposer(ctx)
+			monitorActive("proposer", false)
 
 			return false
 		}
 		log.Trace().Msg("Beacon block header not found; activating proposer")
-		s.enableProposer(ctx)
+		monitorActive("proposer", true)
 
 		return true
 	}
 
 	log.Trace().Msg("Beacon block found; not activating proposer")
-	s.disableProposer(ctx)
+	monitorActive("proposer", false)
 
 	return false
-}
-
-// headerAbsent is true when the header lookup definitively reported no block at the slot.
-func headerAbsent(err error) bool {
-	if stderrors.Is(err, beaconblockheader.ErrBeaconBlockHeaderNotFound) {
-		return true
-	}
-	var apiErr *api.Error
-
-	return stderrors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
 }
