@@ -72,6 +72,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The controller applies its override to pre-Gloas slots only.
+	if parameters.maxAttestationDelay != 0 {
+		preGloasAttestationDelay = parameters.maxAttestationDelay
+	}
 	log.Trace().Dur("pre_gloas_delay", preGloasAttestationDelay).Dur("gloas_delay", gloasAttestationDelay).Msg("Obtained spec attestation delays")
 
 	s := &Service{
@@ -134,7 +138,7 @@ func obtainAttestationDelays(spec map[string]any, gloasForkEpoch phase0.Epoch) (
 		return 0, 0, errors.New("seconds per slot not a duration")
 	}
 
-	// Match the controller's pre-Gloas attestation deadline.
+	// Match the controller's default pre-Gloas attestation deadline.
 	preGloasDelay := secondsPerSlot / 3
 
 	// Chaintime uses SECONDS_PER_SLOT for slot starts, including after Gloas.
