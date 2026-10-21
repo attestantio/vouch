@@ -15,9 +15,8 @@ package first
 
 import (
 	"context"
-	stderrors "errors"
+	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -33,17 +32,14 @@ import (
 type beaconBlockHeaderResp struct {
 	provider string
 	response *api.Response[*apiv1.BeaconBlockHeader]
-	notFound bool
 	err      error
 }
 
-// ErrBeaconBlockHeaderNotFound indicates that every provider definitively lacks the requested header.
-var ErrBeaconBlockHeaderNotFound = stderrors.New("beacon block header not found")
-
 // ErrBeaconBlockHeaderTimeout indicates that the header could not be obtained before the deadline.
-var ErrBeaconBlockHeaderTimeout = stderrors.New("failed to obtain beacon block header before timeout")
+var ErrBeaconBlockHeaderTimeout = errors.New("failed to obtain beacon block header before timeout")
 
 // BeaconBlockHeader provides the beacon block header from a number of beacon nodes.
+// If every beacon node returns 404 the error wraps that 404, so callers can tell definitive absence from failure.
 func (s *Service) BeaconBlockHeader(ctx context.Context,
 	opts *api.BeaconBlockHeaderOpts,
 ) (
@@ -68,25 +64,8 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 		}(name, provider)
 	}
 
-	providerErrors := make([]error, 0, len(s.beaconBlockHeadersProviders))
-	notFoundCount := 0
-	timedOut := false
-	completed := 0
-	process := func(resp *beaconBlockHeaderResp) *api.Response[*apiv1.BeaconBlockHeader] {
-		completed++
-		if resp.err != nil {
-			if resp.notFound {
-				notFoundCount++
-			} else {
-				timedOut = timedOut || stderrors.Is(resp.err, context.DeadlineExceeded)
-				providerErrors = append(providerErrors, fmt.Errorf("%s: %w", resp.provider, resp.err))
-			}
-			return nil
-		}
-		s.clientMonitor.StrategyOperation("first", resp.provider, "beacon block header", time.Since(started))
-		return resp.response
-	}
-	for completed < len(s.beaconBlockHeadersProviders) {
+	var notFound, providerErrors []error
+	for len(notFound)+len(providerErrors) < len(s.beaconBlockHeadersProviders) {
 		var resp *beaconBlockHeaderResp
 		select {
 		case resp = <-respCh:
@@ -98,22 +77,31 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 				return nil, contextError(ctx, log)
 			}
 		}
-		if response := process(resp); response != nil {
-			return response, nil
+		switch {
+		case resp.err == nil:
+			s.clientMonitor.StrategyOperation("first", resp.provider, "beacon block header", time.Since(started))
+
+			return resp.response, nil
+		case util.IsNotFound(resp.err):
+			notFound = append(notFound, resp.err)
+		default:
+			providerErrors = append(providerErrors, fmt.Errorf("%s: %w", resp.provider, resp.err))
 		}
 	}
-	if timedOut {
+	if len(providerErrors) == 0 {
+		return nil, fmt.Errorf("no beacon node has the beacon block header: %w", notFound[0])
+	}
+	err := errors.Join(providerErrors...)
+	if errors.Is(err, context.DeadlineExceeded) {
 		return nil, ErrBeaconBlockHeaderTimeout
 	}
-	if notFoundCount == len(s.beaconBlockHeadersProviders) {
-		return nil, ErrBeaconBlockHeaderNotFound
-	}
-	return nil, fmt.Errorf("failed to obtain beacon block header: %w", stderrors.Join(providerErrors...))
+
+	return nil, fmt.Errorf("failed to obtain beacon block header: %w", err)
 }
 
 // contextError maps the end of the strategy's context to the error returned to callers.
 func contextError(ctx context.Context, log zerolog.Logger) error {
-	if stderrors.Is(ctx.Err(), context.DeadlineExceeded) {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		log.Debug().Msg("Failed to obtain beacon block header before timeout")
 
 		return ErrBeaconBlockHeaderTimeout
@@ -136,15 +124,11 @@ func (s *Service) fetchHeader(ctx context.Context,
 	result := &beaconBlockHeaderResp{provider: name, response: response, err: err}
 	switch {
 	case err != nil:
-		var apiErr *api.Error
-		switch {
-		case stderrors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound:
-			result.notFound = true
-		case !stderrors.Is(err, context.Canceled):
+		if !util.IsNotFound(err) && !errors.Is(err, context.Canceled) {
 			providerLog.Debug().Dur("elapsed", time.Since(started)).Err(err).Msg("Failed to obtain beacon block header")
 		}
 	case response == nil || response.Data == nil:
-		result.err = stderrors.New("beacon node returned no beacon block header")
+		result.err = errors.New("beacon node returned no beacon block header")
 		providerLog.Debug().Dur("elapsed", time.Since(started)).Err(result.err).Msg("Failed to obtain beacon block header")
 	default:
 		providerLog.Trace().Dur("elapsed", time.Since(started)).Msg("Obtained beacon block header")

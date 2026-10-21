@@ -20,8 +20,8 @@ import (
 )
 
 // OnProposalFailure flags that an attempt to propose has failed.
-func (s *Service) OnProposalFailure(ctx context.Context, duty *beaconblockproposer.Duty) {
-	s.log.Trace().Uint64("slot", uint64(duty.Slot())).Msg("Proposal failure; deactivating")
+func (s *Service) OnProposalFailure(_ context.Context, duty *beaconblockproposer.Duty) {
+	s.log.Trace().Uint64("slot", uint64(duty.Slot())).Msg("Proposal failure; marking proposer inactive")
 
-	s.disableProposer(ctx)
+	monitorActive("proposer", false)
 }
