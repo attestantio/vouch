@@ -58,15 +58,18 @@ func newStaticDelayService(t *testing.T, spec consensusclient.SpecProvider) (*Se
 	)
 }
 
+const (
+	gloasForkEpoch = 5
+	slotsPerEpoch  = 32
+	farFutureEpoch = phase0.Epoch(0xffffffffffffffff)
+)
+
 // TestAttestationDelay confirms that the base delay is chosen from the duty's slot, so a process
 // running across the fork switches to the Gloas deadline at the first Gloas slot.
 func TestAttestationDelay(t *testing.T) {
-	const gloasForkEpoch = 5
-	const slotsPerEpoch = 32
 	spec := fixedSpecProvider{
 		"SECONDS_PER_SLOT":          12 * time.Second,
 		"SLOTS_PER_EPOCH":           uint64(slotsPerEpoch),
-		"INTERVALS_PER_SLOT":        uint64(3),
 		"SLOT_DURATION_MS":          uint64(12000),
 		"ATTESTATION_DUE_BPS_GLOAS": uint64(2500),
 		"GLOAS_FORK_EPOCH":          uint64(gloasForkEpoch),
@@ -113,47 +116,40 @@ func TestAttestationDelay(t *testing.T) {
 func TestGloasAttestationDelay(t *testing.T) {
 	tests := []struct {
 		name     string
-		spec     fixedSpecProvider
+		spec     map[string]any
 		expected time.Duration
 	}{
 		{
 			name: "GloasKeysMissing",
-			spec: fixedSpecProvider{
+			spec: map[string]any{
 				"SECONDS_PER_SLOT": 12 * time.Second,
-				"SLOTS_PER_EPOCH":  uint64(32),
-				"GLOAS_FORK_EPOCH": uint64(0),
 			},
 			expected: 3 * time.Second,
 		},
 		{
 			name: "CustomSlotDuration",
-			spec: fixedSpecProvider{
+			spec: map[string]any{
 				"SECONDS_PER_SLOT":          6 * time.Second,
-				"SLOTS_PER_EPOCH":           uint64(32),
 				"SLOT_DURATION_MS":          uint64(6000),
 				"ATTESTATION_DUE_BPS_GLOAS": uint64(2500),
-				"GLOAS_FORK_EPOCH":          uint64(0),
 			},
 			expected: 1500 * time.Millisecond,
 		},
 		{
 			name: "CustomDueBPS",
-			spec: fixedSpecProvider{
+			spec: map[string]any{
 				"SECONDS_PER_SLOT":          12 * time.Second,
 				"SLOT_DURATION_MS":          uint64(12000),
 				"ATTESTATION_DUE_BPS_GLOAS": uint64(2000),
-				"GLOAS_FORK_EPOCH":          uint64(0),
 			},
 			expected: 2400 * time.Millisecond,
 		},
 		{
 			name: "DueBPSOutOfRange",
-			spec: fixedSpecProvider{
+			spec: map[string]any{
 				"SECONDS_PER_SLOT":          12 * time.Second,
-				"SLOTS_PER_EPOCH":           uint64(32),
 				"SLOT_DURATION_MS":          uint64(12000),
 				"ATTESTATION_DUE_BPS_GLOAS": uint64(10001),
-				"GLOAS_FORK_EPOCH":          uint64(0),
 			},
 			expected: 3 * time.Second,
 		},
@@ -161,7 +157,7 @@ func TestGloasAttestationDelay(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, gloasDelay, _, err := obtainAttestationDelays(test.spec)
+			_, gloasDelay, err := obtainAttestationDelays(test.spec, 0)
 			require.NoError(t, err)
 			require.Equal(t, test.expected, gloasDelay)
 		})
@@ -183,35 +179,32 @@ func TestAttestationDelayWithoutGloas(t *testing.T) {
 	require.Equal(t, 4*time.Second, s.attestationDelay(1<<40))
 }
 
+// TestGloasForkEpoch confirms the fork epoch comes from chaintime, which treats a missing or
+// malformed value as far future, as the controller does.
 func TestGloasForkEpoch(t *testing.T) {
 	tests := []struct {
 		name     string
 		fork     any
 		expected phase0.Epoch
-		err      string
 	}{
 		{name: "Scheduled", fork: uint64(5), expected: 5},
 		{name: "FromGenesis", fork: uint64(0)},
-		{name: "Missing", expected: phase0.Epoch(^uint64(0))},
-		{name: "FarFuture", fork: ^uint64(0), expected: phase0.Epoch(^uint64(0))},
-		{name: "Malformed", fork: "5", err: "GLOAS_FORK_EPOCH is not a uint64"},
+		{name: "Missing", expected: farFutureEpoch},
+		{name: "FarFuture", fork: uint64(farFutureEpoch), expected: farFutureEpoch},
+		{name: "Malformed", fork: "5", expected: farFutureEpoch},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			spec := fixedSpecProvider{
 				"SECONDS_PER_SLOT": 12 * time.Second,
-				"SLOTS_PER_EPOCH":  uint64(32),
+				"SLOTS_PER_EPOCH":  uint64(slotsPerEpoch),
 			}
 			if test.fork != nil {
 				spec["GLOAS_FORK_EPOCH"] = test.fork
 			}
-			_, _, forkEpoch, err := obtainAttestationDelays(spec)
-			if test.err != "" {
-				require.EqualError(t, err, test.err)
-				return
-			}
+			s, err := newStaticDelayService(t, spec)
 			require.NoError(t, err)
-			require.Equal(t, test.expected, forkEpoch)
+			require.Equal(t, test.expected, s.gloasForkEpoch)
 		})
 	}
 }
@@ -233,7 +226,7 @@ func TestPreGloasAttestationDelay(t *testing.T) {
 			if test.intervals != nil {
 				spec["INTERVALS_PER_SLOT"] = test.intervals
 			}
-			preGloasDelay, _, _, err := obtainAttestationDelays(spec)
+			preGloasDelay, _, err := obtainAttestationDelays(spec, farFutureEpoch)
 			require.NoError(t, err)
 			require.Equal(t, 4*time.Second, preGloasDelay)
 		})
@@ -241,15 +234,15 @@ func TestPreGloasAttestationDelay(t *testing.T) {
 }
 
 func TestGloasSlotDurationMismatch(t *testing.T) {
+	const mismatch = "SLOT_DURATION_MS 6s differs from SECONDS_PER_SLOT 12s; chaintime does not support changing slot duration"
 	tests := []struct {
 		name string
-		fork any
+		fork phase0.Epoch
 		err  string
 	}{
-		{name: "FromGenesis", fork: uint64(0), err: "SLOT_DURATION_MS differs from SECONDS_PER_SLOT; chaintime does not support changing slot duration"},
-		{name: "Scheduled", fork: uint64(5), err: "SLOT_DURATION_MS differs from SECONDS_PER_SLOT; chaintime does not support changing slot duration"},
-		{name: "Missing"},
-		{name: "FarFuture", fork: ^uint64(0)},
+		{name: "FromGenesis", fork: 0, err: mismatch},
+		{name: "Scheduled", fork: gloasForkEpoch, err: mismatch},
+		{name: "NotScheduled", fork: farFutureEpoch},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -257,10 +250,7 @@ func TestGloasSlotDurationMismatch(t *testing.T) {
 				"SECONDS_PER_SLOT": 12 * time.Second,
 				"SLOT_DURATION_MS": uint64(6000),
 			}
-			if test.fork != nil {
-				spec["GLOAS_FORK_EPOCH"] = test.fork
-			}
-			_, _, _, err := obtainAttestationDelays(spec)
+			_, _, err := obtainAttestationDelays(spec, test.fork)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 				return
@@ -276,8 +266,8 @@ func TestShouldAttestDeadline(t *testing.T) {
 		slot     phase0.Slot
 		deadline time.Duration
 	}{
-		{name: "LastSlotBeforeGloas", slot: 159, deadline: 4 * time.Second},
-		{name: "FirstGloasSlot", slot: 160, deadline: 3 * time.Second},
+		{name: "LastSlotBeforeGloas", slot: slotsPerEpoch*gloasForkEpoch - 1, deadline: 4 * time.Second},
+		{name: "FirstGloasSlot", slot: slotsPerEpoch * gloasForkEpoch, deadline: 3 * time.Second},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -285,8 +275,8 @@ func TestShouldAttestDeadline(t *testing.T) {
 				ctx := context.Background()
 				s, err := newStaticDelayService(t, fixedSpecProvider{
 					"SECONDS_PER_SLOT": 12 * time.Second,
-					"SLOTS_PER_EPOCH":  uint64(32),
-					"GLOAS_FORK_EPOCH": uint64(5),
+					"SLOTS_PER_EPOCH":  uint64(slotsPerEpoch),
+					"GLOAS_FORK_EPOCH": uint64(gloasForkEpoch),
 				})
 				require.NoError(t, err)
 				duty, err := attester.NewDuty(ctx, test.slot, 1,
@@ -319,16 +309,13 @@ func TestAttestationDelaySpecValues(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			spec := map[string]any{
-				"SECONDS_PER_SLOT": 12 * time.Second,
-				"GLOAS_FORK_EPOCH": uint64(0),
-			}
+			spec := map[string]any{"SECONDS_PER_SLOT": 12 * time.Second}
 			if test.key == "" {
 				delete(spec, "SECONDS_PER_SLOT")
 			} else {
 				spec[test.key] = test.raw
 			}
-			preGloasDelay, gloasDelay, _, err := obtainAttestationDelays(spec)
+			preGloasDelay, gloasDelay, err := obtainAttestationDelays(spec, 0)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 				return
@@ -340,13 +327,13 @@ func TestAttestationDelaySpecValues(t *testing.T) {
 	}
 }
 
-// limitedSpecProvider fails if startup requests more spec snapshots than allowed.
-type limitedSpecProvider struct {
+// failingSpecProvider serves the spec a fixed number of times, then fails.
+type failingSpecProvider struct {
 	fixedSpecProvider
 	remaining int
 }
 
-func (s *limitedSpecProvider) Spec(ctx context.Context, opts *api.SpecOpts) (*api.Response[map[string]any], error) {
+func (s *failingSpecProvider) Spec(ctx context.Context, opts *api.SpecOpts) (*api.Response[map[string]any], error) {
 	if s.remaining == 0 {
 		return nil, errors.New("spec unavailable")
 	}
@@ -355,33 +342,15 @@ func (s *limitedSpecProvider) Spec(ctx context.Context, opts *api.SpecOpts) (*ap
 	return s.fixedSpecProvider.Spec(ctx, opts)
 }
 
-func TestNewSpecSnapshot(t *testing.T) {
-	tests := []struct {
-		name    string
-		fetches int
-		err     string
-	}{
-		// Chaintime construction consumes the first fetch; staticdelay gets one more.
-		{name: "NoRedundantFetch", fetches: 2},
-		{name: "FetchFailure", fetches: 1, err: "spec unavailable"},
+func TestNewSpecFetchFailure(t *testing.T) {
+	provider := &failingSpecProvider{
+		fixedSpecProvider: fixedSpecProvider{
+			"SECONDS_PER_SLOT": 12 * time.Second,
+			"SLOTS_PER_EPOCH":  uint64(slotsPerEpoch),
+		},
+		// Enough for chaintime construction only.
+		remaining: 1,
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			provider := &limitedSpecProvider{
-				fixedSpecProvider: fixedSpecProvider{
-					"SECONDS_PER_SLOT": 12 * time.Second,
-					"SLOTS_PER_EPOCH":  uint64(32),
-					"GLOAS_FORK_EPOCH": uint64(0),
-				},
-				remaining: test.fetches,
-			}
-			s, err := newStaticDelayService(t, provider)
-			if test.err != "" {
-				require.EqualError(t, err, test.err)
-				return
-			}
-			require.NoError(t, err)
-			require.Equal(t, 3*time.Second, s.attestationDelay(32))
-		})
-	}
+	_, err := newStaticDelayService(t, provider)
+	require.EqualError(t, err, "spec unavailable")
 }
