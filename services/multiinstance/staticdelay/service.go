@@ -113,22 +113,6 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	return s, nil
 }
 
-func (*Service) disableAttester(_ context.Context) {
-	monitorActive("attester", false)
-}
-
-func (*Service) enableAttester(_ context.Context) {
-	monitorActive("attester", true)
-}
-
-func (*Service) disableProposer(_ context.Context) {
-	monitorActive("proposer", false)
-}
-
-func (*Service) enableProposer(_ context.Context) {
-	monitorActive("proposer", true)
-}
-
 // obtainAttestationDelays provides the pre-Gloas and Gloas attestation deadlines, and the slot duration.
 func obtainAttestationDelays(spec map[string]any, gloasForkEpoch phase0.Epoch) (
 	time.Duration,

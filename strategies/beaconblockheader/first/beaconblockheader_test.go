@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	consensusclient "github.com/attestantio/go-eth2-client"
@@ -29,24 +30,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBeaconBlockHeadersReportsDefinitiveAbsenceWhenAllProvidersAnswer(t *testing.T) {
-	provider := &headerErrorProvider{err: &api.Error{StatusCode: 404}}
-	service, err := first.New(context.Background(),
-		first.WithLogLevel(zerolog.Disabled),
-		first.WithTimeout(2*time.Second),
-		first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
-			"missing": provider,
-		}),
-	)
-	require.NoError(t, err)
-
-	started := time.Now()
-	_, err = service.BeaconBlockHeader(context.Background(), &api.BeaconBlockHeaderOpts{Block: "1"})
-
-	require.ErrorIs(t, err, first.ErrBeaconBlockHeaderNotFound)
-	require.Less(t, time.Since(started), time.Second)
-}
-
 type headerErrorProvider struct {
 	err error
 }
@@ -55,68 +38,20 @@ func (p *headerErrorProvider) BeaconBlockHeader(context.Context, *api.BeaconBloc
 	return nil, p.err
 }
 
-func TestBeaconBlockHeadersClassifiesProviderDeadlineAsTimeout(t *testing.T) {
-	service, err := first.New(context.Background(),
-		first.WithLogLevel(zerolog.Disabled),
-		first.WithTimeout(2*time.Second),
-		first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
-			"missing":   &headerErrorProvider{err: &api.Error{StatusCode: 404}},
-			"timed-out": &headerErrorProvider{err: context.DeadlineExceeded},
-		}),
-	)
-	require.NoError(t, err)
-
-	_, err = service.BeaconBlockHeader(context.Background(), &api.BeaconBlockHeaderOpts{Block: "1"})
-
-	require.ErrorIs(t, err, first.ErrBeaconBlockHeaderTimeout)
-	require.NotErrorIs(t, err, first.ErrBeaconBlockHeaderNotFound)
-}
-
-func TestBeaconBlockHeadersReturnsProviderErrorsWhenAllAnswer(t *testing.T) {
-	providerErr := errors.New("connection refused")
-	service, err := first.New(context.Background(),
-		first.WithLogLevel(zerolog.Disabled),
-		first.WithTimeout(2*time.Second),
-		first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
-			"offline": &headerErrorProvider{err: providerErr},
-		}),
-	)
-	require.NoError(t, err)
-
-	started := time.Now()
-	_, err = service.BeaconBlockHeader(context.Background(), &api.BeaconBlockHeaderOpts{Block: "1"})
-
-	require.ErrorIs(t, err, providerErr)
-	require.Less(t, time.Since(started), time.Second)
-}
-
-func TestBeaconBlockHeadersDoesNotTreatMixedAbsenceAndFailureAsDefinitive(t *testing.T) {
-	service, err := first.New(context.Background(),
-		first.WithLogLevel(zerolog.Disabled),
-		first.WithTimeout(2*time.Second),
-		first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
-			"missing": &headerErrorProvider{err: &api.Error{StatusCode: 404}},
-			"offline": &headerErrorProvider{err: errors.New("connection refused")},
-		}),
-	)
-	require.NoError(t, err)
-
-	started := time.Now()
-	_, err = service.BeaconBlockHeader(context.Background(), &api.BeaconBlockHeaderOpts{Block: "1"})
-
-	require.ErrorContains(t, err, "connection refused")
-	require.NotErrorIs(t, err, first.ErrBeaconBlockHeaderNotFound)
-	require.Less(t, time.Since(started), time.Second)
-}
-
 func TestBeaconBlockHeaders(t *testing.T) {
+	notFound := &api.Error{StatusCode: 404}
+	serviceUnavailable := &api.Error{StatusCode: 503}
+	errConnectionRefused := errors.New("connection refused")
 	tests := []struct {
 		name            string
 		params          []first.Parameter
 		blockID         string
 		beaconBlockRoot phase0.Root
 		err             string
-		isTimeout       bool
+		errIs           error
+		errIsNot        error
+		// answered is true when every provider answers at once, so the strategy must not wait for its timeout.
+		answered bool
 	}{
 		{
 			name: "Good",
@@ -147,8 +82,8 @@ func TestBeaconBlockHeaders(t *testing.T) {
 				0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 				0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
 			},
-			err:       "failed to obtain beacon block header before timeout",
-			isTimeout: true,
+			err:   "failed to obtain beacon block header before timeout",
+			errIs: first.ErrBeaconBlockHeaderTimeout,
 		},
 		{
 			name: "GoodMixed",
@@ -166,24 +101,113 @@ func TestBeaconBlockHeaders(t *testing.T) {
 				0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
 			},
 		},
+		{
+			name: "AllNotFound",
+			params: []first.Parameter{
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(2 * time.Second),
+				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+					"missing1": &headerErrorProvider{err: notFound},
+					"missing2": &headerErrorProvider{err: notFound},
+				}),
+			},
+			blockID:  "1",
+			errIs:    notFound,
+			answered: true,
+		},
+		{
+			name: "NotFoundAndProviderDeadline",
+			params: []first.Parameter{
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(2 * time.Second),
+				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+					"missing":   &headerErrorProvider{err: notFound},
+					"timed-out": &headerErrorProvider{err: context.DeadlineExceeded},
+				}),
+			},
+			blockID:  "1",
+			errIs:    first.ErrBeaconBlockHeaderTimeout,
+			errIsNot: notFound,
+			answered: true,
+		},
+		{
+			name: "ProviderFailure",
+			params: []first.Parameter{
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(2 * time.Second),
+				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+					"offline": &headerErrorProvider{err: errConnectionRefused},
+				}),
+			},
+			blockID:  "1",
+			errIs:    errConnectionRefused,
+			answered: true,
+		},
+		{
+			name: "NotFoundAndProviderFailure",
+			params: []first.Parameter{
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(2 * time.Second),
+				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+					"missing": &headerErrorProvider{err: notFound},
+					"offline": &headerErrorProvider{err: errConnectionRefused},
+				}),
+			},
+			blockID:  "1",
+			errIs:    errConnectionRefused,
+			errIsNot: notFound,
+			answered: true,
+		},
+		{
+			name: "NotFoundAndServiceUnavailable",
+			params: []first.Parameter{
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(2 * time.Second),
+				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+					"missing":     &headerErrorProvider{err: notFound},
+					"unavailable": &headerErrorProvider{err: serviceUnavailable},
+				}),
+			},
+			blockID:  "1",
+			errIs:    serviceUnavailable,
+			errIsNot: notFound,
+			answered: true,
+		},
 	}
 
 	for _, test := range tests {
-		s, err := first.New(context.Background(), test.params...)
-		require.NoError(t, err)
+		run := func(t *testing.T) {
+			t.Helper()
+			s, err := first.New(context.Background(), test.params...)
+			require.NoError(t, err)
 
-		t.Run(test.name, func(t *testing.T) {
+			started := time.Now()
 			root, err := s.BeaconBlockHeader(context.Background(), &api.BeaconBlockHeaderOpts{
 				Block: test.blockID,
 			})
-			if test.err != "" {
+			switch {
+			case test.err != "":
 				require.EqualError(t, err, test.err)
-				if test.isTimeout {
-					require.ErrorIs(t, err, first.ErrBeaconBlockHeaderTimeout)
-				}
-			} else {
+			case test.errIs == nil:
 				require.NoError(t, err)
 				require.NotNil(t, root)
+			}
+			if test.errIs != nil {
+				require.ErrorIs(t, err, test.errIs)
+			}
+			if test.errIsNot != nil {
+				require.NotErrorIs(t, err, test.errIsNot)
+			}
+			if test.answered {
+				require.Less(t, time.Since(started), time.Second)
+			}
+		}
+		t.Run(test.name, func(t *testing.T) {
+			if test.answered {
+				// The fake clock makes the elapsed-time check exact; other rows leave sleeping providers behind.
+				synctest.Test(t, run)
+			} else {
+				run(t)
 			}
 		})
 	}
