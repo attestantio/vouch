@@ -4,7 +4,7 @@ dev:
   - update golang.org/x/net to v0.62.0 to pick up the golang.org/x/net/html denial-of-service fix (CVE-2026-78661)
   - build with Go 1.26.11 to pick up the net/http denial-of-service fix (CVE-2026-97054)
   - static-delay multi-instance re-checks before every duty instead of staying active after a takeover, so it stands down again once the primary recovers; attesting no longer activates proposing, and the active-state metrics follow each decision
-  - static-delay multi-instance proposes only when every beacon node reports no block at the slot; a timeout, 5xx or connection failure now stands down instead of proposing
+  - static-delay multi-instance proposes only when the beacon block header lookup reports no block at the slot (with the default first strategy, every beacon node); a timeout, 5xx or connection failure now stands down instead of proposing
   - the first beaconblockheader strategy returns as soon as every beacon node has answered, rather than waiting for its timeout when none has the header
 
 1.14.0-alpha.2:
