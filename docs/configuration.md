@@ -327,24 +327,28 @@ builderclient:
 # fail to see expected attestations or proposals within the given time period.
 multiinstance:
   # style can be 'static-delay' or 'always'.  'always' means that the instance will carry out its duties regardless of which other
-  # instances may active.  'static-delay' means that the instance will wait for an amount of time if inactive before becoming
-  # active.  Note that for the 'static-delay' style to operate the beacon node(s) to which Vouch connects must be running with the
-  # 'subscribe all subnets' option enabled.  This is because this style looks at the attestation data to see if other instance(s)
-  # of Vouch are active.  However, Vouch cannot detect if the beacon nodes are configured correctly so it is up to the user to
-  # carry out this work themselves.  When the Gloas fork is scheduled, the 'static-delay' style also checks that the beacon node's
-  # SLOT_DURATION_MS and SECONDS_PER_SLOT give the same slot length, and refuses to start if they do not.  Public networks always
-  # serve matching values, so this only happens with a misconfigured beacon node; correct its network configuration and restart.
+  # instances may active.  'static-delay' means that an instance with a non-zero delay waits that delay before every duty and
+  # carries it out only if no other instance has: an attestation only if none for its validators is in the pool, a proposal only
+  # if the beacon block header lookup reports no block at the slot.  With the default 'first' header strategy every beacon node
+  # must report no block, and if any cannot answer the instance does not propose; with 'simple' the first beacon node to report no
+  # block decides.  It stands down again as soon as another instance is seen to be active.  Note that for the 'static-delay' style
+  # to operate the beacon node(s) to which Vouch connects must be running with the 'subscribe all subnets' option enabled.  This
+  # is because this style looks at the attestation data to see if other instance(s) of Vouch are active.  However, Vouch cannot
+  # detect if the beacon nodes are configured correctly so it is up to the user to carry out this work themselves.  When the Gloas
+  # fork is scheduled, the 'static-delay' style also checks that the beacon node's SLOT_DURATION_MS and SECONDS_PER_SLOT give the
+  # same slot length, and refuses to start if they do not.  Public networks always serve matching values, so this only happens
+  # with a misconfigured beacon node; correct its network configuration and restart.
   style: 'always'
   static-delay:
-    # attester-delay is the time for inactive Vouch instances to wait to see expected attestations prior to becoming active
-    # themselves.  The higher this value is, the more likely it is that an inactive Vouch will miss a slot's worth of attestations
-    # before becoming active.  The lower this value is, the more likely it is that multiple Vouch instances will consider
-    # themselves as all active and potentially cause attestation failures.  If either of these situations is seen commonly then the
-    # value below may need to be changed accordingly.
+    # attester-delay is the time a Vouch instance waits after the attestation deadline, on every attestation duty, before checking
+    # the attestation pool for another instance's attestation.  The higher this value is, the later the instance attests when no
+    # other instance has.  The lower this value is, the more likely it is that the other instance's attestation has not yet
+    # reached the pool and both instances attest, causing attestation failures.  If either of these situations is seen commonly
+    # then the value below may need to be changed accordingly.  A value of 0 attests at once without checking.
     attester-delay: '1s'
-    # proposer-delay is the time for inactive Vouch instances to wait to see expected proposals prior to becoming active themselves.
-    # The same caveats apply to this value as to the attester delay, however in general it is very unlikely that a Vouch instance
-    # will become inactive around a proposal, given the relative frequency of proposals and attestations.
+    # proposer-delay is the time a Vouch instance waits when each proposal duty starts before checking for another instance's
+    # block.  The same caveats apply to this value as to the attester delay.  A late proposal is less likely to be accepted, so
+    # keep this value short.  A value of 0 proposes at once without checking.
     proposer-delay: '2s'
 
 # tracing sends OTLP trace data to the supplied endpoint.

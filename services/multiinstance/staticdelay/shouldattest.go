@@ -33,9 +33,8 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 	log := s.log.With().Uint64("slot", uint64(duty.Slot())).Logger()
 	log.Trace().Msg("Checking if we should attest")
 
-	if s.attesterActive.Load() {
-		log.Trace().Msg("We are the active attester")
-		s.enableAttester(ctx)
+	if s.attesterDelay == 0 {
+		monitorActive("attester", true)
 
 		return true
 	}
@@ -89,7 +88,7 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 				if aggregationBits.BitAt(validatorCommitteeIndex) {
 					// An attestation is already in the pool; we don't need to act.
 					log.Trace().Msg("Another instance is attesting; not activating attester")
-					s.disableAttester(ctx)
+					monitorActive("attester", false)
 
 					return false
 				}
@@ -98,7 +97,7 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 	}
 
 	log.Trace().Msg("No attestation found; activating attester")
-	s.enableAttester(ctx)
+	monitorActive("attester", true)
 
 	return true
 }

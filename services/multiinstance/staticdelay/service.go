@@ -17,7 +17,6 @@ package staticdelay
 
 import (
 	"context"
-	"sync/atomic"
 	"time"
 
 	consensusclient "github.com/attestantio/go-eth2-client"
@@ -41,9 +40,7 @@ type Service struct {
 	gloasAttestationDelay      time.Duration
 	gloasForkEpoch             phase0.Epoch
 	attesterDelay              time.Duration
-	attesterActive             atomic.Bool
 	proposerDelay              time.Duration
-	proposerActive             atomic.Bool
 }
 
 // New creates a new controller.
@@ -90,37 +87,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		attesterDelay:              parameters.attesterDelay,
 		proposerDelay:              parameters.proposerDelay,
 	}
-	s.attesterActive.Store(parameters.attesterDelay == 0)
 	monitorActive("attester", parameters.attesterDelay == 0)
-	s.proposerActive.Store(parameters.proposerDelay == 0)
 	monitorActive("proposer", parameters.proposerDelay == 0)
 	log.Info().Bool("attester_active", parameters.attesterDelay == 0).Bool("proposer_active", parameters.proposerDelay == 0).Msg("Initial configuration")
 
 	return s, nil
-}
-
-func (s *Service) disableAttester(_ context.Context) {
-	s.attesterActive.Store(false)
-	monitorActive("attester", false)
-	// We also deactivate the proposer pre-emptively, on the basis that if we cannot attest we are unlikely to be able to propose.
-	s.proposerActive.Store(false)
-}
-
-func (s *Service) enableAttester(_ context.Context) {
-	s.attesterActive.Store(true)
-	monitorActive("attester", true)
-	// We also activate the proposer pre-emptively, on the basis that if we are attesting we should be proposing also.
-	s.proposerActive.Store(true)
-}
-
-func (s *Service) disableProposer(_ context.Context) {
-	s.proposerActive.Store(false)
-	monitorActive("proposer", false)
-}
-
-func (s *Service) enableProposer(_ context.Context) {
-	s.proposerActive.Store(true)
-	monitorActive("proposer", true)
 }
 
 // obtainAttestationDelays provides the pre-Gloas and Gloas attestation deadlines.

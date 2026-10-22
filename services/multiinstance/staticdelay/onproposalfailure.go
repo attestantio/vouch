@@ -1,4 +1,4 @@
-// Copyright © 2024 Attestant Limited.
+// Copyright © 2024 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,8 +21,7 @@ import (
 
 // OnProposalFailure flags that an attempt to propose has failed.
 func (s *Service) OnProposalFailure(_ context.Context, duty *beaconblockproposer.Duty) {
-	s.log.Trace().Uint64("slot", uint64(duty.Slot())).Msg("Proposal failure; deactivating")
+	s.log.Trace().Uint64("slot", uint64(duty.Slot())).Msg("Proposal failure; marking proposer inactive")
 
-	s.proposerActive.Store(false)
 	monitorActive("proposer", false)
 }
