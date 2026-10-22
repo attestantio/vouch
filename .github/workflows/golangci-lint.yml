@@ -14,9 +14,9 @@ jobs:
     name: lint
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           cache: false
           go-version: "1.26"
@@ -24,7 +24,7 @@ jobs:
       # Cache the custom binary to speed up subsequent runs
       - name: Cache custom golangci-lint
         id: cache-custom-gcl
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ./custom-gcl
           key: custom-gcl-${{ hashFiles('.custom-gcl.yml') }}
@@ -45,7 +45,7 @@ jobs:
 
       # Run using the action with custom binary
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           install-mode: "none"
           args: "--timeout=60m"
