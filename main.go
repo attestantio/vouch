@@ -124,7 +124,7 @@ import (
 )
 
 // ReleaseVersion is the release version for the code.
-var ReleaseVersion = "1.14.0-alpha.2"
+var ReleaseVersion = "1.14.0-beta.1"
 
 func main() {
 	exitCode := main2()
@@ -1694,9 +1694,10 @@ func (p *readinessGatedProposalProvider) EPBSProposal(ctx context.Context,
 	return &api.Response[*api.VersionedEPBSProposal]{
 		Data: response.Data,
 		Metadata: map[string]any{
-			beaconblockproposer.MetadataStrategy: "simple",
-			beaconblockproposer.MetadataProvider: proposerpreferences.SimpleProvider,
-			beaconblockproposer.MetadataSource:   beaconblockproposal.EPBSProposalSource(response.Data, response.Metadata),
+			beaconblockproposer.MetadataStrategy:   "simple",
+			beaconblockproposer.MetadataProvider:   proposerpreferences.SimpleProvider,
+			beaconblockproposer.MetadataSource:     beaconblockproposal.EPBSProposalSource(response.Data, response.Metadata),
+			beaconblockproposer.MetadataBuilderURL: beaconblockproposer.BuilderURL(response.Metadata),
 		},
 	}, nil
 }

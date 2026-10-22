@@ -98,11 +98,13 @@ func (*LogCapture) hasField(entry map[string]any, key string, value any) bool {
 
 func fieldsMatch(entryValue any, value any) bool {
 	expected := reflect.ValueOf(value)
+	// JSON numbers decode to float64.  Compare as float64, because converting a float beyond the
+	// integer range back to an integer gives a different value on each architecture.
 	if expected.CanInt() {
-		return int64(entryValue.(float64)) == expected.Int()
+		return entryValue.(float64) == float64(expected.Int())
 	}
 	if expected.CanUint() {
-		return uint64(entryValue.(float64)) == expected.Uint()
+		return entryValue.(float64) == float64(expected.Uint())
 	}
 	if expected.CanFloat() {
 		return entryValue.(float64) == expected.Float()

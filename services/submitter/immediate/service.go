@@ -123,18 +123,16 @@ func (s *Service) SubmitProposerPreferences(ctx context.Context, preferences []*
 }
 
 // SubmitProposal submits a proposal.
-func (s *Service) SubmitProposal(ctx context.Context, proposal *api.VersionedSignedProposal) error {
+func (s *Service) SubmitProposal(ctx context.Context, opts *api.SubmitProposalOpts) error {
 	ctx, span := otel.Tracer("attestantio.vouch.services.submitter.immediate").Start(ctx, "SubmitProposal")
 	defer span.End()
 
-	if proposal == nil {
+	if opts == nil || opts.Proposal == nil {
 		return errors.New("no proposal supplied")
 	}
 
 	started := time.Now()
-	err := s.proposalSubmitter.SubmitProposal(ctx, &api.SubmitProposalOpts{
-		Proposal: proposal,
-	})
+	err := s.proposalSubmitter.SubmitProposal(ctx, opts)
 	if service, isService := s.proposalSubmitter.(eth2client.Service); isService {
 		s.clientMonitor.ClientOperation(service.Address(), "submit proposal", err == nil, time.Since(started))
 	} else {
@@ -145,7 +143,7 @@ func (s *Service) SubmitProposal(ctx context.Context, proposal *api.VersionedSig
 	}
 
 	if e := s.log.Trace(); e.Enabled() {
-		data, err := json.Marshal(proposal)
+		data, err := json.Marshal(opts.Proposal)
 		if err == nil {
 			e.Str("proposal", string(data)).Msg("Submitted proposal")
 		}

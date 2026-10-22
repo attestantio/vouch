@@ -171,6 +171,7 @@ func TestEPBSProposalObservability(t *testing.T) {
 	require.Equal(t, "best", response.Metadata["vouch.strategy"])
 	require.Equal(t, "stable-provider", response.Metadata["vouch.provider"])
 	require.Equal(t, "builder_api", response.Metadata["vouch.source"])
+	require.Equal(t, "https://builder.example", response.Metadata["vouch.builder_url"])
 	require.True(t, capture.HasLog(map[string]any{
 		"message":             "ePBS proposal provider completed",
 		"slot":                uint64(1),
