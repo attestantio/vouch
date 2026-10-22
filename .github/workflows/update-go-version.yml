@@ -17,13 +17,13 @@ jobs:
     steps:
       - name: Generate GitHub App Token
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.GO_AUTOUPDATE_APP_ID }}
           private-key: ${{ secrets.GO_AUTOUPDATE_APP_PRIVATE_KEY }}
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
@@ -63,7 +63,7 @@ jobs:
           echo "version_number=$VERSION_NUMBER" >> $GITHUB_OUTPUT
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           cache: false
           go-version: "${{ steps.fetch-version.outputs.version_number }}"
