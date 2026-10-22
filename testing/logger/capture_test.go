@@ -15,6 +15,7 @@ package logger
 
 import (
 	"fmt"
+	"math"
 	"sync"
 	"testing"
 
@@ -57,6 +58,16 @@ func TestHasLog(t *testing.T) {
 			require.Equal(t, test.match, capture.HasLog(test.fields))
 		})
 	}
+}
+
+// TestHasLogMaxUint64 matches a uint64 too large for float64, such as the self-build builder
+// index.  Converting such a float back to uint64 gives a different value on amd64 and arm64.
+func TestHasLogMaxUint64(t *testing.T) {
+	capture := &LogCapture{entries: make([]map[string]any, 0)}
+	_, err := fmt.Fprintf(capture, `{"value":%d}`, uint64(math.MaxUint64))
+	require.NoError(t, err)
+
+	require.True(t, capture.HasLog(map[string]any{"value": uint64(math.MaxUint64)}))
 }
 
 // TestEntriesDuringConcurrentWrite reads Entries while another goroutine is still capturing
