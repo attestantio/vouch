@@ -20,6 +20,9 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
+// FarFutureEpoch is the epoch HardForkEpoch returns for a fork that is unscheduled or cannot be obtained.
+const FarFutureEpoch = phase0.Epoch(0xffffffffffffffff)
+
 // Service provides a number of functions for calculating chain-related times.
 type Service interface {
 	// GenesisTime provides the time of the chain's genesis.
