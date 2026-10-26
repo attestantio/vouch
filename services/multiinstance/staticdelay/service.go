@@ -68,6 +68,10 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		return nil, err
 	}
 	gloasForkEpoch := parameters.chainTime.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH")
+	// HardForkEpoch reports a failed lookup as far future, so check it against the snapshot.
+	if epoch, ok := specResponse.Data["GLOAS_FORK_EPOCH"].(uint64); ok && phase0.Epoch(epoch) != gloasForkEpoch {
+		return nil, errors.Errorf("GLOAS_FORK_EPOCH lookup returned %d but the spec serves %d", gloasForkEpoch, epoch)
+	}
 	preGloasAttestationDelay, gloasAttestationDelay, err := obtainAttestationDelays(specResponse.Data, gloasForkEpoch)
 	if err != nil {
 		return nil, err
