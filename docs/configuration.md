@@ -477,7 +477,7 @@ A value must be a positive duration with a unit that is less than the slot durat
 
 ### controller.max-attestation-delay
 
-This is a deprecated duration parameter that applies to pre-Gloas slots only. It defaults to a third of the slot duration, `4s` on a 12-second slot. Gloas slots always use `ATTESTATION_DUE_BPS_GLOAS`, `3s` on a 12-second slot. It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty.
+This is a deprecated duration parameter that applies to pre-Gloas slots only. It defaults to a third of the slot duration, `4s` on a 12-second slot. Gloas slots always use `ATTESTATION_DUE_BPS_GLOAS`, `3s` on a 12-second slot. It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty. With `multiinstance.style: static-delay`, an inactive instance also waits until this deadline plus `multiinstance.static-delay.attester-delay` before checking whether another instance has attested, so raising it delays takeover by the same amount. Gloas slots ignore it in both places.
 
 ### controller.attestation-aggregation-delay
 
