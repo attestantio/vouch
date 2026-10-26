@@ -340,7 +340,9 @@ multiinstance:
     # themselves.  The higher this value is, the more likely it is that an inactive Vouch will miss a slot's worth of attestations
     # before becoming active.  The lower this value is, the more likely it is that multiple Vouch instances will consider
     # themselves as all active and potentially cause attestation failures.  If either of these situations is seen commonly then the
-    # value below may need to be changed accordingly.
+    # value below may need to be changed accordingly.  The delay counts from the attestation deadline: controller.max-attestation-delay
+    # or a third of the slot before Gloas, ATTESTATION_DUE_BPS_GLOAS from Gloas.  Vouch refuses to start if the deadline plus this
+    # delay reaches the end of the slot, because a takeover attestation would then always be late.
     attester-delay: '1s'
     # proposer-delay is the time for inactive Vouch instances to wait to see expected proposals prior to becoming active themselves.
     # The same caveats apply to this value as to the attester delay, however in general it is very unlikely that a Vouch instance
@@ -477,7 +479,7 @@ A value must be a positive duration with a unit that is less than the slot durat
 
 ### controller.max-attestation-delay
 
-This is a deprecated duration parameter that applies to pre-Gloas slots only. It defaults to a third of the slot duration, `4s` on a 12-second slot. Gloas slots always use `ATTESTATION_DUE_BPS_GLOAS`, `3s` on a 12-second slot. It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty. With `multiinstance.style: static-delay`, an inactive instance also waits until this deadline plus `multiinstance.static-delay.attester-delay` before checking whether another instance has attested, so raising it delays takeover by the same amount. Gloas slots ignore it in both places.
+This is a deprecated duration parameter that applies to pre-Gloas slots only. It defaults to a third of the slot duration, `4s` on a 12-second slot. Gloas slots always use `ATTESTATION_DUE_BPS_GLOAS`, `3s` on a 12-second slot. It defines the maximum time that Vouch will wait from the start of a slot for a block before attesting on the basis that the slot is empty. With `multiinstance.style: static-delay`, an inactive instance also waits until this deadline plus `multiinstance.static-delay.attester-delay` before checking whether another instance has attested, so raising it delays takeover by the same amount. Vouch refuses to start if this deadline plus `attester-delay` reaches the slot duration. Gloas slots ignore it in both places.
 
 ### controller.attestation-aggregation-delay
 
