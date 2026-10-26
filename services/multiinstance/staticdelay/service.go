@@ -17,6 +17,7 @@ package staticdelay
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -67,10 +68,11 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	gloasForkEpoch := parameters.chainTime.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH")
-	// HardForkEpoch reports a failed lookup as far future, so check it against the snapshot.
-	if epoch, ok := specResponse.Data["GLOAS_FORK_EPOCH"].(uint64); ok && phase0.Epoch(epoch) != gloasForkEpoch {
-		return nil, errors.Errorf("failed to obtain GLOAS_FORK_EPOCH: chaintime returned %d but the spec serves %d", gloasForkEpoch, epoch)
+	// Read the fork epoch from the same snapshot as the deadlines.  A missing or malformed value
+	// means no Gloas fork, as in chaintime.HardForkEpoch.
+	gloasForkEpoch := chaintime.FarFutureEpoch
+	if epoch, ok := specResponse.Data["GLOAS_FORK_EPOCH"].(uint64); ok {
+		gloasForkEpoch = phase0.Epoch(epoch)
 	}
 	preGloasAttestationDelay, gloasAttestationDelay, slotDuration, err := obtainAttestationDelays(specResponse.Data, gloasForkEpoch)
 	if err != nil {
@@ -83,7 +85,12 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	// A pool check at or after the end of the slot is too late to take over.  Only check slots
 	// that can still occur.
 	if parameters.chainTime.CurrentEpoch() < gloasForkEpoch && preGloasAttestationDelay+parameters.attesterDelay >= slotDuration {
-		return nil, errors.Errorf("pre-Gloas attestation deadline %s plus multiinstance.static-delay.attester-delay %s must be less than the slot duration %s", preGloasAttestationDelay, parameters.attesterDelay, slotDuration)
+		until := ""
+		if gloasForkEpoch != chaintime.FarFutureEpoch {
+			until = fmt.Sprintf(" until Gloas activates at epoch %d", gloasForkEpoch)
+		}
+
+		return nil, errors.Errorf("pre-Gloas attestation deadline %s plus multiinstance.static-delay.attester-delay %s must be less than the slot duration %s%s", preGloasAttestationDelay, parameters.attesterDelay, slotDuration, until)
 	}
 	if gloasForkEpoch != chaintime.FarFutureEpoch && gloasAttestationDelay+parameters.attesterDelay >= slotDuration {
 		return nil, errors.Errorf("Gloas attestation deadline %s plus multiinstance.static-delay.attester-delay %s must be less than the slot duration %s", gloasAttestationDelay, parameters.attesterDelay, slotDuration)

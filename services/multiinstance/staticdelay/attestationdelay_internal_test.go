@@ -143,6 +143,7 @@ func TestAttesterDelayWithinSlot(t *testing.T) {
 		{name: "OverrideWithinSlot", override: 10 * time.Second, attesterDelay: time.Second},
 		{name: "AttesterDelayAtSlotEnd", attesterDelay: 8 * time.Second, err: fmt.Sprintf(preGloasErr, "4s", "8s")},
 		{name: "AttesterDelayWithinSlot", attesterDelay: 7 * time.Second},
+		{name: "AttesterDelayBeforeGloas", fork: uint64(gloasForkEpoch), attesterDelay: 8 * time.Second, err: fmt.Sprintf(preGloasErr, "4s", "8s") + " until Gloas activates at epoch 5"},
 		{name: "GloasScheduled", fork: uint64(gloasForkEpoch), override: 2 * time.Second, attesterDelay: 9 * time.Second, err: fmt.Sprintf(gloasErr, "3s", "9s")},
 		{name: "GloasNotScheduled", override: 2 * time.Second, attesterDelay: 9 * time.Second},
 		{name: "GloasFromGenesis", fork: uint64(0), override: 11 * time.Second, attesterDelay: 8 * time.Second},
@@ -234,8 +235,8 @@ func TestAttestationDelayWithoutGloas(t *testing.T) {
 	require.Equal(t, 4*time.Second, s.attestationDelay(1<<40))
 }
 
-// TestGloasForkEpoch confirms the fork epoch comes from chaintime, which treats a missing or
-// malformed value as far future, as the controller does.
+// TestGloasForkEpoch confirms a missing or malformed fork epoch means no Gloas fork, as in
+// chaintime.HardForkEpoch.
 func TestGloasForkEpoch(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -398,30 +399,31 @@ func (s *failingSpecProvider) Spec(ctx context.Context, opts *api.SpecOpts) (*ap
 }
 
 func TestNewSpecFetchFailure(t *testing.T) {
-	tests := []struct {
-		name    string
-		fork    any
-		fetches int
-		err     string
-	}{
-		// Chaintime construction consumes the first fetch.
-		{name: "Spec", fetches: 1, err: "spec unavailable"},
-		{name: "ForkLookup", fork: uint64(gloasForkEpoch), fetches: 2, err: "failed to obtain GLOAS_FORK_EPOCH: chaintime returned 18446744073709551615 but the spec serves 5"},
+	provider := &failingSpecProvider{
+		fixedSpecProvider: fixedSpecProvider{
+			"SECONDS_PER_SLOT": 12 * time.Second,
+			"SLOTS_PER_EPOCH":  uint64(slotsPerEpoch),
+		},
+		// Enough for chaintime construction only.
+		remaining: 1,
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			provider := &failingSpecProvider{
-				fixedSpecProvider: fixedSpecProvider{
-					"SECONDS_PER_SLOT": 12 * time.Second,
-					"SLOTS_PER_EPOCH":  uint64(slotsPerEpoch),
-				},
-				remaining: test.fetches,
-			}
-			if test.fork != nil {
-				provider.fixedSpecProvider["GLOAS_FORK_EPOCH"] = test.fork
-			}
-			_, err := newStaticDelayService(t, provider)
-			require.EqualError(t, err, test.err)
-		})
+	_, err := newStaticDelayService(t, provider)
+	require.EqualError(t, err, "spec unavailable")
+}
+
+// TestNewSingleSpecFetch confirms the fork epoch comes from the same snapshot as the deadlines, so a
+// later fetch answered by another beacon node cannot disagree with it.
+func TestNewSingleSpecFetch(t *testing.T) {
+	provider := &failingSpecProvider{
+		fixedSpecProvider: fixedSpecProvider{
+			"SECONDS_PER_SLOT": 12 * time.Second,
+			"SLOTS_PER_EPOCH":  uint64(slotsPerEpoch),
+			"GLOAS_FORK_EPOCH": uint64(gloasForkEpoch),
+		},
+		// One fetch for chaintime construction and one for static-delay.
+		remaining: 2,
 	}
+	s, err := newStaticDelayService(t, provider)
+	require.NoError(t, err)
+	require.Equal(t, phase0.Epoch(gloasForkEpoch), s.gloasForkEpoch)
 }
