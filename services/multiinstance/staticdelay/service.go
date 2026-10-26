@@ -153,19 +153,13 @@ func obtainAttestationDelays(spec map[string]any, gloasForkEpoch phase0.Epoch) (
 	// Match the controller's default pre-Gloas attestation deadline.
 	preGloasDelay := secondsPerSlot / 3
 
-	// Chaintime uses SECONDS_PER_SLOT for slot starts, including after Gloas.
-	gloasSlotDuration := secondsPerSlot
-	if durationMS, ok := spec["SLOT_DURATION_MS"].(uint64); ok && durationMS != 0 {
-		gloasSlotDuration = time.Duration(durationMS) * time.Millisecond
-		if gloasForkEpoch != chaintime.FarFutureEpoch && gloasSlotDuration != secondsPerSlot {
-			return 0, 0, 0, errors.Errorf("SLOT_DURATION_MS %s differs from SECONDS_PER_SLOT %s; chaintime does not support changing slot duration", gloasSlotDuration, secondsPerSlot)
-		}
+	// Chaintime times every slot from SECONDS_PER_SLOT, including after Gloas, so the Gloas deadline
+	// is a fraction of it and a scheduled fork must not change the slot duration.
+	if slotDuration := chaintime.GloasSlotDuration(spec, secondsPerSlot); gloasForkEpoch != chaintime.FarFutureEpoch && slotDuration != secondsPerSlot {
+		return 0, 0, 0, errors.Errorf("SLOT_DURATION_MS %s differs from SECONDS_PER_SLOT %s; chaintime does not support changing slot duration", slotDuration, secondsPerSlot)
 	}
 	// The fallback is ATTESTATION_DUE_BPS_GLOAS itself, 2500 basis points.
-	gloasDelay := gloasSlotDuration / 4
-	if bps, ok := spec["ATTESTATION_DUE_BPS_GLOAS"].(uint64); ok && bps != 0 && bps <= 10000 {
-		gloasDelay = gloasSlotDuration * time.Duration(bps) / 10000
-	}
+	gloasDelay := chaintime.DueBPS(spec, "ATTESTATION_DUE_BPS_GLOAS", secondsPerSlot, secondsPerSlot/4)
 
 	return preGloasDelay, gloasDelay, secondsPerSlot, nil
 }
