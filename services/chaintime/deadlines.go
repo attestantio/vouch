@@ -15,9 +15,8 @@ package chaintime
 
 import "time"
 
-// GloasSlotDuration provides the slot duration in effect after Gloas.  Gloas serves this in
-// milliseconds, and it can differ from SECONDS_PER_SLOT, so every Gloas-derived deadline must be a
-// fraction of this value rather than of SECONDS_PER_SLOT.
+// GloasSlotDuration provides the slot duration that Gloas serves as SLOT_DURATION_MS, falling back
+// to the supplied duration.  It can differ from SECONDS_PER_SLOT, which chaintime uses for slot starts.
 func GloasSlotDuration(spec map[string]any, slotDuration time.Duration) time.Duration {
 	if durationMS, ok := spec["SLOT_DURATION_MS"].(uint64); ok && durationMS != 0 {
 		return time.Duration(durationMS) * time.Millisecond

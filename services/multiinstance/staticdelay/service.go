@@ -70,7 +70,7 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	gloasForkEpoch := parameters.chainTime.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH")
 	// HardForkEpoch reports a failed lookup as far future, so check it against the snapshot.
 	if epoch, ok := specResponse.Data["GLOAS_FORK_EPOCH"].(uint64); ok && phase0.Epoch(epoch) != gloasForkEpoch {
-		return nil, errors.Errorf("GLOAS_FORK_EPOCH lookup returned %d but the spec serves %d", gloasForkEpoch, epoch)
+		return nil, errors.Errorf("failed to obtain GLOAS_FORK_EPOCH: chaintime returned %d but the spec serves %d", gloasForkEpoch, epoch)
 	}
 	preGloasAttestationDelay, gloasAttestationDelay, slotDuration, err := obtainAttestationDelays(specResponse.Data, gloasForkEpoch)
 	if err != nil {
@@ -80,8 +80,9 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if parameters.maxAttestationDelay != 0 {
 		preGloasAttestationDelay = parameters.maxAttestationDelay
 	}
-	// A pool check at or after the end of the slot is too late to take over.
-	if gloasForkEpoch != 0 && preGloasAttestationDelay+parameters.attesterDelay >= slotDuration {
+	// A pool check at or after the end of the slot is too late to take over.  Only check slots
+	// that can still occur.
+	if parameters.chainTime.CurrentEpoch() < gloasForkEpoch && preGloasAttestationDelay+parameters.attesterDelay >= slotDuration {
 		return nil, errors.Errorf("pre-Gloas attestation deadline %s plus multiinstance.static-delay.attester-delay %s must be less than the slot duration %s", preGloasAttestationDelay, parameters.attesterDelay, slotDuration)
 	}
 	if gloasForkEpoch != chaintime.FarFutureEpoch && gloasAttestationDelay+parameters.attesterDelay >= slotDuration {
@@ -155,8 +156,8 @@ func obtainAttestationDelays(spec map[string]any, gloasForkEpoch phase0.Epoch) (
 
 	// Chaintime times every slot from SECONDS_PER_SLOT, including after Gloas, so the Gloas deadline
 	// is a fraction of it and a scheduled fork must not change the slot duration.
-	if slotDuration := chaintime.GloasSlotDuration(spec, secondsPerSlot); gloasForkEpoch != chaintime.FarFutureEpoch && slotDuration != secondsPerSlot {
-		return 0, 0, 0, errors.Errorf("SLOT_DURATION_MS %s differs from SECONDS_PER_SLOT %s; chaintime does not support changing slot duration", slotDuration, secondsPerSlot)
+	if gloasSlotDuration := chaintime.GloasSlotDuration(spec, secondsPerSlot); gloasForkEpoch != chaintime.FarFutureEpoch && gloasSlotDuration != secondsPerSlot {
+		return 0, 0, 0, errors.Errorf("SLOT_DURATION_MS %s differs from SECONDS_PER_SLOT %s; chaintime does not support changing slot duration", gloasSlotDuration, secondsPerSlot)
 	}
 	// The fallback is ATTESTATION_DUE_BPS_GLOAS itself, 2500 basis points.
 	gloasDelay := chaintime.DueBPS(spec, "ATTESTATION_DUE_BPS_GLOAS", secondsPerSlot, secondsPerSlot/4)

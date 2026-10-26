@@ -406,7 +406,7 @@ func TestNewSpecFetchFailure(t *testing.T) {
 	}{
 		// Chaintime construction consumes the first fetch.
 		{name: "Spec", fetches: 1, err: "spec unavailable"},
-		{name: "ForkLookup", fork: uint64(gloasForkEpoch), fetches: 2, err: "GLOAS_FORK_EPOCH lookup returned 18446744073709551615 but the spec serves 5"},
+		{name: "ForkLookup", fork: uint64(gloasForkEpoch), fetches: 2, err: "failed to obtain GLOAS_FORK_EPOCH: chaintime returned 18446744073709551615 but the spec serves 5"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

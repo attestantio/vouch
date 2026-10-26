@@ -523,6 +523,7 @@ func obtainAttestationTimings(spec map[string]any, slotDuration time.Duration, g
 		}
 	}
 
+	// Gloas deadlines are fractions of the Gloas slot duration, not of SECONDS_PER_SLOT.
 	slotDuration = chaintime.GloasSlotDuration(spec, slotDuration)
 
 	// The fallbacks are the Gloas deadlines themselves: ATTESTATION_DUE_BPS_GLOAS and
