@@ -15,6 +15,7 @@ package staticdelay
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -126,6 +127,45 @@ func TestMaxAttestationDelayOverride(t *testing.T) {
 	require.Equal(t, 3*time.Second, s.attestationDelay(slotsPerEpoch*gloasForkEpoch))
 }
 
+// TestAttesterDelayWithinSlot confirms startup is refused when the pool check would fall at or
+// after the end of the slot, where a takeover attestation is always late.
+func TestAttesterDelayWithinSlot(t *testing.T) {
+	const preGloasErr = "pre-Gloas attestation deadline %s plus multiinstance.static-delay.attester-delay %s must be less than the slot duration 12s"
+	const gloasErr = "Gloas attestation deadline %s plus multiinstance.static-delay.attester-delay %s must be less than the slot duration 12s"
+	tests := []struct {
+		name          string
+		fork          any
+		override      time.Duration
+		attesterDelay time.Duration
+		err           string
+	}{
+		{name: "OverrideAtSlotEnd", override: 11 * time.Second, attesterDelay: time.Second, err: fmt.Sprintf(preGloasErr, "11s", "1s")},
+		{name: "OverrideWithinSlot", override: 10 * time.Second, attesterDelay: time.Second},
+		{name: "AttesterDelayAtSlotEnd", attesterDelay: 8 * time.Second, err: fmt.Sprintf(preGloasErr, "4s", "8s")},
+		{name: "AttesterDelayWithinSlot", attesterDelay: 7 * time.Second},
+		{name: "GloasScheduled", fork: uint64(gloasForkEpoch), override: 2 * time.Second, attesterDelay: 9 * time.Second, err: fmt.Sprintf(gloasErr, "3s", "9s")},
+		{name: "GloasNotScheduled", override: 2 * time.Second, attesterDelay: 9 * time.Second},
+		{name: "GloasFromGenesis", fork: uint64(0), override: 11 * time.Second, attesterDelay: 8 * time.Second},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			spec := fixedSpecProvider{
+				"SECONDS_PER_SLOT": 12 * time.Second,
+				"SLOTS_PER_EPOCH":  uint64(slotsPerEpoch),
+			}
+			if test.fork != nil {
+				spec["GLOAS_FORK_EPOCH"] = test.fork
+			}
+			_, err := newStaticDelayService(t, spec, WithMaxAttestationDelay(test.override), WithAttesterDelay(test.attesterDelay))
+			if test.err != "" {
+				require.EqualError(t, err, test.err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
 // TestGloasAttestationDelay confirms the Gloas deadline follows the spec, and falls back to the
 // Gloas deadline itself when the node does not serve a usable value.
 func TestGloasAttestationDelay(t *testing.T) {
@@ -172,7 +212,7 @@ func TestGloasAttestationDelay(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, gloasDelay, err := obtainAttestationDelays(test.spec, 0)
+			_, gloasDelay, _, err := obtainAttestationDelays(test.spec, 0)
 			require.NoError(t, err)
 			require.Equal(t, test.expected, gloasDelay)
 		})
@@ -241,7 +281,7 @@ func TestPreGloasAttestationDelay(t *testing.T) {
 			if test.intervals != nil {
 				spec["INTERVALS_PER_SLOT"] = test.intervals
 			}
-			preGloasDelay, _, err := obtainAttestationDelays(spec, farFutureEpoch)
+			preGloasDelay, _, _, err := obtainAttestationDelays(spec, farFutureEpoch)
 			require.NoError(t, err)
 			require.Equal(t, 4*time.Second, preGloasDelay)
 		})
@@ -265,7 +305,7 @@ func TestGloasSlotDurationMismatch(t *testing.T) {
 				"SECONDS_PER_SLOT": 12 * time.Second,
 				"SLOT_DURATION_MS": uint64(6000),
 			}
-			_, _, err := obtainAttestationDelays(spec, test.fork)
+			_, _, _, err := obtainAttestationDelays(spec, test.fork)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 				return
@@ -330,7 +370,7 @@ func TestAttestationDelaySpecValues(t *testing.T) {
 			} else {
 				spec[test.key] = test.raw
 			}
-			preGloasDelay, gloasDelay, err := obtainAttestationDelays(spec, 0)
+			preGloasDelay, gloasDelay, _, err := obtainAttestationDelays(spec, 0)
 			if test.err != "" {
 				require.EqualError(t, err, test.err)
 				return

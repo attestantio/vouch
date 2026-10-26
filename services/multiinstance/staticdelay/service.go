@@ -72,13 +72,20 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 	if epoch, ok := specResponse.Data["GLOAS_FORK_EPOCH"].(uint64); ok && phase0.Epoch(epoch) != gloasForkEpoch {
 		return nil, errors.Errorf("GLOAS_FORK_EPOCH lookup returned %d but the spec serves %d", gloasForkEpoch, epoch)
 	}
-	preGloasAttestationDelay, gloasAttestationDelay, err := obtainAttestationDelays(specResponse.Data, gloasForkEpoch)
+	preGloasAttestationDelay, gloasAttestationDelay, slotDuration, err := obtainAttestationDelays(specResponse.Data, gloasForkEpoch)
 	if err != nil {
 		return nil, err
 	}
 	// The controller applies its override to pre-Gloas slots only.
 	if parameters.maxAttestationDelay != 0 {
 		preGloasAttestationDelay = parameters.maxAttestationDelay
+	}
+	// A pool check at or after the end of the slot is too late to take over.
+	if gloasForkEpoch != 0 && preGloasAttestationDelay+parameters.attesterDelay >= slotDuration {
+		return nil, errors.Errorf("pre-Gloas attestation deadline %s plus multiinstance.static-delay.attester-delay %s must be less than the slot duration %s", preGloasAttestationDelay, parameters.attesterDelay, slotDuration)
+	}
+	if gloasForkEpoch != chaintime.FarFutureEpoch && gloasAttestationDelay+parameters.attesterDelay >= slotDuration {
+		return nil, errors.Errorf("Gloas attestation deadline %s plus multiinstance.static-delay.attester-delay %s must be less than the slot duration %s", gloasAttestationDelay, parameters.attesterDelay, slotDuration)
 	}
 	log.Trace().Dur("pre_gloas_delay", preGloasAttestationDelay).Dur("gloas_delay", gloasAttestationDelay).Msg("Obtained spec attestation delays")
 
@@ -127,19 +134,20 @@ func (s *Service) enableProposer(_ context.Context) {
 	monitorActive("proposer", true)
 }
 
-// obtainAttestationDelays provides the pre-Gloas and Gloas attestation deadlines.
+// obtainAttestationDelays provides the pre-Gloas and Gloas attestation deadlines, and the slot duration.
 func obtainAttestationDelays(spec map[string]any, gloasForkEpoch phase0.Epoch) (
+	time.Duration,
 	time.Duration,
 	time.Duration,
 	error,
 ) {
 	tmp, exists := spec["SECONDS_PER_SLOT"]
 	if !exists {
-		return 0, 0, errors.New("failed to obtain SECONDS_PER_SLOT")
+		return 0, 0, 0, errors.New("failed to obtain SECONDS_PER_SLOT")
 	}
 	secondsPerSlot, isDuration := tmp.(time.Duration)
 	if !isDuration {
-		return 0, 0, errors.New("seconds per slot not a duration")
+		return 0, 0, 0, errors.New("seconds per slot not a duration")
 	}
 
 	// Match the controller's default pre-Gloas attestation deadline.
@@ -150,7 +158,7 @@ func obtainAttestationDelays(spec map[string]any, gloasForkEpoch phase0.Epoch) (
 	if durationMS, ok := spec["SLOT_DURATION_MS"].(uint64); ok && durationMS != 0 {
 		gloasSlotDuration = time.Duration(durationMS) * time.Millisecond
 		if gloasForkEpoch != chaintime.FarFutureEpoch && gloasSlotDuration != secondsPerSlot {
-			return 0, 0, errors.Errorf("SLOT_DURATION_MS %s differs from SECONDS_PER_SLOT %s; chaintime does not support changing slot duration", gloasSlotDuration, secondsPerSlot)
+			return 0, 0, 0, errors.Errorf("SLOT_DURATION_MS %s differs from SECONDS_PER_SLOT %s; chaintime does not support changing slot duration", gloasSlotDuration, secondsPerSlot)
 		}
 	}
 	// The fallback is ATTESTATION_DUE_BPS_GLOAS itself, 2500 basis points.
@@ -159,5 +167,5 @@ func obtainAttestationDelays(spec map[string]any, gloasForkEpoch phase0.Epoch) (
 		gloasDelay = gloasSlotDuration * time.Duration(bps) / 10000
 	}
 
-	return preGloasDelay, gloasDelay, nil
+	return preGloasDelay, gloasDelay, secondsPerSlot, nil
 }
