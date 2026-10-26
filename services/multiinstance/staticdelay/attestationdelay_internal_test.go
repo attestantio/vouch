@@ -358,14 +358,30 @@ func (s *failingSpecProvider) Spec(ctx context.Context, opts *api.SpecOpts) (*ap
 }
 
 func TestNewSpecFetchFailure(t *testing.T) {
-	provider := &failingSpecProvider{
-		fixedSpecProvider: fixedSpecProvider{
-			"SECONDS_PER_SLOT": 12 * time.Second,
-			"SLOTS_PER_EPOCH":  uint64(slotsPerEpoch),
-		},
-		// Enough for chaintime construction only.
-		remaining: 1,
+	tests := []struct {
+		name    string
+		fork    any
+		fetches int
+		err     string
+	}{
+		// Chaintime construction consumes the first fetch.
+		{name: "Spec", fetches: 1, err: "spec unavailable"},
+		{name: "ForkLookup", fork: uint64(gloasForkEpoch), fetches: 2, err: "GLOAS_FORK_EPOCH lookup returned 18446744073709551615 but the spec serves 5"},
 	}
-	_, err := newStaticDelayService(t, provider)
-	require.EqualError(t, err, "spec unavailable")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			provider := &failingSpecProvider{
+				fixedSpecProvider: fixedSpecProvider{
+					"SECONDS_PER_SLOT": 12 * time.Second,
+					"SLOTS_PER_EPOCH":  uint64(slotsPerEpoch),
+				},
+				remaining: test.fetches,
+			}
+			if test.fork != nil {
+				provider.fixedSpecProvider["GLOAS_FORK_EPOCH"] = test.fork
+			}
+			_, err := newStaticDelayService(t, provider)
+			require.EqualError(t, err, test.err)
+		})
+	}
 }
