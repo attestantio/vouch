@@ -145,7 +145,7 @@ func obtainAttestationDelays(spec map[string]any, gloasForkEpoch phase0.Epoch) (
 	gloasSlotDuration := secondsPerSlot
 	if durationMS, ok := spec["SLOT_DURATION_MS"].(uint64); ok && durationMS != 0 {
 		gloasSlotDuration = time.Duration(durationMS) * time.Millisecond
-		if gloasForkEpoch != 0xffffffffffffffff && gloasSlotDuration != secondsPerSlot {
+		if gloasForkEpoch != chaintime.FarFutureEpoch && gloasSlotDuration != secondsPerSlot {
 			return 0, 0, errors.Errorf("SLOT_DURATION_MS %s differs from SECONDS_PER_SLOT %s; chaintime does not support changing slot duration", gloasSlotDuration, secondsPerSlot)
 		}
 	}

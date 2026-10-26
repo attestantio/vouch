@@ -24,6 +24,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/services/attester"
+	"github.com/attestantio/vouch/services/chaintime"
 	standardchaintime "github.com/attestantio/vouch/services/chaintime/standard"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -61,7 +62,7 @@ func newStaticDelayService(t *testing.T, spec consensusclient.SpecProvider, para
 const (
 	gloasForkEpoch = 5
 	slotsPerEpoch  = 32
-	farFutureEpoch = phase0.Epoch(0xffffffffffffffff)
+	farFutureEpoch = chaintime.FarFutureEpoch
 )
 
 // TestAttestationDelay confirms that the base delay is chosen from the duty's slot, so a process
