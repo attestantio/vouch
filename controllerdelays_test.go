@@ -219,6 +219,20 @@ func TestControllerDelayOptions(t *testing.T) {
 		require.True(t, exists, delay.key)
 		require.Equal(t, reflect.ValueOf(option).Pointer(), reflect.ValueOf(delay.option).Pointer(), delay.key)
 	}
-	// Static-delay reads the first entry as its pre-Gloas attestation deadline override.
-	require.Equal(t, "controller.max-attestation-delay", deprecatedControllerDelays[0].key)
+}
+
+// TestControllerDelay confirms a delay is found by key, so reordering the table cannot hand a
+// caller another setting's value.
+func TestControllerDelay(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+	viper.Set("controller.attestation-aggregation-delay", "7s")
+	viper.Set("controller.max-attestation-delay", "5s")
+
+	delay, err := controllerDelay("controller.max-attestation-delay")
+	require.NoError(t, err)
+	require.Equal(t, 5*time.Second, delay)
+
+	_, err = controllerDelay("controller.unknown-delay")
+	require.EqualError(t, err, "unknown controller delay controller.unknown-delay")
 }
