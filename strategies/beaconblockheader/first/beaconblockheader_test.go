@@ -31,6 +31,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/mock"
 	"github.com/attestantio/vouch/strategies/beaconblockheader/first"
+	"github.com/attestantio/vouch/util"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
@@ -56,11 +57,36 @@ func TestBeaconBlockHeadersReportsStrategyTimeoutWhenANodeHitsTheSameDeadline(t 
 	}
 }
 
-// deadlineProvider answers only when the caller's context ends, with that context's error.
-type deadlineProvider struct{}
+// TestBeaconBlockHeadersReportsStrategyTimeoutWhenAnAbstentionHitsTheDeadline checks that a node which abstains only
+// because the strategy's deadline cut off its health check does not let another node's 404 decide.
+func TestBeaconBlockHeadersReportsStrategyTimeoutWhenAnAbstentionHitsTheDeadline(t *testing.T) {
+	for range 500 {
+		s, err := first.New(context.Background(),
+			first.WithLogLevel(zerolog.Disabled),
+			first.WithTimeout(time.Millisecond),
+			first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+				"missing":  &headerErrorProvider{err: &api.Error{StatusCode: 404}},
+				"checking": &deadlineProvider{err: consensusclient.ErrNotActive},
+			}),
+		)
+		require.NoError(t, err)
 
-func (*deadlineProvider) BeaconBlockHeader(ctx context.Context, _ *api.BeaconBlockHeaderOpts) (*api.Response[*apiv1.BeaconBlockHeader], error) {
+		_, err = s.BeaconBlockHeader(context.Background(), &api.BeaconBlockHeaderOpts{Block: "1"})
+		require.ErrorIs(t, err, first.ErrBeaconBlockHeaderTimeout)
+		require.False(t, util.IsNotFound(err))
+	}
+}
+
+// deadlineProvider answers only when the caller's context ends, with err or else that context's error.
+type deadlineProvider struct {
+	err error
+}
+
+func (p *deadlineProvider) BeaconBlockHeader(ctx context.Context, _ *api.BeaconBlockHeaderOpts) (*api.Response[*apiv1.BeaconBlockHeader], error) {
 	<-ctx.Done()
+	if p.err != nil {
+		return nil, p.err
+	}
 
 	return nil, ctx.Err()
 }
