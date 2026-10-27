@@ -329,16 +329,18 @@ multiinstance:
   # style can be 'static-delay' or 'always'.  'always' means that the instance will carry out its duties regardless of which other
   # instances may active.  'static-delay' means that an instance with a non-zero delay waits that delay before every duty and
   # carries it out only if no other instance has: an attestation only if none for its validators is in the pool, a proposal only
-  # if the beacon block header lookup reports no block at the slot.  With the default 'first' header strategy every beacon node
-  # that accepts the connection must report no block, at least one must do so, and if a reachable node errors or times out the
-  # instance does not propose; with 'simple' the first beacon node to report no block decides.  It stands down again as soon as
-  # another instance is seen to be active.  Note that for the 'static-delay' style to operate the beacon node(s) to which Vouch
-  # connects must be running with the 'subscribe all subnets' option enabled.  This is because this style looks at the attestation
-  # data to see if other instance(s) of Vouch are active.  However, Vouch cannot detect if the beacon nodes are configured
-  # correctly so it is up to the user to carry out this work themselves.  When the Gloas fork is scheduled, the 'static-delay'
-  # style also checks that the beacon node's SLOT_DURATION_MS and SECONDS_PER_SLOT give the same slot length, and refuses to start
-  # if they do not.  Public networks always serve matching values, so this only happens with a misconfigured beacon node; correct
-  # its network configuration and restart.
+  # if the beacon block header lookup reports no block at the slot.  With the default 'first' header strategy at least one beacon
+  # node must report no block and every other node must report no block or fail to connect without timing out, for example by
+  # refusing the connection; if any node errors or times out, including while connecting, the instance does not propose.  With
+  # 'simple' the first beacon node to report no block decides.  A beacon node that is behind the chain also reports no block, so
+  # with either style a lagging node can lead the instance to propose when another instance already has; keep the beacon nodes
+  # synced.  It stands down again as soon as another instance is seen to be active.  Note that for the 'static-delay' style to
+  # operate the beacon node(s) to which Vouch connects must be running with the 'subscribe all subnets' option enabled.  This is
+  # because this style looks at the attestation data to see if other instance(s) of Vouch are active.  However, Vouch cannot
+  # detect if the beacon nodes are configured correctly so it is up to the user to carry out this work themselves.  When the Gloas
+  # fork is scheduled, the 'static-delay' style also checks that the beacon node's SLOT_DURATION_MS and SECONDS_PER_SLOT give the
+  # same slot length, and refuses to start if they do not.  Public networks always serve matching values, so this only happens
+  # with a misconfigured beacon node; correct its network configuration and restart.
   style: 'always'
   static-delay:
     # attester-delay is the time a Vouch instance waits after the attestation deadline, on every attestation duty, before checking
