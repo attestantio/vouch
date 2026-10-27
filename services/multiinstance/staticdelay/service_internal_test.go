@@ -118,6 +118,32 @@ func activeGauge(t *testing.T, operation string) float64 {
 	return 0
 }
 
+// TestChecksTotalSeriesExistFromRegistration checks that every operation and result series is exported before its first
+// count, so an increase() alert sees the first increment.
+func TestChecksTotalSeriesExistFromRegistration(t *testing.T) {
+	ensureMetricsRegistered(t)
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	series := map[string]bool{}
+	for _, family := range families {
+		if family.GetName() != "vouch_multiinstance_checks_total" {
+			continue
+		}
+		for _, metric := range family.Metric {
+			labels := map[string]string{}
+			for _, label := range metric.Label {
+				labels[label.GetName()] = label.GetValue()
+			}
+			series[labels["operation"]+"/"+labels["result"]] = true
+		}
+	}
+	for _, operation := range []string{"attester", "proposer"} {
+		for _, result := range []string{"active", "inactive", "unknown"} {
+			require.True(t, series[operation+"/"+result], operation+"/"+result)
+		}
+	}
+}
+
 func TestPrimaryDutiesRestoreActiveGaugesAfterFailure(t *testing.T) {
 	s := newTestService(t)
 	s.attesterDelay = 0
@@ -236,7 +262,7 @@ func TestProposerActivatesOnlyOnDefinitiveHeaderAbsence(t *testing.T) {
 	}{
 		{name: "BlockFound", outcome: headerOutcome{response: found}, result: "inactive"},
 		{name: "NotFound", outcome: headerOutcome{err: &api.Error{StatusCode: 404}}, result: "active"},
-		{name: "WrappedNotFound", outcome: headerOutcome{err: errors.Join(errors.New("no beacon node has the beacon block header"), &api.Error{StatusCode: 404})}, result: "active"},
+		{name: "WrappedNotFound", outcome: headerOutcome{err: errors.Join(errors.New("no reachable beacon node has the beacon block header"), &api.Error{StatusCode: 404})}, result: "active"},
 		{name: "ProviderFailure", outcome: headerOutcome{err: errors.New("connection refused")}, result: "unknown"},
 		{name: "ServerError", outcome: headerOutcome{err: &api.Error{StatusCode: 503}}, result: "unknown"},
 		{name: "Timeout", outcome: headerOutcome{err: context.DeadlineExceeded}, result: "unknown"},
