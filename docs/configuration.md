@@ -350,9 +350,10 @@ multiinstance:
     # to start if the deadline plus this delay reaches the end of the slot, because a takeover attestation would then always be
     # late.
     attester-delay: '1s'
-    # proposer-delay is the time a Vouch instance waits when each proposal duty starts before checking for another instance's
-    # block.  The same caveats apply to this value as to the attester delay.  A late proposal is less likely to be accepted, so
-    # keep this value short.  A value of 0 proposes at once without checking.
+    # proposer-delay is the time a Vouch instance waits when each proposal duty starts before asking its beacon nodes for another
+    # instance's block, and it is all the time that block has to reach those nodes: the lookup is made once, and a node that has
+    # not yet seen the block reports none.  Set it above the usual time a block takes to reach this instance's beacon nodes, but
+    # no higher, because a later proposal is less likely to be accepted.  A value of 0 proposes at once without checking.
     proposer-delay: '2s'
 
 # tracing sends OTLP trace data to the supplied endpoint.
