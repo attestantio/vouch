@@ -74,22 +74,27 @@ func registerPrometheusMetrics(_ context.Context) error {
 // monitorActive provides metrics for the instance activity status.
 func monitorActive(operation string, active bool) {
 	if active {
-		monitorDecision(operation, "active", 1)
+		monitorDecision(operation, "active")
 	} else {
-		monitorDecision(operation, "inactive", 0)
+		monitorDecision(operation, "inactive")
 	}
 }
 
 // monitorUnknown records a stand-down because the check could not establish whether another instance acted.
 func monitorUnknown(operation string) {
-	monitorDecision(operation, "unknown", 0)
+	monitorDecision(operation, "unknown")
 }
 
-func monitorDecision(operation string, result string, state float64) {
+// monitorDecision counts the result and sets the gauge to 1 only when the instance acts.
+func monitorDecision(operation string, result string) {
 	if activeCounter == nil {
 		return
 	}
 
 	activeCounter.WithLabelValues(operation, result).Inc()
+	state := 0.0
+	if result == "active" {
+		state = 1
+	}
 	activeState.WithLabelValues(operation).Set(state)
 }
