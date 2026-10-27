@@ -133,9 +133,9 @@ Network metrics provide information about the network from Vouch's point of view
 The `static-delay` multi-instance style decides before each attestation and proposal duty whether this instance carries it out.  Both metrics have the label `operation`, with the value `attester` or `proposer`:
 
   - `vouch_multiinstance_active` is 1 if this instance's last decision for that operation was to carry out the duty, and 0 if it stood down or the duty failed.  It holds its value until the next duty of that type, so on a secondary instance it can stay at 1 after the primary has recovered, until the secondary's next duty
-  - `vouch_multiinstance_checks_total` counts the decisions and duty failures, with the label `result` set to `active` or `inactive`
+  - `vouch_multiinstance_checks_total` counts the decisions and duty failures, with the label `result` set to `active`, `inactive`, or `unknown` when the instance stood down because it could not establish whether another instance acted (today only a proposal whose beacon block header lookup failed or timed out)
 
-To alert when a secondary instance takes over duties, alert on an increase in `vouch_multiinstance_checks_total{result="active"}` on that instance rather than on the gauge.
+To alert when a secondary instance takes over duties, alert on an increase in `vouch_multiinstance_checks_total{result="active"}` on that instance rather than on the gauge.  To alert when it skipped a proposal it could not decide on, which loses the block if the primary is also down, alert on an increase in `vouch_multiinstance_checks_total{operation="proposer",result="unknown"}`.
 
 ## Relay
 Relay metrics provide information about the performance, both individually and comparatively, of the block relays configured for use.
