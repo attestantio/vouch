@@ -68,7 +68,7 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 		}(name, provider)
 	}
 
-	// Unreachable nodes abstain: the request never reached them, so they say nothing about the block.
+	// Nodes that gave no answer abstain; see abstains.
 	var notFound, unreachableErrors, providerErrors []error
 	for len(notFound)+len(unreachableErrors)+len(providerErrors) < len(s.beaconBlockHeadersProviders) {
 		var resp *beaconBlockHeaderResp
@@ -89,30 +89,31 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 			return resp.response, nil
 		case util.IsNotFound(resp.err):
 			notFound = append(notFound, resp.err)
-		case unreachable(resp.err):
+		case abstains(resp.err):
 			unreachableErrors = append(unreachableErrors, fmt.Errorf("%s: %w", resp.provider, resp.err))
 		default:
 			providerErrors = append(providerErrors, fmt.Errorf("%s: %w", resp.provider, resp.err))
 		}
 	}
+	failures := slices.Concat(providerErrors, unreachableErrors)
+	if ctx.Err() != nil {
+		// An answer raced the strategy's own deadline, which may also have cut off a node's health check and made it
+		// abstain; report that deadline rather than letting a 404 decide.
+		return nil, contextError(ctx, log, failures)
+	}
 	if len(providerErrors) == 0 && len(notFound) > 0 {
 		return nil, fmt.Errorf("no reachable beacon node has the beacon block header: %w", notFound[0])
 	}
-	// Never wrap the 404s here: callers read a wrapped 404 as proof that no block exists.
-	failures := slices.Concat(providerErrors, unreachableErrors)
-	if ctx.Err() != nil {
-		// The last answer raced the strategy's own deadline; report that deadline.
-		return nil, contextError(ctx, log, failures)
-	}
 
+	// Never wrap the 404s here: callers read a wrapped 404 as proof that no block exists.
 	// A node's own deadline is that node's error; only contextError reports the strategy's timeout.
 	return nil, fmt.Errorf("failed to obtain beacon block header: %w", errors.Join(failures...))
 }
 
-// unreachable is true when the node gave no answer: the request failed while connecting, other than by timing out, or
-// the client had already marked the node inactive and sent nothing.  The client also marks a node inactive when its
-// sync status request errors or times out, so such a node abstains too, as it does in the multi client.
-func unreachable(err error) bool {
+// abstains is true when the node gave no answer about the block: the request failed while connecting, other than by
+// timing out, or the client returned ErrNotActive because the node was marked inactive and its health check (a sync
+// status request) failed again during this lookup.  The multi client behind the simple style skips such nodes too.
+func abstains(err error) bool {
 	if errors.Is(err, eth2client.ErrNotActive) {
 		return true
 	}
