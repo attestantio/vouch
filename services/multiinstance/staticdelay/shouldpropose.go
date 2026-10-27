@@ -50,7 +50,7 @@ func (s *Service) ShouldPropose(ctx context.Context, duty *beaconblockproposer.D
 		if !util.IsNotFound(err) {
 			// Without proof that no block exists, proposing risks a duplicate; stand down.
 			log.Warn().Err(err).Msg("Failed to establish whether beacon block exists; not activating proposer")
-			monitorActive("proposer", false)
+			monitorUnknown("proposer")
 
 			return false
 		}

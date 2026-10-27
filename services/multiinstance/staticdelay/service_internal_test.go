@@ -227,16 +227,19 @@ func (p *headerSequenceProvider) BeaconBlockHeader(context.Context, *api.BeaconB
 }
 
 func TestProposerActivatesOnlyOnDefinitiveHeaderAbsence(t *testing.T) {
+	found := &api.Response[*apiv1.BeaconBlockHeader]{Data: &apiv1.BeaconBlockHeader{}}
 	tests := []struct {
-		name     string
-		err      error
-		activate bool
+		name    string
+		outcome headerOutcome
+		// result is the checks_total result the decision must count, once.
+		result string
 	}{
-		{name: "NotFound", err: &api.Error{StatusCode: 404}, activate: true},
-		{name: "WrappedNotFound", err: errors.Join(errors.New("no beacon node has the beacon block header"), &api.Error{StatusCode: 404}), activate: true},
-		{name: "ProviderFailure", err: errors.New("connection refused"), activate: false},
-		{name: "ServerError", err: &api.Error{StatusCode: 503}, activate: false},
-		{name: "Timeout", err: context.DeadlineExceeded, activate: false},
+		{name: "BlockFound", outcome: headerOutcome{response: found}, result: "inactive"},
+		{name: "NotFound", outcome: headerOutcome{err: &api.Error{StatusCode: 404}}, result: "active"},
+		{name: "WrappedNotFound", outcome: headerOutcome{err: errors.Join(errors.New("no beacon node has the beacon block header"), &api.Error{StatusCode: 404})}, result: "active"},
+		{name: "ProviderFailure", outcome: headerOutcome{err: errors.New("connection refused")}, result: "unknown"},
+		{name: "ServerError", outcome: headerOutcome{err: &api.Error{StatusCode: 503}}, result: "unknown"},
+		{name: "Timeout", outcome: headerOutcome{err: context.DeadlineExceeded}, result: "unknown"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -244,17 +247,51 @@ func TestProposerActivatesOnlyOnDefinitiveHeaderAbsence(t *testing.T) {
 				s := newTestService(t)
 				s.proposerDelay = time.Second
 				monitorActive("proposer", true)
-				s.beaconBlockHeadersProvider = &headerSequenceProvider{outcomes: []headerOutcome{{err: test.err}}}
+				s.beaconBlockHeadersProvider = &headerSequenceProvider{outcomes: []headerOutcome{test.outcome}}
+				before := map[string]float64{}
+				for _, result := range []string{"active", "inactive", "unknown"} {
+					before[result] = checksTotal(t, "proposer", result)
+				}
 
-				require.Equal(t, test.activate, s.ShouldPropose(context.Background(), beaconblockproposer.NewDuty(1, 1)))
-				if test.activate {
+				require.Equal(t, test.result == "active", s.ShouldPropose(context.Background(), beaconblockproposer.NewDuty(1, 1)))
+				if test.result == "active" {
 					require.Equal(t, float64(1), activeGauge(t, "proposer"))
 				} else {
 					require.Zero(t, activeGauge(t, "proposer"))
 				}
+				for result, count := range before {
+					want := count
+					if result == test.result {
+						want++
+					}
+					require.Equal(t, want, checksTotal(t, "proposer", result), result)
+				}
 			})
 		})
 	}
+}
+
+// checksTotal returns vouch_multiinstance_checks_total for the operation and result, or 0 before the first count.
+func checksTotal(t *testing.T, operation string, result string) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, family := range families {
+		if family.GetName() != "vouch_multiinstance_checks_total" {
+			continue
+		}
+		for _, metric := range family.Metric {
+			labels := map[string]string{}
+			for _, label := range metric.Label {
+				labels[label.GetName()] = label.GetValue()
+			}
+			if labels["operation"] == operation && labels["result"] == result {
+				return metric.GetCounter().GetValue()
+			}
+		}
+	}
+
+	return 0
 }
 
 func TestAttesterReevaluatesAfterSuccessfulTakeover(t *testing.T) {
