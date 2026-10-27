@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -40,8 +41,9 @@ type beaconBlockHeaderResp struct {
 var ErrBeaconBlockHeaderTimeout = errors.New("failed to obtain beacon block header before timeout")
 
 // BeaconBlockHeader provides the beacon block header from a number of beacon nodes.
-// If at least one beacon node returns 404 and every other node was unreachable, the error wraps that 404, so callers
-// can tell definitive absence from failure.  A timeout or any other error from a reachable node means no 404 is wrapped.
+// If at least one beacon node returns 404 and every other node returned 404 or was unreachable, the error wraps that 404,
+// so callers can tell definitive absence from failure.  A timeout or any other error from a reachable node means no 404
+// is wrapped.
 func (s *Service) BeaconBlockHeader(ctx context.Context,
 	opts *api.BeaconBlockHeaderOpts,
 ) (
@@ -77,7 +79,7 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 			select {
 			case resp = <-respCh:
 			default:
-				return nil, contextError(ctx, log, append(providerErrors, unreachableErrors...))
+				return nil, contextError(ctx, log, slices.Concat(providerErrors, unreachableErrors))
 			}
 		}
 		switch {
@@ -97,8 +99,14 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 		return nil, fmt.Errorf("no reachable beacon node has the beacon block header: %w", notFound[0])
 	}
 	// Never wrap the 404s here: callers read a wrapped 404 as proof that no block exists.
+	failures := slices.Concat(providerErrors, unreachableErrors)
+	if ctx.Err() != nil {
+		// The last answer raced the strategy's own deadline; report that deadline.
+		return nil, contextError(ctx, log, failures)
+	}
+
 	// A node's own deadline is that node's error; only contextError reports the strategy's timeout.
-	return nil, fmt.Errorf("failed to obtain beacon block header: %w", errors.Join(append(providerErrors, unreachableErrors...)...))
+	return nil, fmt.Errorf("failed to obtain beacon block header: %w", errors.Join(failures...))
 }
 
 // unreachable is true when a request failed while connecting to the node, other than by timing out.

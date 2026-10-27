@@ -35,6 +35,36 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestBeaconBlockHeadersReportsStrategyTimeoutWhenANodeHitsTheSameDeadline checks that a node returning the strategy's
+// own deadline as its error is still reported as the strategy timeout, whichever arrives first.  It uses the real clock
+// with a short timeout and many runs, because the fake clock always delivers the strategy's deadline first.
+func TestBeaconBlockHeadersReportsStrategyTimeoutWhenANodeHitsTheSameDeadline(t *testing.T) {
+	for range 500 {
+		func() {
+			s, err := first.New(context.Background(),
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(time.Millisecond),
+				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+					"waiting": &deadlineProvider{},
+				}),
+			)
+			require.NoError(t, err)
+
+			_, err = s.BeaconBlockHeader(context.Background(), &api.BeaconBlockHeaderOpts{Block: "1"})
+			require.ErrorIs(t, err, first.ErrBeaconBlockHeaderTimeout)
+		}()
+	}
+}
+
+// deadlineProvider answers only when the caller's context ends, with that context's error.
+type deadlineProvider struct{}
+
+func (*deadlineProvider) BeaconBlockHeader(ctx context.Context, _ *api.BeaconBlockHeaderOpts) (*api.Response[*apiv1.BeaconBlockHeader], error) {
+	<-ctx.Done()
+
+	return nil, ctx.Err()
+}
+
 // TestBeaconBlockHeadersCountsEmptyResponseAsClientFailure checks that a response without a header is not
 // recorded as a successful client call.
 func TestBeaconBlockHeadersCountsEmptyResponseAsClientFailure(t *testing.T) {
