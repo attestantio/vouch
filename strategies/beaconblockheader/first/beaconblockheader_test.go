@@ -159,7 +159,7 @@ func TestBeaconBlockHeaders(t *testing.T) {
 		&url.Error{Op: "Get", URL: "http://slow:5052", Err: &net.OpError{Op: "dial", Net: "tcp", Err: context.DeadlineExceeded}})
 	notFound := &api.Error{StatusCode: 404}
 	serviceUnavailable := &api.Error{StatusCode: 503}
-	errConnectionRefused := errors.New("connection refused")
+	errProviderFailure := errors.New("unexpected provider failure")
 	tests := []struct {
 		name            string
 		params          []first.Parameter
@@ -252,6 +252,19 @@ func TestBeaconBlockHeaders(t *testing.T) {
 			answered:    true,
 		},
 		{
+			name: "NotFoundAndFound",
+			params: []first.Parameter{
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(2 * time.Second),
+				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+					"missing": &headerErrorProvider{err: notFound},
+					"good":    mock.NewBeaconBlockHeadersProvider(),
+				}),
+			},
+			blockID:  "1",
+			answered: true,
+		},
+		{
 			name: "NotFoundAndConnectionRefused",
 			params: []first.Parameter{
 				first.WithLogLevel(zerolog.Disabled),
@@ -318,7 +331,7 @@ func TestBeaconBlockHeaders(t *testing.T) {
 				first.WithLogLevel(zerolog.Disabled),
 				first.WithTimeout(time.Second),
 				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
-					"offline": &headerErrorProvider{err: errConnectionRefused},
+					"offline": &headerErrorProvider{err: errProviderFailure},
 					"sleepy":  mock.NewSleepyBeaconBlockHeadersProvider(5*time.Second, mock.NewBeaconBlockHeadersProvider()),
 				}),
 			},
@@ -346,11 +359,11 @@ func TestBeaconBlockHeaders(t *testing.T) {
 				first.WithLogLevel(zerolog.Disabled),
 				first.WithTimeout(2 * time.Second),
 				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
-					"offline": &headerErrorProvider{err: errConnectionRefused},
+					"offline": &headerErrorProvider{err: errProviderFailure},
 				}),
 			},
 			blockID:  "1",
-			errIs:    errConnectionRefused,
+			errIs:    errProviderFailure,
 			answered: true,
 		},
 		{
@@ -360,11 +373,11 @@ func TestBeaconBlockHeaders(t *testing.T) {
 				first.WithTimeout(2 * time.Second),
 				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
 					"missing": &headerErrorProvider{err: notFound},
-					"offline": &headerErrorProvider{err: errConnectionRefused},
+					"offline": &headerErrorProvider{err: errProviderFailure},
 				}),
 			},
 			blockID:  "1",
-			errIs:    errConnectionRefused,
+			errIs:    errProviderFailure,
 			errIsNot: []error{notFound},
 			answered: true,
 		},
