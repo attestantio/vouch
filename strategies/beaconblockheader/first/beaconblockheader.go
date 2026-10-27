@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	eth2client "github.com/attestantio/go-eth2-client"
@@ -39,7 +40,8 @@ type beaconBlockHeaderResp struct {
 var ErrBeaconBlockHeaderTimeout = errors.New("failed to obtain beacon block header before timeout")
 
 // BeaconBlockHeader provides the beacon block header from a number of beacon nodes.
-// If every beacon node returns 404 the error wraps that 404, so callers can tell definitive absence from failure.
+// If at least one beacon node returns 404 and every other node was unreachable, the error wraps that 404, so callers
+// can tell definitive absence from failure.  A timeout or any other error from a reachable node means no 404 is wrapped.
 func (s *Service) BeaconBlockHeader(ctx context.Context,
 	opts *api.BeaconBlockHeaderOpts,
 ) (
@@ -64,8 +66,9 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 		}(name, provider)
 	}
 
-	var notFound, providerErrors []error
-	for len(notFound)+len(providerErrors) < len(s.beaconBlockHeadersProviders) {
+	// Unreachable nodes abstain: the request never reached them, so they say nothing about the block.
+	var notFound, unreachableErrors, providerErrors []error
+	for len(notFound)+len(unreachableErrors)+len(providerErrors) < len(s.beaconBlockHeadersProviders) {
 		var resp *beaconBlockHeaderResp
 		select {
 		case resp = <-respCh:
@@ -74,7 +77,7 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 			select {
 			case resp = <-respCh:
 			default:
-				return nil, contextError(ctx, log, providerErrors)
+				return nil, contextError(ctx, log, append(providerErrors, unreachableErrors...))
 			}
 		}
 		switch {
@@ -84,16 +87,25 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 			return resp.response, nil
 		case util.IsNotFound(resp.err):
 			notFound = append(notFound, resp.err)
+		case unreachable(resp.err):
+			unreachableErrors = append(unreachableErrors, fmt.Errorf("%s: %w", resp.provider, resp.err))
 		default:
 			providerErrors = append(providerErrors, fmt.Errorf("%s: %w", resp.provider, resp.err))
 		}
 	}
-	if len(providerErrors) == 0 {
-		return nil, fmt.Errorf("no beacon node has the beacon block header: %w", notFound[0])
+	if len(providerErrors) == 0 && len(notFound) > 0 {
+		return nil, fmt.Errorf("no reachable beacon node has the beacon block header: %w", notFound[0])
 	}
 	// Never wrap the 404s here: callers read a wrapped 404 as proof that no block exists.
 	// A node's own deadline is that node's error; only contextError reports the strategy's timeout.
-	return nil, fmt.Errorf("failed to obtain beacon block header: %w", errors.Join(providerErrors...))
+	return nil, fmt.Errorf("failed to obtain beacon block header: %w", errors.Join(append(providerErrors, unreachableErrors...)...))
+}
+
+// unreachable is true when a request failed while connecting to the node, other than by timing out.
+func unreachable(err error) bool {
+	var opErr *net.OpError
+
+	return errors.As(err, &opErr) && opErr.Op == "dial" && !opErr.Timeout()
 }
 
 // contextError maps the end of the strategy's context to the error returned to callers,
