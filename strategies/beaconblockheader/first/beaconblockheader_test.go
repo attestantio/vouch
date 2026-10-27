@@ -88,7 +88,7 @@ func TestBeaconBlockHeaders(t *testing.T) {
 		beaconBlockRoot phase0.Root
 		err             string
 		errIs           error
-		errIsNot        error
+		errIsNot        []error
 		errContains     string
 		// answered is true when every provider answers at once, so the strategy must not wait for its timeout.
 		answered bool
@@ -165,9 +165,10 @@ func TestBeaconBlockHeaders(t *testing.T) {
 					"timed-out": &headerErrorProvider{err: context.DeadlineExceeded},
 				}),
 			},
-			blockID:     "1",
-			errIs:       first.ErrBeaconBlockHeaderTimeout,
-			errIsNot:    notFound,
+			blockID: "1",
+			// The node's own deadline fired, not the strategy's, so report it as that node's error.
+			errIs:       context.DeadlineExceeded,
+			errIsNot:    []error{notFound, first.ErrBeaconBlockHeaderTimeout},
 			errContains: "timed-out",
 			answered:    true,
 		},
@@ -197,7 +198,7 @@ func TestBeaconBlockHeaders(t *testing.T) {
 			},
 			blockID:  "1",
 			errIs:    first.ErrBeaconBlockHeaderTimeout,
-			errIsNot: notFound,
+			errIsNot: []error{notFound},
 		},
 		{
 			name: "ProviderFailure",
@@ -224,7 +225,7 @@ func TestBeaconBlockHeaders(t *testing.T) {
 			},
 			blockID:  "1",
 			errIs:    errConnectionRefused,
-			errIsNot: notFound,
+			errIsNot: []error{notFound},
 			answered: true,
 		},
 		{
@@ -239,7 +240,7 @@ func TestBeaconBlockHeaders(t *testing.T) {
 			},
 			blockID:  "1",
 			errIs:    serviceUnavailable,
-			errIsNot: notFound,
+			errIsNot: []error{notFound},
 			answered: true,
 		},
 	}
@@ -264,8 +265,8 @@ func TestBeaconBlockHeaders(t *testing.T) {
 			if test.errIs != nil {
 				require.ErrorIs(t, err, test.errIs)
 			}
-			if test.errIsNot != nil {
-				require.NotErrorIs(t, err, test.errIsNot)
+			for _, unexpected := range test.errIsNot {
+				require.NotErrorIs(t, err, unexpected)
 			}
 			if test.errContains != "" {
 				require.ErrorContains(t, err, test.errContains)

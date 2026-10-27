@@ -92,12 +92,8 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 		return nil, fmt.Errorf("no beacon node has the beacon block header: %w", notFound[0])
 	}
 	// Never wrap the 404s here: callers read a wrapped 404 as proof that no block exists.
-	err := errors.Join(providerErrors...)
-	if errors.Is(err, context.DeadlineExceeded) {
-		return nil, fmt.Errorf("%w: %w", ErrBeaconBlockHeaderTimeout, err)
-	}
-
-	return nil, fmt.Errorf("failed to obtain beacon block header: %w", err)
+	// A node's own deadline is that node's error; only contextError reports the strategy's timeout.
+	return nil, fmt.Errorf("failed to obtain beacon block header: %w", errors.Join(providerErrors...))
 }
 
 // contextError maps the end of the strategy's context to the error returned to callers,
