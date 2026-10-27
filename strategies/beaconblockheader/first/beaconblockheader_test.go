@@ -16,7 +16,11 @@ package first_test
 import (
 	"context"
 	"errors"
+	"net"
+	"net/http"
+	"net/url"
 	"sync"
+	"syscall"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -69,6 +73,22 @@ func (*emptyHeaderProvider) BeaconBlockHeader(context.Context, *api.BeaconBlockH
 	return &api.Response[*apiv1.BeaconBlockHeader]{}, nil
 }
 
+// connectionRefused returns the error a request to a closed port gives, wrapped as go-eth2-client wraps it.
+func connectionRefused(t *testing.T) error {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	address := listener.Addr().String()
+	require.NoError(t, listener.Close())
+	resp, err := http.Get("http://" + address + "/eth/v1/beacon/headers/1")
+	if resp != nil {
+		require.NoError(t, resp.Body.Close())
+	}
+	require.Error(t, err)
+
+	return errors.Join(errors.New("failed to call GET endpoint"), err)
+}
+
 type headerErrorProvider struct {
 	err error
 }
@@ -78,6 +98,9 @@ func (p *headerErrorProvider) BeaconBlockHeader(context.Context, *api.BeaconBloc
 }
 
 func TestBeaconBlockHeaders(t *testing.T) {
+	refused := connectionRefused(t)
+	dialTimeout := errors.Join(errors.New("failed to call GET endpoint"),
+		&url.Error{Op: "Get", URL: "http://slow:5052", Err: &net.OpError{Op: "dial", Net: "tcp", Err: context.DeadlineExceeded}})
 	notFound := &api.Error{StatusCode: 404}
 	serviceUnavailable := &api.Error{StatusCode: 503}
 	errConnectionRefused := errors.New("connection refused")
@@ -170,6 +193,52 @@ func TestBeaconBlockHeaders(t *testing.T) {
 			errIs:       context.DeadlineExceeded,
 			errIsNot:    []error{notFound, first.ErrBeaconBlockHeaderTimeout},
 			errContains: "timed-out",
+			answered:    true,
+		},
+		{
+			name: "NotFoundAndConnectionRefused",
+			params: []first.Parameter{
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(2 * time.Second),
+				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+					"missing": &headerErrorProvider{err: notFound},
+					"down":    &headerErrorProvider{err: refused},
+				}),
+			},
+			blockID:  "1",
+			errIs:    notFound,
+			answered: true,
+		},
+		{
+			name: "AllConnectionRefused",
+			params: []first.Parameter{
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(2 * time.Second),
+				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+					"down1": &headerErrorProvider{err: refused},
+					"down2": &headerErrorProvider{err: refused},
+				}),
+			},
+			blockID:     "1",
+			errIs:       syscall.ECONNREFUSED,
+			errIsNot:    []error{notFound},
+			errContains: "down1",
+			answered:    true,
+		},
+		{
+			name: "NotFoundAndDialTimeout",
+			params: []first.Parameter{
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(2 * time.Second),
+				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+					"missing": &headerErrorProvider{err: notFound},
+					"slow":    &headerErrorProvider{err: dialTimeout},
+				}),
+			},
+			blockID:     "1",
+			errIs:       context.DeadlineExceeded,
+			errIsNot:    []error{notFound},
+			errContains: "slow",
 			answered:    true,
 		},
 		{
