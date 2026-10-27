@@ -51,6 +51,12 @@ func registerPrometheusMetrics(_ context.Context) error {
 	if err := prometheus.Register(activeCounter); err != nil {
 		return errors.Wrap(err, "failed to register vouch_multiinstance_checks_total")
 	}
+	// Export every series from the start, so an increase() alert sees the first count.
+	for _, operation := range []string{"attester", "proposer"} {
+		for _, result := range []string{"active", "inactive", "unknown"} {
+			activeCounter.WithLabelValues(operation, result).Add(0)
+		}
+	}
 
 	activeState = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "vouch",
