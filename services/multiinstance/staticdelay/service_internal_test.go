@@ -16,6 +16,7 @@ package staticdelay
 import (
 	"context"
 	"errors"
+	"maps"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -100,48 +101,77 @@ func TestProposerGaugeFollowsOnlyProposalDecisions(t *testing.T) {
 
 func activeGauge(t *testing.T, operation string) float64 {
 	t.Helper()
+	value, found := metricValue(t, "vouch_multiinstance_active", map[string]string{"operation": operation})
+	require.True(t, found, "active gauge not found")
+
+	return value
+}
+
+// metricValue returns the gauge or counter value of the series with exactly these labels, and whether it exists.
+func metricValue(t *testing.T, name string, labels map[string]string) (float64, bool) {
+	t.Helper()
 	families, err := prometheus.DefaultGatherer.Gather()
 	require.NoError(t, err)
 	for _, family := range families {
-		if family.GetName() != "vouch_multiinstance_active" {
+		if family.GetName() != name {
 			continue
 		}
 		for _, metric := range family.Metric {
+			series := map[string]string{}
 			for _, label := range metric.Label {
-				if label.GetName() == "operation" && label.GetValue() == operation {
-					return metric.GetGauge().GetValue()
-				}
+				series[label.GetName()] = label.GetValue()
+			}
+			if maps.Equal(series, labels) {
+				return metric.GetGauge().GetValue() + metric.GetCounter().GetValue(), true
 			}
 		}
 	}
-	t.Fatal("active gauge not found")
-	return 0
+
+	return 0, false
 }
 
 // TestChecksTotalSeriesExistFromRegistration checks that every operation and result series is exported before its first
 // count, so an increase() alert sees the first increment.
 func TestChecksTotalSeriesExistFromRegistration(t *testing.T) {
 	ensureMetricsRegistered(t)
-	families, err := prometheus.DefaultGatherer.Gather()
-	require.NoError(t, err)
-	series := map[string]bool{}
-	for _, family := range families {
-		if family.GetName() != "vouch_multiinstance_checks_total" {
-			continue
-		}
-		for _, metric := range family.Metric {
-			labels := map[string]string{}
-			for _, label := range metric.Label {
-				labels[label.GetName()] = label.GetValue()
-			}
-			series[labels["operation"]+"/"+labels["result"]] = true
-		}
-	}
 	for _, operation := range []string{"attester", "proposer"} {
 		for _, result := range []string{"active", "inactive", "unknown"} {
-			require.True(t, series[operation+"/"+result], operation+"/"+result)
+			_, found := metricValue(t, "vouch_multiinstance_checks_total", map[string]string{"operation": operation, "result": result})
+			require.True(t, found, operation+"/"+result)
 		}
 	}
+}
+
+// TestChecksTotalCountsStartupStateOnce checks that New counts each operation's starting state once.
+func TestChecksTotalCountsStartupStateOnce(t *testing.T) {
+	ensureMetricsRegistered(t)
+	attesterInactive := checksTotal(t, "attester", "inactive")
+	proposerActive := checksTotal(t, "proposer", "active")
+
+	// The test service starts with a 1s attester delay and no proposer delay.
+	newTestService(t)
+	require.Equal(t, attesterInactive+1, checksTotal(t, "attester", "inactive"))
+	require.Equal(t, proposerActive+1, checksTotal(t, "proposer", "active"))
+}
+
+// TestAttesterNeverCountsUnknown checks that a failed pool read keeps the attester's fail-open behaviour and counts.
+func TestAttesterNeverCountsUnknown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := newTestService(t)
+		s.attestationPoolProvider = &failingAttestationPool{}
+		unknown := checksTotal(t, "attester", "unknown")
+		active := checksTotal(t, "attester", "active")
+
+		require.True(t, s.ShouldAttest(context.Background(), newAttesterDuty(t, 1)))
+		require.Equal(t, unknown, checksTotal(t, "attester", "unknown"))
+		require.Equal(t, active+1, checksTotal(t, "attester", "active"))
+	})
+}
+
+type failingAttestationPool struct{}
+
+func (*failingAttestationPool) AttestationPool(context.Context, *api.AttestationPoolOpts) (*api.Response[[]*spec.VersionedAttestation], error) {
+	return nil, errors.New("no responses received")
 }
 
 func TestPrimaryDutiesRestoreActiveGaugesAfterFailure(t *testing.T) {
@@ -263,7 +293,7 @@ func TestProposerActivatesOnlyOnDefinitiveHeaderAbsence(t *testing.T) {
 		{name: "BlockFound", outcome: headerOutcome{response: found}, result: "inactive"},
 		{name: "NotFound", outcome: headerOutcome{err: &api.Error{StatusCode: 404}}, result: "active"},
 		{name: "WrappedNotFound", outcome: headerOutcome{err: errors.Join(errors.New("no reachable beacon node has the beacon block header"), &api.Error{StatusCode: 404})}, result: "active"},
-		{name: "ProviderFailure", outcome: headerOutcome{err: errors.New("connection refused")}, result: "unknown"},
+		{name: "ProviderFailure", outcome: headerOutcome{err: errors.New("unexpected provider failure")}, result: "unknown"},
 		{name: "ServerError", outcome: headerOutcome{err: &api.Error{StatusCode: 503}}, result: "unknown"},
 		{name: "Timeout", outcome: headerOutcome{err: context.DeadlineExceeded}, result: "unknown"},
 	}
@@ -300,24 +330,9 @@ func TestProposerActivatesOnlyOnDefinitiveHeaderAbsence(t *testing.T) {
 // checksTotal returns vouch_multiinstance_checks_total for the operation and result, or 0 before the first count.
 func checksTotal(t *testing.T, operation string, result string) float64 {
 	t.Helper()
-	families, err := prometheus.DefaultGatherer.Gather()
-	require.NoError(t, err)
-	for _, family := range families {
-		if family.GetName() != "vouch_multiinstance_checks_total" {
-			continue
-		}
-		for _, metric := range family.Metric {
-			labels := map[string]string{}
-			for _, label := range metric.Label {
-				labels[label.GetName()] = label.GetValue()
-			}
-			if labels["operation"] == operation && labels["result"] == result {
-				return metric.GetCounter().GetValue()
-			}
-		}
-	}
+	value, _ := metricValue(t, "vouch_multiinstance_checks_total", map[string]string{"operation": operation, "result": result})
 
-	return 0
+	return value
 }
 
 func TestAttesterReevaluatesAfterSuccessfulTakeover(t *testing.T) {

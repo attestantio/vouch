@@ -87,7 +87,10 @@ func fakeBeaconNode(t *testing.T) *httptest.Server {
 
 func realClient(t *testing.T, address string) consensusclient.BeaconBlockHeadersProvider {
 	t.Helper()
-	client, err := httpclient.New(context.Background(),
+	// Cancelling the context at cleanup stops the client's background pings.
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	client, err := httpclient.New(ctx,
 		httpclient.WithAddress(address),
 		httpclient.WithAllowDelayedStart(true),
 		httpclient.WithTimeout(2*time.Second),
