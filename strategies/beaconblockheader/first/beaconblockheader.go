@@ -109,8 +109,13 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 	return nil, fmt.Errorf("failed to obtain beacon block header: %w", errors.Join(failures...))
 }
 
-// unreachable is true when a request failed while connecting to the node, other than by timing out.
+// unreachable is true when the node gave no answer: the request failed while connecting, other than by timing out, or
+// the client had already marked the node inactive and sent nothing.  The client also marks a node inactive when its
+// sync status request errors or times out, so such a node abstains too, as it does in the multi client.
 func unreachable(err error) bool {
+	if errors.Is(err, eth2client.ErrNotActive) {
+		return true
+	}
 	var opErr *net.OpError
 
 	return errors.As(err, &opErr) && opErr.Op == "dial" && !opErr.Timeout()

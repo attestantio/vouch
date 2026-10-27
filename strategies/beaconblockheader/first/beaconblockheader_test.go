@@ -256,6 +256,21 @@ func TestBeaconBlockHeaders(t *testing.T) {
 			answered:    true,
 		},
 		{
+			name: "AllNotActive",
+			params: []first.Parameter{
+				first.WithLogLevel(zerolog.Disabled),
+				first.WithTimeout(2 * time.Second),
+				first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+					"down1": &headerErrorProvider{err: consensusclient.ErrNotActive},
+					"down2": &headerErrorProvider{err: consensusclient.ErrNotActive},
+				}),
+			},
+			blockID:  "1",
+			errIs:    consensusclient.ErrNotActive,
+			errIsNot: []error{notFound},
+			answered: true,
+		},
+		{
 			name: "NotFoundAndDialTimeout",
 			params: []first.Parameter{
 				first.WithLogLevel(zerolog.Disabled),
