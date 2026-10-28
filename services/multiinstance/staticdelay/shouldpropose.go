@@ -54,7 +54,8 @@ func (s *Service) ShouldPropose(ctx context.Context, duty *beaconblockproposer.D
 
 			return false
 		}
-		log.Trace().Msg("Beacon block header not found; activating proposer")
+		// With the first strategy the error names the nodes that reported no block and any that abstained.
+		log.Info().Err(err).Msg("Beacon block header not found; activating proposer")
 		monitorActive("proposer", true)
 
 		return true
