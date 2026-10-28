@@ -1,6 +1,6 @@
 module github.com/attestantio/vouch
 
-go 1.25.5
+go 1.26.10
 
 require (
 	github.com/OffchainLabs/go-bitfield v0.0.0-20251031151322-f427d04d8506
