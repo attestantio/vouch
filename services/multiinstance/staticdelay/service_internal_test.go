@@ -14,7 +14,9 @@
 package staticdelay
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"maps"
 	"sync"
@@ -30,6 +32,7 @@ import (
 	"github.com/attestantio/vouch/services/attester"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -325,6 +328,27 @@ func TestProposerActivatesOnlyOnDefinitiveHeaderAbsence(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestProposerTakeoverLogsDecidingError checks that a takeover proposal is logged at info with the lookup error, so an
+// operator can see which beacon nodes reported no block.
+func TestProposerTakeoverLogsDecidingError(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := newTestService(t)
+		var logged bytes.Buffer
+		s.log = zerolog.New(&logged).Level(zerolog.InfoLevel)
+		s.proposerDelay = time.Second
+		s.beaconBlockHeadersProvider = &headerSequenceProvider{outcomes: []headerOutcome{{
+			err: errors.Join(errors.New("no reachable beacon node has the beacon block header: missing"), &api.Error{StatusCode: 404}),
+		}}}
+
+		require.True(t, s.ShouldPropose(context.Background(), beaconblockproposer.NewDuty(1, 1)))
+		var entry map[string]any
+		require.NoError(t, json.Unmarshal(logged.Bytes(), &entry), logged.String())
+		require.Equal(t, "info", entry["level"])
+		require.Equal(t, "Beacon block header not found; activating proposer", entry["message"])
+		require.Contains(t, entry["error"], "header: missing")
+	})
 }
 
 // checksTotal returns vouch_multiinstance_checks_total for the operation and result, or 0 before the first count.

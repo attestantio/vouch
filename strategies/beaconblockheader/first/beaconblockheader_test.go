@@ -153,6 +153,27 @@ func (p *headerErrorProvider) BeaconBlockHeader(context.Context, *api.BeaconBloc
 	return nil, p.err
 }
 
+// TestBeaconBlockHeadersNamesNodesInDecidingError checks that the error that lets a proposal go ahead says which
+// nodes reported no block and which abstained.
+func TestBeaconBlockHeadersNamesNodesInDecidingError(t *testing.T) {
+	s, err := first.New(context.Background(),
+		first.WithLogLevel(zerolog.Disabled),
+		first.WithTimeout(2*time.Second),
+		first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+			"missing1": &headerErrorProvider{err: &api.Error{StatusCode: 404}},
+			"missing2": &headerErrorProvider{err: &api.Error{StatusCode: 404}},
+			"down":     &headerErrorProvider{err: consensusclient.ErrNotActive},
+		}),
+	)
+	require.NoError(t, err)
+
+	_, err = s.BeaconBlockHeader(context.Background(), &api.BeaconBlockHeaderOpts{Block: "1"})
+	require.True(t, util.IsNotFound(err), "%v", err)
+	require.ErrorContains(t, err, "missing1: ")
+	require.ErrorContains(t, err, "missing2: ")
+	require.ErrorContains(t, err, "; abstained: down: client is not active")
+}
+
 func TestBeaconBlockHeaders(t *testing.T) {
 	refused := connectionRefused(t)
 	dialTimeout := errors.Join(errors.New("failed to call GET endpoint"),
