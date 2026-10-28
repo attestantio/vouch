@@ -1,6 +1,7 @@
 1.13.2:
   - build with Go 1.26.10 to pick up the crypto/x509 denylist for the eight compromised eMudhra/emSign intermediate CA keys (CVE-2026-111943); building now requires Go 1.26
   - pin the release, test and lint workflows to an exact Go version so builds cannot silently resolve to a toolchain without the denylist
+  - update golang.org/x/net to v0.60.0, golang.org/x/crypto to v0.57.0, golang.org/x/text to v0.42.0 and google.golang.org/grpc to v1.83.2, along with their transitive dependencies, to clear outstanding high-severity advisories on this branch
 
 1.13.1:
   - initialise sync committee verification metrics to 0
