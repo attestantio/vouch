@@ -1,4 +1,4 @@
-// Copyright © 2024 Attestant Limited.
+// Copyright © 2024 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -20,6 +20,7 @@ import (
 
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
+	"github.com/attestantio/vouch/util"
 )
 
 // ShouldPropose returns true if this Vouch instance should propose.
@@ -33,9 +34,8 @@ func (s *Service) ShouldPropose(ctx context.Context, duty *beaconblockproposer.D
 	log := s.log.With().Uint64("slot", uint64(duty.Slot())).Logger()
 	log.Trace().Msg("Checking if we should propose")
 
-	if s.proposerActive.Load() {
-		log.Trace().Msg("We are the active proposer")
-		s.enableProposer(ctx)
+	if s.proposerDelay == 0 {
+		monitorActive("proposer", true)
 
 		return true
 	}
@@ -47,14 +47,22 @@ func (s *Service) ShouldPropose(ctx context.Context, duty *beaconblockproposer.D
 		Block: fmt.Sprintf("%d", duty.Slot()),
 	})
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to obtain beacon block header; activating proposer")
-		s.enableProposer(ctx)
+		if !util.IsNotFound(err) {
+			// Without proof that no block exists, proposing risks a duplicate; stand down.
+			log.Warn().Err(err).Msg("Failed to establish whether beacon block exists; not activating proposer")
+			monitorUnknown("proposer")
+
+			return false
+		}
+		// With the first strategy the error names the nodes that reported no block and any that abstained.
+		log.Info().Err(err).Msg("Beacon block header not found; activating proposer")
+		monitorActive("proposer", true)
 
 		return true
 	}
 
 	log.Trace().Msg("Beacon block found; not activating proposer")
-	s.disableProposer(ctx)
+	monitorActive("proposer", false)
 
 	return false
 }
