@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -85,7 +86,7 @@ func TestProposerGaugeFollowsOnlyProposalDecisions(t *testing.T) {
 			{err: &api.Error{StatusCode: 404}},
 		}}
 		s.beaconBlockHeadersProvider = headers
-		s.OnProposalFailure(context.Background(), beaconblockproposer.NewDuty(0, 1))
+		monitorActive("proposer", false)
 
 		require.True(t, s.ShouldAttest(context.Background(), newAttesterDuty(t, 1)))
 		require.Zero(t, activeGauge(t, "proposer"))
@@ -163,10 +164,12 @@ func TestAttesterNeverCountsUnknown(t *testing.T) {
 		s := newTestService(t)
 		s.attestationPoolProvider = &failingAttestationPool{}
 		unknown := checksTotal(t, "attester", "unknown")
+		inactive := checksTotal(t, "attester", "inactive")
 		active := checksTotal(t, "attester", "active")
 
 		require.True(t, s.ShouldAttest(context.Background(), newAttesterDuty(t, 1)))
 		require.Equal(t, unknown, checksTotal(t, "attester", "unknown"))
+		require.Equal(t, inactive, checksTotal(t, "attester", "inactive"))
 		require.Equal(t, active+1, checksTotal(t, "attester", "active"))
 	})
 }
@@ -177,20 +180,30 @@ func (*failingAttestationPool) AttestationPool(context.Context, *api.Attestation
 	return nil, errors.New("no responses received")
 }
 
-func TestPrimaryDutiesRestoreActiveGaugesAfterFailure(t *testing.T) {
+// TestDutyFailuresLeaveMetricsUnchanged checks that a failed duty neither moves the gauge, which holds the last
+// decision, nor counts as a decision.
+func TestDutyFailuresLeaveMetricsUnchanged(t *testing.T) {
 	s := newTestService(t)
 	s.attesterDelay = 0
 	duty := newAttesterDuty(t, 1)
 	proposerDuty := beaconblockproposer.NewDuty(1, 1)
-	s.OnAttestationFailure(context.Background(), duty)
-	s.OnProposalFailure(context.Background(), proposerDuty)
-	require.Zero(t, activeGauge(t, "attester"))
-	require.Zero(t, activeGauge(t, "proposer"))
-
 	require.True(t, s.ShouldAttest(context.Background(), duty))
 	require.True(t, s.ShouldPropose(context.Background(), proposerDuty))
+	before := map[string]float64{}
+	for _, operation := range []string{"attester", "proposer"} {
+		for _, result := range []string{"active", "inactive", "unknown"} {
+			before[operation+"/"+result] = checksTotal(t, operation, result)
+		}
+	}
+
+	s.OnAttestationFailure(context.Background(), duty)
+	s.OnProposalFailure(context.Background(), proposerDuty)
 	require.Equal(t, float64(1), activeGauge(t, "attester"))
 	require.Equal(t, float64(1), activeGauge(t, "proposer"))
+	for series, count := range before {
+		operation, result, _ := strings.Cut(series, "/")
+		require.Equal(t, count, checksTotal(t, operation, result), series)
+	}
 }
 
 func TestActiveAttesterRechecksPoolAfterPrimaryRecovery(t *testing.T) {
