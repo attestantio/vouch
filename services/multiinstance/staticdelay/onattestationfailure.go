@@ -21,7 +21,6 @@ import (
 
 // OnAttestationFailure flags that an attempt to attest has failed.
 func (s *Service) OnAttestationFailure(_ context.Context, duty *attester.Duty) {
-	s.log.Trace().Uint64("slot", uint64(duty.Slot())).Msg("Attestation failure; marking attester inactive")
-
-	monitorActive("attester", false)
+	// Every duty decides afresh, so a failure changes no state; the duty's own metrics count it.
+	s.log.Trace().Uint64("slot", uint64(duty.Slot())).Msg("Attestation failure")
 }
