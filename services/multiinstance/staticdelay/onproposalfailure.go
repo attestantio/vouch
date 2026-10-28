@@ -21,7 +21,6 @@ import (
 
 // OnProposalFailure flags that an attempt to propose has failed.
 func (s *Service) OnProposalFailure(_ context.Context, duty *beaconblockproposer.Duty) {
-	s.log.Trace().Uint64("slot", uint64(duty.Slot())).Msg("Proposal failure; marking proposer inactive")
-
-	monitorActive("proposer", false)
+	// Every duty decides afresh, so a failure changes no state; the duty's own metrics count it.
+	s.log.Trace().Uint64("slot", uint64(duty.Slot())).Msg("Proposal failure")
 }
