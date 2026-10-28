@@ -121,8 +121,11 @@ func absenceError(notFound []error, abstained []error) error {
 }
 
 // abstains is true when the node gave no answer about the block: the request failed while connecting, other than by
-// timing out, or the client returned ErrNotActive because the node was marked inactive and its health check (a sync
-// status request) failed again during this lookup.  The multi client behind the simple style skips such nodes too.
+// timing out, or the client returned ErrNotActive.  The client returns ErrNotActive when the node is marked inactive
+// and either its health check (a sync status request) fails again or another health check is already running, in which
+// case no request is made.  So a node wrongly marked inactive, for example by a health check its caller cancelled, can
+// abstain while healthy and let another node's 404 decide alone; Dirk's slashing protection refuses a duplicate, which
+// the wallet account manager does not.  The multi client behind the simple style skips inactive nodes too.
 func abstains(err error) bool {
 	if errors.Is(err, eth2client.ErrNotActive) {
 		return true

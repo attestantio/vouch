@@ -332,10 +332,14 @@ multiinstance:
   # if the beacon block header lookup reports no block at the slot.  With the default 'first' header strategy at least one beacon
   # node must report no block and every other node must report no block or be unavailable: it refuses the connection, its host is
   # unreachable or cannot be resolved, or it is already marked inactive and fails its health check again before the lookup's
-  # deadline.  With 'first', a node that answers with an error, or does not answer before the deadline, stops the instance
-  # proposing.  With 'simple' the first beacon node to report no block decides.  A beacon node that is behind the chain also
-  # reports no block, so with either style a lagging node can lead the instance to propose when another instance already has; keep
-  # the beacon nodes synced.  It stands down again as soon as another instance is seen to be active.  Note that for the
+  # deadline.  A healthy node can still be marked inactive for a short time, for example after a dropped connection, and if
+  # another health check is running at the moment of the lookup it is treated as unavailable without being asked, so in rare
+  # cases one node's report of no block decides alone; Vouch relies on Dirk's slashing protection to refuse a duplicate block,
+  # which the wallet account manager does not provide.  With 'first', a node that answers with an error, or does not answer
+  # before the deadline, stops the instance proposing.  With 'simple' the first beacon node to report no block decides.  A
+  # beacon node that is behind the chain also reports no block, so with either style a lagging node can lead the instance to
+  # propose when another instance already has; keep the beacon nodes synced.  It stands down again as soon as another instance
+  # is seen to be active.  Note that for the
   # 'static-delay' style to operate the beacon node(s) to which Vouch connects must be running with the 'subscribe all subnets'
   # option enabled.  This is because this style looks at the attestation data to see if other instance(s) of Vouch are active. 
   # However, Vouch cannot detect if the beacon nodes are configured correctly so it is up to the user to carry out this work
