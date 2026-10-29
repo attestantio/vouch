@@ -48,13 +48,13 @@ func New(_ context.Context, params ...Parameter) (*Service, error) {
 }
 
 // SubmitProposal submits a proposal.
-func (s *Service) SubmitProposal(_ context.Context, proposal *api.VersionedSignedProposal) error {
-	if proposal == nil {
+func (s *Service) SubmitProposal(_ context.Context, opts *api.SubmitProposalOpts) error {
+	if opts == nil || opts.Proposal == nil {
 		return errors.New("no proposal supplied")
 	}
 
 	if e := s.log.Trace(); e.Enabled() {
-		data, err := json.Marshal(proposal)
+		data, err := json.Marshal(opts.Proposal)
 		if err == nil {
 			e.Str("block", string(data)).Msg("Not submitting proposal")
 		}
