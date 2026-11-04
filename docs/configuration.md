@@ -336,7 +336,10 @@ multiinstance:
   # another health check is running at the moment of the lookup it is treated as unavailable without being asked, so in rare
   # cases one node's report of no block decides alone; Vouch relies on Dirk's slashing protection to refuse a duplicate block,
   # which the wallet account manager does not provide.  With 'first', a node that answers with an error, or does not answer
-  # before the deadline, stops the instance proposing.  With 'simple' the first beacon node to report no block decides.  A
+  # before the deadline, stops the instance proposing, because it may have the block.  That includes a failing node, such as
+  # one that returns 503 while it restarts, until a health check marks it inactive, up to 30 seconds later; from then on it
+  # counts as unavailable.  A syncing node passes its health check, so it never counts as unavailable.  With 'simple' the
+  # first beacon node to report no block decides.  A
   # beacon node that is behind the chain also reports no block, so with either style a lagging node can lead the instance to
   # propose when another instance already has; keep the beacon nodes synced.  Vouch reads any 404 from the lookup as no
   # block, so a proxy in front of the beacon nodes that answers 404 on the header path while passing their health checks
