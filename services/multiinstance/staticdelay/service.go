@@ -142,3 +142,16 @@ func obtainAttestationDelays(spec map[string]any, gloasForkEpoch phase0.Epoch) (
 
 	return preGloasDelay, gloasDelay, secondsPerSlot, nil
 }
+
+// waitFor sleeps for the duration, returning false if the context ends first.
+func waitFor(ctx context.Context, duration time.Duration) bool {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		// Both cases can be ready when the duration is already over.
+		return ctx.Err() == nil
+	}
+}
