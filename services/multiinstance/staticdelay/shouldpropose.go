@@ -16,7 +16,6 @@ package staticdelay
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/vouch/services/beaconblockproposer"
@@ -40,13 +39,19 @@ func (s *Service) ShouldPropose(ctx context.Context, duty *beaconblockproposer.D
 		return true
 	}
 
-	// Sleep to let other instances do their work.
-	time.Sleep(s.proposerDelay)
+	// Wait to let other instances do their work.
+	if !waitFor(ctx, s.proposerDelay) {
+		return false
+	}
 
 	_, err := s.beaconBlockHeadersProvider.BeaconBlockHeader(ctx, &api.BeaconBlockHeaderOpts{
 		Block: fmt.Sprintf("%d", duty.Slot()),
 	})
 	if err != nil {
+		if ctx.Err() != nil {
+			// The duty ended, so there is no decision to count.
+			return false
+		}
 		if !util.IsNotFound(err) {
 			// Without proof that no block exists, proposing risks a duplicate; stand down.
 			log.Warn().Err(err).Msg("Failed to establish whether beacon block exists; not activating proposer")

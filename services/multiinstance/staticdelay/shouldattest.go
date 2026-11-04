@@ -39,11 +39,12 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 		return true
 	}
 
-	// Sleep to let other instances do their work.
-	// Start off by sleeping until the attestation deadline.
-	time.Sleep(time.Until(s.chainTime.StartOfSlot(duty.Slot()).Add(s.attestationDelay(duty.Slot()))))
-	// Now sleep for the additional attester delay.
-	time.Sleep(s.attesterDelay)
+	// Wait to let other instances do their work: until the attestation deadline, then for the attester delay.  The
+	// waits are separate so a duty that starts after the deadline still waits the full attester delay.
+	if !waitFor(ctx, time.Until(s.chainTime.StartOfSlot(duty.Slot()).Add(s.attestationDelay(duty.Slot())))) ||
+		!waitFor(ctx, s.attesterDelay) {
+		return false
+	}
 	log.Trace().Msg("Checking for attestations from an active instance")
 
 	// Look for any attestations that we are meant to generate that are already in the node's attestation pool.
@@ -94,6 +95,11 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 				}
 			}
 		}
+	}
+
+	if ctx.Err() != nil {
+		// The duty ended, so the pool reads may be cut short and there is no decision to count.
+		return false
 	}
 
 	log.Trace().Msg("No attestation found; activating attester")

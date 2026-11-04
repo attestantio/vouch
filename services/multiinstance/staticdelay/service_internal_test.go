@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
-	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -47,13 +46,13 @@ func ensureMetricsRegistered(t *testing.T) {
 }
 
 // newTestService returns a service on 12-second slots; tests set the delays they need.
-func newTestService(t *testing.T) *Service {
+func newTestService(t *testing.T, params ...Parameter) *Service {
 	t.Helper()
 	ensureMetricsRegistered(t)
 	s, err := newStaticDelayService(t, fixedSpecProvider{
 		"SECONDS_PER_SLOT": 12 * time.Second,
 		"SLOTS_PER_EPOCH":  uint64(32),
-	})
+	}, params...)
 	require.NoError(t, err)
 
 	return s
@@ -189,21 +188,13 @@ func TestDutyFailuresLeaveMetricsUnchanged(t *testing.T) {
 	proposerDuty := beaconblockproposer.NewDuty(1, 1)
 	require.True(t, s.ShouldAttest(context.Background(), duty))
 	require.True(t, s.ShouldPropose(context.Background(), proposerDuty))
-	before := map[string]float64{}
-	for _, operation := range []string{"attester", "proposer"} {
-		for _, result := range []string{"active", "inactive", "unknown"} {
-			before[operation+"/"+result] = checksTotal(t, operation, result)
-		}
-	}
+	before := metricsSnapshot(t)
 
 	s.OnAttestationFailure(context.Background(), duty)
 	s.OnProposalFailure(context.Background(), proposerDuty)
 	require.Equal(t, float64(1), activeGauge(t, "attester"))
 	require.Equal(t, float64(1), activeGauge(t, "proposer"))
-	for series, count := range before {
-		operation, result, _ := strings.Cut(series, "/")
-		require.Equal(t, count, checksTotal(t, operation, result), series)
-	}
+	require.Equal(t, before, metricsSnapshot(t))
 }
 
 func TestActiveAttesterRechecksPoolAfterPrimaryRecovery(t *testing.T) {
@@ -410,4 +401,205 @@ func recoveredAttestation() []*spec.VersionedAttestation {
 			Data:            &phase0.AttestationData{Index: 0},
 		},
 	}}
+}
+
+// metricsSnapshot returns every static-delay series, so a test can check that none moved.
+func metricsSnapshot(t *testing.T) map[string]float64 {
+	t.Helper()
+	snapshot := map[string]float64{}
+	for _, operation := range []string{"attester", "proposer"} {
+		snapshot[operation+"/gauge"] = activeGauge(t, operation)
+		for _, result := range []string{"active", "inactive", "unknown"} {
+			snapshot[operation+"/"+result] = checksTotal(t, operation, result)
+		}
+	}
+
+	return snapshot
+}
+
+// TestCancelledProposerDutyMakesNoDecision checks that a duty whose context has ended neither waits, nor looks up
+// the header, nor moves a metric.
+func TestCancelledProposerDutyMakesNoDecision(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		provider := &headerSequenceProvider{outcomes: []headerOutcome{{err: &api.Error{StatusCode: 404}}}}
+		s := newTestService(t, WithProposerDelay(time.Second), WithBeaconBlockHeadersProvider(provider))
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		before := metricsSnapshot(t)
+		started := time.Now()
+
+		require.False(t, s.ShouldPropose(ctx, beaconblockproposer.NewDuty(1, 1)))
+		require.Zero(t, time.Since(started))
+		require.Zero(t, provider.calls)
+		require.Equal(t, before, metricsSnapshot(t))
+	})
+}
+
+// TestProposerDutyCancelledDuringLookupMakesNoDecision checks that a lookup cut off by the end of the duty's context
+// is not counted as an unknown result.
+func TestProposerDutyCancelledDuringLookupMakesNoDecision(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		s := newTestService(t,
+			WithProposerDelay(time.Second),
+			WithBeaconBlockHeadersProvider(&cancellingProvider{cancel: cancel, err: context.Canceled}),
+		)
+		before := metricsSnapshot(t)
+
+		require.False(t, s.ShouldPropose(ctx, beaconblockproposer.NewDuty(1, 1)))
+		require.Equal(t, before, metricsSnapshot(t))
+	})
+}
+
+// TestCancelledAttesterDutyMakesNoDecision checks that a duty whose context has ended neither waits, nor reads the
+// pool, nor moves a metric.
+func TestCancelledAttesterDutyMakesNoDecision(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		provider := &sequenceAttestationPool{responses: [][]*spec.VersionedAttestation{{}}}
+		s := newTestService(t, WithAttestationPoolProvider(provider))
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		before := metricsSnapshot(t)
+		started := time.Now()
+
+		require.False(t, s.ShouldAttest(ctx, newAttesterDuty(t, 1)))
+		require.Zero(t, time.Since(started))
+		require.Zero(t, provider.calls)
+		require.Equal(t, before, metricsSnapshot(t))
+	})
+}
+
+// TestAttesterDutyCancelledDuringPoolReadMakesNoDecision checks that a pool read cut off by the end of the duty's
+// context does not activate the attester, whether the read fails or returns what it had so far.
+func TestAttesterDutyCancelledDuringPoolReadMakesNoDecision(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+	}{
+		{name: "Error", err: context.Canceled},
+		{name: "PartialPool"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				s := newTestService(t, WithAttestationPoolProvider(&cancellingProvider{cancel: cancel, err: test.err}))
+				before := metricsSnapshot(t)
+
+				require.False(t, s.ShouldAttest(ctx, newAttesterDuty(t, 1)))
+				require.Equal(t, before, metricsSnapshot(t))
+			})
+		})
+	}
+}
+
+// cancellingProvider ends the caller's context during a lookup, as a shutdown would, then returns err, or an empty
+// response if err is nil.
+type cancellingProvider struct {
+	cancel context.CancelFunc
+	err    error
+}
+
+func (p *cancellingProvider) BeaconBlockHeader(context.Context, *api.BeaconBlockHeaderOpts) (*api.Response[*apiv1.BeaconBlockHeader], error) {
+	p.cancel()
+
+	return nil, p.err
+}
+
+func (p *cancellingProvider) AttestationPool(context.Context, *api.AttestationPoolOpts) (*api.Response[[]*spec.VersionedAttestation], error) {
+	p.cancel()
+	if p.err != nil {
+		return nil, p.err
+	}
+
+	return &api.Response[[]*spec.VersionedAttestation]{Data: []*spec.VersionedAttestation{}}, nil
+}
+
+// TestWaitFor checks that waitFor waits the full duration on a live context, and stops with false as soon as the
+// context ends, including when the duration is already over.
+func TestWaitFor(t *testing.T) {
+	tests := []struct {
+		name     string
+		duration time.Duration
+		cancelAt time.Duration // -1 leaves the context live; 0 cancels before the call.
+		want     bool
+		elapsed  time.Duration
+	}{
+		{name: "Completes", duration: time.Second, cancelAt: -1, want: true, elapsed: time.Second},
+		{name: "AlreadyCancelled", duration: time.Second, cancelAt: 0, want: false, elapsed: 0},
+		{name: "CancelledWithNothingToWait", duration: -time.Second, cancelAt: 0, want: false, elapsed: 0},
+		{name: "CancelledMidWait", duration: time.Second, cancelAt: 300 * time.Millisecond, want: false, elapsed: 300 * time.Millisecond},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Repeat, because select picks at random between ready cases.
+			for range 50 {
+				synctest.Test(t, func(t *testing.T) {
+					ctx, cancel := context.WithCancel(context.Background())
+					defer cancel()
+					switch {
+					case test.cancelAt == 0:
+						cancel()
+					case test.cancelAt > 0:
+						time.AfterFunc(test.cancelAt, cancel)
+					}
+					started := time.Now()
+
+					require.Equal(t, test.want, waitFor(ctx, test.duration))
+					require.Equal(t, test.elapsed, time.Since(started))
+				})
+			}
+		})
+	}
+}
+
+// TestProposerDutyCancelledMidWaitMakesNoDecision checks that ending the duty's context during proposer-delay stops
+// the wait at once, without a lookup or a metric change.
+func TestProposerDutyCancelledMidWaitMakesNoDecision(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		provider := &headerSequenceProvider{outcomes: []headerOutcome{{err: &api.Error{StatusCode: 404}}}}
+		s := newTestService(t, WithProposerDelay(time.Second), WithBeaconBlockHeadersProvider(provider))
+		ctx, cancel := context.WithCancel(context.Background())
+		time.AfterFunc(300*time.Millisecond, cancel)
+		before := metricsSnapshot(t)
+		started := time.Now()
+
+		require.False(t, s.ShouldPropose(ctx, beaconblockproposer.NewDuty(1, 1)))
+		require.Equal(t, 300*time.Millisecond, time.Since(started))
+		require.Zero(t, provider.calls)
+		require.Equal(t, before, metricsSnapshot(t))
+	})
+}
+
+// TestAttesterDutyCancelledDuringAttesterDelayMakesNoDecision checks that ending the duty's context after the
+// attestation deadline, during attester-delay, stops the wait at once, without a pool read or a metric change.
+func TestAttesterDutyCancelledDuringAttesterDelayMakesNoDecision(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		provider := &sequenceAttestationPool{responses: [][]*spec.VersionedAttestation{{}}}
+		s := newTestService(t, WithAttestationPoolProvider(provider))
+		duty := newAttesterDuty(t, 1)
+		cancelAt := time.Until(s.chainTime.StartOfSlot(duty.Slot()).Add(s.attestationDelay(duty.Slot()))) + s.attesterDelay/2
+		ctx, cancel := context.WithCancel(context.Background())
+		time.AfterFunc(cancelAt, cancel)
+		before := metricsSnapshot(t)
+		started := time.Now()
+
+		require.False(t, s.ShouldAttest(ctx, duty))
+		require.Equal(t, cancelAt, time.Since(started))
+		require.Zero(t, provider.calls)
+		require.Equal(t, before, metricsSnapshot(t))
+	})
+}
+
+// TestLateAttesterDutyWaitsFullAttesterDelay checks that a duty starting after the attestation deadline still waits
+// the whole attester-delay, so another instance's attestation has that long to reach the pool.
+func TestLateAttesterDutyWaitsFullAttesterDelay(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s := newTestService(t, WithAttestationPoolProvider(&sequenceAttestationPool{responses: [][]*spec.VersionedAttestation{{}}}))
+		duty := newAttesterDuty(t, 1)
+		time.Sleep(time.Until(s.chainTime.StartOfSlot(duty.Slot()).Add(s.attestationDelay(duty.Slot()))) + s.attesterDelay/2)
+		started := time.Now()
+
+		require.True(t, s.ShouldAttest(context.Background(), duty))
+		require.Equal(t, s.attesterDelay, time.Since(started))
+	})
 }
