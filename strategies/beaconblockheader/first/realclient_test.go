@@ -66,7 +66,8 @@ func TestBeaconBlockHeadersAbsenceWhileANodeIsDown(t *testing.T) {
 	}
 }
 
-// fakeBeaconNode serves the endpoints go-eth2-client needs to mark a node active, and 404 for every header.
+// fakeBeaconNode serves the endpoints go-eth2-client needs to mark a node active, and 404 for every header.  Any other
+// path fails with 500, so only a header lookup can report absence.
 func fakeBeaconNode(t *testing.T) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
