@@ -331,21 +331,24 @@ multiinstance:
   # carries it out only if no other instance has: an attestation only if none for its validators is in the pool, a proposal only
   # if the beacon block header lookup reports no block at the slot.  With the default 'first' header strategy at least one beacon
   # node must report no block and every other node must report no block or be unavailable: it refuses the connection, its host is
-  # unreachable or cannot be resolved, or it is already marked inactive and fails its health check again before the lookup's
-  # deadline.  A healthy node can still be marked inactive for a short time, for example after a dropped connection, and if
-  # another health check is running at the moment of the lookup it is treated as unavailable without being asked, so in rare
-  # cases one node's report of no block decides alone; Vouch relies on Dirk's slashing protection to refuse a duplicate block,
-  # which the wallet account manager does not provide.  With 'first', a node that answers with an error, or does not answer before
-  # the deadline, stops the instance proposing, because it may have the block.  That includes a node whose every request fails,
-  # such as one behind a proxy that returns 502 or 503 while the node is down, until a health check marks it inactive, up to 30
-  # seconds later; from then on it counts as unavailable.  Syncing alone does not make a node unavailable, because a syncing node
-  # passes its health check.  With 'simple' the first beacon node to report no block decides, and nodes that are not synced are
-  # skipped.  A beacon node that is behind the chain also reports no block, so with either style a lagging node can lead the
-  # instance to propose when another instance already has; keep the beacon nodes synced.  Vouch reads any 404 from the lookup as
-  # no block, so a proxy in front of the beacon nodes that answers 404 on the header path while passing their health checks makes
-  # the instance propose at each of its slots even when another instance already has.  A wrong path in a beacon node address is
-  # different: the health check fails too, so that node counts as unavailable.  The instance stands down again as soon as another
-  # instance is seen to be active.  Note that for the
+  # unreachable or cannot be resolved, or it is already marked inactive and either fails its health check again before the
+  # lookup's deadline or still has a health check running.  A healthy node can still be marked inactive for a short time, for
+  # example after a dropped connection, and if another health check is running at the moment of the lookup it is treated as
+  # unavailable without being asked, so in rare cases one node's report of no block decides alone; Vouch relies on Dirk's slashing
+  # protection to refuse a duplicate block, which the wallet account manager does not provide.  With 'first', a node that answers
+  # with an error, or does not answer before the deadline, stops the instance proposing, because it may have the block.  That
+  # includes a node whose every request fails, such as one behind a proxy that returns 502 or 503 while the node is down, until a
+  # health check marks it inactive, up to 30 seconds later; from then on it counts as unavailable.  A host that drops packets does
+  # not answer, so it stops the instance proposing until a health check times out and marks it inactive, up to eth2client.timeout
+  # plus 30 seconds later (2.5 minutes by default); after that its next health check is usually still running at the lookup, so it
+  # usually counts as unavailable.  Syncing alone does not make a node unavailable, because a syncing node passes its health
+  # check.  With 'simple' the first beacon node to report no block decides, and nodes that are not synced are skipped.  A beacon
+  # node that is behind the chain also reports no block, so with either style a lagging node can lead the instance to propose when
+  # another instance already has; keep the beacon nodes synced.  Vouch reads any 404 from the lookup as no block, so a proxy in
+  # front of the beacon nodes that answers 404 on the header path while passing their health checks makes the instance propose at
+  # each of its slots even when another instance already has.  A wrong path in a beacon node address is different: the health
+  # check fails too, so that node counts as unavailable.  The instance stands down again as soon as another instance is seen to be
+  # active.  Note that for the
   # 'static-delay' style to operate the beacon node(s) to which Vouch connects must be running with the 'subscribe all subnets'
   # option enabled.  This is because this style looks at the attestation data to see if other instance(s) of Vouch are active. 
   # However, Vouch cannot detect if the beacon nodes are configured correctly so it is up to the user to carry out this work
