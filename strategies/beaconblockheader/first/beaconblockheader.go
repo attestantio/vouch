@@ -125,9 +125,10 @@ func absenceError(notFound []error, abstained []error) error {
 // and either its health check (a sync status request) fails again or another health check is already running, in which
 // case no request is made.  So a node wrongly marked inactive, for example by a health check its caller cancelled, can
 // abstain while healthy and let another node's 404 decide alone; Dirk's slashing protection refuses a duplicate, which
-// the wallet account manager does not.  A node that answers with an error, such as a 503 while it fails, does not
-// abstain until a health check marks it inactive, because it may have the block.  The multi client behind the simple
-// style skips inactive nodes too.
+// the wallet account manager does not.  A node that answers with an error, such as a proxy's 503 while the node behind
+// it is down, does not abstain until a health check marks it inactive, up to 30 seconds later with the client's
+// periodic check, because it may have the block.  Syncing alone never makes a node abstain.  The multi client behind
+// the simple style skips inactive nodes too.
 func abstains(err error) bool {
 	if errors.Is(err, eth2client.ErrNotActive) {
 		return true
