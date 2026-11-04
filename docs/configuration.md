@@ -338,8 +338,11 @@ multiinstance:
   # which the wallet account manager does not provide.  With 'first', a node that answers with an error, or does not answer
   # before the deadline, stops the instance proposing.  With 'simple' the first beacon node to report no block decides.  A
   # beacon node that is behind the chain also reports no block, so with either style a lagging node can lead the instance to
-  # propose when another instance already has; keep the beacon nodes synced.  It stands down again as soon as another instance
-  # is seen to be active.  Note that for the
+  # propose when another instance already has; keep the beacon nodes synced.  Vouch reads any 404 from the lookup as no
+  # block, so a proxy in front of the beacon nodes that answers 404 on the header path while passing their health checks
+  # makes the instance propose at each of its slots even when another instance already has.  A wrong path in a beacon node
+  # address also fails the health check, so that node counts as unavailable.  The instance stands down again as soon as
+  # another instance is seen to be active.  Note that for the
   # 'static-delay' style to operate the beacon node(s) to which Vouch connects must be running with the 'subscribe all subnets'
   # option enabled.  This is because this style looks at the attestation data to see if other instance(s) of Vouch are active. 
   # However, Vouch cannot detect if the beacon nodes are configured correctly so it is up to the user to carry out this work

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,14 +71,16 @@ func fakeBeaconNode(t *testing.T) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/eth/v1/node/syncing":
+		switch {
+		case r.URL.Path == "/eth/v1/node/syncing":
 			_, _ = fmt.Fprint(w, `{"data":{"head_slot":"10","sync_distance":"0","is_syncing":false,"is_optimistic":false,"el_offline":false}}`)
-		case "/eth/v1/node/version":
+		case r.URL.Path == "/eth/v1/node/version":
 			_, _ = fmt.Fprint(w, `{"data":{"version":"test/v1.0.0"}}`)
-		default:
+		case strings.HasPrefix(r.URL.Path, "/eth/v1/beacon/headers/"):
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = fmt.Fprint(w, `{"code":404,"message":"NOT_FOUND"}`)
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}))
 	t.Cleanup(server.Close)
