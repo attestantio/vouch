@@ -366,7 +366,9 @@ multiinstance:
     # proposer-delay is the time a Vouch instance waits when each proposal duty starts before asking its beacon nodes for another
     # instance's block, and it is all the time that block has to reach those nodes: the lookup is made once, and a node that has
     # not yet seen the block reports none.  Set it above the usual time a block takes to reach this instance's beacon nodes, but
-    # no higher, because a later proposal is less likely to be accepted.  A value of 0 proposes at once without checking.
+    # no higher, because a later proposal is less likely to be accepted.  The wait applies to every proposal, including each
+    # one while this instance stands in for another, so every takeover block is proposed this late.  A value of 0 proposes at
+    # once without checking.
     proposer-delay: '2s'
 
 # tracing sends OTLP trace data to the supplied endpoint.
