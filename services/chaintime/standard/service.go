@@ -21,7 +21,6 @@ import (
 	client "github.com/attestantio/go-eth2-client"
 	"github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/attestantio/vouch/services/chaintime"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	zerologger "github.com/rs/zerolog/log"
@@ -139,7 +138,7 @@ func (s *Service) HardForkEpoch(ctx context.Context, hardForkName string) phase0
 	forkEpoch, err := s.getHardForkEpoch(ctx, hardForkName)
 	if err != nil {
 		s.log.Error().Err(err).Msg("Failed to obtain hard fork")
-		return chaintime.FarFutureEpoch
+		return 0xffffffffffffffff
 	}
 	return forkEpoch
 }
