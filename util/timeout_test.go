@@ -87,3 +87,5 @@ func TestTimeout(t *testing.T) {
 		})
 	}
 }
+
+// scratch paths check
