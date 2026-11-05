@@ -321,7 +321,7 @@ func TestTimingsForSlot(t *testing.T) {
 func TestTimingsForSlotWithoutGloas(t *testing.T) {
 	s := &Service{
 		chainTimeService: &slotEpochChainTime{slotsPerEpoch: 32},
-		gloasForkEpoch:   0xffffffffffffffff,
+		gloasForkEpoch:   chaintime.FarFutureEpoch,
 		preGloasTimings:  dutyTimings{maxAttestationDelay: 4 * time.Second},
 		gloasTimings:     dutyTimings{maxAttestationDelay: 3 * time.Second},
 	}

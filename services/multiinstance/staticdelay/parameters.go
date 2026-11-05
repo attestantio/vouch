@@ -33,6 +33,7 @@ type parameters struct {
 	chainTime                  chaintime.Service
 	attesterDelay              time.Duration
 	proposerDelay              time.Duration
+	maxAttestationDelay        time.Duration
 }
 
 // Parameter is the interface for service parameters.
@@ -102,6 +103,13 @@ func WithProposerDelay(delay time.Duration) Parameter {
 	})
 }
 
+// WithMaxAttestationDelay sets the controller's pre-Gloas attestation deadline override; 0 uses the spec.
+func WithMaxAttestationDelay(delay time.Duration) Parameter {
+	return parameterFunc(func(p *parameters) {
+		p.maxAttestationDelay = delay
+	})
+}
+
 // parseAndCheckParameters parses and checks parameters to ensure that mandatory parameters are present and correct.
 func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	parameters := parameters{
@@ -132,6 +140,9 @@ func parseAndCheckParameters(params ...Parameter) (*parameters, error) {
 	}
 	if parameters.proposerDelay < 0 {
 		return nil, errors.New("proposer delay cannot be negative")
+	}
+	if parameters.maxAttestationDelay < 0 {
+		return nil, errors.New("max attestation delay cannot be negative")
 	}
 
 	return &parameters, nil

@@ -154,7 +154,7 @@ func (s *Service) subscribeEvents(ctx context.Context,
 	if payloadEventsProvider == nil ||
 		s.ptcDutiesProvider == nil ||
 		s.payloadAttester == nil ||
-		s.gloasForkEpoch == 0xffffffffffffffff {
+		s.gloasForkEpoch == chaintime.FarFutureEpoch {
 		return nil
 	}
 	if err := payloadEventsProvider.Events(ctx, &api.EventsOpts{
@@ -710,7 +710,7 @@ func capellaDetails(ctx context.Context, log zerolog.Logger, specProvider eth2cl
 	var capellaForkEpoch phase0.Epoch
 	capellaForkEpoch, err := fetchCapellaForkEpoch(ctx, specProvider)
 	if err != nil {
-		capellaForkEpoch = 0xffffffffffffffff
+		capellaForkEpoch = chaintime.FarFutureEpoch
 	} else {
 		log.Trace().Uint64("epoch", uint64(capellaForkEpoch)).Msg("Obtained Capella fork epoch")
 	}
@@ -726,7 +726,7 @@ func bellatrixDetails(ctx context.Context, log zerolog.Logger, specProvider eth2
 	if err != nil {
 		// Not handling bellatrix after all.
 		handlingBellatrix = false
-		bellatrixForkEpoch = 0xffffffffffffffff
+		bellatrixForkEpoch = chaintime.FarFutureEpoch
 	} else {
 		log.Trace().Uint64("epoch", uint64(bellatrixForkEpoch)).Msg("Obtained Bellatrix fork epoch")
 	}
@@ -759,7 +759,7 @@ func altairDetails(ctx context.Context, log zerolog.Logger, specProvider eth2cli
 func gloasDetails(ctx context.Context, log zerolog.Logger, chainTimeService chaintime.Service) phase0.Epoch {
 	// Fetch the gloas fork epoch from the fork schedule.
 	gloasForkEpoch := chainTimeService.HardForkEpoch(ctx, "GLOAS_FORK_EPOCH")
-	if gloasForkEpoch == 0xffffffffffffffff {
+	if gloasForkEpoch == chaintime.FarFutureEpoch {
 		log.Debug().Msg("Not handling Gloas")
 	} else {
 		log.Trace().Uint64("epoch", uint64(gloasForkEpoch)).Msg("Obtained Gloas fork epoch")
@@ -783,7 +783,7 @@ func electraDetails(ctx context.Context, log zerolog.Logger, chainTimeService ch
 	// Fetch the electra fork epoch from the fork schedule.
 	handlingElectra := true
 	electraForkEpoch := chainTimeService.HardForkEpoch(ctx, "ELECTRA_FORK_EPOCH")
-	if electraForkEpoch == 0xffffffffffffffff {
+	if electraForkEpoch == chaintime.FarFutureEpoch {
 		// Not handling electra after all.
 		handlingElectra = false
 	} else {

@@ -567,6 +567,21 @@ func controllerDelays() ([]time.Duration, error) {
 	return delays, nil
 }
 
+// controllerDelay provides the deprecated duty delay override with the given key.
+func controllerDelay(key string) (time.Duration, error) {
+	delays, err := controllerDelays()
+	if err != nil {
+		return 0, err
+	}
+	for i, delay := range deprecatedControllerDelays {
+		if delay.key == key {
+			return delays[i], nil
+		}
+	}
+
+	return 0, fmt.Errorf("unknown controller delay %s", key)
+}
+
 // controllerDelayParameters provides the deprecated duty delay overrides as controller parameters,
 // warning about each one that is set.
 func controllerDelayParameters() ([]standardcontroller.Parameter, error) {
@@ -2653,6 +2668,12 @@ func startMultiInstance(ctx context.Context,
 			return nil, errors.Wrap(err, "failed to instantiate attestation pool strategy")
 		}
 
+		var maxAttestationDelay time.Duration
+		maxAttestationDelay, err = controllerDelay("controller.max-attestation-delay")
+		if err != nil {
+			return nil, err
+		}
+
 		service, err = staticdelaymultiinstance.New(ctx,
 			staticdelaymultiinstance.WithLogLevel(util.LogLevel("multiinstance.static-delay")),
 			staticdelaymultiinstance.WithMonitor(monitor),
@@ -2662,6 +2683,7 @@ func startMultiInstance(ctx context.Context,
 			staticdelaymultiinstance.WithChainTime(chainTime),
 			staticdelaymultiinstance.WithAttesterDelay(viper.GetDuration("multiinstance.static-delay.attester-delay")),
 			staticdelaymultiinstance.WithProposerDelay(viper.GetDuration("multiinstance.static-delay.proposer-delay")),
+			staticdelaymultiinstance.WithMaxAttestationDelay(maxAttestationDelay),
 		)
 	default:
 		service, err = alwaysmultiinstance.New(ctx,
