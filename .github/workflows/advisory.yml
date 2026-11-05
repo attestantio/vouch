@@ -27,7 +27,7 @@ jobs:
       # restores a cache, and tar fails on files that already exist.
       - name: Surviving mutants
         continue-on-error: true
-        timeout-minutes: 60
+        timeout-minutes: 1
         uses: gomutants/gomutants@05a4b33ec0faacc1e36d259c4238aef860e40751 # v0.7.2
         with:
           version: v0.7.2
@@ -70,3 +70,4 @@ jobs:
             fi
             echo "::warning file=$file,line=$line,col=$col,title=Test-only function::${name# } is only reachable from tests"
           done
+          exit 1
