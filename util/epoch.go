@@ -15,7 +15,7 @@ package util
 
 import "github.com/attestantio/go-eth2-client/spec/phase0"
 
-// EpochToInt64 converts an epoch to an int64.
+// EpochToInt64 converts an epoch to an int64, panicking if it does not fit.
 func EpochToInt64(epoch phase0.Epoch) int64 {
 	if epoch > 0x7fffffffffffffff {
 		panic("epoch too large to convert to int64")
