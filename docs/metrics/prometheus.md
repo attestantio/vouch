@@ -128,6 +128,15 @@ Network metrics provide information about the network from Vouch's point of view
   - `vouch_attestationaggregation_coverage_ratio` the ratio of the number of attestations included in the aggregate to the total number of attestations for the aggregate.  This metric is provided as a histogram, with buckets in increments of 0.1 up to 1.
   - `vouch_synccommitteeaggregation_coverage_ratio` the ratio of the number of sync committee messages included in the aggregate to the total number of members of the sync committee for the aggregate.  This metric is provided as a histogram, with buckets in increments of 0.1 up to 1.
 
+## Multi-instance
+
+The `static-delay` multi-instance style decides before each attestation and proposal duty whether this instance carries it out.  Both metrics have the label `operation`, with the value `attester` or `proposer`:
+
+  - `vouch_multiinstance_active` is 1 if this instance's last decision for that operation was to carry out the duty, and 0 if it stood down; a failed duty does not change it.  It holds its value until the next duty of that type, so on a secondary instance it can stay at 1 after the primary has recovered, until the secondary's next duty
+  - `vouch_multiinstance_checks_total` counts the decisions, plus the starting state once at startup (`active` for an operation with a zero delay, otherwise `inactive`), with the label `result` set to `active`, `inactive`, or `unknown` when the instance stood down because it could not establish whether another instance acted (today only a proposal whose beacon block header lookup failed or timed out).  Failed attestations and proposals are counted by `vouch_attestation_process_requests_total` and `vouch_beaconblockproposal_process_requests_total` with `result="failed"`
+
+To alert when a secondary instance takes over duties, alert on an increase in `vouch_multiinstance_checks_total{result="active"}` on that instance rather than on the gauge.  To alert when it skipped a proposal it could not decide on, which loses the block if the primary is also down, alert on an increase in `vouch_multiinstance_checks_total{operation="proposer",result="unknown"}`.
+
 ## Relay
 Relay metrics provide information about the performance, both individually and comparatively, of the block relays configured for use.
 

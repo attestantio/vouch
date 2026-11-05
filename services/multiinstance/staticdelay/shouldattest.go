@@ -18,8 +18,10 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/attester"
+	"github.com/rs/zerolog"
 )
 
 // ShouldAttest returns true if this Vouch instance should attest.
@@ -33,18 +35,18 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 	log := s.log.With().Uint64("slot", uint64(duty.Slot())).Logger()
 	log.Trace().Msg("Checking if we should attest")
 
-	if s.attesterActive.Load() {
-		log.Trace().Msg("We are the active attester")
-		s.enableAttester(ctx)
+	if s.attesterDelay == 0 {
+		monitorActive("attester", true)
 
 		return true
 	}
 
-	// Sleep to let other instances do their work.
-	// Start off by sleeping until the attestation deadline.
-	time.Sleep(time.Until(s.chainTime.StartOfSlot(duty.Slot()).Add(s.attestationDelay(duty.Slot()))))
-	// Now sleep for the additional attester delay.
-	time.Sleep(s.attesterDelay)
+	// Wait to let other instances do their work: until the attestation deadline, then for the attester delay.  The
+	// waits are separate so a duty that starts after the deadline still waits the full attester delay.
+	if !waitFor(ctx, time.Until(s.chainTime.StartOfSlot(duty.Slot()).Add(s.attestationDelay(duty.Slot())))) ||
+		!waitFor(ctx, s.attesterDelay) {
+		return false
+	}
 	log.Trace().Msg("Checking for attestations from an active instance")
 
 	// Look for any attestations that we are meant to generate that are already in the node's attestation pool.
@@ -74,33 +76,51 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 			continue
 		}
 
-		for _, attestation := range resp.Data {
-			// We only accept single-committee attestations.
-			if _, err := attestation.CommitteeIndex(); err != nil {
-				continue
-			}
+		if poolHasDutyAttestation(log, resp.Data, dutyAttestations) {
+			// An attestation is already in the pool; we don't need to act.
+			log.Trace().Msg("Another instance is attesting; not activating attester")
+			monitorActive("attester", false)
 
-			aggregationBits, err := attestation.AggregationBits()
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to obtain aggregation bits")
-				continue
-			}
-			for validatorCommitteeIndex := range dutyAttestations {
-				if aggregationBits.BitAt(validatorCommitteeIndex) {
-					// An attestation is already in the pool; we don't need to act.
-					log.Trace().Msg("Another instance is attesting; not activating attester")
-					s.disableAttester(ctx)
+			return false
+		}
+	}
 
-					return false
-				}
+	if ctx.Err() != nil {
+		// The duty ended, so the pool reads may be cut short and there is no decision to count.
+		return false
+	}
+
+	log.Trace().Msg("No attestation found; activating attester")
+	monitorActive("attester", true)
+
+	return true
+}
+
+// poolHasDutyAttestation returns true if a single-committee attestation in the pool covers one of the duty's
+// validators, given as offsets in the committee.
+func poolHasDutyAttestation(log zerolog.Logger,
+	pool []*spec.VersionedAttestation,
+	dutyAttestations map[uint64]phase0.ValidatorIndex,
+) bool {
+	for _, attestation := range pool {
+		// We only accept single-committee attestations.
+		if _, err := attestation.CommitteeIndex(); err != nil {
+			continue
+		}
+
+		aggregationBits, err := attestation.AggregationBits()
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to obtain aggregation bits")
+			continue
+		}
+		for validatorCommitteeIndex := range dutyAttestations {
+			if aggregationBits.BitAt(validatorCommitteeIndex) {
+				return true
 			}
 		}
 	}
 
-	log.Trace().Msg("No attestation found; activating attester")
-	s.enableAttester(ctx)
-
-	return true
+	return false
 }
 
 // attestationDelay provides the attestation deadline that applies at the given slot.
