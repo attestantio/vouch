@@ -1,0 +1,72 @@
+name: advisory
+# Reports only. Neither step can fail the job, so this never blocks a merge.
+# Both steps look at lines the PR changes in production code, so PRs that
+# change no such lines skip the job. gomutants runs the whole test suite for
+# its baseline even when it finds no mutants, which is minutes of wasted work.
+on:
+  pull_request:
+    paths:
+      - '**.go'
+      - '!**_test.go'
+      - .github/workflows/advisory.yml
+
+permissions:
+  contents: read
+
+jobs:
+  advisory:
+    name: mutation and test-only code
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Both steps diff against the base branch, which a shallow clone lacks.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          cache: false
+          go-version-file: go.mod
+
+      # Functions that deadcode reports without -test but not with it are
+      # reachable only from tests. Only those declared on lines this PR touches
+      # are annotated, and helpers whose first parameter is *testing.T are allowed.
+      - name: Test-only functions
+        continue-on-error: true
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          go install golang.org/x/tools/cmd/deadcode@v0.52.0
+          work=$(mktemp -d)
+
+          deadcode ./... | sort > "$work/prod"
+          deadcode -test ./... | sort > "$work/tests"
+          comm -23 "$work/prod" "$work/tests" > "$work/testonly"
+
+          # Lines this PR adds or changes, as file:line.
+          git diff -U0 --no-prefix "origin/$BASE_REF...HEAD" -- '*.go' | awk '
+            /^\+\+\+ / { file = substr($0, 5) }
+            /^@@/ { split($3, r, ","); n = (r[2] == "" ? 1 : r[2])
+                    for (i = 0; i < n; i++) print file ":" substr(r[1], 2) + i }
+          ' > "$work/changed"
+
+          awk -F: 'NR == FNR { changed[$0]; next } ($1 ":" $2) in changed' "$work/changed" "$work/testonly" |
+          while IFS=: read -r file line col _ name; do
+            sig=$(sed -n "${line},$((line + 3))p" "$file" | tr '\n' ' ')
+            if printf '%s' "${sig:col-1}" | grep -Eq '^[^(]*\([[:space:]]*([[:alnum:]_]+[[:space:]]+)?\*testing\.T[,)]'; then
+              continue
+            fi
+            echo "::warning file=$file,line=$line,col=$col,title=Test-only function::${name# } is only reachable from tests"
+          done
+
+      # threshold-efficacy is empty so survivors annotate the diff without failing.
+      # The action installs "latest" unless version is set, so both pins are needed.
+      - name: Surviving mutants
+        continue-on-error: true
+        uses: gomutants/gomutants@05a4b33ec0faacc1e36d259c4238aef860e40751 # v0.7.2
+        with:
+          version: v0.7.2
+          threshold-efficacy: ""
+          args: --changed-since origin/${{ github.base_ref }} ./...
