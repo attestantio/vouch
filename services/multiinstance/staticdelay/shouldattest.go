@@ -18,8 +18,10 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/api"
+	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/attestantio/vouch/services/attester"
+	"github.com/rs/zerolog"
 )
 
 // ShouldAttest returns true if this Vouch instance should attest.
@@ -74,26 +76,12 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 			continue
 		}
 
-		for _, attestation := range resp.Data {
-			// We only accept single-committee attestations.
-			if _, err := attestation.CommitteeIndex(); err != nil {
-				continue
-			}
+		if poolHasDutyAttestation(log, resp.Data, dutyAttestations) {
+			// An attestation is already in the pool; we don't need to act.
+			log.Trace().Msg("Another instance is attesting; not activating attester")
+			monitorActive("attester", false)
 
-			aggregationBits, err := attestation.AggregationBits()
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to obtain aggregation bits")
-				continue
-			}
-			for validatorCommitteeIndex := range dutyAttestations {
-				if aggregationBits.BitAt(validatorCommitteeIndex) {
-					// An attestation is already in the pool; we don't need to act.
-					log.Trace().Msg("Another instance is attesting; not activating attester")
-					monitorActive("attester", false)
-
-					return false
-				}
-			}
+			return false
 		}
 	}
 
@@ -106,6 +94,33 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 	monitorActive("attester", true)
 
 	return true
+}
+
+// poolHasDutyAttestation returns true if a single-committee attestation in the pool covers one of the duty's
+// validators, given as offsets in the committee.
+func poolHasDutyAttestation(log zerolog.Logger,
+	pool []*spec.VersionedAttestation,
+	dutyAttestations map[uint64]phase0.ValidatorIndex,
+) bool {
+	for _, attestation := range pool {
+		// We only accept single-committee attestations.
+		if _, err := attestation.CommitteeIndex(); err != nil {
+			continue
+		}
+
+		aggregationBits, err := attestation.AggregationBits()
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to obtain aggregation bits")
+			continue
+		}
+		for validatorCommitteeIndex := range dutyAttestations {
+			if aggregationBits.BitAt(validatorCommitteeIndex) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // attestationDelay provides the attestation deadline that applies at the given slot.
