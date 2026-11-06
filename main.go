@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"math/big"
 	"net/http"
 
@@ -1443,6 +1444,10 @@ func startMajorityAttestationDataStrategy(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+	threshold, err := attestationDataThreshold("strategies.attestationdata.majority.threshold", len(attestationDataProviders))
+	if err != nil {
+		return nil, err
+	}
 	attestationDataProvider, err := majorityattestationdatastrategy.New(ctx,
 		majorityattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 		majorityattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.majority")),
@@ -1451,7 +1456,7 @@ func startMajorityAttestationDataStrategy(ctx context.Context,
 		majorityattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.majority")),
 		majorityattestationdatastrategy.WithChainTime(chainTime),
 		majorityattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
-		majorityattestationdatastrategy.WithThreshold(viper.GetInt("strategies.attestationdata.majority.threshold")),
+		majorityattestationdatastrategy.WithThreshold(threshold),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start majority attestation data strategy")
@@ -1469,6 +1474,10 @@ func startCombinedMajorityAttestationDataStrategy(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+	threshold, err := attestationDataThreshold("strategies.attestationdata.combinedmajority.threshold", len(attestationDataProviders))
+	if err != nil {
+		return nil, err
+	}
 	attestationDataProvider, err := combinedmajorityattestationdatastrategy.New(ctx,
 		combinedmajorityattestationdatastrategy.WithClientMonitor(monitor.(metrics.ClientMonitor)),
 		combinedmajorityattestationdatastrategy.WithProcessConcurrency(util.ProcessConcurrency("strategies.attestationdata.combinedmajority")),
@@ -1477,7 +1486,7 @@ func startCombinedMajorityAttestationDataStrategy(ctx context.Context,
 		combinedmajorityattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.combinedmajority")),
 		combinedmajorityattestationdatastrategy.WithChainTime(chainTime),
 		combinedmajorityattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
-		combinedmajorityattestationdatastrategy.WithThreshold(viper.GetInt("strategies.attestationdata.combinedmajority.threshold")),
+		combinedmajorityattestationdatastrategy.WithThreshold(threshold),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start combinedmajority attestation data strategy")
@@ -1514,6 +1523,29 @@ func startSimpleAttestationDataStrategy(ctx context.Context,
 		return nil, errors.Wrap(err, "failed to fetch clients for simple attestation data strategy")
 	}
 	return attestationDataClient.(eth2client.AttestationDataProvider), nil
+}
+
+// attestationDataThreshold returns the minimum number of beacon nodes that must agree for the majority or
+// combinedmajority attestation data strategy to use their data, read from the given key.  Unlike viper.GetInt it
+// rejects a set value that is not a non-negative integer, rather than returning 0.  Unset means 0.
+// It logs the threshold, and warns when there are several beacon nodes and it enforces no minimum.
+func attestationDataThreshold(key string, nodes int) (int, error) {
+	var threshold uint64
+	if viper.IsSet(key) {
+		var err error
+		threshold, err = uint64Setting(key)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	log.Info().Str("key", key).Uint64("threshold", threshold).Msg("Attestation data strategy threshold")
+	if nodes > 1 && threshold < 2 {
+		log.Warn().Str("key", key).Uint64("threshold", threshold).Msg(key + " is below 2, so it enforces no minimum number of agreeing beacon nodes; set it to 2 or more")
+	}
+
+	// Clamping keeps a huge value from wrapping to a negative int; the strategy rejects it as above the node count.
+	return int(min(threshold, math.MaxInt32)), nil
 }
 
 // attestationDataProvidersForConfig builds the per-address attestation data provider map for a strategy.
@@ -2417,7 +2449,7 @@ func selectBuilderBidProvider(ctx context.Context,
 
 // uint64Setting returns the named setting as an unsigned integer.
 // Unlike viper.GetUint64 it rejects unset values and values that are not non-negative integers, rather than returning 0.
-// Callers register a default with viper.SetDefault, so an unset value means the default is missing.
+// Callers register a default with viper.SetDefault or check viper.IsSet first, so an unset value means neither was done.
 func uint64Setting(key string) (uint64, error) {
 	raw := viper.Get(key)
 	if raw == nil {
@@ -2425,7 +2457,7 @@ func uint64Setting(key string) (uint64, error) {
 	}
 	value, err := strconv.ParseUint(fmt.Sprint(raw), 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("%s: invalid value %v; must be a non-negative integer", key, raw)
+		return 0, fmt.Errorf("%s: invalid value %q; must be a non-negative integer", key, fmt.Sprint(raw))
 	}
 
 	return value, nil

@@ -32,10 +32,10 @@ func TestUint64Setting(t *testing.T) {
 		{name: "Integer", yaml: "key: 90", expected: 90},
 		{name: "Zero", yaml: "key: 0", expected: 0},
 		{name: "IntegerString", yaml: `key: "90"`, expected: 90},
-		{name: "Negative", yaml: "key: -1", err: "key: invalid value -1; must be a non-negative integer"},
-		{name: "Typo", yaml: `key: "9O"`, err: "key: invalid value 9O; must be a non-negative integer"},
-		{name: "Percent", yaml: `key: "90%"`, err: "key: invalid value 90%; must be a non-negative integer"},
-		{name: "Fraction", yaml: "key: 0.01", err: "key: invalid value 0.01; must be a non-negative integer"},
+		{name: "Negative", yaml: "key: -1", err: "key: invalid value \"-1\"; must be a non-negative integer"},
+		{name: "Typo", yaml: `key: "9O"`, err: "key: invalid value \"9O\"; must be a non-negative integer"},
+		{name: "Percent", yaml: `key: "90%"`, err: "key: invalid value \"90%\"; must be a non-negative integer"},
+		{name: "Fraction", yaml: "key: 0.01", err: "key: invalid value \"0.01\"; must be a non-negative integer"},
 	}
 
 	for _, test := range tests {
