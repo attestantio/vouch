@@ -26,7 +26,7 @@ func ExpectedGasLimit(
 	case lastBlockGasLimit < targetGasLimit:
 		// We expect the gas limit to rise.
 		expectedGasLimit = lastBlockGasLimit + delta
-		if expectedGasLimit > targetGasLimit {
+		if targetGasLimit < expectedGasLimit {
 			expectedGasLimit = targetGasLimit
 		}
 	case lastBlockGasLimit == targetGasLimit:
@@ -35,7 +35,7 @@ func ExpectedGasLimit(
 	case lastBlockGasLimit > targetGasLimit:
 		// We expect the gas limit to fall.
 		expectedGasLimit = lastBlockGasLimit - delta
-		if expectedGasLimit < targetGasLimit {
+		if targetGasLimit > expectedGasLimit {
 			expectedGasLimit = targetGasLimit
 		}
 	}

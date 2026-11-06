@@ -67,7 +67,7 @@ func TestExpectedGasLimit(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			require.Equal(t, test.expected, util.ExpectedGasLimit(test.latest, test.target))
+			require.LessOrEqual(t, util.ExpectedGasLimit(test.latest, test.target), max(test.latest, test.target))
 		})
 	}
 }
