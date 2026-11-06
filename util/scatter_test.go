@@ -115,3 +115,8 @@ func TestError(t *testing.T) {
 	})
 	require.EqualError(t, err, "bad number")
 }
+
+func TestScatterResultIsFirst(t *testing.T) {
+	require.True(t, (&util.ScatterResult{Offset: 0}).IsFirst())
+	require.False(t, (&util.ScatterResult{Offset: 1}).IsFirst())
+}

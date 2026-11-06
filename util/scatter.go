@@ -99,3 +99,8 @@ func calculateExtentSize(items int, desiredConcurrency int) int {
 
 	return extentSize
 }
+
+// IsFirst returns true if the result is from the worker that started at offset 0.
+func (r *ScatterResult) IsFirst() bool {
+	return r.Offset == 0
+}

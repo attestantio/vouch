@@ -27,7 +27,7 @@ type BuilderClient struct {
 }
 
 // Name returns the name of the builder implementation.
-func (*BuilderClient) Name() string {
+func (*BuilderClient) Name() string { // touched
 	return "mock"
 }
 

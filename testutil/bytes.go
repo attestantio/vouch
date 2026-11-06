@@ -22,7 +22,7 @@ import (
 
 // HexToBytes converts a hex string to a byte array.
 // This should only be used for pre-defined test strings; it will panic if the input is invalid.
-func HexToBytes(input string) []byte {
+func HexToBytes(input string) []byte { // touched
 	res, err := hex.DecodeString(strings.TrimPrefix(input, "0x"))
 	if err != nil {
 		panic(err)
