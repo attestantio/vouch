@@ -35,9 +35,10 @@ jobs:
           args: --changed-since origin/${{ github.base_ref }} ./...
 
       # Functions that deadcode reports without -test but not with it are
-      # reachable only from tests. The module already has about 240 of them,
-      # mostly mocks, so only those declared on lines this PR changes are
-      # annotated. Helpers whose first parameter is *testing.T are allowed.
+      # reachable only from tests. The module already has about 240 of them, so
+      # only those declared on lines this PR changes are annotated. Test support
+      # is allowed: directories named mock, testing or testutil, and helpers
+      # whose first parameter is *testing.T.
       # shortcut: a function that becomes test-only because the PR removes its
       # last production caller is missed; compare against the base branch to catch it.
       - name: Test-only functions
@@ -62,7 +63,7 @@ jobs:
                     for (i = 0; i < n; i++) print file ":" substr(r[1], 2) + i }
           ' > "$work/changed"
 
-          awk -F: 'NR == FNR { changed[$0]; next } ($1 ":" $2) in changed' "$work/changed" "$work/testonly" |
+          awk -F: 'NR == FNR { changed[$0]; next } $1 !~ "(^|/)(mock|testing|testutil)/" && ($1 ":" $2) in changed' "$work/changed" "$work/testonly" |
           while IFS=: read -r file line col _ name; do
             sig=$(sed -n "${line},$((line + 3))p" "$file" | tr '\n' ' ')
             if grep -Eq '^[^(]*\([[:space:]]*([[:alnum:]_]+,[[:space:]]*)*([[:alnum:]_]+[[:space:]]+)?\*testing\.T[,)]' <<< "${sig:col-1}"; then
