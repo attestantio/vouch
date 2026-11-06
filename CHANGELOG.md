@@ -1,6 +1,11 @@
 dev:
   - wait from the gloas attestation deadline on gloas slots in static-delay multi-instance, rather than from the pre-gloas one; align the pre-gloas deadline with the controller, including controller.max-attestation-delay, and refuse to start when gloas is scheduled and SLOT_DURATION_MS differs from SECONDS_PER_SLOT
   - refuse to start static-delay multi-instance when the attestation deadline plus multiinstance.static-delay.attester-delay reaches the end of the slot, where a takeover attestation would always be late
+  - document strategies.attestationdata.combinedmajority.threshold, which is separate from strategies.attestationdata.majority.threshold, and that it counts nodes that agree on source, target and slot
+  - refuse to start when strategies.attestationdata.majority.threshold or strategies.attestationdata.combinedmajority.threshold is set but is not a non-negative integer, naming the key and the quoted value, instead of silently using 0; an unset or empty threshold is still 0, but a value such as 2.0, +2 or 0x2 in an environment variable, which viper read as 2, is now refused
+  - quote the value in the error for blockrelay.fallback-gas-limit, builderconfig.fallback-min-bid and builderconfig.fallback-builder-boost-factor when it is not a non-negative integer
+  - log the majority and combinedmajority attestation data thresholds at startup, and warn when there are several beacon nodes and the threshold is 0 or 1, which enforces no minimum
+  - fix the majority and combinedmajority attestation data strategies failing every request when the threshold is above a strict majority of the beacon nodes, such as 3 with 3 beacon nodes; they now wait for that many nodes to agree, up to the timeout
 
 1.14.0-alpha.2:
   - update golang.org/x/net to v0.60.0 and build the Docker image with Go 1.26.10 to pick up HTTP/2, Range header and TLS denial-of-service fixes and a crypto/x509 fix; building now requires Go 1.26

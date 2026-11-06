@@ -156,7 +156,25 @@ strategies:
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
     majority:
       # threshold is the minimum number of beacon nodes that have to provide the same attestation data for Vouch with the 'majority'
-      # and 'combinedmajority' strategy to use it.
+      # strategy to use it.  It does not apply to the 'combinedmajority' strategy, which has its own threshold below.
+      # If not set, defaults to 0.  A threshold of 0 or 1 enforces no minimum, as the most common attestation data is used however few
+      # nodes provide it, and with more than one beacon node Vouch logs a warning at startup.
+      # A threshold above a strict majority of the beacon nodes, for example 3 with 3 beacon nodes, makes Vouch wait for that many nodes
+      # to agree, up to the timeout, and fail the request if they do not.  It cannot be higher than the number of beacon nodes.
+      # With two beacon nodes a threshold of 2 fails the request whenever one node is down or the two disagree.
+      # A value that is set but is not a non-negative integer stops Vouch from starting.  An empty value counts as not set.
+      threshold: 2
+    combinedmajority:
+      # threshold is the minimum number of beacon nodes that have to provide attestation data with the same source, target and slot
+      # for Vouch with the 'combinedmajority' strategy to use it.  It does not read the 'majority' threshold.
+      # It counts nodes that agree on source, target and slot, not on the full attestation data: the head that Vouch attests to is the
+      # best head within that group, and can be provided by fewer nodes than the threshold.
+      # If not set, defaults to 0.  A threshold of 0 or 1 enforces no minimum, as the largest group is used however few nodes provide it,
+      # and with more than one beacon node Vouch logs a warning at startup.
+      # A threshold above a strict majority of the beacon nodes, for example 3 with 3 beacon nodes, makes Vouch wait for that many nodes
+      # to agree, up to the timeout, and fail the request if they do not.  It cannot be higher than the number of beacon nodes.
+      # With two beacon nodes a threshold of 2 fails the request whenever one node is down or the two disagree.
+      # A value that is set but is not a non-negative integer stops Vouch from starting.  An empty value counts as not set.
       threshold: 2
   # The aggregateattestation strategy obtains aggregate attestations from multiple sources.
   # Note that the list of nodes here must be a subset of those in the attestationdata strategy.  If not, the nodes will not have

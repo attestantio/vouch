@@ -1,4 +1,4 @@
-// Copyright © 2023 Attestant Limited.
+// Copyright © 2023 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -127,6 +127,30 @@ func TestService(t *testing.T) {
 				majority.WithChainTime(chainTime),
 				majority.WithBlockRootToSlotCache(cache),
 			},
+		},
+		{
+			name: "ThresholdNegative",
+			params: []majority.Parameter{
+				majority.WithLogLevel(zerolog.Disabled),
+				majority.WithTimeout(2 * time.Second),
+				majority.WithAttestationDataProviders(attestationDataProviders),
+				majority.WithChainTime(chainTime),
+				majority.WithBlockRootToSlotCache(cache),
+				majority.WithThreshold(-1),
+			},
+			err: "problem with parameters: threshold cannot be negative",
+		},
+		{
+			name: "ThresholdAboveProviders",
+			params: []majority.Parameter{
+				majority.WithLogLevel(zerolog.Disabled),
+				majority.WithTimeout(2 * time.Second),
+				majority.WithAttestationDataProviders(attestationDataProviders),
+				majority.WithChainTime(chainTime),
+				majority.WithBlockRootToSlotCache(cache),
+				majority.WithThreshold(2),
+			},
+			err: "problem with parameters: threshold cannot be higher than number of data providers",
 		},
 		{
 			name: "BlockRootToSlotCacheMissing",

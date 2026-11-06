@@ -1,4 +1,4 @@
-// Copyright © 2025 Attestant Limited.
+// Copyright © 2025 - 2026 Attestant Limited.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -63,6 +63,8 @@ func (s *Service) AttestationData(ctx context.Context,
 	ctx = log.WithContext(ctx)
 
 	requests := len(s.attestationDataProviders)
+	// A threshold above a strict majority must be reachable, so keep collecting until it is met.
+	required := max(requests/2+1, s.threshold)
 
 	// We have two timeouts: a soft timeout and a hard timeout.
 	// At the soft timeout, we return if we have enough data to proceed.
@@ -77,10 +79,10 @@ func (s *Service) AttestationData(ctx context.Context,
 	attestationDataResponses := make(map[attestationDataHead][]*attestationDataResponse)
 	attestationDataCounts := make(map[attestationDataHead]int)
 	attestationDataProviders := make(map[attestationDataHead][]string)
-	responded, errored := s.attestationDataLoop1(softCtx, started, requests, attestationDataResponses, attestationDataCounts, attestationDataProviders, respCh, errCh)
+	responded, errored := s.attestationDataLoop1(softCtx, started, requests, required, attestationDataResponses, attestationDataCounts, attestationDataProviders, respCh, errCh)
 	softCancel()
 
-	s.attestationDataLoop2(hardCtx, started, requests, attestationDataResponses, attestationDataCounts, attestationDataProviders, respCh, errCh, responded, errored)
+	s.attestationDataLoop2(hardCtx, started, requests, required, attestationDataResponses, attestationDataCounts, attestationDataProviders, respCh, errCh, responded, errored)
 	cancel()
 
 	var bestAttestationDataKey attestationDataHead
@@ -247,6 +249,7 @@ func (s *Service) attestationData(ctx context.Context,
 func (*Service) attestationDataLoop1(ctx context.Context,
 	started time.Time,
 	requests int,
+	required int,
 	attestationDataResponses map[attestationDataHead][]*attestationDataResponse,
 	attestationDataCounts map[attestationDataHead]int,
 	attestationDataProviders map[attestationDataHead][]string,
@@ -262,9 +265,8 @@ func (*Service) attestationDataLoop1(ctx context.Context,
 	responded := 0
 	errored := 0
 	largestCount := 0
-	strictMajority := requests/2 + 1
 
-	for responded+errored != requests && largestCount < strictMajority {
+	for responded+errored != requests && largestCount < required {
 		select {
 		case resp := <-respCh:
 			responded++
@@ -319,6 +321,7 @@ func (*Service) attestationDataLoop1(ctx context.Context,
 func (*Service) attestationDataLoop2(ctx context.Context,
 	started time.Time,
 	requests int,
+	required int,
 	attestationDataResponses map[attestationDataHead][]*attestationDataResponse,
 	attestationDataCounts map[attestationDataHead]int,
 	attestationDataProviders map[attestationDataHead][]string,
@@ -335,9 +338,8 @@ func (*Service) attestationDataLoop2(ctx context.Context,
 			largestCount = v
 		}
 	}
-	strictMajority := requests/2 + 1
 
-	for responded+errored != requests && largestCount < strictMajority {
+	for responded+errored != requests && largestCount < required {
 		select {
 		case resp := <-respCh:
 			responded++
