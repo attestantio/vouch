@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/attestantio/vouch/services/beaconblockproposer"
 	"github.com/attestantio/vouch/services/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -193,9 +194,9 @@ func monitorGloasProposalSelection(strategy string, requestedPreference string, 
 		requestedPreference = "unknown"
 	}
 	switch source {
-	case "self_build", "p2p_builder", "builder_api":
+	case beaconblockproposer.SourceSelfBuild, beaconblockproposer.SourceP2PBuilder, beaconblockproposer.SourceBuilderAPI:
 	default:
-		source = "unknown"
+		source = beaconblockproposer.SourceUnknown
 	}
 	gloasProposalSelections.WithLabelValues(strategy, requestedPreference, source).Inc()
 }

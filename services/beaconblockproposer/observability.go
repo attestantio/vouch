@@ -35,6 +35,18 @@ const (
 	MetadataBuilderURL = "vouch.builder_url"
 )
 
+// Values of MetadataSource.
+const (
+	// SourceSelfBuild is a proposal the beacon node built itself.
+	SourceSelfBuild = "self_build"
+	// SourceP2PBuilder is a builder bid the beacon node received over P2P.
+	SourceP2PBuilder = "p2p_builder"
+	// SourceBuilderAPI is a builder bid the beacon node obtained from a direct builder.
+	SourceBuilderAPI = "builder_api"
+	// SourceUnknown is a proposal whose source was not recorded.
+	SourceUnknown = "unknown"
+)
+
 var endpointInError = regexp.MustCompile(`(?i)(?:https?|grpc)://\S+`)
 
 type requestIDContextKey struct{}

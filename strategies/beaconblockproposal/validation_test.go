@@ -336,3 +336,40 @@ func TestEPBSProposalSource(t *testing.T) {
 		})
 	}
 }
+
+func TestEPBSSelectionMetadata(t *testing.T) {
+	tests := []struct {
+		name     string
+		proposal *api.VersionedEPBSProposal
+		metadata map[string]any
+		expected map[string]any
+	}{
+		{
+			name:     "BuilderAPI",
+			proposal: withoutPayload(1),
+			metadata: map[string]any{"Eth-Builder-Url": "https://builder.example", "Eth-Consensus-Version": "gloas"},
+			expected: map[string]any{
+				"vouch.strategy":    "best",
+				"vouch.provider":    "beacon-node-1",
+				"vouch.source":      "builder_api",
+				"vouch.builder_url": "https://builder.example",
+			},
+		},
+		{
+			name:     "P2PBuilder",
+			proposal: withoutPayload(1),
+			expected: map[string]any{
+				"vouch.strategy":    "best",
+				"vouch.provider":    "beacon-node-1",
+				"vouch.source":      "p2p_builder",
+				"vouch.builder_url": "",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.expected, beaconblockproposal.EPBSSelectionMetadata("best", "beacon-node-1", test.proposal, test.metadata))
+		})
+	}
+}

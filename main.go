@@ -1707,13 +1707,8 @@ func (p *readinessGatedProposalProvider) EPBSProposal(ctx context.Context,
 
 	// Label the selection as the first and best strategies do.
 	return &api.Response[*api.VersionedEPBSProposal]{
-		Data: response.Data,
-		Metadata: map[string]any{
-			beaconblockproposer.MetadataStrategy:   "simple",
-			beaconblockproposer.MetadataProvider:   proposerpreferences.SimpleProvider,
-			beaconblockproposer.MetadataSource:     beaconblockproposal.EPBSProposalSource(response.Data, response.Metadata),
-			beaconblockproposer.MetadataBuilderURL: beaconblockproposer.BuilderURL(response.Metadata),
-		},
+		Data:     response.Data,
+		Metadata: beaconblockproposal.EPBSSelectionMetadata("simple", proposerpreferences.SimpleProvider, response.Data, response.Metadata),
 	}, nil
 }
 

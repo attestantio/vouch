@@ -912,7 +912,7 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 			// The strategy named the source from the header but did not pass the URL on.
 			name:     "MissingWithBuilderAPISource",
 			builders: builders,
-			source:   "builder_api",
+			source:   beaconblockproposer.SourceBuilderAPI,
 			warning:  missing,
 			result:   "missing",
 		},
@@ -920,7 +920,7 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 			// The strategy passed on no source, so a builder API win cannot be ruled out.
 			name:     "MissingWithUnknownSource",
 			builders: builders,
-			source:   "unknown",
+			source:   beaconblockproposer.SourceUnknown,
 			warning:  missing,
 			result:   "missing",
 		},
@@ -945,7 +945,7 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 				case test.source != "":
 					response.Metadata[beaconblockproposer.MetadataSource] = test.source
 				case test.returnedBuilderURL != "" && !test.executionPayload:
-					response.Metadata[beaconblockproposer.MetadataSource] = "builder_api"
+					response.Metadata[beaconblockproposer.MetadataSource] = beaconblockproposer.SourceBuilderAPI
 				}
 			})
 
@@ -1020,12 +1020,12 @@ func TestProposeGloasSelectionReportsStrategyAndUnknownValue(t *testing.T) {
 		{
 			name:     "FirstBuilderAPI",
 			strategy: "first",
-			source:   "builder_api",
+			source:   beaconblockproposer.SourceBuilderAPI,
 		},
 		{
 			name:     "SimpleP2PBuilder",
 			strategy: "simple",
-			source:   "p2p_builder",
+			source:   beaconblockproposer.SourceP2PBuilder,
 		},
 	}
 
@@ -1048,6 +1048,49 @@ func TestProposeGloasSelectionReportsStrategyAndUnknownValue(t *testing.T) {
 				"value_known":      false,
 				"execution_value":  "unknown",
 				"publication_path": "block_only",
+			}), "%v", capture.Entries())
+		})
+	}
+}
+
+func TestProposeGloasSelectionRecoversOnlySelfBuildSource(t *testing.T) {
+	ctx := context.Background()
+	monitor, err := prometheusmetrics.New(ctx,
+		prometheusmetrics.WithLogLevel(zerolog.Disabled),
+		prometheusmetrics.WithAddress("localhost:0"),
+	)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name             string
+		executionPayload bool
+		source           string
+	}{
+		{
+			name:             "SelfBuilt",
+			executionPayload: true,
+			source:           "self_build",
+		},
+		{
+			// Without the response headers a builder win cannot be told apart from a P2P win.
+			name:   "BuilderBacked",
+			source: "unknown",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			capture := logger.NewLogCapture()
+			before := gloasSelectionCount(t, "best", "value_maximizing", test.source)
+			service, duty, _, _, _, _ := newGloasProposerForSelection(ctx, t, test.executionPayload, monitor, nil, func(response *consensusapi.Response[*consensusapi.VersionedEPBSProposal]) {
+				delete(response.Metadata, beaconblockproposer.MetadataSource)
+			})
+
+			require.NoError(t, service.Propose(ctx, duty))
+			require.Equal(t, before+1, gloasSelectionCount(t, "best", "value_maximizing", test.source))
+			require.True(t, capture.HasLog(map[string]any{
+				"message": "Selected Gloas proposal",
+				"source":  test.source,
 			}), "%v", capture.Entries())
 		})
 	}
@@ -1328,7 +1371,7 @@ func newGloasProposerForSelection(
 		response.Metadata = map[string]any{
 			beaconblockproposer.MetadataStrategy: "best",
 			beaconblockproposer.MetadataProvider: "stable-provider",
-			beaconblockproposer.MetadataSource:   map[bool]string{true: "self_build", false: "p2p_builder"}[executionPayloadIncluded],
+			beaconblockproposer.MetadataSource:   map[bool]string{true: beaconblockproposer.SourceSelfBuild, false: beaconblockproposer.SourceP2PBuilder}[executionPayloadIncluded],
 		}
 		if mutate != nil {
 			mutate(response)

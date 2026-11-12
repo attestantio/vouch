@@ -307,13 +307,13 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	// The strategy has already named the provider stably; naming it again could remap it.
 	provider := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataProvider)
 	source := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataSource)
-	if source == "unknown" && bid.BuilderIndex == gloas.BuilderIndexSelfBuild {
+	if source == beaconblockproposer.SourceUnknown && bid.BuilderIndex == gloas.BuilderIndexSelfBuild {
 		// The proposer can recover self-building from the bid, but telling builder_api apart from
 		// p2p_builder needs the beacon node's response headers, and the strategies replace those
 		// with their own metadata before returning.  Leave the label "unknown" rather than
 		// guessing: a strategy that stops setting vouch.source should show up in the metric
 		// instead of being silently counted as p2p_builder.
-		source = "self_build"
+		source = beaconblockproposer.SourceSelfBuild
 	}
 	publicationPath := "block_only"
 	if bid.BuilderIndex == gloas.BuilderIndexSelfBuild {
@@ -382,7 +382,7 @@ func (s *Service) echoedBuilderURL(ctx context.Context,
 		Logger()
 	builderURL, _ := metadata[beaconblockproposer.MetadataBuilderURL].(string)
 	if builderURL == "" {
-		if source != "p2p_builder" {
+		if source != beaconblockproposer.SourceP2PBuilder {
 			monitorBuilderURLEcho("missing")
 			log.Warn().Str("source", source).Msg("Builder-backed proposal has no builder URL to echo; the proposal strategy did not pass it on")
 		}
