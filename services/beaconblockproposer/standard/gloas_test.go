@@ -816,7 +816,15 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 			builders:           builders,
 			returnedBuilderURL: "ftp://builder.example/gloas",
 			warning:            invalid,
-			warningLogURL:      "<invalid>",
+			warningLogURL:      "ftp://builder.example/gloas",
+			result:             "invalid",
+		},
+		{
+			name:               "NotHTTPWithCredentials",
+			builders:           builders,
+			returnedBuilderURL: "ftp://user:secret@secret.example/gloas?key=secret",
+			warning:            invalid,
+			warningLogURL:      "ftp://secret.example/gloas",
 			result:             "invalid",
 		},
 		{
@@ -824,7 +832,7 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 			builders:           builders,
 			returnedBuilderURL: "/gloas",
 			warning:            invalid,
-			warningLogURL:      "<invalid>",
+			warningLogURL:      "/gloas",
 			result:             "invalid",
 		},
 		{
@@ -832,7 +840,7 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 			builders:           builders,
 			returnedBuilderURL: "http://:8080",
 			warning:            invalid,
-			warningLogURL:      "<invalid>",
+			warningLogURL:      "http://:8080",
 			result:             "invalid",
 		},
 		{
@@ -849,7 +857,7 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 			builders:           builders,
 			returnedBuilderURL: "https://b\u00fccher.example",
 			warning:            invalid,
-			warningLogURL:      "<invalid>",
+			warningLogURL:      "https://b%C3%BCcher.example",
 			result:             "invalid",
 		},
 		{
@@ -857,7 +865,7 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 			builders:           builders,
 			returnedBuilderURL: "https://builder.example/a b",
 			warning:            invalid,
-			warningLogURL:      "<invalid>",
+			warningLogURL:      "https://builder.example/a%20b",
 			result:             "invalid",
 		},
 		{
@@ -901,7 +909,7 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 			builders:           builders,
 			returnedBuilderURL: maxLengthBuilderURL + "a",
 			warning:            invalid,
-			warningLogURL:      "<invalid>",
+			warningLogURL:      maxLengthBuilderURL[:256],
 			result:             "invalid",
 		},
 		{

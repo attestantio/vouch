@@ -400,7 +400,8 @@ func (s *Service) echoedBuilderURL(ctx context.Context,
 	parsed, valid := parsedBuilderURL(builderURL)
 	if !valid {
 		monitorBuilderURLEcho("invalid")
-		log.Warn().Str("builder_url", "<invalid>").Int("builder_url_length", len(builderURL)).Msg("Beacon node returned an invalid builder URL; not echoing it")
+		loggable := loggableBuilderURL(builderURL)
+		log.Warn().Str("builder_url", loggable[:min(len(loggable), maxLoggedInvalidBuilderURLSize)]).Int("builder_url_length", len(builderURL)).Msg("Beacon node returned an invalid builder URL; not echoing it")
 
 		return ""
 	}
@@ -415,6 +416,8 @@ func (s *Service) echoedBuilderURL(ctx context.Context,
 	}
 	if len(matches) == 1 {
 		monitorBuilderURLEcho("normalized")
+		// Echo the URL as requested rather than as returned: Lighthouse re-serialises the URL it
+		// returns, and Lodestar forwards the block only to the exact URL it requested bids from.
 		for match := range matches {
 			return match
 		}
@@ -436,6 +439,9 @@ func (s *Service) echoedBuilderURL(ctx context.Context,
 
 // maxBuilderURLSize is the beacon-APIs MAX_BUILDER_URL_SIZE.
 const maxBuilderURLSize = 2048
+
+// maxLoggedInvalidBuilderURLSize bounds the log line for an invalid builder URL, which has no size limit.
+const maxLoggedInvalidBuilderURLSize = 256
 
 // parsedBuilderURL parses a builder URL returned by a beacon node.  It accepts only an absolute
 // http(s) URL of printable ASCII, without spaces, within the builder URL size limit, so that echoing it cannot make
@@ -459,6 +465,10 @@ func parsedBuilderURL(builderURL string) (*url.URL, bool) {
 
 // normalizedBuilderURL lowercases the scheme and host, drops the scheme's default port and
 // writes an empty path as a slash, as Lighthouse does when it returns Eth-Builder-Url.
+//
+// It is no narrower because each rule covers a real case, such as a configured URL with an explicit
+// :443.  It is no broader because other rewrites can change the endpoint: /a%2Fb and /a/b are
+// different paths.  A missed match costs only Lodestar's forward, since the URL is still echoed.
 func normalizedBuilderURL(parsed url.URL) string {
 	// url.Parse has already lowercased the scheme.
 	parsed.Host = strings.ToLower(parsed.Host)
