@@ -308,11 +308,9 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	provider := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataProvider)
 	source := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataSource)
 	if source == beaconblockproposer.SourceUnknown && bid.BuilderIndex == gloas.BuilderIndexSelfBuild {
-		// The proposer can recover self-building from the bid, but telling builder_api apart from
-		// p2p_builder needs the beacon node's response headers, and the strategies replace those
-		// with their own metadata before returning.  Leave the label "unknown" rather than
-		// guessing: a strategy that stops setting vouch.source should show up in the metric
-		// instead of being silently counted as p2p_builder.
+		// The bid shows self-building for certain.  For a builder-backed bid leave the label
+		// "unknown" rather than guessing from vouch.builder_url: a strategy that stops setting
+		// vouch.source should show up in the metric instead of being counted under another source.
 		source = beaconblockproposer.SourceSelfBuild
 	}
 	publicationPath := "block_only"
@@ -468,7 +466,8 @@ func parsedBuilderURL(builderURL string) (*url.URL, bool) {
 //
 // It is no narrower because each rule covers a real case, such as a configured URL with an explicit
 // :443.  It is no broader because other rewrites can change the endpoint: /a%2Fb and /a/b are
-// different paths.  A missed match costs only Lodestar's forward, since the URL is still echoed.
+// different paths.  A missed match still echoes the URL, with an "unmatched" warning, so it costs
+// only Lodestar's forward.
 func normalizedBuilderURL(parsed url.URL) string {
 	// url.Parse has already lowercased the scheme.
 	parsed.Host = strings.ToLower(parsed.Host)
@@ -487,8 +486,12 @@ func normalizedBuilderURL(parsed url.URL) string {
 
 // loggableBuilderURL drops the parts of a builder URL that can hold credentials.
 func loggableBuilderURL(builderURL string) string {
+	if builderURL == "" {
+		return ""
+	}
 	parsed, err := url.Parse(builderURL)
-	if err != nil {
+	// Without a host, url.Parse can read userinfo as part of the path or opaque value.
+	if err != nil || parsed.Host == "" {
 		return "<invalid>"
 	}
 

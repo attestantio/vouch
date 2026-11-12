@@ -659,6 +659,8 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 	const invalid = "Beacon node returned an invalid builder URL; not echoing it"
 	const missing = "Builder-backed proposal has no builder URL to echo; the proposal strategy did not pass it on"
 	maxLengthBuilderURL := "https://builder.example/" + strings.Repeat("a", 2048-len("https://builder.example/"))
+	// An invalid URL whose logged form is exactly the 256-byte log cap.
+	logCapInvalidBuilderURL := "ftp://builder.example/" + strings.Repeat("a", 256-len("ftp://builder.example/"))
 	builders := []*beaconblockproposer.EPBSBuilder{
 		{URL: "https://other.example"},
 		{URL: builderURL},
@@ -828,11 +830,20 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 			result:             "invalid",
 		},
 		{
+			// With no host, url.Parse reads the userinfo as part of the path.
+			name:               "NoHostWithCredentials",
+			builders:           builders,
+			returnedBuilderURL: "https:///user:secret@builder.example/gloas",
+			warning:            invalid,
+			warningLogURL:      "<invalid>",
+			result:             "invalid",
+		},
+		{
 			name:               "Relative",
 			builders:           builders,
 			returnedBuilderURL: "/gloas",
 			warning:            invalid,
-			warningLogURL:      "/gloas",
+			warningLogURL:      "<invalid>",
 			result:             "invalid",
 		},
 		{
@@ -903,6 +914,14 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 			warning:            noMatch,
 			warningLogURL:      maxLengthBuilderURL,
 			result:             "unmatched",
+		},
+		{
+			name:               "InvalidAtLogCap",
+			builders:           builders,
+			returnedBuilderURL: logCapInvalidBuilderURL,
+			warning:            invalid,
+			warningLogURL:      logCapInvalidBuilderURL,
+			result:             "invalid",
 		},
 		{
 			name:               "OverMaxLength",
@@ -1080,7 +1099,7 @@ func TestProposeGloasSelectionRecoversOnlySelfBuildSource(t *testing.T) {
 			source:           "self_build",
 		},
 		{
-			// Without the response headers a builder win cannot be told apart from a P2P win.
+			// The proposer does not guess a builder-backed source from vouch.builder_url.
 			name:   "BuilderBacked",
 			source: "unknown",
 		},
@@ -1092,6 +1111,7 @@ func TestProposeGloasSelectionRecoversOnlySelfBuildSource(t *testing.T) {
 			before := gloasSelectionCount(t, "best", "value_maximizing", test.source)
 			service, duty, _, _, _, _ := newGloasProposerForSelection(ctx, t, test.executionPayload, monitor, nil, func(response *consensusapi.Response[*consensusapi.VersionedEPBSProposal]) {
 				delete(response.Metadata, beaconblockproposer.MetadataSource)
+				response.Metadata[beaconblockproposer.MetadataBuilderURL] = "https://builder.example"
 			})
 
 			require.NoError(t, service.Propose(ctx, duty))

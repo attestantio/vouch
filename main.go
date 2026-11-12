@@ -1705,7 +1705,6 @@ func (p *readinessGatedProposalProvider) EPBSProposal(ctx context.Context,
 		return nil, err
 	}
 
-	// Label the selection as the first and best strategies do.
 	return &api.Response[*api.VersionedEPBSProposal]{
 		Data:     response.Data,
 		Metadata: beaconblockproposal.EPBSSelectionMetadata("simple", proposerpreferences.SimpleProvider, response.Data, response.Metadata),
