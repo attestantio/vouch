@@ -932,12 +932,11 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 		},
 	}
 
-	results := []string{"exact", "normalized", "unmatched", "ambiguous", "invalid", "missing"}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			before := make(map[string]float64)
-			for _, result := range results {
-				before[result] = builderURLEchoCount(t, result)
+			expectedCounts := builderURLEchoCounts(t)
+			if test.result != "" {
+				expectedCounts[test.result]++
 			}
 			capture := logger.NewLogCapture()
 			service, duty, _, _, _, proposalSubmitter := newGloasProposerForSelection(ctx, t, test.executionPayload, monitor, test.builders, func(response *consensusapi.Response[*consensusapi.VersionedEPBSProposal]) {
@@ -980,13 +979,7 @@ func TestProposeGloasBuilderURLEcho(t *testing.T) {
 					}
 				}
 			}
-			for _, result := range results {
-				expected := before[result]
-				if result == test.result {
-					expected++
-				}
-				require.Equal(t, expected, builderURLEchoCount(t, result), result)
-			}
+			require.Equal(t, expectedCounts, builderURLEchoCounts(t))
 			for _, entry := range capture.Entries() {
 				require.NotContains(t, fmt.Sprint(entry), "secret@")
 				require.NotContains(t, fmt.Sprint(entry), "key=secret")
@@ -1379,9 +1372,11 @@ func newGloasProposerForSelection(
 	return service, duty, blockSigner, envelopeSigner, envelopeSubmitter, proposalSubmitter
 }
 
-func builderURLEchoCount(t *testing.T, result string) float64 {
+// builderURLEchoCounts returns the builder URL echo counter by result.
+func builderURLEchoCounts(t *testing.T) map[string]float64 {
 	t.Helper()
 
+	counts := make(map[string]float64)
 	metricFamilies, err := prometheus.DefaultGatherer.Gather()
 	require.NoError(t, err)
 	for _, metricFamily := range metricFamilies {
@@ -1389,15 +1384,11 @@ func builderURLEchoCount(t *testing.T, result string) float64 {
 			continue
 		}
 		for _, metric := range metricFamily.GetMetric() {
-			for _, label := range metric.GetLabel() {
-				if label.GetName() == "result" && label.GetValue() == result {
-					return metric.GetCounter().GetValue()
-				}
-			}
+			counts[metric.GetLabel()[0].GetValue()] = metric.GetCounter().GetValue()
 		}
 	}
 
-	return 0
+	return counts
 }
 
 func gloasSelectionCount(t *testing.T, strategy string, requestedPreference string, source string) float64 {
