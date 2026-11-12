@@ -321,7 +321,7 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	}
 	builderURL := ""
 	if bid.BuilderIndex != gloas.BuilderIndexSelfBuild {
-		builderURL = s.echoedBuilderURL(ctx, proposalResponse.Metadata, builderConfig)
+		builderURL = s.echoedBuilderURL(ctx, proposalResponse.Metadata, builderConfig, bid.BuilderIndex, source)
 	}
 	requestedPreference := gloasRequestedPreference(builderConfig.BuilderBoostFactor)
 	executionValue := "unknown"
@@ -367,58 +367,100 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 }
 
 // echoedBuilderURL returns the builder URL to echo when publishing a builder-won proposal.  The
-// beacon node supplies the URL, so Vouch echoes the requested entry's URL that it matches: exactly,
-// or else after normalisation, because some beacon nodes return the URL normalised.
+// beacon-APIs require the echo, so a URL that matches no requested builder is still echoed, with a
+// warning.  A URL that matches a requested builder only after normalisation is echoed as Vouch
+// requested it, because some beacon nodes forward only to the exact URL they requested bids from.
 func (s *Service) echoedBuilderURL(ctx context.Context,
 	metadata map[string]any,
 	builderConfig *gloas.BuilderConfig,
+	builderIndex gloas.BuilderIndex,
+	source string,
 ) string {
+	log := s.log.With().
+		Str("request_id", beaconblockproposer.RequestID(ctx)).
+		Uint64("builder_index", uint64(builderIndex)).
+		Logger()
 	builderURL, _ := metadata[beaconblockproposer.MetadataBuilderURL].(string)
 	if builderURL == "" {
+		if source != "p2p_builder" {
+			monitorBuilderURLEcho("missing")
+			log.Warn().Str("source", source).Msg("Builder-backed proposal has no builder URL to echo; the proposal strategy did not pass it on")
+		}
+
 		return ""
 	}
 	for _, builder := range builderConfig.Builders {
 		if string(builder.URL) == builderURL {
+			monitorBuilderURLEcho("exact")
+
 			return builderURL
 		}
 	}
 
+	parsed, valid := parsedBuilderURL(builderURL)
+	if !valid {
+		monitorBuilderURLEcho("invalid")
+		log.Warn().Str("builder_url", "<invalid>").Int("builder_url_length", len(builderURL)).Msg("Beacon node returned an invalid builder URL; not echoing it")
+
+		return ""
+	}
+	normalized := normalizedBuilderURL(*parsed)
 	requested := make([]string, 0, len(builderConfig.Builders))
 	matches := make(map[string]struct{})
-	normalized, valid := normalizedBuilderURL(builderURL)
 	for _, builder := range builderConfig.Builders {
 		requested = append(requested, loggableBuilderURL(string(builder.URL)))
-		if candidate, isValid := normalizedBuilderURL(string(builder.URL)); valid && isValid && candidate == normalized {
+		if candidate, err := url.Parse(string(builder.URL)); err == nil && normalizedBuilderURL(*candidate) == normalized {
 			matches[string(builder.URL)] = struct{}{}
 		}
 	}
 	if len(matches) == 1 {
+		monitorBuilderURLEcho("normalized")
 		for match := range matches {
 			return match
 		}
 	}
 
-	event := s.log.Warn().
-		Str("request_id", beaconblockproposer.RequestID(ctx)).
+	event := log.Warn().
 		Str("builder_url", loggableBuilderURL(builderURL)).
 		Strs("requested_builder_urls", requested)
 	if len(matches) > 1 {
-		event.Msg("Beacon node returned a builder URL that matches more than one requested builder; not echoing it")
+		monitorBuilderURLEcho("ambiguous")
+		event.Msg("Beacon node returned a builder URL that matches more than one requested builder; echoing it as returned")
 	} else {
-		event.Msg("Beacon node returned a builder URL that matches no requested builder; not echoing it")
+		monitorBuilderURLEcho("unmatched")
+		event.Msg("Beacon node returned a builder URL that matches no requested builder; echoing it as returned")
 	}
 
-	return ""
+	return builderURL
+}
+
+// maxBuilderURLSize is the beacon-APIs MAX_BUILDER_URL_SIZE.
+const maxBuilderURLSize = 2048
+
+// parsedBuilderURL parses a builder URL returned by a beacon node.  It accepts only an absolute
+// http(s) URL of printable ASCII, without spaces, within the builder URL size limit, so that echoing it cannot make
+// a publication request invalid.
+func parsedBuilderURL(builderURL string) (*url.URL, bool) {
+	if len(builderURL) > maxBuilderURLSize {
+		return nil, false
+	}
+	for i := range len(builderURL) {
+		if builderURL[i] < 0x21 || builderURL[i] > 0x7e {
+			return nil, false
+		}
+	}
+	parsed, err := url.Parse(builderURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
+		return nil, false
+	}
+
+	return parsed, true
 }
 
 // normalizedBuilderURL lowercases the scheme and host, drops the scheme's default port and
 // writes an empty path as a slash, as Lighthouse does when it returns Eth-Builder-Url.
-func normalizedBuilderURL(builderURL string) (string, bool) {
-	parsed, err := url.Parse(builderURL)
-	if err != nil || parsed.Host == "" {
-		return "", false
-	}
-	parsed.Scheme = strings.ToLower(parsed.Scheme)
+func normalizedBuilderURL(parsed url.URL) string {
+	// url.Parse has already lowercased the scheme.
 	parsed.Host = strings.ToLower(parsed.Host)
 	switch parsed.Scheme {
 	case "http":
@@ -430,14 +472,11 @@ func normalizedBuilderURL(builderURL string) (string, bool) {
 		parsed.Path = "/"
 	}
 
-	return parsed.String(), true
+	return parsed.String()
 }
 
 // loggableBuilderURL drops the parts of a builder URL that can hold credentials.
 func loggableBuilderURL(builderURL string) string {
-	if builderURL == "" {
-		return ""
-	}
 	parsed, err := url.Parse(builderURL)
 	if err != nil {
 		return "<invalid>"

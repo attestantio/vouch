@@ -30,6 +30,7 @@ var (
 	beaconBlockProposalProcessLatestSlot prometheus.Gauge
 	beaconBlockProposalSource            *prometheus.CounterVec
 	gloasProposalSelections              *prometheus.CounterVec
+	builderURLEchoes                     *prometheus.CounterVec
 )
 
 func registerMetrics(ctx context.Context, monitor metrics.Service) error {
@@ -126,6 +127,16 @@ func registerPrometheusMetrics(_ context.Context) error {
 		return err
 	}
 
+	builderURLEchoes = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "vouch",
+		Subsystem: "beaconblockproposal_process",
+		Name:      "builder_url_echoes_total",
+		Help:      "The number of builder-backed Gloas proposals by how their builder URL was echoed.",
+	}, []string{"result"})
+	if err := prometheus.Register(builderURLEchoes); err != nil {
+		return err
+	}
+
 	bestBidRelayCount = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "vouch",
 		Subsystem: "beaconblockproposer",
@@ -187,6 +198,16 @@ func monitorGloasProposalSelection(strategy string, requestedPreference string, 
 		source = "unknown"
 	}
 	gloasProposalSelections.WithLabelValues(strategy, requestedPreference, source).Inc()
+}
+
+// monitorBuilderURLEcho is called when Vouch has decided how to echo the builder URL of a
+// selected builder-backed Gloas proposal that is not a P2P win.
+func monitorBuilderURLEcho(result string) {
+	if builderURLEchoes == nil {
+		return
+	}
+
+	builderURLEchoes.WithLabelValues(result).Inc()
 }
 
 // monitorBeaconBlockProposalSource is called to tag the source of a beacon block proposal.

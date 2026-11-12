@@ -117,6 +117,17 @@ There is also a companion metric `vouch_client_operation_requests_total`, which 
   - `requested_preference` is the auction preference Vouch requested, derived from the builder boost factor: "self_build_preferred" below 100, "value_maximizing" at 100 and "builder_preferred" above 100
   - `source` is where the selected proposal's execution payload came from: "self_build", "p2p_builder", "builder_api" or "unknown"
 
+`vouch_beaconblockproposal_process_builder_url_echoes_total` counts, for each Gloas proposal Vouch selected whose payload a builder won and that is not a P2P win, how the `Eth-Builder-Url` the beacon node returned is echoed to the beacon nodes Vouch publishes through.  It is counted at selection, before the block is signed and published.  It has one label, `result`:
+
+  - "exact" the URL equals a direct-builder URL Vouch requested for the slot, and is echoed
+  - "normalized" the URL equals one requested URL only after lowercasing the scheme and host, dropping the default port and writing an empty path as "/", and the requested URL is echoed, because some beacon nodes forward only to the exact URL they requested bids from
+  - "unmatched" the URL matches no requested URL; it is echoed as returned and a warning is logged
+  - "ambiguous" the URL matches more than one requested URL after normalisation; it is echoed as returned and a warning is logged
+  - "invalid" the URL is not an absolute http or https URL of printable ASCII without spaces, of at most 2048 bytes; it is not echoed and a warning is logged
+  - "missing" the proposal strategy passed on no URL although the proposal's source was not "p2p_builder"; nothing is echoed and a warning is logged
+
+"unmatched" also occurs when a beacon node runs an auction with builders of its own, or when Vouch requested no direct builders because it could not sign their authorisation.  Otherwise only "exact" and "normalized" are expected, so an increase in the other results is worth an alert.
+
 `vouch_proposerpreferences_provider_events_total` counts proposer preferences outcomes per beacon node.  It has two labels:
 
   - `provider` is the beacon node's configured position, such as "beacon-1", rather than its endpoint

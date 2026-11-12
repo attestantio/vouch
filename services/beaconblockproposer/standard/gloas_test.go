@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -644,12 +645,20 @@ func TestProposeGloasBuilderSelectionObservability(t *testing.T) {
 	}))
 }
 
-func TestProposeGloasEchoesConfiguredBuilderURL(t *testing.T) {
+func TestProposeGloasBuilderURLEcho(t *testing.T) {
 	ctx := context.Background()
+	monitor, err := prometheusmetrics.New(ctx,
+		prometheusmetrics.WithLogLevel(zerolog.Disabled),
+		prometheusmetrics.WithAddress("localhost:0"),
+	)
+	require.NoError(t, err)
 	const builderURL = "https://builder.example/gloas"
 	const secretBuilderURL = "https://user:secret@secret.example/gloas?key=secret#secret"
-	const noMatch = "Beacon node returned a builder URL that matches no requested builder; not echoing it"
-	const ambiguous = "Beacon node returned a builder URL that matches more than one requested builder; not echoing it"
+	const noMatch = "Beacon node returned a builder URL that matches no requested builder; echoing it as returned"
+	const ambiguous = "Beacon node returned a builder URL that matches more than one requested builder; echoing it as returned"
+	const invalid = "Beacon node returned an invalid builder URL; not echoing it"
+	const missing = "Builder-backed proposal has no builder URL to echo; the proposal strategy did not pass it on"
+	maxLengthBuilderURL := "https://builder.example/" + strings.Repeat("a", 2048-len("https://builder.example/"))
 	builders := []*beaconblockproposer.EPBSBuilder{
 		{URL: "https://other.example"},
 		{URL: builderURL},
@@ -658,6 +667,7 @@ func TestProposeGloasEchoesConfiguredBuilderURL(t *testing.T) {
 		{URL: "https://Mixed.Example/Gloas"},
 		{URL: "https://port.example:443/gloas"},
 		{URL: "http://plain.example:8080"},
+		{URL: "http://port80.example:80"},
 		{URL: "https://dup.example"},
 		{URL: "https://DUP.example:443/"},
 	}
@@ -666,100 +676,253 @@ func TestProposeGloasEchoesConfiguredBuilderURL(t *testing.T) {
 		name               string
 		executionPayload   bool
 		builders           []*beaconblockproposer.EPBSBuilder
+		source             string
 		returnedBuilderURL string
 		echoedBuilderURL   string
-		loggedBuilderURL   string
+		selectedLogURL     string
 		warning            string
+		warningLogURL      string
+		result             string
 	}{
 		{
 			name:               "ConfiguredBuilderWon",
 			builders:           builders,
 			returnedBuilderURL: builderURL,
 			echoedBuilderURL:   builderURL,
+			selectedLogURL:     builderURL,
+			result:             "exact",
 		},
 		{
 			name:               "ConfiguredBuilderWithSecretsWon",
 			builders:           builders,
 			returnedBuilderURL: secretBuilderURL,
 			echoedBuilderURL:   secretBuilderURL,
-			loggedBuilderURL:   "https://secret.example/gloas",
+			selectedLogURL:     "https://secret.example/gloas",
+			result:             "exact",
 		},
 		{
-			// Lighthouse returns the URL normalised, with an empty path as a slash.
+			// Lighthouse returns the URL normalised, with an empty path as a slash.  Lodestar
+			// forwards only to the exact URL it requested bids from, so the configured bytes go out.
 			name:               "LighthouseTrailingSlash",
 			builders:           builders,
 			returnedBuilderURL: "https://lighthouse.example/",
 			echoedBuilderURL:   "https://lighthouse.example",
+			selectedLogURL:     "https://lighthouse.example",
+			result:             "normalized",
 		},
 		{
 			name:               "SchemeAndHostCase",
 			builders:           builders,
 			returnedBuilderURL: "HTTPS://mixed.example/Gloas",
 			echoedBuilderURL:   "https://Mixed.Example/Gloas",
-		},
-		{
-			name:               "PathCaseDiffers",
-			builders:           builders,
-			returnedBuilderURL: "https://mixed.example/gloas",
-			loggedBuilderURL:   "https://mixed.example/gloas",
-			warning:            noMatch,
+			selectedLogURL:     "https://Mixed.Example/Gloas",
+			result:             "normalized",
 		},
 		{
 			name:               "ExplicitDefaultPort",
 			builders:           builders,
 			returnedBuilderURL: "https://port.example/gloas",
 			echoedBuilderURL:   "https://port.example:443/gloas",
+			selectedLogURL:     "https://port.example:443/gloas",
+			result:             "normalized",
+		},
+		{
+			name:               "ExplicitHTTPDefaultPort",
+			builders:           builders,
+			returnedBuilderURL: "http://port80.example/",
+			echoedBuilderURL:   "http://port80.example:80",
+			selectedLogURL:     "http://port80.example:80",
+			result:             "normalized",
+		},
+		{
+			name:               "PathCaseDiffers",
+			builders:           builders,
+			returnedBuilderURL: "https://mixed.example/gloas",
+			echoedBuilderURL:   "https://mixed.example/gloas",
+			selectedLogURL:     "https://mixed.example/gloas",
+			warning:            noMatch,
+			warningLogURL:      "https://mixed.example/gloas",
+			result:             "unmatched",
 		},
 		{
 			name:               "NonDefaultPortKept",
 			builders:           builders,
 			returnedBuilderURL: "http://plain.example/",
-			loggedBuilderURL:   "http://plain.example/",
+			echoedBuilderURL:   "http://plain.example/",
+			selectedLogURL:     "http://plain.example/",
 			warning:            noMatch,
+			warningLogURL:      "http://plain.example/",
+			result:             "unmatched",
 		},
 		{
 			name:               "AmbiguousNormalizedMatch",
 			builders:           builders,
 			returnedBuilderURL: "https://dup.example/",
-			loggedBuilderURL:   "https://dup.example/",
+			echoedBuilderURL:   "https://dup.example/",
+			selectedLogURL:     "https://dup.example/",
 			warning:            ambiguous,
+			warningLogURL:      "https://dup.example/",
+			result:             "ambiguous",
 		},
 		{
 			name:               "ExactMatchBeatsNormalizedAmbiguity",
 			builders:           builders,
 			returnedBuilderURL: "https://dup.example",
 			echoedBuilderURL:   "https://dup.example",
+			selectedLogURL:     "https://dup.example",
+			result:             "exact",
 		},
 		{
 			name:               "UnconfiguredBuilderURL",
 			builders:           builders,
 			returnedBuilderURL: "https://unknown.example",
-			loggedBuilderURL:   "https://unknown.example",
+			echoedBuilderURL:   "https://unknown.example",
+			selectedLogURL:     "https://unknown.example",
 			warning:            noMatch,
+			warningLogURL:      "https://unknown.example",
+			result:             "unmatched",
 		},
 		{
 			name:               "UnconfiguredBuilderURLWithSecrets",
 			builders:           builders,
 			returnedBuilderURL: "https://user:secret@unknown.example?key=secret",
-			loggedBuilderURL:   "https://unknown.example",
+			echoedBuilderURL:   "https://user:secret@unknown.example?key=secret",
+			selectedLogURL:     "https://unknown.example",
 			warning:            noMatch,
+			warningLogURL:      "https://unknown.example",
+			result:             "unmatched",
 		},
 		{
 			name:               "NearMissBuilderURL",
 			builders:           builders,
 			returnedBuilderURL: builderURL + "/",
-			loggedBuilderURL:   builderURL + "/",
+			echoedBuilderURL:   builderURL + "/",
+			selectedLogURL:     builderURL + "/",
 			warning:            noMatch,
+			warningLogURL:      builderURL + "/",
+			result:             "unmatched",
 		},
 		{
 			name:               "NoBuildersConfigured",
 			returnedBuilderURL: builderURL,
-			loggedBuilderURL:   builderURL,
+			echoedBuilderURL:   builderURL,
+			selectedLogURL:     builderURL,
 			warning:            noMatch,
+			warningLogURL:      builderURL,
+			result:             "unmatched",
+		},
+		{
+			name:               "NotHTTP",
+			builders:           builders,
+			returnedBuilderURL: "ftp://builder.example/gloas",
+			warning:            invalid,
+			warningLogURL:      "<invalid>",
+			result:             "invalid",
+		},
+		{
+			name:               "Relative",
+			builders:           builders,
+			returnedBuilderURL: "/gloas",
+			warning:            invalid,
+			warningLogURL:      "<invalid>",
+			result:             "invalid",
+		},
+		{
+			name:               "NoHostname",
+			builders:           builders,
+			returnedBuilderURL: "http://:8080",
+			warning:            invalid,
+			warningLogURL:      "<invalid>",
+			result:             "invalid",
+		},
+		{
+			// A control character would make every node's publication fail.
+			name:               "ControlCharacter",
+			builders:           builders,
+			returnedBuilderURL: "https://builder.example/\r\nX-Injected: 1",
+			warning:            invalid,
+			warningLogURL:      "<invalid>",
+			result:             "invalid",
+		},
+		{
+			name:               "NotASCII",
+			builders:           builders,
+			returnedBuilderURL: "https://b\u00fccher.example",
+			warning:            invalid,
+			warningLogURL:      "<invalid>",
+			result:             "invalid",
+		},
+		{
+			name:               "Space",
+			builders:           builders,
+			returnedBuilderURL: "https://builder.example/a b",
+			warning:            invalid,
+			warningLogURL:      "<invalid>",
+			result:             "invalid",
+		},
+		{
+			name:               "Delete",
+			builders:           builders,
+			returnedBuilderURL: "https://builder.example/\x7f",
+			warning:            invalid,
+			warningLogURL:      "<invalid>",
+			result:             "invalid",
+		},
+		{
+			name:               "Unparseable",
+			builders:           builders,
+			returnedBuilderURL: "https://builder.example/%zz",
+			warning:            invalid,
+			warningLogURL:      "<invalid>",
+			result:             "invalid",
+		},
+		{
+			name:               "PrintableASCIIBounds",
+			builders:           builders,
+			returnedBuilderURL: "https://builder.example/!~",
+			echoedBuilderURL:   "https://builder.example/!~",
+			selectedLogURL:     "https://builder.example/%21~",
+			warning:            noMatch,
+			warningLogURL:      "https://builder.example/%21~",
+			result:             "unmatched",
+		},
+		{
+			name:               "MaxLength",
+			builders:           builders,
+			returnedBuilderURL: maxLengthBuilderURL,
+			echoedBuilderURL:   maxLengthBuilderURL,
+			selectedLogURL:     maxLengthBuilderURL,
+			warning:            noMatch,
+			warningLogURL:      maxLengthBuilderURL,
+			result:             "unmatched",
+		},
+		{
+			name:               "OverMaxLength",
+			builders:           builders,
+			returnedBuilderURL: maxLengthBuilderURL + "a",
+			warning:            invalid,
+			warningLogURL:      "<invalid>",
+			result:             "invalid",
 		},
 		{
 			name:     "P2PBuilderWon",
 			builders: builders,
+		},
+		{
+			// The strategy named the source from the header but did not pass the URL on.
+			name:     "MissingWithBuilderAPISource",
+			builders: builders,
+			source:   "builder_api",
+			warning:  missing,
+			result:   "missing",
+		},
+		{
+			// The strategy passed on no source, so a builder API win cannot be ruled out.
+			name:     "MissingWithUnknownSource",
+			builders: builders,
+			source:   "unknown",
+			warning:  missing,
+			result:   "missing",
 		},
 		{
 			name:               "SelfBuilt",
@@ -769,11 +932,22 @@ func TestProposeGloasEchoesConfiguredBuilderURL(t *testing.T) {
 		},
 	}
 
+	results := []string{"exact", "normalized", "unmatched", "ambiguous", "invalid", "missing"}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			before := make(map[string]float64)
+			for _, result := range results {
+				before[result] = builderURLEchoCount(t, result)
+			}
 			capture := logger.NewLogCapture()
-			service, duty, _, _, _, proposalSubmitter := newGloasProposerForSelection(ctx, t, test.executionPayload, nullmetrics.New(), test.builders, func(response *consensusapi.Response[*consensusapi.VersionedEPBSProposal]) {
+			service, duty, _, _, _, proposalSubmitter := newGloasProposerForSelection(ctx, t, test.executionPayload, monitor, test.builders, func(response *consensusapi.Response[*consensusapi.VersionedEPBSProposal]) {
 				response.Metadata[beaconblockproposer.MetadataBuilderURL] = test.returnedBuilderURL
+				switch {
+				case test.source != "":
+					response.Metadata[beaconblockproposer.MetadataSource] = test.source
+				case test.returnedBuilderURL != "" && !test.executionPayload:
+					response.Metadata[beaconblockproposer.MetadataSource] = "builder_api"
+				}
 			})
 
 			require.NoError(t, service.Propose(ctx, duty))
@@ -783,25 +957,40 @@ func TestProposeGloasEchoesConfiguredBuilderURL(t *testing.T) {
 			if test.executionPayload {
 				builderIndex = uint64(gloas.BuilderIndexSelfBuild)
 			}
-			selectedBuilderURL := test.echoedBuilderURL
-			if test.loggedBuilderURL != "" && test.warning == "" {
-				selectedBuilderURL = test.loggedBuilderURL
-			}
 			require.True(t, capture.HasLog(map[string]any{
 				"message":       "Selected Gloas proposal",
-				"builder_url":   selectedBuilderURL,
+				"builder_url":   test.selectedLogURL,
 				"builder_index": builderIndex,
 			}), "%v", capture.Entries())
-			for _, message := range []string{noMatch, ambiguous} {
-				require.Equal(t, message == test.warning, capture.HasLog(map[string]any{
-					"message":     message,
-					"level":       "warn",
-					"builder_url": test.loggedBuilderURL,
-				}), "%s: %v", message, capture.Entries())
+			for _, message := range []string{noMatch, ambiguous, invalid, missing} {
+				fields := map[string]any{
+					"message":       message,
+					"level":         "warn",
+					"builder_index": builderIndex,
+				}
+				if test.warningLogURL != "" {
+					fields["builder_url"] = test.warningLogURL
+				}
+				require.Equal(t, message == test.warning, capture.HasLog(fields), "%s: %v", message, capture.Entries())
+			}
+			if test.warning == noMatch || test.warning == ambiguous {
+				for _, entry := range capture.Entries() {
+					if entry["message"] == test.warning {
+						require.Len(t, entry["requested_builder_urls"], len(test.builders))
+					}
+				}
+			}
+			for _, result := range results {
+				expected := before[result]
+				if result == test.result {
+					expected++
+				}
+				require.Equal(t, expected, builderURLEchoCount(t, result), result)
 			}
 			for _, entry := range capture.Entries() {
 				require.NotContains(t, fmt.Sprint(entry), "secret@")
 				require.NotContains(t, fmt.Sprint(entry), "key=secret")
+				require.NotContains(t, fmt.Sprint(entry), "X-Injected")
 			}
 		})
 	}
@@ -1053,6 +1242,14 @@ func TestProposeGloasProposalSourceSubmissionFailure(t *testing.T) {
 	require.Nil(t, envelopeSubmitter.opts)
 }
 
+func TestProposeGloasBuilderBackedSubmissionFailure(t *testing.T) {
+	ctx := context.Background()
+	service, duty, _, _, _, proposalSubmitter := newGloasProposerForProposalSource(ctx, t, false, nullmetrics.New())
+	proposalSubmitter.err = errors.New("submit failed")
+
+	require.EqualError(t, service.Propose(ctx, duty), "failed to propose block: failed to submit proposal: submit failed")
+}
+
 func executionPayloadBid(t *testing.T, proposal *consensusapi.VersionedEPBSProposal) *gloas.ExecutionPayloadBid {
 	t.Helper()
 
@@ -1180,6 +1377,27 @@ func newGloasProposerForSelection(
 	duty.SetRandaoReveal(phase0.BLSSignature{0x02})
 
 	return service, duty, blockSigner, envelopeSigner, envelopeSubmitter, proposalSubmitter
+}
+
+func builderURLEchoCount(t *testing.T, result string) float64 {
+	t.Helper()
+
+	metricFamilies, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, metricFamily := range metricFamilies {
+		if metricFamily.GetName() != "vouch_beaconblockproposal_process_builder_url_echoes_total" {
+			continue
+		}
+		for _, metric := range metricFamily.GetMetric() {
+			for _, label := range metric.GetLabel() {
+				if label.GetName() == "result" && label.GetValue() == result {
+					return metric.GetCounter().GetValue()
+				}
+			}
+		}
+	}
+
+	return 0
 }
 
 func gloasSelectionCount(t *testing.T, strategy string, requestedPreference string, source string) float64 {
