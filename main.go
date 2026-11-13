@@ -1477,7 +1477,7 @@ func startCombinedMajorityAttestationDataStrategy(ctx context.Context,
 		combinedmajorityattestationdatastrategy.WithTimeout(util.Timeout("strategies.attestationdata.combinedmajority")),
 		combinedmajorityattestationdatastrategy.WithChainTime(chainTime),
 		combinedmajorityattestationdatastrategy.WithBlockRootToSlotCache(cacheSvc.(cache.BlockRootToSlotProvider)),
-		combinedmajorityattestationdatastrategy.WithThreshold(viper.GetInt("strategies.attestationdata.combinedmajority.threshold")),
+		combinedmajorityattestationdatastrategy.WithThreshold(util.AttestationDataThreshold()),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to start combinedmajority attestation data strategy")

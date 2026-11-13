@@ -108,6 +108,19 @@ func BeaconNodeAddressesForAttestationData() []string {
 	}
 }
 
+// AttestationDataThreshold returns the threshold for the combinedmajority attestation data strategy.
+// The strategy-specific setting takes precedence; if unset, the documented majority threshold is used.
+func AttestationDataThreshold() int {
+	const sharedThreshold = "strategies.attestationdata.majority.threshold"
+	const combinedThreshold = "strategies.attestationdata.combinedmajority.threshold"
+
+	if viper.IsSet(combinedThreshold) {
+		return viper.GetInt(combinedThreshold)
+	}
+
+	return viper.GetInt(sharedThreshold)
+}
+
 // BeaconNodeAddressesForAggregateAttestations obtains the beacon node addresses used for
 // aggregate attestations from the configuration.
 // This takes into account the used styles in strategies, and removes duplicates.
