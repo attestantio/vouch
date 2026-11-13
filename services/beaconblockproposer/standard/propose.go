@@ -465,9 +465,11 @@ func parsedBuilderURL(builderURL string) (*url.URL, bool) {
 // writes an empty path as a slash, as Lighthouse does when it returns Eth-Builder-Url.
 //
 // It is no narrower because each rule covers a real case, such as a configured URL with an explicit
-// :443.  It is no broader because other rewrites can change the endpoint: /a%2Fb and /a/b are
-// different paths.  A missed match still echoes the URL, with an "unmatched" warning, so it costs
-// only Lodestar's forward.
+// :443.  It is no broader because matching every rewrite Lighthouse's URL parser makes (dot
+// segments, short IPv4 and long IPv6 forms, IDNA, an empty port) would mean reimplementing the URL
+// Standard, and decoding more would equate different paths such as /a%2Fb and /a/b.  A missed match
+// still echoes the URL, with an "unmatched" warning that tells the operator to write the URL in
+// canonical form, so it costs only Lodestar's forward.
 func normalizedBuilderURL(parsed url.URL) string {
 	// url.Parse has already lowercased the scheme.
 	parsed.Host = strings.ToLower(parsed.Host)

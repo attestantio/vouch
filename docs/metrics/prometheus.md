@@ -126,7 +126,7 @@ There is also a companion metric `vouch_client_operation_requests_total`, which 
   - "invalid" the URL is not an absolute http or https URL of printable ASCII without spaces, of at most 2048 bytes; it is not echoed and a warning is logged
   - "missing" the proposal strategy passed on no URL although the proposal's source was not "p2p_builder"; nothing is echoed and a warning is logged
 
-"unmatched" also occurs when a beacon node runs an auction with builders of its own, or when Vouch requested no direct builders because it could not sign their authorisation.  Otherwise only "exact" and "normalized" are expected, so an increase in the other results is worth an alert.
+"unmatched" also occurs when a beacon node runs an auction with builders of its own, when Vouch requested no direct builders because it could not sign their authorisation, or when a Lighthouse node returns a configured URL that is not in canonical form, for example one with dot segments, a short IPv4 or long IPv6 address, a non-ASCII host or an empty port.  Otherwise only "exact" and "normalized" are expected, so an increase in the other results is worth an alert.
 
 `vouch_proposerpreferences_provider_events_total` counts proposer preferences outcomes per beacon node.  It has two labels:
 
