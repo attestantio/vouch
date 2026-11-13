@@ -38,7 +38,7 @@ type AttestationsSubmitter interface {
 // ProposalSubmitter is the interface for a submitter of proposals.
 type ProposalSubmitter interface {
 	// SubmitProposal submits a proposal.
-	SubmitProposal(ctx context.Context, proposal *api.VersionedSignedProposal) error
+	SubmitProposal(ctx context.Context, opts *api.SubmitProposalOpts) error
 }
 
 // ExecutionPayloadEnvelopeSubmitter is the interface for a submitter of execution payload envelopes.

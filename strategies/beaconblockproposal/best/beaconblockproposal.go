@@ -258,13 +258,9 @@ func (s *Service) EPBSProposal(ctx context.Context,
 	beaconblockproposer.WithClientDetails(selectionEvent, selection.provider)
 	selectionEvent.Msg("ePBS proposal selection completed")
 
-	metadata := make(map[string]any, 3)
-	metadata[beaconblockproposer.MetadataStrategy] = "best"
-	metadata[beaconblockproposer.MetadataProvider] = stableBestProvider
-	metadata[beaconblockproposer.MetadataSource] = source
 	return &api.Response[*api.VersionedEPBSProposal]{
 		Data:     selection.proposal,
-		Metadata: metadata,
+		Metadata: beaconblockproposal.EPBSSelectionMetadata("best", stableBestProvider, selection.proposal, selection.metadata),
 	}, nil
 }
 

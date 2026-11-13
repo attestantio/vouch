@@ -109,13 +109,28 @@ func EPBSProposalSource(proposal *api.VersionedEPBSProposal, metadata map[string
 	// built it itself.  ValidateEPBSProposal has already rejected a Gloas proposal with no bid,
 	// so a missing bid here can only be that pre-Gloas case.
 	if signedBid, err := EPBSProposalBid(proposal); err != nil || signedBid.Message.BuilderIndex == gloas.BuilderIndexSelfBuild {
-		return "self_build"
+		return beaconblockproposer.SourceSelfBuild
 	}
 	if beaconblockproposer.BuilderURLPresent(metadata) {
-		return "builder_api"
+		return beaconblockproposer.SourceBuilderAPI
 	}
 
-	return "p2p_builder"
+	return beaconblockproposer.SourceP2PBuilder
+}
+
+// EPBSSelectionMetadata returns the response metadata that a strategy passes to the proposer for the
+// ePBS proposal it selected.
+func EPBSSelectionMetadata(strategy string,
+	provider string,
+	proposal *api.VersionedEPBSProposal,
+	responseMetadata map[string]any,
+) map[string]any {
+	return map[string]any{
+		beaconblockproposer.MetadataStrategy:   strategy,
+		beaconblockproposer.MetadataProvider:   provider,
+		beaconblockproposer.MetadataSource:     EPBSProposalSource(proposal, responseMetadata),
+		beaconblockproposer.MetadataBuilderURL: beaconblockproposer.BuilderURL(responseMetadata),
+	}
 }
 
 // validateEPBSPayload matches a Gloas proposal's payload to its auction result.  The beacon node

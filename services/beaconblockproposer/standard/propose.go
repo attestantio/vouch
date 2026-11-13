@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -204,7 +205,7 @@ func (s *Service) proposeBlock(ctx context.Context,
 		}
 	}
 
-	if err := s.proposalSubmitter.SubmitProposal(ctx, signedProposal); err != nil {
+	if err := s.proposalSubmitter.SubmitProposal(ctx, &api.SubmitProposalOpts{Proposal: signedProposal}); err != nil {
 		return errors.Wrap(err, "failed to submit proposal")
 	}
 
@@ -306,17 +307,19 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	// The strategy has already named the provider stably; naming it again could remap it.
 	provider := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataProvider)
 	source := responseMetadataString(proposalResponse.Metadata, beaconblockproposer.MetadataSource)
-	if source == "unknown" && bid.BuilderIndex == gloas.BuilderIndexSelfBuild {
-		// The proposer can recover self-building from the bid, but telling builder_api apart from
-		// p2p_builder needs the beacon node's response headers, and the strategies replace those
-		// with their own metadata before returning.  Leave the label "unknown" rather than
-		// guessing: a strategy that stops setting vouch.source should show up in the metric
-		// instead of being silently counted as p2p_builder.
-		source = "self_build"
+	if source == beaconblockproposer.SourceUnknown && bid.BuilderIndex == gloas.BuilderIndexSelfBuild {
+		// The bid shows self-building for certain.  For a builder-backed bid leave the label
+		// "unknown" rather than guessing from vouch.builder_url: a strategy that stops setting
+		// vouch.source should show up in the metric instead of being counted under another source.
+		source = beaconblockproposer.SourceSelfBuild
 	}
 	publicationPath := "block_only"
 	if bid.BuilderIndex == gloas.BuilderIndexSelfBuild {
 		publicationPath = "block_and_envelope"
+	}
+	builderURL := ""
+	if bid.BuilderIndex != gloas.BuilderIndexSelfBuild {
+		builderURL = s.echoedBuilderURL(ctx, proposalResponse.Metadata, builderConfig, bid.BuilderIndex, source)
 	}
 	requestedPreference := gloasRequestedPreference(builderConfig.BuilderBoostFactor)
 	executionValue := "unknown"
@@ -340,6 +343,8 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 		Bool("value_known", proposal.ExecutionValue != nil).
 		Str("execution_value", executionValue).
 		Str("publication_path", publicationPath).
+		Uint64("builder_index", uint64(bid.BuilderIndex)).
+		Str("builder_url", loggableBuilderURL(builderURL)).
 		Msg("Selected Gloas proposal")
 	trace.SpanFromContext(ctx).SetAttributes(
 		attribute.String("provider", provider),
@@ -353,10 +358,146 @@ func (s *Service) proposeEPBSBlock(ctx context.Context,
 	// ValidateEPBSProposal has already matched the payload to the auction result and rejected a
 	// zero bid fee recipient.
 	if bid.BuilderIndex != gloas.BuilderIndexSelfBuild {
-		return s.proposeBuilderBackedEPBSBlock(ctx, proposal, duty, provider)
+		return s.proposeBuilderBackedEPBSBlock(ctx, proposal, duty, provider, builderURL)
 	}
 
 	return s.proposeSelfBuiltEPBSBlock(ctx, proposal, duty, bid, provider)
+}
+
+// echoedBuilderURL returns the builder URL to echo when publishing a builder-won proposal.  The
+// beacon-APIs require the echo, so a URL that matches no requested builder is still echoed, with a
+// warning.  A URL that matches a requested builder only after normalisation is echoed as Vouch
+// requested it, because some beacon nodes forward only to the exact URL they requested bids from.
+func (s *Service) echoedBuilderURL(ctx context.Context,
+	metadata map[string]any,
+	builderConfig *gloas.BuilderConfig,
+	builderIndex gloas.BuilderIndex,
+	source string,
+) string {
+	log := s.log.With().
+		Str("request_id", beaconblockproposer.RequestID(ctx)).
+		Uint64("builder_index", uint64(builderIndex)).
+		Logger()
+	builderURL, _ := metadata[beaconblockproposer.MetadataBuilderURL].(string)
+	if builderURL == "" {
+		if source != beaconblockproposer.SourceP2PBuilder {
+			monitorBuilderURLEcho("missing")
+			log.Warn().Str("source", source).Msg("Builder-backed proposal has no builder URL to echo; the proposal strategy did not pass it on")
+		}
+
+		return ""
+	}
+	for _, builder := range builderConfig.Builders {
+		if string(builder.URL) == builderURL {
+			monitorBuilderURLEcho("exact")
+
+			return builderURL
+		}
+	}
+
+	parsed, valid := parsedBuilderURL(builderURL)
+	if !valid {
+		monitorBuilderURLEcho("invalid")
+		loggable := loggableBuilderURL(builderURL)
+		log.Warn().Str("builder_url", loggable[:min(len(loggable), maxLoggedInvalidBuilderURLSize)]).Int("builder_url_length", len(builderURL)).Msg("Beacon node returned an invalid builder URL; not echoing it")
+
+		return ""
+	}
+	normalized := normalizedBuilderURL(*parsed)
+	requested := make([]string, 0, len(builderConfig.Builders))
+	matches := make(map[string]struct{})
+	for _, builder := range builderConfig.Builders {
+		requested = append(requested, loggableBuilderURL(string(builder.URL)))
+		if candidate, err := url.Parse(string(builder.URL)); err == nil && normalizedBuilderURL(*candidate) == normalized {
+			matches[string(builder.URL)] = struct{}{}
+		}
+	}
+	if len(matches) == 1 {
+		monitorBuilderURLEcho("normalized")
+		// Echo the URL as requested rather than as returned: Lighthouse re-serialises the URL it
+		// returns, and Lodestar forwards the block only to the exact URL it requested bids from.
+		for match := range matches {
+			return match
+		}
+	}
+
+	event := log.Warn().
+		Str("builder_url", loggableBuilderURL(builderURL)).
+		Strs("requested_builder_urls", requested)
+	if len(matches) > 1 {
+		monitorBuilderURLEcho("ambiguous")
+		event.Msg("Beacon node returned a builder URL that matches more than one requested builder; echoing it as returned")
+	} else {
+		monitorBuilderURLEcho("unmatched")
+		event.Msg("Beacon node returned a builder URL that matches no requested builder; echoing it as returned")
+	}
+
+	return builderURL
+}
+
+// maxBuilderURLSize is the beacon-APIs MAX_BUILDER_URL_SIZE.
+const maxBuilderURLSize = 2048
+
+// maxLoggedInvalidBuilderURLSize bounds the log line for an invalid builder URL, which has no size limit.
+const maxLoggedInvalidBuilderURLSize = 256
+
+// parsedBuilderURL parses a builder URL returned by a beacon node.  It accepts only an absolute
+// http(s) URL of printable ASCII, without spaces, within the builder URL size limit, so that echoing it cannot make
+// a publication request invalid.
+func parsedBuilderURL(builderURL string) (*url.URL, bool) {
+	if len(builderURL) > maxBuilderURLSize {
+		return nil, false
+	}
+	for i := range len(builderURL) {
+		if builderURL[i] < 0x21 || builderURL[i] > 0x7e {
+			return nil, false
+		}
+	}
+	parsed, err := url.Parse(builderURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
+		return nil, false
+	}
+
+	return parsed, true
+}
+
+// normalizedBuilderURL lowercases the scheme and host, drops the scheme's default port and
+// writes an empty path as a slash, as Lighthouse does when it returns Eth-Builder-Url.
+//
+// It is no narrower because each rule covers a real case, such as a configured URL with an explicit
+// :443.  It is no broader because matching every rewrite Lighthouse's URL parser makes (dot
+// segments, short IPv4 and long IPv6 forms, IDNA, an empty port) would mean reimplementing the URL
+// Standard, and decoding more would equate different paths such as /a%2Fb and /a/b.  A missed match
+// still echoes the URL, with an "unmatched" warning that tells the operator to write the URL in
+// canonical form, so it costs only Lodestar's forward.
+func normalizedBuilderURL(parsed url.URL) string {
+	// url.Parse has already lowercased the scheme.
+	parsed.Host = strings.ToLower(parsed.Host)
+	switch parsed.Scheme {
+	case "http":
+		parsed.Host = strings.TrimSuffix(parsed.Host, ":80")
+	case "https":
+		parsed.Host = strings.TrimSuffix(parsed.Host, ":443")
+	}
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	}
+
+	return parsed.String()
+}
+
+// loggableBuilderURL drops the parts of a builder URL that can hold credentials.
+func loggableBuilderURL(builderURL string) string {
+	if builderURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(builderURL)
+	// Without a host, url.Parse can read userinfo as part of the path or opaque value.
+	if err != nil || parsed.Host == "" {
+		return "<invalid>"
+	}
+
+	return (&url.URL{Scheme: parsed.Scheme, Host: parsed.Host, Path: parsed.Path}).String()
 }
 
 func (s *Service) obtainEPBSProposal(ctx context.Context,
@@ -427,12 +568,14 @@ func gloasRequestedPreference(boost uint64) string {
 	}
 }
 
-// proposeBuilderBackedEPBSBlock signs and publishes a proposal whose payload a P2P builder won.
-// The builder reveals that payload, so there is no envelope work to do here.
+// proposeBuilderBackedEPBSBlock signs and publishes a proposal whose payload a builder won.
+// The builder reveals that payload, so there is no envelope work to do here.  A non-empty
+// builderURL is echoed so that each beacon node forwards the signed block to that builder.
 func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
 	proposal *api.VersionedEPBSProposal,
 	duty *beaconblockproposer.Duty,
 	provider string,
+	builderURL string,
 ) error {
 	bodyRoot, err := proposal.BodyRoot()
 	if err != nil {
@@ -453,7 +596,10 @@ func (s *Service) proposeBuilderBackedEPBSBlock(ctx context.Context,
 		attribute.String("proposal_root", proposalRoot),
 	}
 	publicationCtx, publicationSpan := otel.Tracer("attestantio.vouch.services.beaconblockproposer.standard").Start(ctx, "publishGloasBlock", trace.WithAttributes(publicationAttributes...))
-	err = s.proposalSubmitter.SubmitProposal(publicationCtx, signedProposal)
+	err = s.proposalSubmitter.SubmitProposal(publicationCtx, &api.SubmitProposalOpts{
+		Proposal:   signedProposal,
+		BuilderURL: builderURL,
+	})
 	if err != nil {
 		recordSpanError(publicationSpan, err, "failed to submit proposal")
 	}
@@ -525,7 +671,7 @@ func (s *Service) proposeSelfBuiltEPBSBlock(ctx context.Context,
 		attribute.String("provider", provider),
 		attribute.String("proposal_root", envelope.BeaconBlockRoot.String()),
 	))
-	err = s.proposalSubmitter.SubmitProposal(publicationCtx, signedProposal)
+	err = s.proposalSubmitter.SubmitProposal(publicationCtx, &api.SubmitProposalOpts{Proposal: signedProposal})
 	if err != nil {
 		recordSpanError(publicationSpan, err, "failed to submit proposal")
 	}
