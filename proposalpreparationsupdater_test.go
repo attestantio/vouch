@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,6 +34,10 @@ type updaterChainTime struct {
 	slotDuration       time.Duration
 	currentEpoch       phase0.Epoch
 	bellatrixForkEpoch phase0.Epoch
+	// bellatrixLookupLimit, if set, is the number of bellatrix fork epoch lookups that succeed.
+	// Later lookups return the far future epoch, as chaintime does when the spec request fails.
+	bellatrixLookupLimit int32
+	bellatrixLookups     atomic.Int32
 }
 
 func (c *updaterChainTime) GenesisTime() time.Time {
@@ -65,6 +70,11 @@ func (*updaterChainTime) FirstSlotOfEpoch(epoch phase0.Epoch) phase0.Slot {
 
 func (c *updaterChainTime) HardForkEpoch(_ context.Context, hardForkName string) phase0.Epoch {
 	if hardForkName == "BELLATRIX_FORK_EPOCH" {
+		lookups := c.bellatrixLookups.Add(1)
+		if c.bellatrixLookupLimit > 0 && lookups > c.bellatrixLookupLimit {
+			return chaintime.FarFutureEpoch
+		}
+
 		return c.bellatrixForkEpoch
 	}
 
@@ -138,6 +148,22 @@ func requireNoUpdate(t *testing.T, preparer *recordingProposalPreparer, duration
 	}
 }
 
+// requireTriggerReturns fails if triggerUpdate does not return within a second.
+func requireTriggerReturns(t *testing.T, ctx context.Context, updater *proposalPreparationsUpdater, address string) {
+	t.Helper()
+
+	returned := make(chan struct{})
+	go func() {
+		updater.triggerUpdate(ctx, address)
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		require.FailNow(t, "trigger blocked", "address %s", address)
+	}
+}
+
 // resetClientSyncedHandler clears the client synced handler, restoring it when the test ends.
 func resetClientSyncedHandler(t *testing.T) {
 	t.Helper()
@@ -181,7 +207,16 @@ func TestProposalPreparationsUpdaterLimitsUpdates(t *testing.T) {
 			updater.triggerUpdate(ctx, "beacon-1")
 		}()
 	}
-	wg.Wait()
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		require.FailNow(t, "triggers blocked")
+	}
 
 	first := requireUpdate(t, preparer, time.Second)
 	require.Less(t, first.at.Sub(started), cooldown)
@@ -221,30 +256,30 @@ func TestProposalPreparationsUpdaterStalledUpdateDoesNotBlockTriggers(t *testing
 	defer close(preparer.release)
 	updater := &proposalPreparationsUpdater{chainTime: postBellatrixChainTime(100 * time.Millisecond), preparer: preparer}
 
-	updater.triggerUpdate(ctx, "beacon-1")
+	requireTriggerReturns(t, ctx, updater, "beacon-1")
 	requireUpdate(t, preparer, time.Second)
 
 	// The first update is now stalled.
-	triggered := make(chan struct{})
-	go func() {
-		updater.triggerUpdate(ctx, "beacon-2")
-		close(triggered)
-	}()
-	select {
-	case <-triggered:
-	case <-time.After(time.Second):
-		require.FailNow(t, "trigger blocked on a stalled update")
-	}
+	requireTriggerReturns(t, ctx, updater, "beacon-2")
 }
 
-func TestProposalPreparationsUpdaterBeforeBellatrix(t *testing.T) {
+// TestProposalPreparationsUpdaterBellatrixFork confirms that proposal preparations are updated
+// from the bellatrix fork epoch onwards, and not before it or when the fork is unscheduled.  The
+// current epoch is 10.
+func TestProposalPreparationsUpdaterBellatrixFork(t *testing.T) {
 	tests := []struct {
 		name               string
 		bellatrixForkEpoch phase0.Epoch
+		updated            bool
 	}{
 		{
 			name:               "BeforeFork",
 			bellatrixForkEpoch: 11,
+		},
+		{
+			name:               "AtFork",
+			bellatrixForkEpoch: 10,
+			updated:            true,
 		},
 		{
 			name:               "Unscheduled",
@@ -257,15 +292,40 @@ func TestProposalPreparationsUpdaterBeforeBellatrix(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			chainTime := postBellatrixChainTime(100 * time.Millisecond)
-			chainTime.bellatrixForkEpoch = test.bellatrixForkEpoch
 			preparer := newRecordingProposalPreparer()
-			updater := &proposalPreparationsUpdater{chainTime: chainTime, preparer: preparer}
+			updater := &proposalPreparationsUpdater{
+				chainTime:          postBellatrixChainTime(100 * time.Millisecond),
+				preparer:           preparer,
+				bellatrixForkEpoch: test.bellatrixForkEpoch,
+			}
 
 			updater.triggerUpdate(ctx, "beacon-1")
-			requireNoUpdate(t, preparer, 300*time.Millisecond)
+			if test.updated {
+				requireUpdate(t, preparer, time.Second)
+			} else {
+				requireNoUpdate(t, preparer, 300*time.Millisecond)
+			}
 		})
 	}
+}
+
+// TestProposalPreparationsUpdaterReadsBellatrixForkEpochOnce confirms that the bellatrix fork
+// epoch is read when the updater starts, so a lookup that fails later, as it can when a node that
+// has just become synced again refetches the spec, does not stop the update.
+func TestProposalPreparationsUpdaterReadsBellatrixForkEpochOnce(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	resetClientSyncedHandler(t)
+
+	chainTime := postBellatrixChainTime(100 * time.Millisecond)
+	chainTime.bellatrixLookupLimit = 1
+	preparer := newRecordingProposalPreparer()
+	startProposalPreparationsUpdater(ctx, chainTime, preparer)
+
+	handler := clientSyncedHandler.Load()
+	require.NotNil(t, handler)
+	(*handler)("beacon-1")
+	requireUpdate(t, preparer, time.Second)
 }
 
 // TestProposalPreparationsUpdaterStopsWhenContextDone confirms that a pending update is
