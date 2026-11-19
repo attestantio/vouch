@@ -21,8 +21,9 @@ jobs:
         run: docker build -t vouch:${{ github.sha }} .
 
       - name: Run Trivy scan (full report)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          version: 'v0.76.2'
           image-ref: 'vouch:${{ github.sha }}'
           format: 'sarif'
           output: 'trivy-results.sarif'
@@ -37,8 +38,9 @@ jobs:
           sarif_file: 'trivy-results.sarif'
 
       - name: Run Trivy scan (fail on fixable CRITICAL/HIGH)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          version: 'v0.76.2'
           image-ref: 'vouch:${{ github.sha }}'
           format: 'table'
           severity: 'CRITICAL,HIGH'
