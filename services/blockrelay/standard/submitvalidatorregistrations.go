@@ -235,21 +235,26 @@ func (s *Service) submitRelayRegistrations(ctx context.Context,
 				s.log.Error().Str("builder", builder).Msg("Builder client does not accept validator registrations")
 				return
 			}
-			if err := submitter.SubmitValidatorRegistrations(ctx, &builderapi.SubmitValidatorRegistrationsOpts{
-				// Validator registrations can take a long time, as they are processed sequentially by some relays.  As such,
-				// unilaterally set the timeout here.  This code is within a waitgroup, so we're okay to wait for a little longer
-				// than we would with most requests.
-				Common: builderapi.CommonOpts{
-					Timeout: time.Second * time.Duration(len(providerRegistrations)),
-				},
-				Registrations: providerRegistrations,
-			}); err != nil {
+			if err := submitter.SubmitValidatorRegistrations(ctx, registrationOpts(providerRegistrations)); err != nil {
 				s.log.Error().Err(err).Str("builder", builder).Msg("Failed to submit validator registrations")
 				return
 			}
 		}(ctx, builder, providerRegistrations, s.monitor)
 	}
 	wg.Wait()
+}
+
+// registrationOpts returns the options with which to submit the given registrations to a relay.
+//
+// No per-call timeout is set, so the timeout configured for the client applies
+// (builderclient.submitvalidatorregistrations, optionally overridden per relay).  A per-call
+// timeout can only shorten the deadline and never extend it, because the client's own timeout is
+// a hard ceiling on the request, so setting one here would override the configured value with a
+// value that can only ever be lower.
+func registrationOpts(registrations []*builderapi.VersionedSignedValidatorRegistration) *builderapi.SubmitValidatorRegistrationsOpts {
+	return &builderapi.SubmitValidatorRegistrationsOpts{
+		Registrations: registrations,
+	}
 }
 
 func (s *Service) submitConsensusRegistrations(ctx context.Context,
