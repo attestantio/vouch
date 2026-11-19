@@ -619,3 +619,13 @@ func TestLateAttesterDutyWaitsFullAttesterDelay(t *testing.T) {
 		require.Equal(t, s.attesterDelay, time.Since(started))
 	})
 }
+
+// TestWaitForNothingAllocatesNothing checks that a wait that is already over creates no timer.
+func TestWaitForNothingAllocatesNothing(t *testing.T) {
+	ctx := context.Background()
+	waited := true
+	require.Zero(t, testing.AllocsPerRun(100, func() {
+		waited = waited && waitFor(ctx, 0) && waitFor(ctx, -time.Second)
+	}))
+	require.True(t, waited)
+}
