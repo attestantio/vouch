@@ -16,9 +16,6 @@ package first_test
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +23,7 @@ import (
 	"github.com/attestantio/go-eth2-client/api"
 	httpclient "github.com/attestantio/go-eth2-client/http"
 	"github.com/attestantio/vouch/strategies/beaconblockheader/first"
+	"github.com/attestantio/vouch/testutil"
 	"github.com/attestantio/vouch/util"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -37,8 +35,8 @@ import (
 func TestBeaconBlockHeadersAbsenceWhileANodeIsDown(t *testing.T) {
 	for _, downAtStart := range []bool{false, true} {
 		t.Run(fmt.Sprintf("DownAtStart=%v", downAtStart), func(t *testing.T) {
-			up := fakeBeaconNode(t)
-			down := fakeBeaconNode(t)
+			up := testutil.NoBlockBeaconNode(t)
+			down := testutil.NoBlockBeaconNode(t)
 			providers := map[string]consensusclient.BeaconBlockHeadersProvider{
 				"up": realClient(t, up.URL),
 			}
@@ -64,29 +62,6 @@ func TestBeaconBlockHeadersAbsenceWhileANodeIsDown(t *testing.T) {
 			}
 		})
 	}
-}
-
-// fakeBeaconNode serves the endpoints go-eth2-client needs to mark a node active, and 404 for every header.  Any other
-// path fails with 500, so only a header lookup can report absence.
-func fakeBeaconNode(t *testing.T) *httptest.Server {
-	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.URL.Path == "/eth/v1/node/syncing":
-			_, _ = fmt.Fprint(w, `{"data":{"head_slot":"10","sync_distance":"0","is_syncing":false,"is_optimistic":false,"el_offline":false}}`)
-		case r.URL.Path == "/eth/v1/node/version":
-			_, _ = fmt.Fprint(w, `{"data":{"version":"test/v1.0.0"}}`)
-		case strings.HasPrefix(r.URL.Path, "/eth/v1/beacon/headers/"):
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = fmt.Fprint(w, `{"code":404,"message":"NOT_FOUND"}`)
-		default:
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	}))
-	t.Cleanup(server.Close)
-
-	return server
 }
 
 func realClient(t *testing.T, address string) consensusclient.BeaconBlockHeadersProvider {
