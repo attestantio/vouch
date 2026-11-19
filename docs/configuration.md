@@ -364,7 +364,9 @@ multiinstance:
     # then the value below may need to be changed accordingly.  A value of 0 attests at once without checking.  The deadline is
     # controller.max-attestation-delay or a third of the slot before Gloas, ATTESTATION_DUE_BPS_GLOAS from Gloas.  Vouch refuses
     # to start if the deadline plus this delay reaches the end of the slot, because a takeover attestation would then always be
-    # late.
+    # late.  If the attestation pool cannot be read, the instance attests, so that a pool outage on a secondary instance does not
+    # stop it taking over while the primary is down.  Dirk's slashing protection refuses a conflicting attestation; with the
+    # wallet account manager both instances can sign one, which is slashable.
     attester-delay: '1s'
     # proposer-delay is the time a Vouch instance waits when each proposal duty starts before asking its beacon nodes for another
     # instance's block, and it is all the time that block has to reach those nodes: the lookup is made once, and a node that has
