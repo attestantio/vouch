@@ -36,7 +36,7 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 	log.Trace().Msg("Checking if we should attest")
 
 	if s.attesterDelay == 0 {
-		monitorActive("attester", true)
+		monitorDecision("attester", "active")
 
 		return true
 	}
@@ -79,7 +79,7 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 		if poolHasDutyAttestation(log, resp.Data, dutyAttestations) {
 			// An attestation is already in the pool; we don't need to act.
 			log.Trace().Msg("Another instance is attesting; not activating attester")
-			monitorActive("attester", false)
+			monitorDecision("attester", "inactive")
 
 			return false
 		}
@@ -91,7 +91,7 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 	}
 
 	log.Trace().Msg("No attestation found; activating attester")
-	monitorActive("attester", true)
+	monitorDecision("attester", "active")
 
 	return true
 }
