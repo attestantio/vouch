@@ -34,7 +34,7 @@ func (s *Service) ShouldPropose(ctx context.Context, duty *beaconblockproposer.D
 	log.Trace().Msg("Checking if we should propose")
 
 	if s.proposerDelay == 0 {
-		monitorActive("proposer", true)
+		monitorDecision("proposer", "active")
 
 		return true
 	}
@@ -55,19 +55,19 @@ func (s *Service) ShouldPropose(ctx context.Context, duty *beaconblockproposer.D
 		if !util.IsNotFound(err) {
 			// Without proof that no block exists, proposing risks a duplicate; stand down.
 			log.Warn().Err(err).Msg("Failed to establish whether beacon block exists; not activating proposer")
-			monitorUnknown("proposer")
+			monitorDecision("proposer", "unknown")
 
 			return false
 		}
 		// With the first strategy the error names the nodes that reported no block and any that abstained.
 		log.Info().Err(err).Msg("Beacon block header not found; activating proposer")
-		monitorActive("proposer", true)
+		monitorDecision("proposer", "active")
 
 		return true
 	}
 
 	log.Trace().Msg("Beacon block found; not activating proposer")
-	monitorActive("proposer", false)
+	monitorDecision("proposer", "inactive")
 
 	return false
 }

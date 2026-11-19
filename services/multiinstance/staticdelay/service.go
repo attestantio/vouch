@@ -106,8 +106,8 @@ func New(ctx context.Context, params ...Parameter) (*Service, error) {
 		attesterDelay:              parameters.attesterDelay,
 		proposerDelay:              parameters.proposerDelay,
 	}
-	monitorActive("attester", parameters.attesterDelay == 0)
-	monitorActive("proposer", parameters.proposerDelay == 0)
+	monitorStartingState("attester", parameters.attesterDelay == 0)
+	monitorStartingState("proposer", parameters.proposerDelay == 0)
 	log.Info().Bool("attester_active", parameters.attesterDelay == 0).Bool("proposer_active", parameters.proposerDelay == 0).Msg("Initial configuration")
 
 	return s, nil

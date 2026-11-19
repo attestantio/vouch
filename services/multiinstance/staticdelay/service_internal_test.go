@@ -85,7 +85,7 @@ func TestProposerGaugeFollowsOnlyProposalDecisions(t *testing.T) {
 			{err: &api.Error{StatusCode: 404}},
 		}}
 		s.beaconBlockHeadersProvider = headers
-		monitorActive("proposer", false)
+		monitorDecision("proposer", "inactive")
 
 		require.True(t, s.ShouldAttest(context.Background(), newAttesterDuty(t, 1)))
 		require.Zero(t, activeGauge(t, "proposer"))
@@ -145,16 +145,32 @@ func TestChecksTotalSeriesExistFromRegistration(t *testing.T) {
 	}
 }
 
-// TestChecksTotalCountsStartupStateOnce checks that New counts each operation's starting state once.
-func TestChecksTotalCountsStartupStateOnce(t *testing.T) {
+// TestStartupSetsGaugeWithoutCounting checks that New sets each operation's gauge to its starting state, and counts
+// no decision.
+func TestStartupSetsGaugeWithoutCounting(t *testing.T) {
 	ensureMetricsRegistered(t)
-	attesterInactive := checksTotal(t, "attester", "inactive")
-	proposerActive := checksTotal(t, "proposer", "active")
+	monitorDecision("attester", "active")
+	monitorDecision("proposer", "inactive")
+	before := metricsSnapshot(t)
 
 	// The test service starts with a 1s attester delay and no proposer delay.
 	newTestService(t)
-	require.Equal(t, attesterInactive+1, checksTotal(t, "attester", "inactive"))
-	require.Equal(t, proposerActive+1, checksTotal(t, "proposer", "active"))
+	before["attester/gauge"], before["proposer/gauge"] = 0, 1
+	require.Equal(t, before, metricsSnapshot(t))
+}
+
+// TestMetricsWithoutPrometheusAreSkipped checks that metric updates do nothing when no Prometheus monitor registered
+// the metrics.
+func TestMetricsWithoutPrometheusAreSkipped(t *testing.T) {
+	ensureMetricsRegistered(t)
+	counter, gauge := activeCounter, activeState
+	activeCounter, activeState = nil, nil
+	t.Cleanup(func() { activeCounter, activeState = counter, gauge })
+
+	require.NotPanics(t, func() {
+		monitorStartingState("proposer", true)
+		monitorDecision("proposer", "active")
+	})
 }
 
 // TestAttesterNeverCountsUnknown checks that a failed pool read keeps the attester's fail-open behaviour and counts.
@@ -200,7 +216,7 @@ func TestDutyFailuresLeaveMetricsUnchanged(t *testing.T) {
 func TestActiveAttesterRechecksPoolAfterPrimaryRecovery(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := newTestService(t)
-		monitorActive("attester", true)
+		monitorDecision("attester", "active")
 		s.attestationPoolProvider = &sequenceAttestationPool{responses: [][]*spec.VersionedAttestation{
 			recoveredAttestation(),
 		}}
@@ -230,7 +246,7 @@ func TestProposerTakesOverThenRelinquishesAfterPrimaryRecovery(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := newTestService(t)
 		s.proposerDelay = time.Second
-		monitorActive("proposer", false)
+		monitorDecision("proposer", "inactive")
 		s.beaconBlockHeadersProvider = &headerSequenceProvider{outcomes: []headerOutcome{
 			{err: &api.Error{StatusCode: 404}},
 			{response: &api.Response[*apiv1.BeaconBlockHeader]{Data: &apiv1.BeaconBlockHeader{}}},
@@ -309,7 +325,7 @@ func TestProposerActivatesOnlyOnDefinitiveHeaderAbsence(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				s := newTestService(t)
 				s.proposerDelay = time.Second
-				monitorActive("proposer", true)
+				monitorDecision("proposer", "active")
 				s.beaconBlockHeadersProvider = &headerSequenceProvider{outcomes: []headerOutcome{test.outcome}}
 				before := map[string]float64{}
 				for _, result := range []string{"active", "inactive", "unknown"} {
