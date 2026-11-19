@@ -96,9 +96,9 @@ func (s *Service) BeaconBlockHeader(ctx context.Context,
 		}
 	}
 	failures := slices.Concat(providerErrors, abstainedErrors)
-	if ctx.Err() != nil {
+	if ctx.Err() != nil && len(notFound) < len(s.beaconBlockHeadersProviders) {
 		// An answer raced the strategy's own deadline, which may also have cut off a node's health check and made it
-		// abstain; report that deadline rather than letting a 404 decide.
+		// abstain; report that deadline rather than letting a 404 decide.  A 404 from every node cannot be such an artefact.
 		return nil, contextError(ctx, log, failures)
 	}
 	if len(providerErrors) == 0 && len(notFound) > 0 {

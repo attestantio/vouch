@@ -57,6 +57,49 @@ func TestBeaconBlockHeadersReportsStrategyTimeoutWhenANodeHitsTheSameDeadline(t 
 	}
 }
 
+// TestBeaconBlockHeadersKeepsAbsenceWhenTheContextEndsAfterEvery404 checks that the context ending after every node
+// has answered 404 still reports absence, because a 404 cannot be an artefact of the context ending.
+func TestBeaconBlockHeadersKeepsAbsenceWhenTheContextEndsAfterEvery404(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		s, err := first.New(context.Background(),
+			first.WithLogLevel(zerolog.Disabled),
+			first.WithTimeout(time.Minute),
+			first.WithBeaconBlockHeadersProviders(map[string]consensusclient.BeaconBlockHeadersProvider{
+				"missing":    &headerErrorProvider{err: &api.Error{StatusCode: 404}},
+				"cancelling": &headerErrorProvider{err: &cancellingNotFound{cancel: cancel}},
+			}),
+		)
+		require.NoError(t, err)
+
+		_, err = s.BeaconBlockHeader(ctx, &api.BeaconBlockHeaderOpts{Block: "1"})
+		require.ErrorIs(t, ctx.Err(), context.Canceled, "the context must end before the deadline check")
+		require.True(t, util.IsNotFound(err), "%v", err)
+	})
+}
+
+// cancellingNotFound is a 404 that ends the caller's context while the strategy classifies it, once the other answers
+// are in.  The strategy checks for a 404 once when the node answers and again when it classifies the answer.
+type cancellingNotFound struct {
+	cancel context.CancelFunc
+	checks int
+}
+
+func (*cancellingNotFound) Error() string { return "not found" }
+
+func (*cancellingNotFound) Unwrap() error { return &api.Error{StatusCode: 404} }
+
+func (e *cancellingNotFound) As(any) bool {
+	e.checks++
+	if e.checks == 2 {
+		synctest.Wait()
+		e.cancel()
+	}
+
+	return false
+}
+
 // TestBeaconBlockHeadersReportsStrategyTimeoutWhenAnAbstentionHitsTheDeadline checks that a node which abstains only
 // because the strategy's deadline cut off its health check does not let another node's 404 decide.
 func TestBeaconBlockHeadersReportsStrategyTimeoutWhenAnAbstentionHitsTheDeadline(t *testing.T) {
