@@ -452,19 +452,29 @@ func TestCancelledProposerDutyMakesNoDecision(t *testing.T) {
 }
 
 // TestProposerDutyCancelledDuringLookupMakesNoDecision checks that a lookup cut off by the end of the duty's context
-// is not counted as an unknown result.
+// is not counted, whether the lookup fails or every node had already reported no block.
 func TestProposerDutyCancelledDuringLookupMakesNoDecision(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		s := newTestService(t,
-			WithProposerDelay(time.Second),
-			WithBeaconBlockHeadersProvider(&cancellingProvider{cancel: cancel, err: context.Canceled}),
-		)
-		before := metricsSnapshot(t)
+	for _, test := range []struct {
+		name string
+		err  error
+	}{
+		{name: "Error", err: context.Canceled},
+		{name: "NotFound", err: &api.Error{StatusCode: 404}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				s := newTestService(t,
+					WithProposerDelay(time.Second),
+					WithBeaconBlockHeadersProvider(&cancellingProvider{cancel: cancel, err: test.err}),
+				)
+				before := metricsSnapshot(t)
 
-		require.False(t, s.ShouldPropose(ctx, beaconblockproposer.NewDuty(1, 1)))
-		require.Equal(t, before, metricsSnapshot(t))
-	})
+				require.False(t, s.ShouldPropose(ctx, beaconblockproposer.NewDuty(1, 1)))
+				require.Equal(t, before, metricsSnapshot(t))
+			})
+		})
+	}
 }
 
 // TestCancelledAttesterDutyMakesNoDecision checks that a duty whose context has ended neither waits, nor reads the
