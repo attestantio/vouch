@@ -149,7 +149,7 @@ func requireNoUpdate(t *testing.T, preparer *recordingProposalPreparer, duration
 }
 
 // requireTriggerReturns fails if triggerUpdate does not return within a second.
-func requireTriggerReturns(t *testing.T, ctx context.Context, updater *proposalPreparationsUpdater, address string) {
+func requireTriggerReturns(ctx context.Context, t *testing.T, updater *proposalPreparationsUpdater, address string) {
 	t.Helper()
 
 	returned := make(chan struct{})
@@ -182,7 +182,7 @@ func TestProposalPreparationsUpdaterUpdatesOnTrigger(t *testing.T) {
 	preparer := newRecordingProposalPreparer()
 	updater := &proposalPreparationsUpdater{chainTime: postBellatrixChainTime(cooldown), preparer: preparer}
 
-	updater.triggerUpdate(ctx, "beacon-1")
+	requireTriggerReturns(ctx, t, updater, "beacon-1")
 	requireUpdate(t, preparer, time.Second)
 	requireNoUpdate(t, preparer, 3*cooldown)
 }
@@ -223,6 +223,10 @@ func TestProposalPreparationsUpdaterLimitsUpdates(t *testing.T) {
 	second := requireUpdate(t, preparer, time.Second)
 	require.GreaterOrEqual(t, second.at.Sub(first.at), cooldown)
 	requireNoUpdate(t, preparer, 3*cooldown)
+
+	// The updater is idle again, so a later trigger updates straight away.
+	requireTriggerReturns(ctx, t, updater, "beacon-1")
+	requireUpdate(t, preparer, time.Second)
 }
 
 // TestProposalPreparationsUpdaterUpdatesImmediatelyAfterCooldown confirms that a trigger after
@@ -235,12 +239,12 @@ func TestProposalPreparationsUpdaterUpdatesImmediatelyAfterCooldown(t *testing.T
 	preparer := newRecordingProposalPreparer()
 	updater := &proposalPreparationsUpdater{chainTime: postBellatrixChainTime(cooldown), preparer: preparer}
 
-	updater.triggerUpdate(ctx, "beacon-1")
+	requireTriggerReturns(ctx, t, updater, "beacon-1")
 	requireUpdate(t, preparer, time.Second)
 	requireNoUpdate(t, preparer, 3*cooldown)
 
 	started := time.Now()
-	updater.triggerUpdate(ctx, "beacon-2")
+	requireTriggerReturns(ctx, t, updater, "beacon-2")
 	update := requireUpdate(t, preparer, time.Second)
 	require.Less(t, update.at.Sub(started), cooldown)
 }
@@ -256,11 +260,11 @@ func TestProposalPreparationsUpdaterStalledUpdateDoesNotBlockTriggers(t *testing
 	defer close(preparer.release)
 	updater := &proposalPreparationsUpdater{chainTime: postBellatrixChainTime(100 * time.Millisecond), preparer: preparer}
 
-	requireTriggerReturns(t, ctx, updater, "beacon-1")
+	requireTriggerReturns(ctx, t, updater, "beacon-1")
 	requireUpdate(t, preparer, time.Second)
 
 	// The first update is now stalled.
-	requireTriggerReturns(t, ctx, updater, "beacon-2")
+	requireTriggerReturns(ctx, t, updater, "beacon-2")
 }
 
 // TestProposalPreparationsUpdaterBellatrixFork confirms that proposal preparations are updated
@@ -299,7 +303,7 @@ func TestProposalPreparationsUpdaterBellatrixFork(t *testing.T) {
 				bellatrixForkEpoch: test.bellatrixForkEpoch,
 			}
 
-			updater.triggerUpdate(ctx, "beacon-1")
+			requireTriggerReturns(ctx, t, updater, "beacon-1")
 			if test.updated {
 				requireUpdate(t, preparer, time.Second)
 			} else {
@@ -328,6 +332,24 @@ func TestProposalPreparationsUpdaterReadsBellatrixForkEpochOnce(t *testing.T) {
 	requireUpdate(t, preparer, time.Second)
 }
 
+// TestProposalPreparationsUpdaterUsesForkEpochReadAtStartup confirms that the fork epoch read
+// when the updater starts is the one that gates updates.  The current epoch is 10.
+func TestProposalPreparationsUpdaterUsesForkEpochReadAtStartup(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	resetClientSyncedHandler(t)
+
+	chainTime := postBellatrixChainTime(100 * time.Millisecond)
+	chainTime.bellatrixForkEpoch = 11
+	preparer := newRecordingProposalPreparer()
+	startProposalPreparationsUpdater(ctx, chainTime, preparer)
+
+	handler := clientSyncedHandler.Load()
+	require.NotNil(t, handler)
+	(*handler)("beacon-1")
+	requireNoUpdate(t, preparer, 300*time.Millisecond)
+}
+
 // TestProposalPreparationsUpdaterStopsWhenContextDone confirms that a pending update is
 // dropped, and later triggers ignored, once the service context is done.
 func TestProposalPreparationsUpdaterStopsWhenContextDone(t *testing.T) {
@@ -338,14 +360,14 @@ func TestProposalPreparationsUpdaterStopsWhenContextDone(t *testing.T) {
 	preparer := newRecordingProposalPreparer()
 	updater := &proposalPreparationsUpdater{chainTime: postBellatrixChainTime(cooldown), preparer: preparer}
 
-	updater.triggerUpdate(ctx, "beacon-1")
+	requireTriggerReturns(ctx, t, updater, "beacon-1")
 	requireUpdate(t, preparer, time.Second)
 
 	// Leave an update pending for the end of the cooldown, then stop the service.
-	updater.triggerUpdate(ctx, "beacon-2")
+	requireTriggerReturns(ctx, t, updater, "beacon-2")
 	cancel()
 	requireNoUpdate(t, preparer, 3*cooldown)
 
-	updater.triggerUpdate(ctx, "beacon-3")
+	requireTriggerReturns(ctx, t, updater, "beacon-3")
 	requireNoUpdate(t, preparer, 3*cooldown)
 }
