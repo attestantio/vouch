@@ -156,7 +156,8 @@ strategies:
     beacon-node-addresses: ['localhost:4000', 'localhost:5051', 'localhost:5052']
     majority:
       # threshold is the minimum number of beacon nodes that have to provide the same attestation data for Vouch with the 'majority'
-      # and 'combinedmajority' strategy to use it.
+      # and 'combinedmajority' strategy to use it. The 'combinedmajority' strategy can override this with
+      # strategies.attestationdata.combinedmajority.threshold.
       threshold: 2
   # The aggregateattestation strategy obtains aggregate attestations from multiple sources.
   # Note that the list of nodes here must be a subset of those in the attestationdata strategy.  If not, the nodes will not have
