@@ -1,0 +1,73 @@
+name: advisory
+# Reports only. Both steps use continue-on-error, so a failure in either leaves the job green.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  advisory:
+    name: mutation and test-only code
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Both steps diff against the base branch, which a shallow clone lacks.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          cache: false
+          go-version-file: go.mod
+
+      # threshold-efficacy is empty so survivors annotate the diff without failing.
+      # The action installs "latest" unless version is set, so both pins are needed.
+      # This runs before anything fills the Go caches: the action's own setup-go
+      # restores a cache, and tar fails on files that already exist.
+      - name: Surviving mutants
+        continue-on-error: true
+        timeout-minutes: 60
+        uses: gomutants/gomutants@05a4b33ec0faacc1e36d259c4238aef860e40751 # v0.7.2
+        with:
+          version: v0.7.2
+          threshold-efficacy: ""
+          args: --changed-since origin/${{ github.base_ref }} ./...
+
+      # Functions that deadcode reports without -test but not with it are
+      # reachable only from tests. The module already has about 240 of them, so
+      # only those declared on lines this PR changes are annotated. Test support
+      # is allowed: directories named mock, testing or testutil, and helpers
+      # whose first parameter is *testing.T.
+      # shortcut: a function that becomes test-only because the PR removes its
+      # last production caller is missed; compare against the base branch to catch it.
+      - name: Test-only functions
+        continue-on-error: true
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          # Byte-wise matching, because deadcode columns are byte offsets.
+          export LC_ALL=C
+          go install golang.org/x/tools/cmd/deadcode@v0.52.0
+          work=$(mktemp -d)
+
+          deadcode ./... | sort > "$work/dead"
+          deadcode -test ./... | sort > "$work/dead-with-tests"
+          comm -23 "$work/dead" "$work/dead-with-tests" > "$work/testonly"
+
+          # Lines this PR adds or changes, as file:line.
+          git diff -U0 --no-prefix "origin/$BASE_REF...HEAD" -- '*.go' | awk '
+            /^\+\+\+ / { file = substr($0, 5) }
+            /^@@/ { split($3, r, ","); n = (r[2] == "" ? 1 : r[2])
+                    for (i = 0; i < n; i++) print file ":" substr(r[1], 2) + i }
+          ' > "$work/changed"
+
+          awk -F: 'NR == FNR { changed[$0]; next } $1 !~ "(^|/)(mock|testing|testutil)/" && ($1 ":" $2) in changed' "$work/changed" "$work/testonly" |
+          while IFS=: read -r file line col _ name; do
+            sig=$(sed -n "${line},$((line + 3))p" "$file" | tr '\n' ' ')
+            if grep -Eq '^[^(]*\([[:space:]]*([[:alnum:]_]+,[[:space:]]*)*([[:alnum:]_]+[[:space:]]+)?\*testing\.T[,)]' <<< "${sig:col-1}"; then
+              continue
+            fi
+            echo "::warning file=$file,line=$line,col=$col,title=Test-only function::${name# } is only reachable from tests"
+          done
