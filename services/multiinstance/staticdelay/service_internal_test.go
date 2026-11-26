@@ -159,18 +159,32 @@ func TestStartupSetsGaugeWithoutCounting(t *testing.T) {
 	require.Equal(t, before, metricsSnapshot(t))
 }
 
-// TestMetricsWithoutPrometheusAreSkipped checks that metric updates do nothing when no Prometheus monitor registered
-// the metrics.
+// TestMetricsWithoutPrometheusAreSkipped checks that metric updates do nothing when the metrics are not registered,
+// including when the counter was created but registering it failed, which leaves the gauge nil.
 func TestMetricsWithoutPrometheusAreSkipped(t *testing.T) {
 	ensureMetricsRegistered(t)
 	counter, gauge := activeCounter, activeState
-	activeCounter, activeState = nil, nil
 	t.Cleanup(func() { activeCounter, activeState = counter, gauge })
+	for _, test := range []struct {
+		name    string
+		counter *prometheus.CounterVec
+	}{
+		{name: "NoneRegistered"},
+		{name: "CounterRegistrationFailed", counter: counter},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			activeCounter, activeState = counter, gauge
+			before := checksTotal(t, "proposer", "active")
+			activeCounter, activeState = test.counter, nil
 
-	require.NotPanics(t, func() {
-		monitorStartingState("proposer", true)
-		monitorDecision("proposer", "active")
-	})
+			require.NotPanics(t, func() {
+				monitorStartingState("proposer", true)
+				monitorDecision("proposer", "active")
+			})
+			activeCounter, activeState = counter, gauge
+			require.Equal(t, before, checksTotal(t, "proposer", "active"))
+		})
+	}
 }
 
 // TestAttesterNeverCountsUnknown checks that a failed pool read keeps the attester's fail-open behaviour and counts.

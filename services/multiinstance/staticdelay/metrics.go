@@ -86,7 +86,8 @@ func monitorStartingState(operation string, active bool) {
 
 // monitorDecision counts the result and sets the gauge to 1 only when the instance acts.
 func monitorDecision(operation string, result string) {
-	if activeCounter == nil {
+	// The gauge is created only after the counter is registered, so it is nil if registering the counter failed.
+	if activeState == nil {
 		return
 	}
 
