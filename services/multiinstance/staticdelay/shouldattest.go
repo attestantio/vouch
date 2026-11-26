@@ -72,6 +72,9 @@ func (s *Service) ShouldAttest(ctx context.Context, duty *attester.Duty) bool {
 			CommitteeIndex: &committeeIndex,
 		})
 		if err != nil {
+			// A pool that cannot be read counts as one without our attestation.  Unlike a skipped proposal, which costs one
+			// block, a secondary that stood down here would miss every attestation while the reads fail and the primary is
+			// down.
 			log.Warn().Err(err).Msg("Failed to obtain attestation pool")
 			continue
 		}
